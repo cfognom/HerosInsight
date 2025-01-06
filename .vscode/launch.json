@@ -1,0 +1,27 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "GW Attach",
+            "type": "cppvsdbg",
+            "request": "attach",
+            "processId": "${command:pickProcess}", // Command to pick the process
+            // "program": "C:/Program Files (x86)/Guild Wars/Gw.exe",
+            // "MIMode": "gdb",
+            // "miDebuggerPath": "C:/MinGW/bin/gdb.exe",
+            // "setupCommands": [
+            //     {
+            //         "description": "Enable pretty-printing for gdb",
+            //         "text": "-enable-pretty-printing",
+            //         "ignoreFailures": true
+            //     }
+            // ]
+            "logging": {
+                "programOutput": true,
+            }
+        },
+    ]
+}

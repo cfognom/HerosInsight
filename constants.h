@@ -1,0 +1,48 @@
+#pragma once
+
+#include <filesystem>
+#include <imgui.h>
+#include <iostream>
+
+#ifdef _DEBUG
+// #define _TIMING 1
+#endif
+
+namespace Constants
+{
+    inline std::filesystem::path dll_path;
+    inline std::filesystem::path resources_path;
+
+    namespace GWColors
+    {
+        inline ImU32 damage_yellow = IM_COL32(255, 255, 120, 255);
+        inline ImU32 header_beige = IM_COL32(228, 214, 171, 255);
+        inline ImU32 skill_dynamic_green = IM_COL32(143, 255, 143, 255);
+        inline ImU32 heal_blue = IM_COL32(106, 195, 219, 255);
+        inline ImU32 hp_red = IM_COL32(212, 48, 48, 255);
+        inline ImU32 energy_blue = IM_COL32(65, 150, 215, 255);
+        inline ImU32 elite_gold = IM_COL32(202, 164, 75, 255);
+        inline ImU32 skill_dull_gray = IM_COL32(178, 178, 178, 255);
+        inline ImU32 effect_border_colors[6] = {
+            0x00000000, // null
+            0xFF46834a, // default green
+            0xFF32a8d4, // condition yellow
+            0xFF3ad1a6, // enchantment green
+            0xFFa729df, // hex purple
+            0xFF977930  // dervish blue
+        };
+    }
+
+    namespace Fonts
+    {
+        inline ImFont *gw_font_14;
+        inline ImFont *gw_font_16;
+        inline ImFont *gw_font_20;
+        inline ImFont *skill_name_font;
+        inline ImFont *skill_thick_font_18;
+        inline ImFont *skill_thick_font_16;
+        inline ImFont *skill_thick_font_15;
+        inline ImFont *skill_thick_font_12;
+        inline ImFont *skill_thick_font_9;
+    }
+}

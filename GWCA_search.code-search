@@ -1,0 +1,11 @@
+# Query: TooltipType
+# Including: build\_deps\gwca-src
+# Excluding: build/_deps/gwca-src/Dependencies
+# ContextLines: 1
+
+1 result - 1 file
+
+build\_deps\gwca-src\Include\GWCA\Managers\UIMgr.h:
+  945  
+  946:         enum class TooltipType : uint32_t {
+  947              None = 0x0,

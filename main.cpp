@@ -1,0 +1,407 @@
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
+#include <Windowsx.h>
+#include <cstdint>
+#include <iostream>
+#include <filesystem>
+#include <iterator>
+
+#include <string>
+
+#include <GWCA/GWCA.h>
+#include <GWCA/Utilities/Hooker.h>
+#include <GWCA/Utilities/Scanner.h>
+
+#include <GWCA/GameEntities/Map.h>
+#include <GWCA/GameEntities/Agent.h>
+#include <GWCA/GameEntities/NPC.h>
+#include <GWCA/GameEntities/Party.h>
+#include <GWCA/GameEntities/Player.h>
+#include <GWCA/GameEntities/Skill.h>
+
+#include <GWCA/Context/PreGameContext.h>
+#include <GWCA/Context/CharContext.h>
+#include <GWCA/Context/AgentContext.h>
+#include <GWCA/Context/PartyContext.h>
+#include <GWCA/Context/MapContext.h>
+#include <GWCA/Context/GadgetContext.h>
+#include <GWCA/Context/GameContext.h>
+
+#include <GWCA/Constants/AgentIDs.h>
+#include <GWCA/Constants/Maps.h>
+#include <GWCA/Constants/Skills.h>
+#include <GWCA/Constants/Constants.h>
+
+#include <GWCA/GameContainers/Array.h>
+#include <GWCA/GameContainers/GamePos.h>
+#include <GWCA/GameContainers/List.h>
+
+#include <GWCA/Managers/GameThreadMgr.h>
+#include <GWCA/Managers/Module.h>
+#include <GWCA/Managers/UIMgr.h>
+#include <GWCA/Managers/StoCMgr.h>
+#include <GWCA/Managers/MemoryMgr.h>
+#include <GWCA/Managers/MapMgr.h>
+#include <GWCA/Managers/ChatMgr.h>
+#include <GWCA/Managers/RenderMgr.h>
+#include <GWCA/Managers/EffectMgr.h>
+#include <GWCA/Managers/SkillbarMgr.h>
+#include <GWCA/Managers/AgentMgr.h>
+#include <GWCA/Managers/PartyMgr.h>
+
+#include <GWCA/Packets/StoC.h>
+
+#include <imgui.h>
+#include <imgui_impl_dx9.h>
+#include <imgui_internal.h>
+#include <skill_book.h>
+#include <constants.h>
+
+#include <update_manager.h>
+
+// We can forward declare, because we won't use it
+struct IDirect3DDevice9;
+
+static volatile bool running;
+static long OldWndProc;
+
+static bool game_loop_callback_attached = false;
+static GW::HookEntry game_loop_callback_entry;
+
+bool AttachGameLoopCallback()
+{
+    GW::GameThreadModule.enable_hooks();
+    if (!game_loop_callback_attached)
+    {
+        GW::GameThread::RegisterGameThreadCallback(&game_loop_callback_entry, HerosInsight::UpdateManager::Update);
+        game_loop_callback_attached = true;
+    }
+    return game_loop_callback_attached;
+}
+
+bool DetachGameLoopCallback()
+{
+    if (game_loop_callback_attached)
+    {
+        GW::GameThread::RemoveGameThreadCallback(&game_loop_callback_entry);
+        game_loop_callback_attached = false;
+    }
+    return !game_loop_callback_attached;
+}
+
+static LRESULT CALLBACK WndProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lParam)
+{
+    auto CheckKeyBinds = [&]() -> bool
+    {
+        constexpr auto size = std::size(HerosInsight::UpdateManager::key_bindings);
+        static uint32_t pressed_bits = 0; // global state of keybindings
+        static_assert(size <= 32, "Too many key bindings");
+        for (size_t i = 0; i < size; i++)
+        {
+            auto &[state, modifier, key_binding] = HerosInsight::UpdateManager::key_bindings[i];
+
+            uint32_t mask = 1 << i;
+
+            if (modifier)
+            {
+                bool modifier_down = GetAsyncKeyState(modifier) & 0x8000;
+                // If the modifier is not pressed, clear the state
+                if (!modifier_down)
+                {
+                    pressed_bits &= ~mask;
+                    continue;
+                }
+            }
+
+            if (wParam != key_binding)
+                continue;
+
+            if (Message == WM_KEYDOWN && !(pressed_bits & mask))
+            {
+                *state = !*state;
+                pressed_bits |= mask;
+                return true; // Block input to the game
+            }
+            else if (Message == WM_KEYUP)
+            {
+                pressed_bits &= ~mask;
+            }
+        }
+        return false;
+    };
+
+    static bool right_mouse_down = false;
+
+    if (Message == WM_RBUTTONDOWN)
+        right_mouse_down = true;
+    if (Message == WM_RBUTTONDBLCLK)
+        right_mouse_down = true;
+    if (Message == WM_RBUTTONUP)
+        right_mouse_down = false;
+
+    ImGuiIO &io = ImGui::GetIO();
+
+    //
+    // The first switch case is used to update the state of imgui with respect of the inputs.
+    //
+
+    switch (Message)
+    {
+    case WM_LBUTTONDOWN:
+    case WM_LBUTTONDBLCLK:
+        if (!right_mouse_down)
+            io.MouseDown[0] = true;
+        break;
+    case WM_LBUTTONUP:
+        io.MouseDown[0] = false;
+        break;
+    case WM_MBUTTONDOWN:
+    case WM_MBUTTONDBLCLK:
+        if (!right_mouse_down)
+        {
+            io.KeysDown[VK_MBUTTON] = true;
+            io.MouseDown[2] = true;
+        }
+        break;
+    case WM_MBUTTONUP:
+        io.KeysDown[VK_MBUTTON] = false;
+        io.MouseDown[2] = false;
+        break;
+    case WM_MOUSEWHEEL:
+        if (!right_mouse_down)
+        {
+            io.MouseWheel += (float)GET_WHEEL_DELTA_WPARAM(wParam) / 120.f; // The values seem to come in multiples of 120
+            // io.MouseWheel += GET_WHEEL_DELTA_WPARAM(wParam) > 0 ? +1.0f : -1.0f;
+        }
+        break;
+    case WM_MOUSEMOVE:
+        if (!right_mouse_down)
+        {
+            io.MousePos.x = (float)GET_X_LPARAM(lParam);
+            io.MousePos.y = (float)GET_Y_LPARAM(lParam);
+        }
+        break;
+    case WM_XBUTTONDOWN:
+        if (!right_mouse_down)
+        {
+            if (GET_XBUTTON_WPARAM(wParam) == XBUTTON1)
+                io.KeysDown[VK_XBUTTON1] = true;
+            if (GET_XBUTTON_WPARAM(wParam) == XBUTTON2)
+                io.KeysDown[VK_XBUTTON2] = true;
+        }
+        break;
+    case WM_XBUTTONUP:
+        if (GET_XBUTTON_WPARAM(wParam) == XBUTTON1)
+            io.KeysDown[VK_XBUTTON1] = false;
+        if (GET_XBUTTON_WPARAM(wParam) == XBUTTON2)
+            io.KeysDown[VK_XBUTTON2] = false;
+        break;
+    case WM_SYSKEYDOWN:
+    case WM_KEYDOWN:
+        if (wParam < 256)
+            io.KeysDown[wParam] = true;
+        break;
+    case WM_SYSKEYUP:
+    case WM_KEYUP:
+        if (wParam < 256)
+            io.KeysDown[wParam] = false;
+        break;
+    case WM_CHAR: // You can also use ToAscii()+GetKeyboardState() to retrieve characters.
+        if (wParam > 0 && wParam < 0x10000)
+            io.AddInputCharacter((unsigned short)wParam);
+        break;
+    default:
+        break;
+    }
+
+    //
+    // This second switch is used to determine whether we need to forward the input to Guild Wars.
+    //
+
+    bool is_dragging_passthough = HerosInsight::UpdateManager::is_dragging_skill;
+    bool is_up = false;
+    switch (Message)
+    {
+    // Send button up mouse events to everything, to avoid being stuck on mouse-down
+    case WM_LBUTTONUP:
+        break;
+
+    // Other mouse events:
+    // - If right mouse down, leave it to gw
+    // - ImGui first (above), if WantCaptureMouse that's it
+    // - Toolbox module second (e.g.: minimap), if captured, that's it
+    // - otherwise pass to gw
+    case WM_LBUTTONDOWN:
+    case WM_LBUTTONDBLCLK:
+        is_dragging_passthough = false;
+    case WM_MOUSEMOVE:
+    case WM_MOUSEWHEEL:
+    {
+        if (is_dragging_passthough)
+            break;
+
+        if (!right_mouse_down && io.WantCaptureMouse)
+            return true;
+        break;
+    }
+
+    // keyboard messages
+    case WM_KEYUP:
+    case WM_SYSKEYUP:
+        is_up = true;
+        [[fallthrough]];
+    case WM_KEYDOWN:
+    case WM_SYSKEYDOWN:
+    case WM_CHAR:
+    case WM_SYSCHAR:
+    case WM_IME_CHAR:
+    case WM_XBUTTONDOWN:
+    case WM_XBUTTONDBLCLK:
+    case WM_XBUTTONUP:
+    case WM_MBUTTONDOWN:
+    case WM_MBUTTONDBLCLK:
+    case WM_MBUTTONUP:
+        if (CheckKeyBinds())
+            return true;
+
+        if (io.WantTextInput)
+        {
+            if (is_up)
+                break; // if imgui wants them, send to imgui (above) and to gw
+            else
+                return true; // if imgui wants them, send just to imgui (above)
+        }
+
+        // note: capturing those events would prevent typing if you have a hotkey assigned to normal letters.
+        // We may want to not send events to toolbox if the player is typing in-game
+        // Otherwise, we may want to capture events.
+        // For that, we may want to only capture *successfull* hotkey activations.
+        break;
+
+    case WM_SIZE:
+        // ImGui doesn't need this, it reads the viewport size directly
+        break;
+
+    default:
+        break;
+    }
+
+    return CallWindowProc((WNDPROC)OldWndProc, hWnd, Message, wParam, lParam);
+}
+
+static LRESULT CALLBACK SafeWndProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lParam)
+{
+    __try
+    {
+        return WndProc(hWnd, Message, wParam, lParam);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+        return CallWindowProc(reinterpret_cast<WNDPROC>(OldWndProc), hWnd, Message, wParam, lParam);
+    }
+}
+
+static void OnRender(IDirect3DDevice9 *device)
+{
+    // This is call from within the game thread and all operation should be done here.
+    // You can't freeze this thread, so no blocking operation or at your own risk.
+    static bool initialized = false;
+    if (!initialized)
+    {
+        HWND hWnd = GW::MemoryMgr::GetGWWindowHandle();
+        OldWndProc = SetWindowLongPtr(hWnd, GWL_WNDPROC, reinterpret_cast<long>(SafeWndProc));
+
+        ImGui::CreateContext();
+        ImGui_ImplDX9_Init(hWnd, device);
+
+        HerosInsight::UpdateManager::Initialize();
+        AttachGameLoopCallback();
+
+        initialized = true;
+
+        GW::Chat::WriteChat(GW::Chat::CHANNEL_MODERATOR, L"HeroAI: Initialized");
+    }
+
+    ImGui_ImplDX9_NewFrame();
+
+    HerosInsight::UpdateManager::Draw(device);
+
+    ImGui::Render();
+    ImDrawData *draw_data = ImGui::GetDrawData();
+    ImGui_ImplDX9_RenderDrawData(draw_data);
+
+    if (!HerosInsight::UpdateManager::open_main_menu
+#ifdef _DEBUG
+        || ((GetAsyncKeyState(VK_MENU) & 0x8000) && (GetAsyncKeyState(VK_END) & 0x8000))
+#endif
+    )
+    {
+        DetachGameLoopCallback();
+        HWND hWnd = GW::MemoryMgr::GetGWWindowHandle();
+
+        ImGui_ImplDX9_Shutdown();
+        ImGui::DestroyContext();
+        SetWindowLongPtr(hWnd, GWL_WNDPROC, OldWndProc);
+
+        HerosInsight::UpdateManager::Terminate();
+
+        GW::Chat::WriteChat(GW::Chat::CHANNEL_MODERATOR, L"HeroAI: Bye!");
+        GW::DisableHooks();
+        running = false;
+    }
+}
+
+std::filesystem::path GetDllPath(HMODULE hModule)
+{
+    wchar_t path[MAX_PATH];
+    GetModuleFileNameW(hModule, path, MAX_PATH);
+    return std::filesystem::path(path).parent_path();
+}
+
+static DWORD WINAPI ThreadProc(LPVOID lpModule)
+{
+    // This is a new thread so you should only initialize GWCA and setup the hook on the game thread.
+    // When the game thread hook is setup (i.e. SetRenderCallback), you should do the next operations
+    // on the game from within the game thread.
+
+    HMODULE hModule = static_cast<HMODULE>(lpModule);
+
+    Constants::dll_path = GetDllPath(hModule);
+    Constants::resources_path = Constants::dll_path / "resources";
+
+    GW::Initialize();
+
+    GW::Render::SetRenderCallback(OnRender);
+    GW::Render::SetResetCallback([](IDirect3DDevice9 *device)
+                                 { ImGui_ImplDX9_InvalidateDeviceObjects(); });
+
+    running = true;
+    while (running)
+    {
+        Sleep(100);
+    }
+
+    // Hooks are disable from Guild Wars thread (safely), so we just make sure we exit the last hooks
+    while (GW::HookBase::GetInHookCount())
+        Sleep(16);
+
+    // We can't guarantee that the code in Guild Wars thread isn't still in the trampoline, but
+    // practically a short sleep is fine.
+    Sleep(16);
+    GW::Terminate();
+
+    FreeLibraryAndExitThread(hModule, EXIT_SUCCESS);
+}
+
+BOOL WINAPI DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
+{
+    DisableThreadLibraryCalls(hModule);
+
+    if (dwReason == DLL_PROCESS_ATTACH)
+    {
+        HANDLE handle = CreateThread(0, 0, ThreadProc, hModule, 0, 0);
+        CloseHandle(handle);
+    }
+
+    return TRUE;
+}
