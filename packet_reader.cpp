@@ -203,7 +203,7 @@ namespace HerosInsight::PacketReader
         auto &caster = CustomAgentDataModule::GetCustomAgentData(cause_id);
         FixedArray<SkillEffect, 8> effects_to_apply_salloc;
         auto effects_to_apply = effects_to_apply_salloc.ref();
-        attack_skill.GetOnHitEffects(caster, target_id, is_projectile, effects_to_apply);
+        // attack_skill.GetOnHitEffects(caster, target_id, is_projectile, effects_to_apply);
 
         if (!Utils::ReceivesStoCEffects(target_id))
         {
@@ -249,7 +249,7 @@ namespace HerosInsight::PacketReader
             auto &data = last_skill_cast[cause_id];
         }
 
-        if (hp_fract <= 0 && Utils::GetAgentRelation(cause_id, target_id) == Utils::AgentRelations::Hostile)
+        if (hp_fract <= 0 && Utils::GetAgentRelations(cause_id, target_id) == Utils::AgentRelations::Hostile)
         {
             // Damage
 
@@ -878,7 +878,7 @@ namespace HerosInsight::PacketReader
         auto &caster = CustomAgentDataModule::GetCustomAgentData(caster_id);
 
         auto carried_effects = projectile.carried_effects.ref();
-        projectile_skill.GetProjectileEffects(caster, carried_effects);
+        // projectile_skill.GetProjectileEffects(caster, carried_effects);
     }
 
     // Only called for heroes

@@ -1996,6 +1996,14 @@ namespace HerosInsight
                 }
             }
 
+            if (IsMatch(just_before, DescWord::For))
+            {
+                for (int32_t i = just_before - 1; i >= 0; i--)
+                {
+                    IF_MATCH_PUSH_PARAM_AND_RETURN(i, DescWord::Heal, SkillParamType::Heal)
+                }
+            }
+
             if (IsMatch(just_after, DescWord::Seconds))
             {
                 if (IsMatch(just_after + 1, DescWord::Lifespan) ||
@@ -2109,14 +2117,6 @@ namespace HerosInsight
                 }
             }
 
-            if (IsMatch(just_before, DescWord::For))
-            {
-                for (int32_t i = just_before - 1; i >= 0; i--)
-                {
-                    IF_MATCH_PUSH_PARAM_AND_RETURN(i, DescWord::Heal, SkillParamType::Heal)
-                }
-            }
-
             {
                 auto dmg_type = GetDmgType(just_after);
                 auto i = just_after;
@@ -2181,11 +2181,64 @@ namespace HerosInsight
         }
     }
 
-    void ParseSkillData(CustomSkillData &custom_sd)
+    void ParseSkillData(CustomSkillData &cskill)
     {
-        // if (custom_sd.skill_id == GW::Constants::SkillID::Fragility)
+        auto pps = cskill.parsed_params.ref();
+        ParsedSkillParam pp = {};
 
-        auto rich_desc = custom_sd.TryGetDescription(true, -1);
+        // Hardcoded cases
+        switch (cskill.skill_id)
+        {
+            case GW::Constants::SkillID::Unseen_Fury:
+            {
+                pp.type = SkillParamType::Blind;
+                pp.param = {3, 10};
+                pps.try_push(pp);
+                pp.type = SkillParamType::Duration;
+                pp.param = {10, 30};
+                pps.try_push(pp);
+                return;
+            }
+
+            case GW::Constants::SkillID::Ursan_Roar_Blood_Washes_Blood:
+                pp.param = {4, 4};
+            case GW::Constants::SkillID::Ursan_Roar:
+            {
+                if (!pp.param)
+                    pp.param = {2, 5};
+
+                pp.type = SkillParamType::Duration;
+                pps.try_push(pp);
+
+                pp.type = SkillParamType::Weakness;
+                pps.try_push(pp);
+                return;
+            }
+
+            case GW::Constants::SkillID::Signet_of_Suffering:
+            {
+                cskill.end_effect_index = 1;
+                break;
+            }
+
+            case GW::Constants::SkillID::Ash_Blast:
+            {
+                pp.type = SkillParamType::Damage;
+                pp.damage_type = DamageType::Earth;
+                pp.param = {35, 65};
+                pps.try_push(pp);
+                pp = {};
+                pp.type = SkillParamType::Duration;
+                pp.param = {5, 5};
+                pps.try_push(pp);
+                pp.type = SkillParamType::ChanceToMiss;
+                pp.param = {20, 75};
+                pps.try_push(pp);
+                return;
+            }
+        }
+
+        auto rich_desc = cskill.TryGetDescription(true, -1);
         assert(rich_desc);
         auto &desc = rich_desc->str;
         auto machine_description = MachineDesc(desc);
@@ -2196,13 +2249,12 @@ namespace HerosInsight
         auto w = start;
         uint32_t lit_counter = 0;
 
-        custom_sd.end_effect_index = -1;
         while (w < end)
         {
             if (w[0] == DescWord::End && w + 1 < end && w[1] == DescWord::Effect)
             {
-                assert(custom_sd.end_effect_index == -1);
-                custom_sd.end_effect_index = custom_sd.parsed_params.ref().size();
+                assert(!cskill.end_effect_index.has_value());
+                cskill.end_effect_index = (uint16_t)cskill.parsed_params.ref().size();
 
                 w += 2;
                 continue;
@@ -2219,22 +2271,16 @@ namespace HerosInsight
 
                 auto sentence = std::span(sentence_start, sentence_end - sentence_start);
                 auto lit_pos = w - sentence_start;
-                auto pps = custom_sd.parsed_params.ref();
                 auto pp = ParsedSkillParam();
                 auto lit = machine_description.lits[lit_counter++];
                 if (!lit.IsNull())
                 {
-                    if (custom_sd.skill_id == GW::Constants::SkillID::Brambles)
-                    {
-                        int a = 0;
-                    }
                     pp.param = lit;
                     ParseContext(pps, pp, sentence, lit_pos);
                 }
             }
             w++;
         }
-        custom_sd.end_effect_index = custom_sd.parsed_params.ref().size();
     }
 
     Utils::SkillContext GetSkillContext(GW::Skill &skill)
@@ -2509,13 +2555,214 @@ namespace HerosInsight
         return base_duration;
     }
 
-    EffectTarget DetermineEffectTarget(CustomSkillData &custom_sd)
+    void DetermineInitEffects(CustomSkillData &cskill, std::vector<StaticSkillEffect> &result)
     {
-        auto skill_id = custom_sd.skill_id;
-        auto &skill = *custom_sd.skill;
+        auto skill_id = cskill.skill_id;
+        auto &skill = *cskill.skill;
 
-        if (custom_sd.base_duration.IsNull())
-            return EffectTarget::None;
+        StaticSkillEffect effect = {};
+
+        auto PushConditions = [&](std::span<const ParsedSkillParam> pps)
+        {
+            for (const auto &pp : pps)
+            {
+                const auto condition_skill_id = SkillParamTypeToSkillID(pp.type);
+                if (condition_skill_id == GW::Constants::SkillID::No_Skill)
+                    continue;
+
+                effect.skill_id = condition_skill_id;
+                effect.duration = pp.param;
+                result.push_back(effect);
+            }
+        };
+
+        // Initial conditions
+        switch (skill_id)
+        {
+            // Skills inflicting initial conditions on foes around target
+            case GW::Constants::SkillID::Youre_All_Alone:
+            case GW::Constants::SkillID::Throw_Dirt:
+            case GW::Constants::SkillID::Barbed_Signet:
+            case GW::Constants::SkillID::Oppressive_Gaze:
+            case GW::Constants::SkillID::Enfeebling_Blood:
+            case GW::Constants::SkillID::Enfeebling_Blood_PvP:
+            case GW::Constants::SkillID::Weaken_Armor:
+            case GW::Constants::SkillID::Signet_of_Weariness:
+            case GW::Constants::SkillID::Ride_the_Lightning:
+            case (GW::Constants::SkillID)2807: // Ride the lightning (PvP)
+            case GW::Constants::SkillID::Blinding_Surge:
+            case GW::Constants::SkillID::Blinding_Surge_PvP:
+            case GW::Constants::SkillID::Thunderclap:
+            case GW::Constants::SkillID::Lightning_Touch:
+            case GW::Constants::SkillID::Teinais_Crystals:
+            case GW::Constants::SkillID::Eruption:
+            case GW::Constants::SkillID::Mind_Burn:
+            case GW::Constants::SkillID::UNUSED_Searing_Flames:
+            case GW::Constants::SkillID::Star_Burst:
+            case GW::Constants::SkillID::Searing_Flames:
+            case GW::Constants::SkillID::Finish_Him:
+            case GW::Constants::SkillID::You_Are_All_Weaklings:
+            case GW::Constants::SkillID::You_Move_Like_a_Dwarf:
+            case GW::Constants::SkillID::Maddening_Laughter:
+            case GW::Constants::SkillID::Queen_Wail:
+            case GW::Constants::SkillID::REMOVE_Queen_Wail:
+            case GW::Constants::SkillID::Raven_Shriek:
+            case GW::Constants::SkillID::Raven_Shriek_A_Gate_Too_Far:
+            case GW::Constants::SkillID::Ursan_Roar:
+            case GW::Constants::SkillID::Ursan_Roar_Blood_Washes_Blood:
+            case GW::Constants::SkillID::Unseen_Fury: // Only stance that applies a condition on activation
+            case GW::Constants::SkillID::Shadow_Sanctuary_kurzick:
+            case GW::Constants::SkillID::Shadow_Sanctuary_luxon:
+            case GW::Constants::SkillID::Aura_of_Thorns:
+            case GW::Constants::SkillID::Aura_of_Thorns_PvP:
+            case GW::Constants::SkillID::Balthazars_Rage:
+            case GW::Constants::SkillID::Mystic_Corruption:
+            case GW::Constants::SkillID::Ebon_Dust_Aura:
+            {
+                effect.mask = EffectMask::Foes;
+                effect.location = EffectLocation::Target;
+                effect.radius = (Utils::Range)skill.aoe_range;
+
+                auto init_pps = cskill.GetInitParsedParams();
+                PushConditions(init_pps);
+                break;
+            }
+
+            // Skills inflicting condition of self
+            case GW::Constants::SkillID::Headbutt:
+            case GW::Constants::SkillID::Signet_of_Suffering:
+            case GW::Constants::SkillID::Signet_of_Agony:
+            case GW::Constants::SkillID::Signet_of_Agony_PvP:
+            case GW::Constants::SkillID::Blood_Drinker:
+            case GW::Constants::SkillID::Chilblains:
+            {
+                effect.mask = EffectMask::Caster;
+                effect.location = EffectLocation::Caster;
+
+                auto init_pps = cskill.GetInitParsedParams();
+                PushConditions(init_pps);
+                break;
+            }
+
+            case GW::Constants::SkillID::Shockwave:
+            {
+                effect.mask = EffectMask::Foes;
+                effect.location = EffectLocation::Caster;
+
+                effect.radius = Utils::Range::Adjacent;
+                effect.skill_id = GW::Constants::SkillID::Blind;
+                result.push_back(effect);
+
+                effect.radius = Utils::Range::Nearby;
+                effect.skill_id = GW::Constants::SkillID::Cracked_Armor;
+                result.push_back(effect);
+
+                effect.radius = Utils::Range::InTheArea;
+                effect.skill_id = GW::Constants::SkillID::Weakness;
+                result.push_back(effect);
+                return;
+            }
+
+            case GW::Constants::SkillID::Stone_Sheath:
+            {
+                effect.mask = EffectMask::Foes;
+                effect.radius = Utils::Range::Nearby;
+                effect.skill_id = GW::Constants::SkillID::Weakness;
+                effect.duration = {5, 20};
+
+                effect.location = EffectLocation::Caster;
+                result.push_back(effect);
+
+                effect.location = EffectLocation::Target;
+                result.push_back(effect);
+                break;
+            }
+
+            case GW::Constants::SkillID::Poisoned_Heart:
+            {
+                effect.mask = EffectMask::Foes | EffectMask::Caster;
+                effect.location = EffectLocation::Caster;
+                effect.radius = (Utils::Range)skill.aoe_range;
+
+                auto init_pps = cskill.GetInitParsedParams();
+                PushConditions(init_pps);
+                break;
+            }
+
+            case GW::Constants::SkillID::Signet_of_Midnight:
+            {
+                effect.mask = EffectMask::Foes | EffectMask::Caster;
+                effect.skill_id = GW::Constants::SkillID::Blind;
+
+                effect.location = EffectLocation::Caster;
+                result.push_back(effect);
+
+                effect.location = EffectLocation::Target;
+                result.push_back(effect);
+                break;
+            }
+
+            // Discards / Handled elsewhere
+            case GW::Constants::SkillID::Swift_Chop:
+            case GW::Constants::SkillID::Seeking_Blade:
+            case GW::Constants::SkillID::Drunken_Blow:     // We discard this because of randomness
+            case GW::Constants::SkillID::Desperation_Blow: // We discard this because of randomness
+            case GW::Constants::SkillID::Mark_of_Fury:     // Only end effect condition
+            case GW::Constants::SkillID::Tainted_Flesh:
+            case GW::Constants::SkillID::Death_Nova:
+            case GW::Constants::SkillID::Withering_Aura:
+            case GW::Constants::SkillID::Putrid_Flesh:
+            case GW::Constants::SkillID::Necrotic_Traversal:
+            case GW::Constants::SkillID::Ulcerous_Lungs:
+            case GW::Constants::SkillID::Well_of_Ruin:
+            case GW::Constants::SkillID::Fevered_Dreams:
+            case GW::Constants::SkillID::Ineptitude:
+            case GW::Constants::SkillID::Illusion_of_Haste:
+            case GW::Constants::SkillID::Illusion_of_Haste_PvP:
+            case GW::Constants::SkillID::Shrinking_Armor:
+            case GW::Constants::SkillID::Phantom_Pain:
+            case GW::Constants::SkillID::Lightning_Surge:
+            case GW::Constants::SkillID::Earthen_Shackles:
+            case GW::Constants::SkillID::Ward_of_Weakness:
+            case GW::Constants::SkillID::Double_Dragon:
+            case GW::Constants::SkillID::Burning_Speed:
+            case GW::Constants::SkillID::Elemental_Flame:
+            case GW::Constants::SkillID::Elemental_Flame_PvP:
+            case GW::Constants::SkillID::UNUSED_Glyph_of_Immolation:
+            case GW::Constants::SkillID::Glyph_of_Immolation:
+            case GW::Constants::SkillID::Incendiary_Bonds:
+            case GW::Constants::SkillID::Mark_of_Rodgort: // TODO: Continue fill in using Skill book filter "condition source" current skill_id: immolate
+                break;
+
+            default:
+            {
+                if (cskill.tags.ConditionSource)
+                {
+                    if (skill.type == GW::Constants::SkillType::Attack ||
+                        skill.type == GW::Constants::SkillType::Spell ||
+                        skill.type == GW::Constants::SkillType::Signet ||
+                        skill.special & (uint32_t)Utils::SkillSpecialFlags::Touch)
+                    {
+                        effect.location = EffectLocation::Target;
+                        effect.mask = EffectMask::Foes;
+
+                        auto init_pps = cskill.GetInitParsedParams();
+                        PushConditions(init_pps);
+                        break;
+                    }
+
+                    SOFT_ASSERT(false, L"Unhandled condition source skill: {}", (uint32_t)skill_id);
+                }
+                break;
+            }
+        }
+
+        if (cskill.base_duration.IsNull())
+            return;
+
+        effect = {};
+        effect.skill_id = skill_id;
+        effect.duration = cskill.base_duration;
 
         // Special cases
         switch (skill_id)
@@ -2525,16 +2772,108 @@ namespace HerosInsight
             case GW::Constants::SkillID::Run_as_One:
             case GW::Constants::SkillID::Rampage_as_One:
             case GW::Constants::SkillID::Strike_as_One:
-                return EffectTarget::CasterAndPet;
+            {
+                effect.mask = EffectMask::CasterAndPet;
+                effect.location = EffectLocation::Null;
+                effect.radius = Utils::Range::CompassRange;
+                result.push_back(effect);
+                return;
+            }
+
+            // Affects allies
+            case GW::Constants::SkillID::Dwaynas_Sorrow:
+                effect.radius = Utils::Range::Nearby;
+            case GW::Constants::SkillID::Charge:
+            case GW::Constants::SkillID::Storm_of_Swords:
+            case GW::Constants::SkillID::Cant_Touch_This:
+            case GW::Constants::SkillID::Fall_Back:
+            case GW::Constants::SkillID::Fall_Back_PvP:
+            case GW::Constants::SkillID::Go_for_the_Eyes:
+            case GW::Constants::SkillID::Go_for_the_Eyes_PvP:
+            case GW::Constants::SkillID::Godspeed:
+            case GW::Constants::SkillID::The_Power_Is_Yours:
+            case GW::Constants::SkillID::Angelic_Bond:
+            case GW::Constants::SkillID::Its_Good_to_Be_King:
+            case GW::Constants::SkillID::Advance:
+            case GW::Constants::SkillID::Song_of_the_Mists:
+            case GW::Constants::SkillID::Enemies_Must_Die:
+            case GW::Constants::SkillID::Rands_Attack:
+            case GW::Constants::SkillID::Lets_Get_Em:
+            case GW::Constants::SkillID::Cry_of_Madness:
+            case GW::Constants::SkillID::Ursan_Roar:
+            case GW::Constants::SkillID::Ursan_Roar_Blood_Washes_Blood:
+            case GW::Constants::SkillID::Volfen_Bloodlust:
+            case GW::Constants::SkillID::Volfen_Bloodlust_Curse_of_the_Nornbear:
+            case GW::Constants::SkillID::Theres_Nothing_to_Fear_Thackeray:
+            case GW::Constants::SkillID::Natures_Blessing:
+            case GW::Constants::SkillID::For_Elona:
+            case GW::Constants::SkillID::Form_Up_and_Advance:
+            {
+                effect.mask = EffectMask::Allies;
+                effect.location = EffectLocation::Target;
+                if (!effect.radius)
+                    effect.radius = (Utils::Range)(uint32_t)skill.aoe_range;
+                result.push_back(effect);
+                return;
+            }
 
             case GW::Constants::SkillID::Save_Yourselves_kurzick:
             case GW::Constants::SkillID::Save_Yourselves_luxon:
-                return EffectTarget::CasterAOEOtherAllies;
+            {
+                effect.mask = EffectMask::OtherPartyMembers;
+                effect.location = EffectLocation::Caster;
+                effect.radius = Utils::Range::Earshot;
+                result.push_back(effect);
+                return;
+            }
 
-            // Skills with aoe but not application aoe
-            case GW::Constants::SkillID::Healing_Seed:
-            case GW::Constants::SkillID::Balthazars_Aura:
-                return EffectTarget::Target;
+            // Party wide skills
+            case GW::Constants::SkillID::Retreat:
+            case GW::Constants::SkillID::Celestial_Stance:
+            case GW::Constants::SkillID::Celestial_Haste:
+            case GW::Constants::SkillID::Order_of_the_Vampire:
+            case GW::Constants::SkillID::Order_of_Pain:
+            case GW::Constants::SkillID::Dark_Fury:
+            case GW::Constants::SkillID::Order_of_Apostasy:
+                effect.radius = Utils::Range::CompassRange;
+            case GW::Constants::SkillID::Shields_Up:
+            case GW::Constants::SkillID::Watch_Yourself:
+            case GW::Constants::SkillID::Watch_Yourself_PvP:
+            case GW::Constants::SkillID::Aegis:
+            case GW::Constants::SkillID::Shield_Guardian:
+            case GW::Constants::SkillID::Magnetic_Surge: // The desc is wrong: this is a party wide skill
+            case GW::Constants::SkillID::Magnetic_Aura:
+            case GW::Constants::SkillID::Swirling_Aura:
+            case GW::Constants::SkillID::Never_Surrender:
+            case GW::Constants::SkillID::Never_Surrender_PvP:
+            case GW::Constants::SkillID::Stand_Your_Ground:
+            case GW::Constants::SkillID::Stand_Your_Ground_PvP:
+            case GW::Constants::SkillID::We_Shall_Return_PvP:
+            case GW::Constants::SkillID::Theyre_on_Fire:
+            case GW::Constants::SkillID::Theres_Nothing_to_Fear:
+            case GW::Constants::SkillID::By_Urals_Hammer:
+            case GW::Constants::SkillID::Dont_Trip:
+            {
+                effect.mask = EffectMask::PartyMembers;
+                effect.location = EffectLocation::Caster;
+                if (!effect.radius)
+                    effect.radius = Utils::Range::Earshot;
+                result.push_back(effect);
+                return;
+            }
+
+            case GW::Constants::SkillID::Together_as_one:
+            {
+                StaticSkillEffect effect = {};
+                effect.mask = EffectMask::PartyMembers | EffectMask::PartyPets;
+                effect.radius = Utils::Range::InTheArea;
+
+                effect.location = EffectLocation::Caster;
+                result.push_back(effect);
+
+                effect.location = EffectLocation::Pet;
+                result.push_back(effect);
+            }
         }
 
         // Skills affecting only pet
@@ -2545,9 +2884,19 @@ namespace HerosInsight
                 case GW::Constants::SkillType::Shout:
                 case GW::Constants::SkillType::Skill:
                 case GW::Constants::SkillType::Skill2:
-                    return EffectTarget::Pet;
+                case GW::Constants::SkillType::PetAttack:
+                {
+                    effect.mask = EffectMask::CastersPet;
+                    effect.location = EffectLocation::Caster;
+                    effect.radius = Utils::Range::CompassRange;
+                    result.push_back(effect);
+                    return;
+                }
             }
         }
+
+        auto desc = cskill.TryGetPredecodedDescription(cskill.GetDescKey(true, -1));
+        assert(desc);
 
         switch (skill.type)
         {
@@ -2555,68 +2904,41 @@ namespace HerosInsight
             case GW::Constants::SkillType::Preparation:
             case GW::Constants::SkillType::Form:
             case GW::Constants::SkillType::Stance:
-                return EffectTarget::Caster;
-
-            case GW::Constants::SkillType::PetAttack:
-                return EffectTarget::Pet;
-
-            case GW::Constants::SkillType::WeaponSpell:
-                return EffectTarget::Target;
-
-            case GW::Constants::SkillType::Ward:
-            case GW::Constants::SkillType::Well:
-            case GW::Constants::SkillType::Ritual:
-                return EffectTarget::None;
+            {
+                effect.location = EffectLocation::Caster;
+                result.push_back(effect);
+                return;
+            }
 
             case GW::Constants::SkillType::Shout:
+            case GW::Constants::SkillType::Signet:
+            case GW::Constants::SkillType::WeaponSpell:
+            case GW::Constants::SkillType::Enchantment:
+            case GW::Constants::SkillType::Hex:
+            case GW::Constants::SkillType::Spell:
+            case GW::Constants::SkillType::Skill:
+            case GW::Constants::SkillType::Skill2:
             {
+                effect.location = EffectLocation::Target;
+                result.push_back(effect);
+                return;
+            }
 
-                // if (skill.aoe_range == 1000)
-                // {
-                //     Utils::ForAlliesInCircle(caster_agent->pos, 1000, caster_agent->allegiance,
-                //         [&](GW::AgentLiving &agent)
-                //         {
-                //             switch (skill_id)
-                //             {
-                //                 case GW::Constants::SkillID::Save_Yourselves_kurzick:
-                //                 case GW::Constants::SkillID::Save_Yourselves_luxon:
-                //                 {
-                //                     if (agent.agent_id == caster_id)
-                //                         return;
-                //                     break;
-                //                 }
-                //                 case GW::Constants::SkillID::Charge:
-                //                 {
-                //                     EffectTracking::RemoveTrackers(agent.agent_id,
-                //                         [](EffectTracking::EffectTracker &effect)
-                //                         {
-                //                             return effect.skill_id == GW::Constants::SkillID::Crippled;
-                //                         });
-                //                     break;
-                //                 }
-                //             }
-                //             EffectTracking::ApplySkillEffect(agent.agent_id, caster_id, skill_effect);
-                //         });
-                // }
+            case GW::Constants::SkillType::Chant:
+            {
+                effect.location = EffectLocation::Caster;
+                effect.radius = Utils::Range::Earshot;
+                if (desc->contains("arty members"))
+                    effect.mask = EffectMask::PartyMembers;
+                else
+                    effect.mask = EffectMask::Allies;
+                result.push_back(effect);
+                return;
             }
         }
 
-        if (Utils::IsRangeValue(skill.aoe_range))
-        {
-            auto desc = custom_sd.TryGetPredecodedDescription(custom_sd.GetDescKey(true, -1));
-            assert(desc);
-            bool party_members = desc->contains("arty members");
-            if (party_members)
-            {
-                return EffectTarget::CasterAOEParty;
-            }
-            else
-            {
-                return EffectTarget::TargetAOE;
-            }
-        }
-
-        return EffectTarget::Target;
+        assert(!result.empty());
+        return;
     }
 
     void CustomSkillData::Init()
@@ -2689,7 +3011,7 @@ namespace HerosInsight
         attribute = AttributeOrTitle(*skill);
 
         this->base_duration = DetermineBaseDuration(*this);
-        this->effect_target = DetermineEffectTarget(*this);
+        DetermineInitEffects(*this, this->init_effects);
     }
 
     SkillParam CustomSkillData::GetSkillParam(uint32_t id) const
@@ -2734,9 +3056,7 @@ namespace HerosInsight
         if (!tags.ConditionSource)
             return;
 
-        std::span<const ParsedSkillParam> full_span = parsed_params.ref();
-        auto span = full_span.subspan(0, end_effect_index);
-        GetConditionsFromSpan(span, skill_id, attr_lvl, result);
+        GetConditionsFromSpan(GetInitParsedParams(), skill_id, attr_lvl, result);
     }
 
     void CustomSkillData::GetEndConditions(uint8_t attr_lvl, FixedArrayRef<SkillEffect> result) const
@@ -2744,172 +3064,23 @@ namespace HerosInsight
         if (!tags.ConditionSource)
             return;
 
+        GetConditionsFromSpan(GetEndParsedParams(), skill_id, attr_lvl, result);
+    }
+
+    std::span<const ParsedSkillParam> CustomSkillData::GetInitParsedParams() const
+    {
         std::span<const ParsedSkillParam> full_span = parsed_params.ref();
-        auto span = full_span.subspan(end_effect_index, full_span.size() - end_effect_index);
-        GetConditionsFromSpan(span, skill_id, attr_lvl, result);
+        return end_effect_index.has_value()
+                   ? full_span.subspan(0, end_effect_index.value())
+                   : full_span;
     }
 
-    void CustomSkillData::GetOnActivationEffects(CustomAgentData &caster, uint32_t target_id, FixedArrayRef<SkillEffect> result) const
+    std::span<const ParsedSkillParam> CustomSkillData::GetEndParsedParams() const
     {
-        if (tags.HitBased)
-            return;
-
-        GetInitEffects(caster, target_id, result);
-    }
-
-    // Effects carried by the projectile, if any
-    void CustomSkillData::GetProjectileEffects(CustomAgentData &caster, FixedArrayRef<SkillEffect> result) const
-    {
-        if (skill_id != GW::Constants::SkillID::No_Skill)
-        {
-            if (!tags.Projectile) // Non-projectile skills have no projectile effects
-                return;
-
-            if (skill_id == GW::Constants::SkillID::Ice_Spear) // Ice Spear has no projectile effects even though it is a projectile
-                return;
-        }
-
-        GetInitEffects(caster, 0, result);
-
-        bool is_ranged_attack = skill_id == GW::Constants::SkillID::No_Skill ||
-                                (skill->weapon_req & 70);
-        if (is_ranged_attack)
-        {
-            bool has_bow = false;
-            auto agent = Utils::GetAgentLivingByID(caster.agent_id);
-            if (agent)
-                has_bow = agent->weapon_type = 1;
-
-            auto caster_effects = EffectTracking::GetTrackerSpan(caster.agent_id);
-            for (const auto &effect : caster_effects)
-            {
-                auto effect_skill_id = effect.skill_id;
-                // clang-format off
-                switch (effect_skill_id)
-                {
-                    case GW::Constants::SkillID::Glass_Arrows:
-                    case GW::Constants::SkillID::Glass_Arrows_PvP:
-                    case GW::Constants::SkillID::Barbed_Arrows:
-                    case GW::Constants::SkillID::Melandrus_Arrows:
-                        if (!has_bow)
-                            break;
-                    case GW::Constants::SkillID::Apply_Poison:
-                    {
-                        auto condition_skill_id = effect_skill_id == GW::Constants::SkillID::Apply_Poison ?
-                            GW::Constants::SkillID::Poison : GW::Constants::SkillID::Bleeding;
-
-                        uint32_t duration_id = effect_skill_id == GW::Constants::SkillID::Barbed_Arrows ? 0 : 1;
-                        auto &preparation_skill = CustomSkillDataModule::GetCustomSkillData(effect_skill_id);
-                        auto base_duration = preparation_skill.GetSkillParam(duration_id).Resolve(effect.attribute_level);
-                        result.try_push({condition_skill_id, effect_skill_id, base_duration});
-                        break;
-                    }
-                }
-                // clang-format on
-            }
-        }
-    }
-
-    void CustomSkillData::GetOnHitEffects(CustomAgentData &caster, uint32_t target_id, bool is_projectile, FixedArrayRef<SkillEffect> result) const
-    {
-        if (IsAttack() && !IsRangedAttack())
-        {
-            GetInitEffects(caster, target_id, result);
-        }
-
-        auto caster_effects = EffectTracking::GetTrackerSpan(caster.agent_id);
-        for (const auto &effect : caster_effects)
-        {
-            auto effect_skill_id = effect.skill_id;
-
-            auto &custom_sd = CustomSkillDataModule::GetCustomSkillData(effect.skill_id);
-
-            switch (effect_skill_id)
-            {
-                case GW::Constants::SkillID::Apply_Poison: // It does not require physical dmg type, it works with any martial weapon
-                    if (is_projectile)
-                        break; // We already have the effect from GetProjectileEffects
-                case GW::Constants::SkillID::Poison_Tip_Signet:
-                {
-                    auto Finder = [](const ParsedSkillParam &param)
-                    {
-                        return param.type == SkillParamType::Poison;
-                    };
-                    auto base_duration = custom_sd.GetParsedSkillParam(Finder).Resolve(effect.attribute_level);
-                    result.try_push({GW::Constants::SkillID::Poison, effect_skill_id, base_duration});
-
-                    break;
-                }
-            }
-        }
-    }
-
-    void CustomSkillData::GetInitEffects(CustomAgentData &caster, uint32_t target_id, FixedArrayRef<SkillEffect> result) const
-    {
-        auto attr_lvl = caster.GetAttrLvlForSkill(*this);
-
-        auto caster_living = Utils::GetAgentLivingByID(caster.agent_id);
-
-        switch (skill_id)
-        {
-            case GW::Constants::SkillID::Epidemic:
-            {
-                auto timestamp_now = GW::MemoryMgr::GetSkillTimer();
-                auto target_effects = EffectTracking::GetTrackerSpan(target_id);
-                for (const auto &effect : target_effects)
-                {
-                    auto &effect_skill = *GW::SkillbarMgr::GetSkillConstantData(effect.skill_id);
-                    if (effect_skill.type == GW::Constants::SkillType::Condition)
-                    {
-                        auto timestamp_end = effect.GetEndTimestamp();
-                        if (timestamp_end > timestamp_now)
-                        {
-                            auto rem_ms = timestamp_end - timestamp_now;
-                            auto rem_sec = (rem_ms + 999) / 1000; // Is wrong?
-                            result.try_push({effect.skill_id, skill_id, rem_sec});
-                        }
-                    }
-                }
-                break;
-            }
-
-            case GW::Constants::SkillID::Ice_Spear:
-            case GW::Constants::SkillID::Smoldering_Embers:
-            case GW::Constants::SkillID::Magnetic_Surge:
-            case GW::Constants::SkillID::Stone_Daggers:
-            {
-                // For these skills, only if the caster is overcast, we continue.
-                if (caster_living)
-                {
-                    auto overcast_lower_bound = *(float *)&caster_living->h0118;
-                    bool is_overcast = overcast_lower_bound < 1.f;
-                    if (is_overcast)
-                    {
-                        // continue
-                        break;
-                    }
-                }
-                // return early
-                return;
-            }
-        }
-
-        auto base_duration = ResolveBaseDuration(caster, attr_lvl);
-        if (base_duration)
-        {
-            result.try_push({skill_id, skill_id, base_duration});
-        }
-
-        GetInitConditions(attr_lvl, result);
-
-        switch (skill_id)
-        {
-            case GW::Constants::SkillID::Mystic_Corruption:
-                if (caster_living->GetIsEnchanted())
-                {
-                    result[1].base_duration *= 2;
-                }
-        }
+        std::span<const ParsedSkillParam> full_span = parsed_params.ref();
+        return end_effect_index.has_value()
+                   ? full_span.subspan(end_effect_index.value(), full_span.size() - end_effect_index.value())
+                   : std::span<const ParsedSkillParam>{};
     }
 
     std::string *CustomSkillData::TryGetName()
@@ -3067,7 +3238,7 @@ namespace HerosInsight
         FixedArray<SkillEffect, 18> skill_effects_salloc;
         auto skill_effects = skill_effects_salloc.ref();
 
-        custom_sd.GetOnActivationEffects(caster, target_id, skill_effects);
+        // custom_sd.GetOnActivationEffects(caster, target_id, skill_effects);
 
         if (skill_effects.size() == 0)
             return;
@@ -3076,7 +3247,7 @@ namespace HerosInsight
 
         std::vector<uint32_t> target_ids; // May become large, so we use a heap allocated buffer
         if (custom_sd.skill->type == GW::Constants::SkillType::Enchantment &&
-            Utils::GetAgentRelation(caster_id, target_id) == Utils::AgentRelations::Hostile)
+            Utils::GetAgentRelations(caster_id, target_id) == Utils::AgentRelations::Hostile)
         {
             // This handles some special enchantments that require a foe (e.g. "Vampiric Spirit")
             target_ids.push_back(caster_id);
@@ -3515,5 +3686,121 @@ namespace HerosInsight
         }
 
         SOFT_ASSERT(success);
+    }
+
+    bool StaticSkillEffect::IsAffected(uint32_t caster_id, uint32_t target_id, uint32_t candidate_agent_id) const
+    {
+        if (!(mask & EffectMask::Caster) &&
+            candidate_agent_id == caster_id)
+            return false;
+
+        if (!(mask & EffectMask::Target) &&
+            candidate_agent_id == target_id)
+            return false;
+
+        if ((bool)(mask & EffectMask::CastersPet) &&
+            candidate_agent_id == Utils::GetPetOfAgent(caster_id))
+            return true;
+
+        if ((bool)(mask & EffectMask::OtherPartyMembers) &&
+            Utils::InSameParty(caster_id, candidate_agent_id))
+            return true;
+
+        auto caster = Utils::GetAgentLivingByID(caster_id);
+        auto candidate = Utils::GetAgentLivingByID(candidate_agent_id);
+        if (caster && candidate)
+        {
+            auto caster_candidate_rel = Utils::GetAgentRelations(caster->allegiance, candidate->allegiance);
+
+            if (caster_candidate_rel == Utils::AgentRelations::Friendly)
+            {
+                if ((mask & EffectMask::Allies) == EffectMask::Allies)
+                    return true;
+
+                GW::NPC *model = nullptr;
+                if (candidate->agent_model_type & 0x2000)
+                {
+                    model = GW::Agents::GetNPCByID(candidate->player_number);
+                }
+
+                if (model)
+                {
+                    if ((bool)(mask & EffectMask::MinionAllies) && model->IsMinion())
+                        return true;
+
+                    if ((bool)(mask & EffectMask::SpiritAllies) && model->IsSpirit())
+                        return true;
+
+                    if ((bool)(mask & EffectMask::NonSpiritAllies) && !model->IsSpirit())
+                        return true;
+                }
+            }
+            else if (caster_candidate_rel == Utils::AgentRelations::Hostile)
+            {
+                if ((bool)(mask & EffectMask::OtherFoes))
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    void StaticSkillEffect::Apply(uint32_t caster_id, uint32_t target_id, uint8_t attr_lvl) const
+    {
+        uint32_t effect_target_id;
+        switch (location)
+        {
+            case EffectLocation::Caster:
+                effect_target_id = caster_id;
+                break;
+
+            case EffectLocation::Target:
+                effect_target_id = target_id;
+                break;
+
+            case EffectLocation::Pet:
+                effect_target_id = Utils::GetPetOfAgent(caster_id);
+                if (!effect_target_id)
+                    return;
+                break;
+
+            default:
+                return;
+        }
+
+        auto caster = Utils::GetAgentLivingByID(caster_id);
+        auto target = Utils::GetAgentLivingByID(target_id);
+        auto effect_target = Utils::GetAgentLivingByID(effect_target_id);
+        if (!caster || !target || !effect_target)
+            return;
+
+        auto base_duration = duration.Resolve(attr_lvl);
+        auto &skill = *GW::SkillbarMgr::GetSkillConstantData(skill_id);
+        auto duration = Utils::CalculateDuration(skill, base_duration, caster_id);
+
+        auto TryApply = [&](GW::AgentLiving &candidate)
+        {
+            auto candidate_id = candidate.agent_id;
+            if (IsAffected(caster_id, target_id, candidate_id))
+            {
+
+                EffectTracking::EffectTracker tracker = {};
+                tracker.cause_agent_id = caster_id;
+                tracker.skill_id = skill_id;
+                tracker.duration_sec = duration;
+                tracker.attribute_level = attr_lvl;
+
+                EffectTracking::AddTracker(candidate_id, tracker);
+            }
+        };
+
+        if (radius == Utils::Range::Null)
+        {
+            TryApply(*effect_target);
+        }
+        else
+        {
+            Utils::ForAgentsInCircle(effect_target->pos, (float)(uint32_t)radius, TryApply);
+        }
     }
 }

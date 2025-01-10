@@ -2131,30 +2131,31 @@ namespace HerosInsight::Utils
         return false;
     }
 
-    bool IsPartyMember(uint32_t agent_id)
+    bool IsPartyMember(uint32_t agent_id, uint32_t party_id)
     {
-        const auto party_info = GW::PartyMgr::GetPartyInfo();
-        SOFT_ASSERT(party_info);
-        if (!party_info)
+        auto party = GW::PartyMgr::GetPartyInfo(party_id);
+        SOFT_ASSERT(party);
+        if (!party)
             return false;
 
-        for (const auto &hero : party_info->heroes)
+        return IsPartyMember(*party, agent_id);
+    }
+
+    bool IsPartyMember(GW::PartyInfo &party, uint32_t agent_id)
+    {
+        for (const auto &hero : party.heroes)
         {
             if (hero.agent_id == agent_id)
                 return true;
         }
 
-        for (const auto &henchman : party_info->henchmen)
+        for (const auto &henchman : party.henchmen)
         {
             if (henchman.agent_id == agent_id)
                 return true;
         }
 
-        const auto agent = GW::Agents::GetAgentByID(agent_id);
-        if (agent == nullptr)
-            return false;
-
-        const auto agent_living = agent->GetAsAgentLiving();
+        const auto agent_living = Utils::GetAgentLivingByID(agent_id);
         if (agent_living == nullptr)
             return false;
 
@@ -2162,7 +2163,7 @@ namespace HerosInsight::Utils
         if (login_number == 0)
             return false;
 
-        for (const auto &player : party_info->players)
+        for (const auto &player : party.players)
         {
             if (player.login_number == login_number)
                 return true;
@@ -2235,22 +2236,14 @@ namespace HerosInsight::Utils
         return AgentRelations::Hostile;
     }
 
-    AgentRelations GetAgentRelation(uint32_t agent1, uint32_t agent2)
+    AgentRelations GetAgentRelations(uint32_t agent1, uint32_t agent2)
     {
-        const auto agent1_party = GW::Agents::GetAgentByID(agent1);
-        const auto agent2_party = GW::Agents::GetAgentByID(agent2);
-        if (agent1_party == nullptr || agent2_party == nullptr)
+        const auto agent1_living = Utils::GetAgentLivingByID(agent1);
+        const auto agent2_living = Utils::GetAgentLivingByID(agent2);
+        if (agent1_living == nullptr || agent2_living == nullptr)
             return AgentRelations::Null;
 
-        const auto agent1_party_living = agent1_party->GetAsAgentLiving();
-        const auto agent2_party_living = agent2_party->GetAsAgentLiving();
-        if (agent1_party_living == nullptr || agent2_party_living == nullptr)
-            return AgentRelations::Null;
-
-        const auto agent1_allegiance = agent1_party_living->allegiance;
-        const auto agent2_allegiance = agent2_party_living->allegiance;
-
-        return GetAgentRelations(agent1_allegiance, agent2_allegiance);
+        return GetAgentRelations(agent1_living->allegiance, agent2_living->allegiance);
     }
 
     float Remap(float input_min, float input_max, float output_min, float output_max, float value)
@@ -3189,6 +3182,26 @@ namespace HerosInsight::Utils
         return 0;
     }
 
+    bool InSameParty(uint32_t agent1_id, uint32_t agent2_id)
+    {
+        auto party_context = GW::GetPartyContext();
+        if (!party_context)
+            return false;
+
+        for (auto party : party_context->parties)
+        {
+            if (!party)
+                continue;
+
+            if (Utils::IsPartyMember(*party, agent1_id))
+            {
+                return Utils::IsPartyMember(*party, agent2_id);
+            }
+        }
+
+        return false;
+    }
+
     bool IsRangeValue(float value)
     {
         return value == 72.f ||
@@ -3212,5 +3225,12 @@ namespace HerosInsight::Utils
                 is_pet = true;
         }
         return is_pet;
+    }
+
+    bool IsOvercast(GW::AgentLiving &agent)
+    {
+        auto overcast_lower_bound = *(float *)&agent.h0118;
+        bool is_overcast = overcast_lower_bound < 1.f;
+        return is_overcast;
     }
 }

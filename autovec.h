@@ -2,6 +2,7 @@
 
 #include <vector>
 
+// Auto resizes so that the index is never out of bounds
 template <typename T>
 class AutoVec
 {

@@ -308,20 +308,46 @@ namespace HerosInsight
 
     std::string_view SkillTagToString(SkillTag tag);
 
-    enum struct EffectTarget
+    enum struct EffectMask
     {
         None,
 
-        Pet,
-        CasterAndPet,
-        Target,
-        TargetAOE,
+        Caster = 1 << 0,
+        Target = 1 << 1,
+        CastersPet = 1 << 2,
+        PartyPets = 1 << 3,
+        OtherPartyMembers = 1 << 4,
+        MinionAllies = 1 << 5,
+        SpiritAllies = 1 << 6,
+        NonSpiritAllies = 1 << 7,
+        OtherFoes = 1 << 8,
+
+        CasterAndPet = Caster | CastersPet,
+        PartyMembers = Caster | OtherPartyMembers,
+        Allies = NonSpiritAllies | SpiritAllies,
+        Foes = Target | OtherFoes,
+    };
+
+    enum struct EffectLocation
+    {
+        Null,
+
         Caster,
-        CasterAOEParty,
-        CasterAOEOtherParty,
-        CasterAOEAllies,
-        CasterAOEOtherAllies,
-        CasterAOEFoes,
+        Target,
+        AllyClosestToTarget,
+        Pet,
+    };
+
+    struct StaticSkillEffect
+    {
+        EffectMask mask;
+        EffectLocation location;
+        Utils::Range radius;
+        GW::Constants::SkillID skill_id;
+        SkillParam duration;
+
+        bool IsAffected(uint32_t caster_id, uint32_t target_id, uint32_t candidate_agent_id) const;
+        void Apply(uint32_t caster_id, uint32_t target_id, uint8_t attr_lvl) const;
     };
 
     struct SkillEffect
@@ -368,9 +394,10 @@ namespace HerosInsight
         AttributeOrTitle attribute;
         Renewal renewal;
         FixedArray<ParsedSkillParam, 8> parsed_params;
-        uint32_t end_effect_index; // index in "params" of where "End Effect:" was found in the description
+        std::optional<int16_t> end_effect_index; // index in "params" of where "End Effect:" was found in the description
         SkillParam base_duration;
-        EffectTarget effect_target;
+        std::vector<StaticSkillEffect> init_effects;
+        std::vector<StaticSkillEffect> end_effects;
 
         void Init();
 
@@ -384,11 +411,9 @@ namespace HerosInsight
         void GetParsedSkillParams(SkillParamType type, FixedArrayRef<ParsedSkillParam> result) const;
         void GetInitConditions(uint8_t attr_lvl, FixedArrayRef<SkillEffect> result) const;
         void GetEndConditions(uint8_t attr_lvl, FixedArrayRef<SkillEffect> result) const;
-        void GetInitEffects(CustomAgentData &custom_ad, uint32_t target_id, FixedArrayRef<SkillEffect> result) const;
+        std::span<const ParsedSkillParam> GetInitParsedParams() const;
+        std::span<const ParsedSkillParam> GetEndParsedParams() const;
 
-        void GetOnActivationEffects(CustomAgentData &caster, uint32_t target_id, FixedArrayRef<SkillEffect> result) const;
-        void GetProjectileEffects(CustomAgentData &caster, FixedArrayRef<SkillEffect> result) const;
-        void GetOnHitEffects(CustomAgentData &caster, uint32_t target_id, bool is_projectile, FixedArrayRef<SkillEffect> result) const;
         void GetOnExpireEffects(CustomAgentData &caster, FixedArrayRef<SkillEffect> result) const;
 
         std::string ToString() const;

@@ -334,7 +334,8 @@ namespace HerosInsight::Utils
     GW::AgentLiving *GetAgentLivingByID(uint32_t agent_id);
     GW::AgentLiving &GetAgentLivingByIDOrThrow(uint32_t agent_id);
     bool ReceivesStoCEffects(uint32_t agent_id);
-    bool IsPartyMember(uint32_t agent_id);
+    bool IsPartyMember(GW::PartyInfo &party, uint32_t agent_id);
+    bool IsPartyMember(uint32_t agent_id, uint32_t party_id = 0);
 
     std::string_view GetEffectIDStr(GW::Constants::EffectID effect_id);
     bool HasVisibleEffect(GW::AgentLiving &agent_living, GW::Constants::EffectID visible_effect_id);
@@ -347,7 +348,7 @@ namespace HerosInsight::Utils
         Hostile,
     };
     AgentRelations GetAgentRelations(GW::Constants::Allegiance agent1_allegiance, GW::Constants::Allegiance agent2_allegiance);
-    AgentRelations GetAgentRelation(uint32_t agent1_id, uint32_t agent2_id);
+    AgentRelations GetAgentRelations(uint32_t agent1_id, uint32_t agent2_id);
 
     float Remap(float input_min, float input_max, float output_min, float output_max, float value);
     float ParabolicRemap(float input_min, float input_max, float output_min, float output_max, float value);
@@ -474,7 +475,10 @@ namespace HerosInsight::Utils
     bool IsFrameValid(GW::UI::Frame *frame);
 
     uint32_t GetPetOfAgent(uint32_t agent_id);
+    bool InSameParty(uint32_t agent1_id, uint32_t agent2_id);
     bool IsRangeValue(float value);
 
     bool GetIsPet(uint32_t agent_id);
+
+    bool IsOvercast(GW::AgentLiving &agent);
 }
