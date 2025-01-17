@@ -489,7 +489,7 @@ namespace TextureModule
         return elapsed.count();
     }
 
-    bool DrawSkill(const GW::Skill &skill, float icon_size, bool as_effect, bool as_hovered)
+    bool DrawSkill(const GW::Skill &skill, ImVec2 pos, float icon_size, bool as_effect, bool as_hovered, ImDrawList *draw_list)
     {
         // icon_size = 100;
         auto skill_icon = TextureModule::GetSkillImage(skill.skill_id);
@@ -509,12 +509,13 @@ namespace TextureModule
         if (skill.IsElite())
             overlay_index += 1;
 
-        auto win_draw_list = ImGui::GetWindowDrawList();
+        if (!draw_list)
+            draw_list = ImGui::GetWindowDrawList();
 
         const auto icon_size_half = icon_size * 0.5f;
         const auto size = ImVec2(icon_size, icon_size);
         const auto size_half = ImVec2(icon_size_half, icon_size_half);
-        auto min = ImGui::GetCursorScreenPos();
+        auto min = pos;
         auto max = min + size;
         auto uv0 = ImVec2(0, 0);
         auto uv1 = ImVec2(1, 1);
@@ -525,7 +526,7 @@ namespace TextureModule
         auto icon_tex_size = ImVec2(icon_desc.Width, icon_desc.Height);
         OffsetUVsByPixels(icon_tex_size, uv0, ImVec2(3, 3));
         OffsetUVsByPixels(icon_tex_size, uv1, ImVec2(-3, -3));
-        win_draw_list->AddImage(*skill_icon, min, max, uv0, uv1, tint);
+        draw_list->AddImage(*skill_icon, min, max, uv0, uv1, tint);
 
         // Draw the skill overlay/lens
         auto overlay_desc = GetTextureDesc(*skill_overlays);
@@ -533,7 +534,7 @@ namespace TextureModule
         GetImageUVsInAtlas(*skill_overlays, ImVec2(56, 56), overlay_index, uv0, uv1);
         // OffsetUVsByPixels(overlay_tex_size, uv0, ImVec2(0, 0));
         OffsetUVsByPixels(overlay_tex_size, uv1, ImVec2(0, -1));
-        win_draw_list->AddImage(*skill_overlays, min, max, uv0, uv1, tint);
+        draw_list->AddImage(*skill_overlays, min, max, uv0, uv1, tint);
 
         if (as_hovered)
         {
@@ -541,7 +542,7 @@ namespace TextureModule
             auto skill_hover_effect = TextureModule::LoadTextureFromFileId(KnownFileIDs::UI_SkillHoverOverlay);
             if (skill_hover_effect && *skill_hover_effect)
             {
-                win_draw_list->AddCallback(
+                draw_list->AddCallback(
                     [](const ImDrawList *parent_list, const ImDrawCmd *cmd)
                     {
                         // The hover effect texture's colors are premultiplied by alpha
@@ -551,8 +552,8 @@ namespace TextureModule
                         g_pd3dDevice->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_ONE);
                     },
                     nullptr);
-                win_draw_list->AddImage(*skill_hover_effect, min, max, ImVec2(0, 0), ImVec2(1, 1), ImColor(0.6f, 0.6f, 0.6f, 1.f));
-                win_draw_list->AddCallback(
+                draw_list->AddImage(*skill_hover_effect, min, max, ImVec2(0, 0), ImVec2(1, 1), ImColor(0.6f, 0.6f, 0.6f, 1.f));
+                draw_list->AddCallback(
                     [](const ImDrawList *parent_list, const ImDrawCmd *cmd)
                     {
                         g_pd3dDevice->SetRenderState(D3DRS_SRCBLEND, D3DBLEND_SRCALPHA);
@@ -585,7 +586,7 @@ namespace TextureModule
                 auto min_ur = min + ImVec2(icon_size * 0.42f, 0);
                 auto max_ur = max + ImVec2(0, -icon_size * 0.42f);
                 GetImageUVsInAtlas(*skill_type_icons, ImVec2(32, 32), offset, uv0, uv1);
-                win_draw_list->AddImage(*skill_type_icons, min_ur, max_ur, uv0, uv1, tint);
+                draw_list->AddImage(*skill_type_icons, min_ur, max_ur, uv0, uv1, tint);
             }
         }
 
@@ -685,7 +686,7 @@ namespace TextureModule
         return number_size;
     }
 
-    void DrawDamageNumber(int32_t number, float scale, DamageNumberColor color)
+    void DrawDamageNumber(int32_t number, ImVec2 pos, float scale, DamageNumberColor color, ImDrawList *draw_list)
     {
         IDirect3DTexture9 **texture;
         // clang-format off
@@ -717,12 +718,13 @@ namespace TextureModule
             rem /= 10;
         }
 
-        auto win_draw_list = ImGui::GetWindowDrawList();
+        if (!draw_list)
+            draw_list = ImGui::GetWindowDrawList();
         auto uv_pixel_offsets = (number_size - number_size_actual) / 2;
         ImVec2 uv_offsets = ImVec2(0, 0);
         TextureModule::OffsetUVsByPixels(atlas_size, uv_offsets, uv_pixel_offsets);
 
-        auto ss_cursor = ImGui::GetCursorScreenPos();
+        auto ss_cursor = pos;
         auto item_min = ss_cursor;
         auto alpha = ImGui::GetStyle().Alpha;
         auto hue_color = ImGui::GetColorU32(ImVec4(1, 1, 1, alpha));
@@ -735,7 +737,7 @@ namespace TextureModule
             uv1 -= uv_offsets;
             auto min = ImVec2(ss_cursor.x, ss_cursor.y);
             auto max = min + number_size_scaled;
-            win_draw_list->AddImage(atlas, min, max, uv0, uv1, hue_color);
+            draw_list->AddImage(atlas, min, max, uv0, uv1, hue_color);
             ss_cursor.x += number_stride_scaled;
         };
 

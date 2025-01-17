@@ -12,7 +12,7 @@ namespace TextureModule
     IDirect3DTexture9 **LoadTextureFromFileId(uint32_t file_id);
     IDirect3DTexture9 **GetSkillImage(GW::Constants::SkillID skill_id);
     IDirect3DTexture9 **GetResourceTexture(const char *filename);
-    bool DrawSkill(const GW::Skill &skill, float icon_size, bool as_effect = false, bool as_hovered = false);
+    bool DrawSkill(const GW::Skill &skill, ImVec2 pos, float icon_size, bool as_effect = false, bool as_hovered = false, ImDrawList *draw_list = nullptr);
     void GetImageUVsInAtlas(IDirect3DTexture9 *texture, ImVec2 image_size, uint32_t index, ImVec2 &uv0, ImVec2 &uv1);
     void OffsetUVsByPixels(ImVec2 source_texture_size, ImVec2 &uv, ImVec2 offset);
 
@@ -78,7 +78,7 @@ namespace TextureModule
     };
 
     ImVec2 CalculateDamageNumberSize(int32_t number, float scale);
-    void DrawDamageNumber(int32_t number, float scale, DamageNumberColor color = DamageNumberColor::Yellow);
+    void DrawDamageNumber(int32_t number, ImVec2 pos, float scale, DamageNumberColor color = DamageNumberColor::Yellow, ImDrawList *draw_list = nullptr);
 
     /* ------------- Known file_id's -------------
 

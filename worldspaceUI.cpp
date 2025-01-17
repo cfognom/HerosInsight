@@ -210,9 +210,9 @@ namespace HerosInsight::WorldSpaceUI
         if (!camera)
             return;
 
-        const auto camera_pos = camera->position;
+        auto camera_pos = camera->position;
 
-        auto Sorter = [&camera_pos](const EffectDrawData &a, const EffectDrawData &b)
+        auto Sorter = [camera_pos](const EffectDrawData &a, const EffectDrawData &b)
         {
             if (a.agent_id == b.agent_id)
             {
@@ -235,7 +235,7 @@ namespace HerosInsight::WorldSpaceUI
 
     void Draw(IDirect3DDevice9 *device)
     {
-        // WARNING: This thing is a mess, but it works
+        // WARNING: This thing is a mess, but it works (and or worked)
 
         auto player_agent_id = GW::Agents::GetControlledCharacterId();
 
@@ -245,9 +245,8 @@ namespace HerosInsight::WorldSpaceUI
         if (!camera)
             return;
 
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.f);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.f);
+        auto bg_draw_list = ImGui::GetBackgroundDrawList();
+
         ImVec2 screen_base_pos = ImVec2(0, 0);
         ImVec2 screen_body_pos = ImVec2(0, 0);
         for (auto it = effect_draw_list.begin(); it != effect_draw_list.end();)
@@ -312,202 +311,171 @@ namespace HerosInsight::WorldSpaceUI
                 it->SetFinished(timestamp_now);
             }
 
-            const auto flags = ImGuiWindowFlags_NoMove |
-                               ImGuiWindowFlags_NoSavedSettings |
-                               ImGuiWindowFlags_NoFocusOnAppearing |
-                               ImGuiWindowFlags_NoBringToFrontOnFocus |
-                               ImGuiWindowFlags_NoScrollbar |
-                               ImGuiWindowFlags_NoBackground |
-                               ImGuiWindowFlags_NoScrollWithMouse |
-                               ImGuiWindowFlags_NoNav |
-                               ImGuiWindowFlags_NoDecoration |
-                               ImGuiWindowFlags_NoMouseInputs |
-                               ImGuiWindowFlags_NoInputs;
-
-            ImGui::SetNextWindowPos(ImVec2(0, 0)); // We use a transparent window that covers the whole screen in order to properly control the alpha value of multiple overlapping elements
-            ImGui::SetNextWindowSize(ImVec2(GW::Render::GetViewportWidth(), GW::Render::GetViewportHeight()));
-            const auto window_name = "Regen UI instance" +
-                                     std::to_string(agent_id) +
-                                     std::to_string((uint32_t)skill_id) +
-                                     std::to_string(it->frame_id_applied);
-            if (ImGui::Begin(window_name.c_str(), nullptr, flags))
+            uint32_t n_same_pos = 0;
+            for (auto it2 = it; it2 != effect_draw_list.begin();) // Count how many other non finished effects are on the same agent
             {
-                uint32_t n_same_pos = 0;
-                for (auto it2 = it; it2 != effect_draw_list.begin();) // Count how many other non finished effects are on the same agent
+                it2--;
+
+                if (it2->pos_type != it->pos_type)
+                    continue;
+
+                if (it2->agent_id == agent_id)
                 {
-                    it2--;
-
-                    if (it2->pos_type != it->pos_type)
-                        continue;
-
-                    if (it2->agent_id == agent_id)
-                    {
-                        if (!it2->IsFinished())
-                            n_same_pos++;
-                    }
-                    else
-                    {
-                        break;
-                    }
+                    if (!it2->IsFinished())
+                        n_same_pos++;
                 }
-
-                if (!it->timestamp_first_update)
+                else
                 {
-                    it->timestamp_first_update = timestamp_now;
-                }
-
-                const auto ms_since_start = timestamp_now - it->timestamp_first_update;
-                if (ms_since_start < fadein_ms)
-                {
-                    alpha = (float)ms_since_start / (float)fadein_ms;
-                }
-
-                const auto animation_progress = (float)ms_since_finished / (float)animation_ms;
-
-                auto scale = 1.0f;
-
-                scale *= std::clamp(
-                    Utils::Remap(distance_min, distance_max, distance_scale_max, distance_scale_min, distance_to_agent),
-                    distance_scale_min,
-                    distance_scale_max);
-
-                scale *= std::clamp(
-                    Utils::Remap(0.f, 1.f, animation_min_scale, animation_max_scale, animation_progress),
-                    animation_min_scale,
-                    animation_max_scale);
-
-                if (n_same_pos == 0)
-                {
-                    // We only have to calculate this once per agent
-                    auto icon_world_pos = agent_pos; // Foot position
-
-                    if (it->pos_type == PositionType::AgentCenter)
-                        icon_world_pos.z -= agent->height1 * 0.5f; // For some reason, up is down. *Pirates of the Caribbean track plays*
-                    else
-                        icon_world_pos.z -= agent->height1 + 30.f * scale;
-
-                    screen_base_pos = Utils::WorldSpaceToScreenSpace(icon_world_pos);
-
-                    if (it->pos_type == PositionType::AgentTopLeft)
-                        screen_base_pos.x -= 20.f * scale;
-                    else if (it->pos_type == PositionType::AgentTopRight)
-                        screen_base_pos.x += 20.f * scale;
-                }
-
-                auto screen_pos = screen_base_pos;
-                if (!it->IsFinished())
-                {
-                    it->last_render_pos = n_same_pos;
-                }
-                screen_pos.y -= (animation_screen_distance * scale) * animation_progress + it->last_render_pos * 30.f * scale;
-
-                icon_size *= scale;
-                const auto icon_half_size = icon_size / 2;
-                auto icon_screen_pos = screen_pos;
-                icon_screen_pos.y -= icon_half_size;
-
-                const auto icon_min = icon_screen_pos - ImVec2(icon_half_size, icon_half_size);
-                const auto icon_max = icon_min + ImVec2(icon_size, icon_size);
-
-                const auto now_or_ended_timestamp = it->timestamp_finished ? it->timestamp_finished : timestamp_now;
-                const auto effect_remaining_progress =
-                    std::clamp(1.f - (float)(now_or_ended_timestamp - it->timestamp_begin) / (float)(it->duration_sec * 1000), 0.f, 1.f);
-
-                auto window_draw_list = ImGui::GetWindowDrawList();
-
-                // Draw skill image
-                ImGui::PushStyleVar(ImGuiStyleVar_Alpha, alpha);
-                ImGui::SetCursorScreenPos(icon_min);
-                const auto &skill = *GW::SkillbarMgr::GetSkillConstantData(skill_id);
-                const auto effect_border_index = Utils::GetSkillEffectBorderIndex(skill);
-                TextureModule::DrawSkill(skill, icon_size, true);
-                // Draw remaining seconds
-                if (now_or_ended_timestamp < it->GetEndTimestamp())
-                {
-                    const auto rem_sec_ceil = (it->GetEndTimestamp() - now_or_ended_timestamp + 999) / 1000;
-                    bool skip = it->IsFinished() && now_or_ended_timestamp > it->GetEndTimestamp() - 300;
-                    if (!skip)
-                    {
-                        ImGui::PushFont(Constants::Fonts::skill_thick_font_12);
-
-                        FixedArray<char, 16> time_str_salloc;
-                        auto time_str = time_str_salloc.ref();
-                        if (rem_sec_ceil > 999)
-                            time_str.PushFormat("999+");
-                        else
-                            time_str.PushFormat("%d", rem_sec_ceil);
-                        const auto rem_sec_pos = icon_min + ImVec2(2, 2);
-                        ImGui::SetWindowFontScale(scale);
-
-                        ImGui::SetCursorScreenPos(rem_sec_pos + ImVec2(1, 1));
-                        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32_BLACK);
-                        ImGui::TextUnformatted(time_str.data(), time_str.data() + time_str.size());
-                        ImGui::PopStyleColor();
-
-                        ImGui::SetCursorScreenPos(rem_sec_pos);
-                        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32_WHITE);
-                        ImGui::TextUnformatted(time_str.data(), time_str.data() + time_str.size());
-                        ImGui::PopStyleColor();
-
-                        ImGui::PopFont();
-                    }
-                }
-                // Draw progressbar
-                const auto progress_bar_color = Constants::GWColors::effect_border_colors[effect_border_index];
-                const auto progress_bar_outline_min = ImVec2(icon_min.x + 2 * scale, icon_max.y - 1 * scale - 3);
-                const auto progress_bar_outline_max = ImVec2(icon_max.x - 2 * scale, icon_max.y - 1 * scale);
-                const auto progress_bar_min = ImVec2(progress_bar_outline_min.x + 1, progress_bar_outline_min.y + 1);
-                const auto progress_bar_max = ImVec2(progress_bar_outline_max.x - 1, progress_bar_outline_max.y - 1);
-                const auto progress_bar_max_width = progress_bar_max.x - progress_bar_min.x;
-                const auto progress_bar_width = progress_bar_max_width * effect_remaining_progress;
-                const auto progress_bar_max_current = ImVec2(progress_bar_min.x + progress_bar_width, progress_bar_max.y);
-                window_draw_list->AddRectFilled(progress_bar_outline_min, progress_bar_outline_max, ImGui::GetColorU32(IM_COL32_BLACK));
-                window_draw_list->AddRectFilled(progress_bar_min, progress_bar_max_current, ImGui::GetColorU32(progress_bar_color));
-                ImGui::PopStyleVar();
-
-                const auto healing = (int32_t)(it->IsFinished() ? std::round(it->accum_healing) : it->accum_healing);
-
-                if (healing != 0)
-                {
-                    // Draw healing/damage text
-                    if (!it->timestamp_first_number)
-                    {
-                        it->timestamp_first_number = timestamp_now;
-                    }
-
-                    const auto ms_since_number_start = timestamp_now - it->timestamp_first_number;
-                    if (ms_since_number_start < fadein_ms)
-                    {
-                        alpha = (float)ms_since_number_start / (float)fadein_ms;
-                    }
-
-                    auto number_scale = scale * 0.75f;
-                    auto number_size = TextureModule::CalculateDamageNumberSize(healing, number_scale);
-                    auto number_half_size = number_size * 0.5f;
-
-                    auto number_screen_pos = icon_screen_pos;
-                    number_screen_pos.x += (it->pos_type == PositionType::AgentTopLeft ? -1 : 1) * (icon_half_size + 5 * scale + number_half_size.x);
-                    number_screen_pos -= number_half_size;
-
-                    auto number_color = healing < 0
-                                            ? player_agent_id == agent_id
-                                                  ? TextureModule::DamageNumberColor::Red
-                                                  : TextureModule::DamageNumberColor::Yellow
-                                            : TextureModule::DamageNumberColor::Blue;
-
-                    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, alpha);
-
-                    ImGui::SetCursorScreenPos(number_screen_pos);
-                    TextureModule::DrawDamageNumber(healing, number_scale, number_color);
-
-                    ImGui::PopStyleVar();
+                    break;
                 }
             }
-            ImGui::End();
+
+            if (!it->timestamp_first_update)
+            {
+                it->timestamp_first_update = timestamp_now;
+            }
+
+            const auto ms_since_start = timestamp_now - it->timestamp_first_update;
+            if (ms_since_start < fadein_ms)
+            {
+                alpha = (float)ms_since_start / (float)fadein_ms;
+            }
+
+            const auto animation_progress = (float)ms_since_finished / (float)animation_ms;
+
+            auto scale = 1.0f;
+
+            scale *= std::clamp(
+                Utils::Remap(distance_min, distance_max, distance_scale_max, distance_scale_min, distance_to_agent),
+                distance_scale_min,
+                distance_scale_max);
+
+            scale *= std::clamp(
+                Utils::Remap(0.f, 1.f, animation_min_scale, animation_max_scale, animation_progress),
+                animation_min_scale,
+                animation_max_scale);
+
+            if (n_same_pos == 0)
+            {
+                // We only have to calculate this once per agent
+                auto icon_world_pos = agent_pos; // Foot position
+
+                if (it->pos_type == PositionType::AgentCenter)
+                    icon_world_pos.z -= agent->height1 * 0.5f; // For some reason, up is down. *Pirates of the Caribbean track plays*
+                else
+                    icon_world_pos.z -= agent->height1 + 30.f * scale;
+
+                screen_base_pos = Utils::WorldSpaceToScreenSpace(icon_world_pos);
+
+                if (it->pos_type == PositionType::AgentTopLeft)
+                    screen_base_pos.x -= 20.f * scale;
+                else if (it->pos_type == PositionType::AgentTopRight)
+                    screen_base_pos.x += 20.f * scale;
+            }
+
+            auto screen_pos = screen_base_pos;
+            if (!it->IsFinished())
+            {
+                it->last_render_pos = n_same_pos;
+            }
+            screen_pos.y -= (animation_screen_distance * scale) * animation_progress + it->last_render_pos * 30.f * scale;
+
+            icon_size *= scale;
+            const auto icon_half_size = icon_size / 2;
+            auto icon_screen_pos = screen_pos;
+            icon_screen_pos.y -= icon_half_size;
+
+            const auto icon_min = icon_screen_pos - ImVec2(icon_half_size, icon_half_size);
+            const auto icon_max = icon_min + ImVec2(icon_size, icon_size);
+
+            const auto now_or_ended_timestamp = it->timestamp_finished ? it->timestamp_finished : timestamp_now;
+            const auto effect_remaining_progress =
+                std::clamp(1.f - (float)(now_or_ended_timestamp - it->timestamp_begin) / (float)(it->duration_sec * 1000), 0.f, 1.f);
+
+            // Draw skill image
+            ImGui::PushStyleVar(ImGuiStyleVar_Alpha, alpha);
+            const auto &skill = *GW::SkillbarMgr::GetSkillConstantData(skill_id);
+            const auto effect_border_index = Utils::GetSkillEffectBorderIndex(skill);
+            TextureModule::DrawSkill(skill, icon_min, icon_size, true, false, bg_draw_list);
+            // Draw remaining seconds
+            if (now_or_ended_timestamp < it->GetEndTimestamp())
+            {
+                const auto rem_sec_ceil = (it->GetEndTimestamp() - now_or_ended_timestamp + 999) / 1000;
+                bool skip = it->IsFinished() && now_or_ended_timestamp > it->GetEndTimestamp() - 300;
+                if (!skip)
+                {
+                    FixedArray<char, 16> time_str_salloc;
+                    auto time_str = time_str_salloc.ref();
+                    if (rem_sec_ceil > 999)
+                        time_str.PushFormat("999+");
+                    else
+                        time_str.PushFormat("%d", rem_sec_ceil);
+                    const auto rem_sec_pos = icon_min + ImVec2(2, 2);
+                    const auto font_size = scale * Constants::Fonts::skill_thick_font_12->FontSize;
+
+                    bg_draw_list->AddText(Constants::Fonts::skill_thick_font_12,
+                        font_size,
+                        rem_sec_pos + ImVec2(1, 1),
+                        ImGui::GetColorU32(IM_COL32_BLACK),
+                        time_str.data(),
+                        time_str.data() + time_str.size());
+
+                    bg_draw_list->AddText(Constants::Fonts::skill_thick_font_12,
+                        font_size,
+                        rem_sec_pos,
+                        ImGui::GetColorU32(IM_COL32_WHITE),
+                        time_str.data(),
+                        time_str.data() + time_str.size());
+                }
+            }
+            // Draw progressbar
+            const auto progress_bar_color = Constants::GWColors::effect_border_colors[effect_border_index];
+            const auto progress_bar_outline_min = ImVec2(icon_min.x + 2 * scale, icon_max.y - 1 * scale - 3);
+            const auto progress_bar_outline_max = ImVec2(icon_max.x - 2 * scale, icon_max.y - 1 * scale);
+            const auto progress_bar_min = ImVec2(progress_bar_outline_min.x + 1, progress_bar_outline_min.y + 1);
+            const auto progress_bar_max = ImVec2(progress_bar_outline_max.x - 1, progress_bar_outline_max.y - 1);
+            const auto progress_bar_max_width = progress_bar_max.x - progress_bar_min.x;
+            const auto progress_bar_width = progress_bar_max_width * effect_remaining_progress;
+            const auto progress_bar_max_current = ImVec2(progress_bar_min.x + progress_bar_width, progress_bar_max.y);
+            bg_draw_list->AddRectFilled(progress_bar_outline_min, progress_bar_outline_max, ImGui::GetColorU32(IM_COL32_BLACK));
+            bg_draw_list->AddRectFilled(progress_bar_min, progress_bar_max_current, ImGui::GetColorU32(progress_bar_color));
+
+            const auto healing = (int32_t)(it->IsFinished() ? std::round(it->accum_healing) : it->accum_healing);
+
+            if (healing != 0)
+            {
+                // Draw healing/damage text
+                if (!it->timestamp_first_number)
+                {
+                    it->timestamp_first_number = timestamp_now;
+                }
+
+                const auto ms_since_number_start = timestamp_now - it->timestamp_first_number;
+                if (ms_since_number_start < fadein_ms)
+                {
+                    alpha = (float)ms_since_number_start / (float)fadein_ms;
+                }
+
+                auto number_scale = scale * 0.75f;
+                auto number_size = TextureModule::CalculateDamageNumberSize(healing, number_scale);
+                auto number_half_size = number_size * 0.5f;
+
+                auto number_screen_pos = icon_screen_pos;
+                number_screen_pos.x += (it->pos_type == PositionType::AgentTopLeft ? -1 : 1) * (icon_half_size + 5 * scale + number_half_size.x);
+                number_screen_pos -= number_half_size;
+
+                auto number_color = healing < 0
+                                        ? player_agent_id == agent_id
+                                              ? TextureModule::DamageNumberColor::Red
+                                              : TextureModule::DamageNumberColor::Yellow
+                                        : TextureModule::DamageNumberColor::Blue;
+
+                TextureModule::DrawDamageNumber(healing, number_screen_pos, number_scale, number_color, bg_draw_list);
+            }
+            ImGui::PopStyleVar(); // Alpha
 
             ++it;
         }
-        ImGui::PopStyleVar(3);
     }
 
     void Reset()
