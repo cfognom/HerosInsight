@@ -319,7 +319,7 @@ static void OnRender(IDirect3DDevice9 *device)
 
         initialized = true;
 
-        GW::Chat::WriteChat(GW::Chat::CHANNEL_MODERATOR, L"HeroAI: Initialized");
+        GW::Chat::WriteChat(GW::Chat::CHANNEL_MODERATOR, L"HerosInsight: Initialized");
     }
 
     ImGui_ImplDX9_NewFrame();
@@ -345,7 +345,7 @@ static void OnRender(IDirect3DDevice9 *device)
 
         HerosInsight::UpdateManager::Terminate();
 
-        GW::Chat::WriteChat(GW::Chat::CHANNEL_MODERATOR, L"HeroAI: Bye!");
+        GW::Chat::WriteChat(GW::Chat::CHANNEL_MODERATOR, L"HerosInsight: Bye!");
         GW::DisableHooks();
         running = false;
     }
