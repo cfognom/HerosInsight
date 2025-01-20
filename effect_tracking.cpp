@@ -152,17 +152,60 @@ namespace HerosInsight::EffectTracking
         effects.push_back(new_effect);
     }
 
-    std::vector<EffectTracker>::iterator RemoveAndElectNew(std::vector<EffectTracker> &effects, std::vector<EffectTracker>::iterator effect_it)
+    struct AOEEffect
+    {
+        GW::GamePos pos;
+        float radius;
+        GW::Constants::SkillID skill_id;
+        uint32_t effect_id;
+        uint32_t cause_agent_id;
+        float duration;
+        uint8_t attribute_level;
+        DWORD timestamp_begin;
+        std::vector<uint32_t> agents_in_range;
+    };
+
+    std::vector<std::optional<AOEEffect>> aoe_effects;
+    size_t GetFreeAOESlot()
+    {
+        for (size_t i = 0; i < aoe_effects.size(); i++)
+        {
+            if (!aoe_effects[i].has_value())
+            {
+                return i;
+            }
+        }
+        auto index = aoe_effects.size();
+        aoe_effects.push_back(std::nullopt);
+        return index;
+    }
+
+    void ApplyAOEEffect(GW::GamePos pos, float radius, GW::Constants::SkillID skill_id, uint32_t effect_id, uint32_t cause_agent_id, float duration)
+    {
+        AOEEffect aoe_effect = {};
+        aoe_effect.pos = pos;
+        aoe_effect.radius = radius;
+        aoe_effect.skill_id = skill_id;
+        aoe_effect.effect_id = effect_id;
+        aoe_effect.cause_agent_id = cause_agent_id;
+        aoe_effect.duration = duration;
+
+        auto index = GetFreeAOESlot();
+        aoe_effects[index] = aoe_effect;
+    }
+
+    void RemoveAndElectNew(std::vector<EffectTracker> &effects, uint32_t index)
     {
 #ifdef DEBUG_EFFECT_LIFETIME
         Utils::FormatToChat(0xFFFFFF00, L"Removing effect for agent {}, skill {}", effect_it->cause_agent_id, Utils::GetSkillName(effect_it->skill_id));
 #endif
 
-        const auto skill_id = effect_it->skill_id;
-        const bool was_active = effect_it->is_active;
+        auto &effect = effects[index];
+        const auto skill_id = effect.skill_id;
+        const bool was_active = effect.is_active;
 
         // Erase the effect using its pointer directly
-        effect_it = effects.erase(effect_it);
+        effects.erase(effects.begin() + index);
 
         if (was_active) // Removed active effect
         {
@@ -184,8 +227,48 @@ namespace HerosInsight::EffectTracking
                 candidate_effect->is_active = true;
             }
         }
+    }
 
-        return effect_it;
+    // Mimics how the game does it
+    void CondiHexEnchRemoval(uint32_t agent_id, RemovalMask mask, uint32_t count)
+    {
+        auto ShouldRemove = [mask, &count](EffectTracker &tracker)
+        {
+            if (count == 0)
+                return false;
+
+            auto skill_id = tracker.skill_id;
+
+            if (skill_id >= GW::Constants::SkillID::Bleeding &&
+                skill_id <= GW::Constants::SkillID::Weakness)
+            {
+                auto shift = (uint32_t)skill_id - (uint32_t)GW::Constants::SkillID::Bleeding;
+                if ((bool)(mask & (RemovalMask)(1 << shift)))
+                    goto success;
+            }
+
+            if ((bool)(mask & RemovalMask::CrackedArmor) &&
+                skill_id == GW::Constants::SkillID::Cracked_Armor)
+                goto success;
+
+            {
+                auto &skill = *GW::SkillbarMgr::GetSkillConstantData(skill_id);
+                if ((bool)(mask & RemovalMask::Hex) &&
+                    skill.type == GW::Constants::SkillType::Hex)
+                    goto success;
+
+                if ((bool)(mask & RemovalMask::Enchantment) &&
+                    skill.type == GW::Constants::SkillType::Enchantment)
+                    goto success;
+            }
+
+            return false;
+        success:
+            --count;
+            return true;
+        };
+
+        RemoveTrackers(agent_id, ShouldRemove);
     }
 
     void RemoveTrackers(uint32_t agent_id, std::function<bool(EffectTracker &)> predicate)
@@ -193,15 +276,12 @@ namespace HerosInsight::EffectTracking
         auto &agent_tracking = agent_trackers[agent_id];
         auto &effects = agent_tracking.effects;
 
-        for (auto effect_it = effects.begin(); effect_it < effects.end();)
+        for (int32_t i = effects.size() - 1; i >= 0; --i)
         {
-            if (predicate(*effect_it))
+            auto &effect = effects[i];
+            if (predicate(effect))
             {
-                effect_it = RemoveAndElectNew(effects, effect_it);
-            }
-            else
-            {
-                ++effect_it;
+                RemoveAndElectNew(effects, i);
             }
         }
     }
@@ -211,21 +291,15 @@ namespace HerosInsight::EffectTracking
         auto &agent_tracking = agent_trackers[agent_id];
         auto &effects = agent_tracking.effects;
 
-        for (auto effect_it = effects.begin(); effect_it < effects.end();)
+        for (int32_t i = effects.size() - 1; i >= 0; --i)
         {
-            if (effect_it->skill_id == effect_skill_id)
-            {
-                if (effect_it->charges > 0)
-                    effect_it->charges--;
+            auto &effect = effects[i];
+            if (effect.charges > 0)
+                --effect.charges;
 
-                if (effect_it->charges == 0)
-                {
-                    effect_it = RemoveAndElectNew(effects, effect_it);
-                }
-                else
-                {
-                    ++effect_it;
-                }
+            if (effect.charges == 0)
+            {
+                RemoveAndElectNew(effects, i);
             }
         }
     }
@@ -365,6 +439,106 @@ namespace HerosInsight::EffectTracking
     }
 #endif
 
+    void UpdateAOEEffects()
+    {
+        for (auto &aoe_effect : aoe_effects)
+        {
+            if (!aoe_effect)
+                continue;
+
+            auto timestamp_now = GW::MemoryMgr::GetSkillTimer();
+            if (!aoe_effect->timestamp_begin)
+                aoe_effect->timestamp_begin = timestamp_now;
+            auto elapsed_ms = timestamp_now - aoe_effect->timestamp_begin;
+            auto elapsed_sec = (float)elapsed_ms / 1000.f;
+            auto rem_duration = aoe_effect->duration - elapsed_sec;
+
+            if (rem_duration <= 0)
+            {
+                aoe_effect = std::nullopt;
+                auto new_size = aoe_effects.size();
+                while (new_size > 0 && !aoe_effects[new_size - 1])
+                    --new_size;
+                aoe_effects.resize(new_size);
+                continue;
+            }
+
+            const auto remove_marker = 0x80000000;
+
+            auto &agents_in_range = aoe_effect->agents_in_range;
+            size_t i = 0;
+            Utils::ForAgentsInCircle(aoe_effect->pos, aoe_effect->radius,
+                [&](GW::AgentLiving &agent)
+                {
+                    auto agent_id = agent.agent_id;
+
+                    while (i < agents_in_range.size())
+                    {
+                        auto &agent_id_in_range = agents_in_range[i];
+                        if (agent_id_in_range < agent_id)
+                        {
+                            // Agent exited radius
+                            agent_id_in_range |= remove_marker; // Mark for removal
+                            ++i;
+                            continue;
+                        }
+
+                        if (agent_id_in_range > agent_id)
+                        {
+                            // Agent entered radius
+                            goto success;
+                        }
+
+                        if (agent_id_in_range == agent_id)
+                        {
+                            // Agent is in range
+                            ++i;
+                            return;
+                        }
+                    }
+
+                    if (i == agents_in_range.size())
+                    {
+                    success:
+                        agents_in_range.insert(agents_in_range.begin() + i, agent_id);
+
+                        EffectTracker tracker = {};
+                        tracker.cause_agent_id = aoe_effect->cause_agent_id;
+                        tracker.skill_id = aoe_effect->skill_id;
+                        tracker.effect_id = aoe_effect->effect_id;
+                        tracker.duration_sec = rem_duration;
+                        tracker.attribute_level = aoe_effect->attribute_level;
+
+                        AddTracker(agent_id, tracker);
+                        ++i;
+                    }
+                });
+
+            for (uint32_t j = 0; j < agents_in_range.size(); ++j)
+            {
+                auto &agent_id_in_range = agents_in_range[j];
+                if (j >= i)
+                    agent_id_in_range |= remove_marker;
+
+                if (agent_id_in_range & remove_marker)
+                {
+                    RemoveTrackers(agent_id_in_range & ~remove_marker,
+                        [&](EffectTracker &effect)
+                        {
+                            return effect.effect_id == aoe_effect->effect_id;
+                        });
+                }
+            }
+
+            // Remove marked
+            std::erase_if(agents_in_range,
+                [&](uint32_t agent_id)
+                {
+                    return agent_id & remove_marker;
+                });
+        }
+    }
+
     void Update()
     {
 #ifdef _DEBUG
@@ -394,14 +568,14 @@ namespace HerosInsight::EffectTracking
                 continue;
             }
 
-            auto EffectIsValid = [&](EffectTracker &effect)
+            auto ShouldRemove = [&](EffectTracker &effect)
             {
                 if (EffectTimedOut(agent, effect, timestamp_now))
                 {
 #ifdef DEBUG_EFFECT_LIFETIME
                     Utils::FormatToChat(0xFFFFFF00, L"Effect timed out: skill {}", Utils::GetSkillName(effect.skill_id));
 #endif
-                    return false;
+                    return true;
                 }
 
                 if (agent)
@@ -427,28 +601,19 @@ namespace HerosInsight::EffectTracking
                             Utils::FormatToChat(0xFFFFFFFF, L"WRONG CALCULATED EFFECT DURATION!");
                         }
 #endif
-                        return false;
+                        return true;
                     }
                 }
-                // We assume the effect stays on until it times out when the mob is outside compass range
-                return true;
+                // We assume the effect stays on until it times-out when the mob is outside compass range
+                return false;
             };
 
-            // Check if we can remove any effects
-            for (auto effect_it = effects.begin(); effect_it < effects.end();)
-            {
-                if (!EffectIsValid(*effect_it))
-                {
-                    effect_it = RemoveAndElectNew(effects, effect_it);
-                }
-                else
-                {
-                    ++effect_it;
-                }
-            }
+            RemoveTrackers(agent_id, ShouldRemove); // Temporarily commented out for testing
 
             it++;
         }
+
+        UpdateAOEEffects();
 
         // Remove effects scheduled for removal
         for (auto &[agent_id, unique_ids_to_remove] : scheduled_removals)

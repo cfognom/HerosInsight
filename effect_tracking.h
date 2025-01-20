@@ -57,9 +57,9 @@ namespace HerosInsight::EffectTracking
         GW::Constants::SkillID skill_id;
         uint32_t attribute_level;
         uint32_t effect_id;
+        uint32_t duration_sec;
         DWORD begin_timestamp;
         DWORD observed_timestamp;
-        uint32_t duration_sec;
         uint32_t unique_id;
         float accum_damage;
         uint8_t charges;
@@ -159,6 +159,8 @@ namespace HerosInsight::EffectTracking
     void ApplySkillEffect(uint32_t target_id, uint32_t cause_id, SkillEffect effect);
     void ApplySkillEffects(uint32_t target_id, uint32_t cause_id, std::span<SkillEffect> effects);
     void AddTracker(uint32_t agent_id, EffectTracker tracker);
+    void ApplyAOEEffect(GW::GamePos pos, float radius, GW::Constants::SkillID skill_id, uint32_t effect_id, uint32_t cause_agent_id, float duration);
+    void CondiHexEnchRemoval(uint32_t agent_id, RemovalMask mask, uint32_t count);
     void RemoveTrackers(uint32_t agent_id, std::function<bool(EffectTracker &)> predicate);
     void SpendCharge(uint32_t agent_id, GW::Constants::SkillID effect_skill_id);
     void ScheduleTrackerRemoval(uint32_t agent_id, uint32_t effect_id);
