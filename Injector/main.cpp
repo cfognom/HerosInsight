@@ -1,9 +1,12 @@
+// Reordering these causes compile errors...
+// clang-format off
 #include <windows.h>
 #include <tlhelp32.h>
 #include <iostream>
 #include <fstream>
 #include <sstream>
 #include <streambuf>
+// clang-format on
 
 DWORD GetProcessIdByName(const char *processName)
 {
@@ -79,15 +82,14 @@ bool InjectDLL(DWORD processId, const char *dllPath)
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
-    const char *processName = "Gw.exe"; // Replace with the actual Guild Wars executable name
-#ifdef _DEBUG
-    const char *dllPath = "C:/Users/carlh/Documents/Guild Wars/HerosInsight/build/Debug/HerosInsight.dll"; // Replace with the actual path to your DLL
-#else
-    const char *dllPath = "C:/Users/carlh/Documents/Guild Wars/HerosInsight/build/Release/HerosInsight.dll"; // Replace with the actual path to your DLL
-#endif
+    const char *processName = "Gw.exe";
+
+    char dllPathBuffer[MAX_PATH];
+    GetFullPathName("HerosInsight.dll", MAX_PATH, dllPathBuffer, NULL);
+    const char *dllPath = dllPathBuffer;
 
     // Redirect std::cout and std::cerr to a file
-    std::ofstream outFile("gw_hero_ai_output.log");
+    std::ofstream outFile("HerosInsight_output.log");
     std::streambuf *originalCoutBuffer = std::cout.rdbuf();
     std::streambuf *originalCerrBuffer = std::cerr.rdbuf();
     std::cout.rdbuf(outFile.rdbuf());
