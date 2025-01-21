@@ -2,7 +2,7 @@
 
 struct IDirect3DDevice9;
 
-namespace HerosInsight
+namespace HerosInsight::HeroAI
 {
     void Update();
 }

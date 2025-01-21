@@ -200,7 +200,7 @@ namespace HerosInsight
 
             if (game_state == GameState::InExplorable)
             {
-                HerosInsight::Update();
+                // HerosInsight::HeroAI::Update();
                 HerosInsight::PartyDataModule::Update();
                 HerosInsight::EffectTracking::Update();
                 HerosInsight::WorldSpaceUI::Update();
