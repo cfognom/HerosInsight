@@ -23,5 +23,12 @@
                 "programOutput": true,
             }
         },
+        {
+            "name": "Debug Injector",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/Debug/Launch_HerosInsight.exe",
+            "cwd": "${workspaceFolder}/build/Debug",
+        }
     ]
 }
