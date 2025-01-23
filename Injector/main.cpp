@@ -6,6 +6,7 @@
 #include <fstream>
 #include <sstream>
 #include <streambuf>
+#include <assert.h>
 // clang-format on
 
 DWORD GetProcessIdByName(const char *processName)
@@ -36,48 +37,51 @@ DWORD GetProcessIdByName(const char *processName)
     return 0;
 }
 
-bool InjectDLL(DWORD processId, const char *dllPath)
+bool TryInjectDLL(DWORD processId, const char *dllPath)
 {
+    assert(processId);
+    assert(dllPath);
+
+    bool success = false;
     HANDLE process = OpenProcess(PROCESS_ALL_ACCESS, FALSE, processId);
     if (process == NULL)
     {
         std::cerr << "Failed to open target process. Error: " << GetLastError() << std::endl;
-        return false;
     }
-
-    size_t dllPathLength = strlen(dllPath) + 1;
-    LPVOID allocatedMemory = VirtualAllocEx(process, NULL, dllPathLength, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-    if (allocatedMemory == NULL)
+    else
     {
-        std::cerr << "Failed to allocate memory in target process." << std::endl;
+        size_t dllPathLength = strlen(dllPath) + 1;
+        LPVOID allocatedMemory = VirtualAllocEx(process, NULL, dllPathLength, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+        if (allocatedMemory == NULL)
+        {
+            std::cerr << "Failed to allocate memory in target process." << std::endl;
+        }
+        else
+        {
+            if (!WriteProcessMemory(process, allocatedMemory, dllPath, dllPathLength, NULL))
+            {
+                std::cerr << "Failed to write DLL path to target process memory." << std::endl;
+            }
+            else
+            {
+                HANDLE remoteThread = CreateRemoteThread(process, NULL, 0, (LPTHREAD_START_ROUTINE)LoadLibraryA, allocatedMemory, 0, NULL);
+                if (remoteThread == NULL)
+                {
+                    std::cerr << "Failed to create remote thread in target process." << std::endl;
+                }
+                else
+                {
+                    WaitForSingleObject(remoteThread, INFINITE);
+                    success = true;
+
+                    CloseHandle(remoteThread);
+                }
+            }
+            VirtualFreeEx(process, allocatedMemory, 0, MEM_RELEASE);
+        }
         CloseHandle(process);
-        return false;
     }
-
-    if (!WriteProcessMemory(process, allocatedMemory, dllPath, dllPathLength, NULL))
-    {
-        std::cerr << "Failed to write DLL path to target process memory." << std::endl;
-        VirtualFreeEx(process, allocatedMemory, 0, MEM_RELEASE);
-        CloseHandle(process);
-        return false;
-    }
-
-    HANDLE remoteThread = CreateRemoteThread(process, NULL, 0, (LPTHREAD_START_ROUTINE)LoadLibraryA, allocatedMemory, 0, NULL);
-    if (remoteThread == NULL)
-    {
-        std::cerr << "Failed to create remote thread in target process." << std::endl;
-        VirtualFreeEx(process, allocatedMemory, 0, MEM_RELEASE);
-        CloseHandle(process);
-        return false;
-    }
-
-    WaitForSingleObject(remoteThread, INFINITE);
-
-    VirtualFreeEx(process, allocatedMemory, 0, MEM_RELEASE);
-    CloseHandle(remoteThread);
-    CloseHandle(process);
-
-    return true;
+    return success;
 }
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
@@ -102,13 +106,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         return 1;
     }
 
-    if (InjectDLL(processId, dllPath))
+    if (TryInjectDLL(processId, dllPath))
     {
         std::cout << "DLL injected successfully." << std::endl;
     }
     else
     {
-        MessageBox(NULL, "Failed to inject DLL.", "Error", MB_ICONERROR | MB_OK);
+        MessageBox(NULL, "Failed to inject DLL, check output file for more details.", "Error", MB_ICONERROR | MB_OK);
     }
 
     // Restore the original buffers
