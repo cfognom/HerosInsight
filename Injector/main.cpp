@@ -1,6 +1,7 @@
 // Reordering these causes compile errors...
 // clang-format off
 #include <windows.h>
+#include <psapi.h>
 #include <tlhelp32.h>
 #include <iostream>
 #include <fstream>
@@ -35,6 +36,42 @@ DWORD GetProcessIdByName(const char *processName)
 
     CloseHandle(snapshot);
     return 0;
+}
+
+bool IsDllLoaded(DWORD processID, const char *dllName)
+{
+    HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, processID);
+    if (!hProcess)
+    {
+        std::cerr << "Failed to open process. Error: " << GetLastError() << "\n";
+        return false;
+    }
+
+    HMODULE hModules[1024];
+    DWORD cbNeeded;
+
+    if (EnumProcessModules(hProcess, hModules, sizeof(hModules), &cbNeeded))
+    {
+        for (unsigned int i = 0; i < (cbNeeded / sizeof(HMODULE)); ++i)
+        {
+            char moduleName[MAX_PATH];
+            if (GetModuleFileNameEx(hProcess, hModules[i], moduleName, sizeof(moduleName) / sizeof(char)))
+            {
+                if (strstr(moduleName, dllName) != nullptr)
+                {
+                    CloseHandle(hProcess);
+                    return true;
+                }
+            }
+        }
+    }
+    else
+    {
+        std::cerr << "Failed to enumerate process modules. Error: " << GetLastError() << "\n";
+    }
+
+    CloseHandle(hProcess);
+    return false;
 }
 
 bool TryInjectDLL(DWORD processId, const char *dllPath)
@@ -92,15 +129,14 @@ bool TryInjectDLL(DWORD processId, const char *dllPath)
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
     const char *processName = "Gw.exe";
+    const char *main_dll = "HerosInsight.dll";
 
     char dllPathBuffer[MAX_PATH];
-    GetFullPathName("HerosInsight.dll", MAX_PATH, dllPathBuffer, NULL);
+    GetFullPathName(main_dll, MAX_PATH, dllPathBuffer, NULL);
     const char *dllPath = dllPathBuffer;
 
     // Redirect std::cout and std::cerr to a file
     std::ofstream outFile("HerosInsight_output.log");
-    std::streambuf *originalCoutBuffer = std::cout.rdbuf();
-    std::streambuf *originalCerrBuffer = std::cerr.rdbuf();
     std::cout.rdbuf(outFile.rdbuf());
     std::cerr.rdbuf(outFile.rdbuf());
 
@@ -111,18 +147,19 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         return 1;
     }
 
-    if (TryInjectDLL(processId, dllPath))
+    if (IsDllLoaded(processId, main_dll))
     {
-        std::cout << "DLL injected successfully." << std::endl;
-    }
-    else
-    {
-        MessageBox(NULL, "Failed to inject DLL, check output file for more details.", "Error", MB_ICONERROR | MB_OK);
+        MessageBox(NULL, "HerosInsight is already running.", "Error", MB_ICONERROR | MB_OK);
+        return 1;
     }
 
-    // Restore the original buffers
-    std::cout.rdbuf(originalCoutBuffer);
-    std::cerr.rdbuf(originalCerrBuffer);
+    if (!TryInjectDLL(processId, dllPath))
+    {
+        MessageBox(NULL, "Failed to inject DLL, check output file for more details.", "Error", MB_ICONERROR | MB_OK);
+        return 1;
+    }
+
+    std::cout << "DLL injected successfully." << std::endl;
 
     return 0;
 }
