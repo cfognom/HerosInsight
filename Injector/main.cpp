@@ -46,7 +46,12 @@ bool TryInjectDLL(DWORD processId, const char *dllPath)
     HANDLE process = OpenProcess(PROCESS_ALL_ACCESS, FALSE, processId);
     if (process == NULL)
     {
-        std::cerr << "Failed to open target process. Error: " << GetLastError() << std::endl;
+        auto last_error = GetLastError();
+        std::cerr << "Failed to open target process. Error: " << last_error << std::endl;
+        if (last_error == 5)
+        {
+            std::cerr << "(Maybe try adding the HerosInsight dll and launcher exe to your antivirus whitelist/exlusion list)" << std::endl;
+        }
     }
     else
     {
