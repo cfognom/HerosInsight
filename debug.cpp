@@ -121,16 +121,28 @@ namespace HerosInsight::Debug
             skill_id >= GW::Constants::SkillID::Count)
             return;
 
-        const auto &custom_sd = CustomSkillDataModule::GetCustomSkillData(skill_id);
-        auto &skill = *custom_sd.skill;
+        const auto &cskill = CustomSkillDataModule::GetCustomSkillData(skill_id);
+        auto &skill = *cskill.skill;
         const auto str = Utils::SkillConstantDataToString(skill);
         DebugDisplay::PushToDisplay("Hovered skill data", str);
 
-        const auto custom_str = custom_sd.ToString();
+        const auto custom_str = cskill.ToString();
         DebugDisplay::PushToDisplay("Hovered skill custom_sd", custom_str);
 
         DebugDisplay::PushToDisplay("Hovered skill", Utils::StrIDToStr(skill.name));
         DebugDisplay::PushToDisplay("Hovered skill agent_id", std::to_string(agent_id));
+        DebugDisplay::PushToDisplay("Hovered skill init_effect count", cskill.init_effects.size());
+        DebugDisplay::PushToDisplay("Hovered skill end_effect count", cskill.end_effects.size());
+        for (uint32_t i = 0; i < cskill.init_effects.size(); i++)
+        {
+            auto &effect = cskill.init_effects[i];
+            DebugDisplay::PushToDisplay(L"Hovered skill init_effect[{}] = {}", i, effect.ToWString());
+        }
+        for (uint32_t i = 0; i < cskill.end_effects.size(); i++)
+        {
+            auto &effect = cskill.end_effects[i];
+            DebugDisplay::PushToDisplay(L"Hovered skill end_effect[{}] = {}", i, effect.ToWString());
+        }
 
         const auto living_agent = Utils::GetAgentLivingByID(agent_id);
         if (living_agent == nullptr)

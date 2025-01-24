@@ -180,7 +180,7 @@ namespace HerosInsight::EffectTracking
         return index;
     }
 
-    void ApplyAOEEffect(GW::GamePos pos, float radius, GW::Constants::SkillID skill_id, uint32_t effect_id, uint32_t cause_agent_id, float duration)
+    uint32_t CreateAOEEffect(GW::GamePos pos, float radius, GW::Constants::SkillID skill_id, uint32_t effect_id, uint32_t cause_agent_id, float duration)
     {
         AOEEffect aoe_effect = {};
         aoe_effect.pos = pos;
@@ -192,6 +192,36 @@ namespace HerosInsight::EffectTracking
 
         auto index = GetFreeAOESlot();
         aoe_effects[index] = aoe_effect;
+        return index;
+    }
+
+    void RemoveAOEEffect(uint32_t id)
+    {
+        auto &aoe = aoe_effects[id];
+        if (!aoe)
+            return;
+
+        for (auto agent_id : aoe->agents_in_range)
+        {
+            RemoveTrackers(agent_id,
+                [=](EffectTracker &tracker)
+                {
+                    return tracker.effect_id == aoe->effect_id;
+                });
+        }
+        aoe = std::nullopt;
+    }
+
+    std::unordered_map<uint32_t, uint32_t> active_auras;
+    void CreateAuraEffect(uint32_t agent_id, float radius, GW::Constants::SkillID skill_id, uint32_t effect_id, uint32_t cause_agent_id, float duration)
+    {
+        auto agent = Utils::GetAgentLivingByID(agent_id);
+        SOFT_ASSERT(agent, L"Attempt to create an aura effect on invalid agent");
+        if (!agent)
+            return;
+
+        auto id = CreateAOEEffect(agent->pos, radius, skill_id, effect_id, cause_agent_id, duration);
+        active_auras[agent_id] = id;
     }
 
     void RemoveAndElectNew(std::vector<EffectTracker> &effects, uint32_t index)
@@ -439,6 +469,35 @@ namespace HerosInsight::EffectTracking
     }
 #endif
 
+    void UpdateAuras()
+    {
+        for (auto it = active_auras.begin(); it != active_auras.end();)
+        {
+            auto agent_id = it->first;
+            auto aoe_id = it->second;
+            auto agent = Utils::GetAgentLivingByID(agent_id);
+            auto &aoe_effect = aoe_effects[aoe_id];
+            if (!agent || agent->GetIsDead() || agent->GetIsDeadByTypeMap())
+            {
+                // Source agent is dead
+                it = active_auras.erase(it);
+                RemoveAOEEffect(aoe_id);
+                continue;
+            }
+
+            if (!aoe_effect)
+            {
+                // Expired
+                it = active_auras.erase(it);
+                continue;
+            }
+
+            aoe_effect->pos = agent->pos;
+
+            ++it;
+        }
+    }
+
     void UpdateAOEEffects()
     {
         for (auto &aoe_effect : aoe_effects)
@@ -613,6 +672,7 @@ namespace HerosInsight::EffectTracking
             it++;
         }
 
+        UpdateAuras();
         UpdateAOEEffects();
 
         // Remove effects scheduled for removal

@@ -72,6 +72,26 @@ namespace HerosInsight::EffectInitiator
 {
     using namespace HerosInsight::PacketStepper;
 
+    struct EffectClaimingScope
+    {
+        static inline uint32_t current_cause_agent_id = 0;
+        static inline std::function<void(const StoC::AddEffect &)> claiming_handler = nullptr;
+
+        EffectClaimingScope(uint32_t cause_agent_id, std::function<void(const StoC::AddEffect &)> handler)
+        {
+            assert(cause_agent_id != 0);
+            assert(current_cause_agent_id == 0);
+            current_cause_agent_id = cause_agent_id;
+            claiming_handler = handler;
+        }
+        ~EffectClaimingScope()
+        {
+            assert(current_cause_agent_id != 0);
+            current_cause_agent_id = 0;
+            claiming_handler = nullptr;
+        }
+    };
+
     struct Attack
     {
         GW::Constants::SkillID skill_id;
@@ -123,42 +143,45 @@ namespace HerosInsight::EffectInitiator
     void GetSpellEffects(
         uint32_t caster_id, uint32_t target_id,
         GW::Constants::SkillID skill_id, uint8_t attr_lvl,
-        FixedArrayRef<StaticSkillEffect> result, std::span<StaticSkillEffect> reference = {})
+        FixedArrayRef<StaticSkillEffect> result)
     {
         auto caster_ptr = Utils::GetAgentLivingByID(caster_id);
-        auto target_ptr = Utils::GetAgentLivingByID(target_id);
-        if (!caster_ptr || !target_ptr)
+        // auto target_ptr = Utils::GetAgentLivingByID(target_id);
+        if (!caster_ptr)
             return;
         auto &caster_living = *caster_ptr;
-        auto &target_living = *target_ptr;
+        // auto &target_living = *target_ptr;
 
         auto &cskill = CustomSkillDataModule::GetCustomSkillData(skill_id);
         auto &skill = *GW::SkillbarMgr::GetSkillConstantData(skill_id);
 
         for (auto init_effect : cskill.init_effects)
         {
-            switch (init_effect.skill_id)
+            if (auto effect_skill_id = std::get_if<GW::Constants::SkillID>(&init_effect.skill_id_or_removal))
             {
-                case GW::Constants::SkillID::Disease:
+                switch (*effect_skill_id)
                 {
-                    if (init_effect.skill_id == GW::Constants::SkillID::Mystic_Corruption &&
-                        caster_living.GetIsEnchanted())
+                    case GW::Constants::SkillID::Disease:
                     {
-                        init_effect.duration.val0 *= 2;
-                        init_effect.duration.val15 *= 2;
-                    }
-                    break;
-                }
-
-                case GW::Constants::SkillID::Ice_Spear:
-                case GW::Constants::SkillID::Smoldering_Embers:
-                case GW::Constants::SkillID::Magnetic_Surge:
-                case GW::Constants::SkillID::Stone_Daggers:
-                {
-                    // These skills only cause effects if the caster is overcast
-                    if (Utils::IsOvercast(caster_living))
+                        if (skill_id == GW::Constants::SkillID::Mystic_Corruption &&
+                            caster_living.GetIsEnchanted())
+                        {
+                            init_effect.duration_or_count.val0 *= 2;
+                            init_effect.duration_or_count.val15 *= 2;
+                        }
                         break;
-                    continue;
+                    }
+
+                    case GW::Constants::SkillID::Ice_Spear:
+                    case GW::Constants::SkillID::Smoldering_Embers:
+                    case GW::Constants::SkillID::Magnetic_Surge:
+                    case GW::Constants::SkillID::Stone_Daggers:
+                    {
+                        // These skills only cause effects if the caster is overcast
+                        if (Utils::IsOvercast(caster_living))
+                            break;
+                        continue;
+                    }
                 }
             }
 
@@ -186,8 +209,8 @@ namespace HerosInsight::EffectInitiator
                             effect.location = EffectLocation::Target;
                             effect.mask = EffectMask::OtherFoes;
                             effect.radius = Utils::Range::Adjacent;
-                            effect.skill_id = effect_skill.skill_id;
-                            effect.duration = {rem_sec, rem_sec};
+                            effect.skill_id_or_removal = effect_skill.skill_id;
+                            effect.duration_or_count = {rem_sec, rem_sec};
                             result.try_push(effect);
                         }
                     }
@@ -197,7 +220,7 @@ namespace HerosInsight::EffectInitiator
         }
     }
 
-    void OnSkillActivated(uint32_t caster_id, uint32_t target_id, GW::Constants::SkillID skill_id)
+    TrackedCoroutine OnSkillActivated(uint32_t caster_id, uint32_t target_id, GW::Constants::SkillID skill_id)
     {
 #ifdef DEBUG_ACTIVATIONS
         Utils::FormatToChat(DEBUG_ACTIVATIONS_COLOR,
@@ -238,65 +261,77 @@ namespace HerosInsight::EffectInitiator
             }
         }
 
-        if (!cskill.init_effects.empty())
+        bool has_init_effects = !cskill.init_effects.empty();
+
+        if (has_init_effects)
         {
-            auto caster_agent = Utils::GetAgentLivingByID(caster_id);
-            auto target_agent = Utils::GetAgentLivingByID(target_id);
-            if (target_agent && caster_agent)
+            FixedArray<StaticSkillEffect, 18> effects_salloc;
+            auto effects = effects_salloc.ref();
+            GetSpellEffects(caster_id, target_id, skill_id, attr_lvl, effects);
+
+            FixedSet<uint32_t, 16> handled_agents;
             {
-                FixedArray<StaticSkillEffect, 18> effects_salloc;
-                auto effects = effects_salloc.ref();
-                GetSpellEffects(caster_id, target_id, skill_id, attr_lvl, effects);
+                EffectClaimingScope scope(caster_id,
+                    [&](const StoC::AddEffect &packet)
+                    {
+                        if (packet.skill_id == skill_id)
+                        {
+                            attr_lvl = packet.attribute_level;
 
-                for (auto &effect : effects)
+                            // TODO: Check for liutenant's and account for it maybe?
+                        }
+
+                        handled_agents.insert(packet.agent_id);
+                    });
+                if (target_id == 0) // Some targeted instant skills don't properly disclose their target, so we attempt to deduce it
                 {
-                    effect.Apply(caster_id, target_id, attr_lvl);
+                    PacketListenerScope listener(
+                        [&](const StoC::GenericValueTarget &packet)
+                        {
+                            if (packet.caster == caster_id)
+                                target_id = packet.target;
+                        });
                 }
-
-                // FixedArray<uint32_t, 16> handled_agents_salloc;
-                // auto handled_agents = handled_agents_salloc.ref();
-                // {
-                //     AfterEffectsAwaiter awaiter(caster_id, targets);
-                //     PacketListenerScope listener(
-                //         [&](const StoC::AddEffect &packet)
-                //         {
-                //             auto duration = *(float *)&packet.timestamp;
-                //             if (packet.skill_id == skill_id)
-                //             {
-                //                 attr_lvl = packet.attribute_level;
-
-                //                 // TODO: Check for liutenant's and account for it
-                //             }
-
-                //             EffectTracking::EffectTracker tracker = {};
-                //             tracker.cause_agent_id = caster_id;
-                //             tracker.skill_id = (GW::Constants::SkillID)packet.skill_id;
-                //             tracker.attribute_level = packet.attribute_level;
-                //             tracker.effect_id = packet.effect_id;
-                //             tracker.duration_sec = duration;
-
-                //             EffectTracking::AddTracker(packet.agent_id, tracker);
-                //             handled_agents.try_push(packet.agent_id);
-                //         });
-                //     co_await awaiter;
-                // }
-
-                // FixedArray<SkillEffect, 18> effects_salloc;
-                // auto effects = effects_salloc.ref();
-                // for (auto &target : targets)
-                // {
-                //     if (target & 0x80000000) // Already processed
-                //     {
-                //         target &= ~0x80000000; // Remove mark
-                //         continue;
-                //     }
-
-                //     effects.clear();
-                //     GetSpellEffects(caster, target_id, effects);
-
-                //     EffectTracking::ApplySkillEffects(target, caster_id, effects);
-                // }
+                co_await AfterEffectsAwaiter(caster_id);
             }
+
+            if (target_id == 0)
+                target_id = caster_id; // If all else fails assume the caster is the target
+
+            for (auto &effect : effects)
+            {
+                effect.Apply(caster_id, target_id, attr_lvl,
+                    [&](GW::AgentLiving &agent)
+                    {
+                        return !handled_agents.has(agent.agent_id);
+                    });
+            }
+        }
+
+        if (skill.type == GW::Constants::SkillType::Ritual)
+        {
+            PermaAwaiter awaiter;
+            float duration = 0;
+            uint32_t effect_id = 0;
+            PacketListenerScope listener1(
+                [&](const StoC::CreateNPC &packet)
+                {
+                    duration = packet.lifetime;
+                    effect_id = packet.effect_id;
+                });
+            PacketListenerScope listener2(
+                [&](const StoC::AgentAdd &packet)
+                {
+                    EffectTracking::CreateAuraEffect(
+                        packet.agent_id,
+                        (float)Utils::Range::SpiritRange,
+                        skill_id,
+                        effect_id,
+                        caster_id,
+                        duration);
+                    awaiter.stop();
+                });
+            co_await awaiter;
         }
     }
 
@@ -484,6 +519,7 @@ namespace HerosInsight::EffectInitiator
                         auto poison_effect = SkillEffect{GW::Constants::SkillID::Poison, GW::Constants::SkillID::Apply_Poison, base_duration};
                         out.try_push(poison_effect);
                     }
+                    break;
                 }
 
                 case GW::Constants::SkillID::Strike_as_One:
@@ -578,7 +614,7 @@ namespace HerosInsight::EffectInitiator
     {
         FixedArray<SkillEffect, 18> effects_salloc;
         auto effects = effects_salloc.ref();
-        CollectAttackEffects(attacker_id, attack.skill_id, false, effects);
+        CollectAttackEffects(attacker_id, attack.skill_id, attack.IsMelee(), effects);
 
         {
             FrameEndAwaiter awaiter;
@@ -693,70 +729,7 @@ namespace HerosInsight::EffectInitiator
 
     TrackedCoroutine TrackInstantSkill(uint32_t caster_id, GW::Constants::SkillID skill_id)
     {
-        uint32_t target_id = caster_id;
-        // {
-        //     // It seems the only way to deduce the target is by listening to the effect_on_target packet
-        //     // And that only works for some targeted skills
-        //     PacketListenerScope listener(
-        //         [&](const StoC::GenericValueTarget &packet)
-        //         {
-        //             if (packet.caster == caster_id &&
-        //                 packet.Value_id == StoC::GenericValueID::effect_on_target)
-        //             {
-        //                 target_id = packet.target;
-        //             }
-        //         });
-        //     co_await FrameEndAwaiter();
-        // }
-
-        // // Attempt to deduce the target from the next packets (We assume no other packets comes inbetween)
-        // while (true)
-        // {
-        //     auto next_packet = co_await NextPacketAwaiter();
-
-        //     switch (next_packet->header)
-        //     {
-        //         // These are allowed to come before...
-        //         case StoC::GenericValue::STATIC_HEADER:
-        //         {
-        //             auto p = (StoC::GenericValue *)next_packet;
-        //             if (p->agent_id == caster_id)
-        //                 switch (p->value_id)
-        //                 {
-        //                     case StoC::GenericValueID::effect_on_agent:
-        //                         continue;
-        //                 }
-        //             break;
-        //         }
-        //         // ... this, and if we get this, we can deduce the target
-        //         case StoC::GenericValueTarget::STATIC_HEADER:
-        //         {
-        //             auto p = (StoC::GenericValueTarget *)next_packet;
-        //             if (p->caster == caster_id)
-        //                 switch (p->Value_id)
-        //                 {
-        //                     case StoC::GenericValueID::effect_on_target:
-        //                         target_id = p->target;
-        //                 }
-        //             break;
-        //         }
-        //     }
-        //     break;
-        // };
-
-        {
-            PacketListenerScope listener(
-                [&](const StoC::GenericValueTarget &packet)
-                {
-                    if (packet.caster != caster_id)
-                        return;
-
-                    target_id = packet.target;
-                });
-            co_await AfterEffectsAwaiter(caster_id, std::span(&target_id, 1));
-        }
-
-        OnSkillActivated(caster_id, target_id, skill_id);
+        OnSkillActivated(caster_id, NULL, skill_id);
 
         co_return;
     }
@@ -924,24 +897,36 @@ namespace HerosInsight::EffectInitiator
 
     void AddEffectCallback(GW::HookStatus *, const StoC::AddEffect *packet)
     {
-        // EffectTracking::AddTracker
+        float duration = *(float *)&packet->timestamp;
+
+        if (EffectClaimingScope::claiming_handler)
+            EffectClaimingScope::claiming_handler(*packet);
+
+        EffectTracking::EffectTracker tracker = {};
+        tracker.cause_agent_id = EffectClaimingScope::current_cause_agent_id;
+        tracker.skill_id = (GW::Constants::SkillID)packet->skill_id;
+        tracker.attribute_level = packet->attribute_level;
+        tracker.effect_id = packet->effect_id;
+        tracker.duration_sec = duration;
+
+        EffectTracking::AddTracker(packet->agent_id, tracker);
     }
 
-    // void RemoveEffectCallback(GW::HookStatus *, const StoC::RemoveEffect *packet)
-    // {
-    //     if (n_postponers > 0)
-    //     {
-    //         postponed.push_back(*packet);
-    //     }
-    //     else
-    //     {
-    //         EffectTracking::RemoveTrackers(packet->agent_id,
-    //             [&](EffectTracking::EffectTracker &effect)
-    //             {
-    //                 return effect.effect_id == packet->effect_id;
-    //             });
-    //     }
-    // }
+    void RemoveEffectCallback(GW::HookStatus *, const StoC::RemoveEffect *packet)
+    {
+        if (n_postponers > 0)
+        {
+            postponed.push_back(*packet);
+        }
+        else
+        {
+            EffectTracking::RemoveTrackers(packet->agent_id,
+                [&](EffectTracking::EffectTracker &effect)
+                {
+                    return effect.effect_id == packet->effect_id;
+                });
+        }
+    }
 
     GW::HookEntry entry;
     void Initialize()
@@ -950,7 +935,7 @@ namespace HerosInsight::EffectInitiator
         GW::StoC::RegisterPacketCallback<StoC::GenericValue>(&entry, &GenericValueCallback, altitude);
         GW::StoC::RegisterPacketCallback<StoC::GenericValueTarget>(&entry, &GenericValueTargetCallback, altitude);
         GW::StoC::RegisterPacketCallback<StoC::AddEffect>(&entry, &AddEffectCallback, altitude);
-        // GW::StoC::RegisterPacketCallback<StoC::RemoveEffect>(&entry, &RemoveEffectCallback, altitude);
+        GW::StoC::RegisterPacketCallback<StoC::RemoveEffect>(&entry, &RemoveEffectCallback, altitude);
     }
 
     void Terminate()

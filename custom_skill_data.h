@@ -1,5 +1,7 @@
 #pragma once
 
+#include <variant>
+
 #include <attribute_or_title.h>
 #include <update_manager.h>
 #include <utils.h>
@@ -41,85 +43,12 @@ namespace HerosInsight
         None = 0xFF,
     };
 
-    enum struct SkillParamType
-    {
-        Null,
-
-        Level,
-        Heal,
-        Damage,
-        EnergyDiscount,
-        DamageReduction,
-
-        ConditionsRemoved,
-        HexesRemoved,
-        EnchantmentsRemoved,
-
-        HealthGain,
-        HealthLoss,
-        HealthSteal,
-
-        EnergyGain,
-        EnergyLoss,
-        EnergySteal,
-
-        AdrenalineGain,
-        AdrenalineLoss,
-
-        SECONDS_START,
-
-        Duration,
-        Disable,
-
-        CONDITION_START,
-
-        Bleeding,
-        Blind,
-        Burning,
-        CrackedArmor,
-        Crippled,
-        Dazed,
-        DeepWound,
-        Disease,
-        Poison,
-        Weakness,
-
-        CONDITION_END,
-        PERCENT_START,
-
-        ChanceToBlock,
-        ChanceToFail,
-        ChanceToMiss,
-
-        MAY_BE_NEGATIVE_AFTER, // ------------------
-
-        MovementSpeedMod,
-        DurationMod,
-        AttackTimeMod,
-        RechargeTimeMod,
-        HealMod,
-        DamageMod,
-
-        PERCENT_END,
-
-        ActivationTimeAdd,
-        RechargeTimeAdd,
-
-        SECONDS_END,
-
-        ArmorChange,
-        MaxHealthAdd,
-        HealthPips,
-        EnergyPips,
-
-        COUNT,
-    };
-
-    GW::Constants::SkillID SkillParamTypeToSkillID(SkillParamType type);
-    std::string_view SkillParamTypeToString(SkillParamType type);
-
     struct SkillParam
     {
+        SkillParam(uint32_t val0, uint32_t val15) : val0(val0), val15(val15) {}
+        SkillParam(uint32_t const_val) : val0(const_val), val15(const_val) {}
+        SkillParam() : val0(0), val15(0) {}
+
         uint32_t val0;
         uint32_t val15;
 
@@ -187,18 +116,125 @@ namespace HerosInsight
 
     SkillParam GetSkillParam(const GW::Skill &skill, uint32_t id);
 
-    struct ParsedSkillParam
+    enum struct RemovalMask
     {
-        SkillParamType type;
+        Null = 0,
+
+        Bleeding = 1 << 0,
+        Blind = 1 << 1,
+        Burning = 1 << 2,
+        Crippled = 1 << 3,
+        Deep_Wound = 1 << 4,
+        Disease = 1 << 5,
+        Poison = 1 << 6,
+        Dazed = 1 << 7,
+        Weakness = 1 << 8,
+
+        CrackedArmor = 1 << 9,
+
+        Hex = 1 << 10,
+        Enchantment = 1 << 11,
+        Condition = Bleeding | Blind | Burning | Crippled | Deep_Wound | Disease | Poison | Dazed | Weakness | CrackedArmor,
+    };
+
+    struct ParsedSkillData
+    {
+        enum struct Type
+        {
+            Null,
+
+            InitialEffect,
+            EndEffect,
+            DropEffect,
+
+            Level,
+            Heal,
+            Damage,
+            EnergyDiscount,
+            DamageReduction,
+
+            ConditionsRemoved,
+            HexesRemoved,
+            EnchantmentsRemoved,
+
+            HealthGain,
+            HealthLoss,
+            HealthSteal,
+
+            EnergyGain,
+            EnergyLoss,
+            EnergySteal,
+
+            AdrenalineGain,
+            AdrenalineLoss,
+
+            SECONDS_START,
+
+            Duration,
+            Disable,
+
+            CONDITION_START,
+
+            Bleeding,
+            Blind,
+            Burning,
+            CrackedArmor,
+            Crippled,
+            Dazed,
+            DeepWound,
+            Disease,
+            Poison,
+            Weakness,
+
+            CONDITION_END,
+            PERCENT_START,
+
+            ChanceToBlock,
+            ChanceToFail,
+            ChanceToMiss,
+
+            MAY_BE_NEGATIVE_AFTER, // ------------------
+
+            MovementSpeedMod,
+            DurationMod,
+            AttackTimeMod,
+            RechargeTimeMod,
+            HealMod,
+            DamageMod,
+
+            PERCENT_END,
+
+            ActivationTimeAdd,
+            RechargeTimeAdd,
+
+            SECONDS_END,
+
+            ArmorChange,
+            MaxHealthAdd,
+            HealthPips,
+            EnergyPips,
+
+            COUNT,
+        };
+
+        Type type;
         std::optional<DamageType> damage_type;
         SkillParam param;
         bool is_negative;
 
         bool IsCondition() const
         {
-            return type >= SkillParamType::CONDITION_START && type < SkillParamType::CONDITION_END;
+            return type >= Type::CONDITION_START && type < Type::CONDITION_END;
+        }
+        bool IsRemoval() const
+        {
+            return type >= Type::ConditionsRemoved && type <= Type::EnchantmentsRemoved;
         }
         void ImGuiRender(int8_t attr_lvl);
+
+        GW::Constants::SkillID GetCondition() const;
+        RemovalMask GetRemovalMask() const;
+        std::string_view ToStr() const;
     };
 
     struct CustomSkillData;
@@ -234,14 +270,14 @@ namespace HerosInsight
     };
     static_assert(sizeof(DescKey) == sizeof(uint16_t));
 
-    enum struct DescWord;
+    enum struct DescToken;
 
-    struct MachineDesc
+    struct TokenizedDesc
     {
-        MachineDesc() = default;
-        MachineDesc(std::string_view desc);
+        TokenizedDesc() = default;
+        TokenizedDesc(std::string_view desc);
 
-        std::vector<DescWord> words;
+        std::vector<DescToken> tokens;
         std::vector<SkillParam> lits;
     };
 
@@ -335,6 +371,8 @@ namespace HerosInsight
         Caster,
         Target,
         AllyClosestToTarget,
+        SpiritAllyClosestToTarget,
+        MinionAllyClosestToTarget,
         Pet,
     };
 
@@ -343,11 +381,12 @@ namespace HerosInsight
         EffectMask mask;
         EffectLocation location;
         Utils::Range radius;
-        GW::Constants::SkillID skill_id;
-        SkillParam duration;
+        std::variant<GW::Constants::SkillID, RemovalMask> skill_id_or_removal;
+        SkillParam duration_or_count;
 
         bool IsAffected(uint32_t caster_id, uint32_t target_id, uint32_t candidate_agent_id) const;
-        void Apply(uint32_t caster_id, uint32_t target_id, uint8_t attr_lvl) const;
+        void Apply(uint32_t caster_id, uint32_t target_id, uint8_t attr_lvl, std::function<bool(GW::AgentLiving &)> predicate = nullptr) const;
+        std::wstring ToWString() const;
     };
 
     struct SkillEffect
@@ -393,11 +432,12 @@ namespace HerosInsight
         Utils::SkillContext context;
         AttributeOrTitle attribute;
         Renewal renewal;
-        FixedArray<ParsedSkillParam, 8> parsed_params;
-        std::optional<int16_t> end_effect_index; // index in "params" of where "End Effect:" was found in the description
         SkillParam base_duration;
+        std::vector<ParsedSkillData> parsed_data;
         std::vector<StaticSkillEffect> init_effects;
+        std::vector<StaticSkillEffect> hit_effects;
         std::vector<StaticSkillEffect> end_effects;
+        std::vector<StaticSkillEffect> drop_effects;
 
         void Init();
 
@@ -407,12 +447,12 @@ namespace HerosInsight
         HerosInsight::Utils::RichString *TryGetDescription(bool is_concise = false, int32_t attribute_lvl = -1);
 
         SkillParam GetSkillParam(uint32_t id) const;
-        SkillParam GetParsedSkillParam(std::function<bool(const ParsedSkillParam &)> predicate) const;
-        void GetParsedSkillParams(SkillParamType type, FixedArrayRef<ParsedSkillParam> result) const;
+        SkillParam GetParsedSkillParam(std::function<bool(const ParsedSkillData &)> predicate) const;
+        void GetParsedSkillParams(ParsedSkillData::Type type, FixedArrayRef<ParsedSkillData> result) const;
         void GetInitConditions(uint8_t attr_lvl, FixedArrayRef<SkillEffect> result) const;
         void GetEndConditions(uint8_t attr_lvl, FixedArrayRef<SkillEffect> result) const;
-        std::span<const ParsedSkillParam> GetInitParsedParams() const;
-        std::span<const ParsedSkillParam> GetEndParsedParams() const;
+        std::span<const ParsedSkillData> GetInitParsedData() const;
+        std::span<const ParsedSkillData> GetEndParsedData() const;
 
         void GetOnExpireEffects(CustomAgentData &caster, FixedArrayRef<SkillEffect> result) const;
 

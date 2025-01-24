@@ -337,7 +337,8 @@ namespace HerosInsight
             (GW::Constants::SkillID)731,  // The Bibliophile
             (GW::Constants::SkillID)719,  // The Plague
             (GW::Constants::SkillID)727,  // Thunder
-            (GW::Constants::SkillID)723   // Vampire
+            (GW::Constants::SkillID)723,  // Vampire
+            (GW::Constants::SkillID)3250  // Temple Strike but not elite
         );
 
         if (IsDeveloperSkill(*custom_sd.skill) ||
@@ -1168,89 +1169,6 @@ namespace HerosInsight
         return true;
     }
 
-    GW::Constants::SkillID degen_skills[] = {
-        GW::Constants::SkillID::Faintheartedness,
-        GW::Constants::SkillID::Life_Siphon,
-        GW::Constants::SkillID::Life_Transfer,
-        GW::Constants::SkillID::Lingering_Curse,
-        GW::Constants::SkillID::Parasitic_Bond,
-        GW::Constants::SkillID::Putrid_Bile,
-        GW::Constants::SkillID::Reapers_Mark,
-        GW::Constants::SkillID::Suffering,
-        GW::Constants::SkillID::Weaken_Knees,
-        GW::Constants::SkillID::Wither,
-        GW::Constants::SkillID::Conjure_Nightmare,
-        GW::Constants::SkillID::Conjure_Phantasm,
-        GW::Constants::SkillID::Crippling_Anguish,
-        GW::Constants::SkillID::Crippling_Anguish_PvP,
-        GW::Constants::SkillID::Illusion_of_Pain,
-        GW::Constants::SkillID::Illusion_of_Pain_PvP,
-        GW::Constants::SkillID::Images_of_Remorse,
-        GW::Constants::SkillID::Migraine,
-        GW::Constants::SkillID::Migraine_PvP,
-        GW::Constants::SkillID::Overload,
-        GW::Constants::SkillID::Phantom_Pain,
-        GW::Constants::SkillID::Shrinking_Armor,
-    };
-
-    GW::Constants::SkillID degen_well_skills[] = {
-        GW::Constants::SkillID::Well_of_Silence,
-        GW::Constants::SkillID::Well_of_Suffering,
-    };
-
-    GW::Constants::SkillID regen_skills[] = {
-        GW::Constants::SkillID::I_Will_Avenge_You,
-        GW::Constants::SkillID::Never_Surrender,
-        GW::Constants::SkillID::Never_Surrender_PvP,
-        GW::Constants::SkillID::Together_as_one,
-        GW::Constants::SkillID::Blood_Renewal,
-        GW::Constants::SkillID::Feel_No_Pain,
-        GW::Constants::SkillID::Feigned_Neutrality,
-        GW::Constants::SkillID::Healing_Breeze,
-        GW::Constants::SkillID::Hexers_Vigor,
-        GW::Constants::SkillID::Ice_Spear,
-        GW::Constants::SkillID::Mending,
-        GW::Constants::SkillID::Mending_Refrain,
-        GW::Constants::SkillID::Mending_Refrain_PvP,
-        GW::Constants::SkillID::Never_Rampage_Alone,
-        GW::Constants::SkillID::Restful_Breeze,
-        GW::Constants::SkillID::Shadow_Refuge,
-        GW::Constants::SkillID::Shadow_Sanctuary_kurzick,
-        GW::Constants::SkillID::Shadow_Sanctuary_luxon,
-        GW::Constants::SkillID::Shield_of_Regeneration,
-        GW::Constants::SkillID::Succor,
-        GW::Constants::SkillID::Swirling_Aura,
-        GW::Constants::SkillID::Troll_Unguent,
-        GW::Constants::SkillID::Vampiric_Spirit,
-        GW::Constants::SkillID::Volfen_Blessing,
-        GW::Constants::SkillID::Volfen_Blessing_Curse_of_the_Nornbear,
-        GW::Constants::SkillID::Vow_of_Piety,
-        GW::Constants::SkillID::Ward_Against_Harm,
-        GW::Constants::SkillID::Watchful_Healing,
-        GW::Constants::SkillID::Watchful_Spirit,
-        GW::Constants::SkillID::Weapon_of_Warding,
-    };
-
-    GW::Constants::SkillID regen_well_skills[] = {
-        GW::Constants::SkillID::Well_of_Blood,
-        GW::Constants::SkillID::Well_of_Power,
-    };
-
-    GW::Constants::SkillID regen_per_condition_skills[] = {
-        GW::Constants::SkillID::I_Will_Survive,
-        GW::Constants::SkillID::Conviction,
-    };
-
-    GW::Constants::SkillID regen_per_condition_or_hex_skills[] = {
-        GW::Constants::SkillID::Melandrus_Resilience,
-        GW::Constants::SkillID::Resilient_Was_Xiko,
-    };
-
-    GW::Constants::SkillID regen_per_enchantment_skills[] = {
-        GW::Constants::SkillID::Mystic_Regeneration,
-        GW::Constants::SkillID::Mystic_Regeneration_PvP,
-    };
-
     CustomSkillData custom_skill_datas[GW::Constants::SkillMax];
 
     std::string *CustomSkillData::TryGetPredecodedDescription(DescKey key)
@@ -1382,7 +1300,7 @@ namespace HerosInsight
         SkipWhitespace(p, end);
     }
 
-    enum struct DescWord
+    enum struct DescToken
     {
         Null,
 
@@ -1512,7 +1430,7 @@ namespace HerosInsight
         WaterMagic,
     };
 
-    MachineDesc::MachineDesc(std::string_view desc)
+    TokenizedDesc::TokenizedDesc(std::string_view desc)
     {
         auto start = (char *)desc.data();
         auto end = start + desc.size();
@@ -1561,7 +1479,7 @@ namespace HerosInsight
 #define MATCH_AND_CONTINUE(str, word) \
     if (TryReadWordStartingWith(str)) \
     {                                 \
-        words.push_back(word);        \
+        tokens.push_back(word);       \
         continue;                     \
     }
 
@@ -1579,193 +1497,193 @@ namespace HerosInsight
                 }
                 auto param = SkillParam(lo, hi);
                 lits.push_back(param);
-                words.push_back(DescWord::Literal);
+                tokens.push_back(DescToken::Literal);
                 continue;
             }
 
             // misc
-            MATCH_AND_CONTINUE(".", DescWord::Period)
-            MATCH_AND_CONTINUE(",", DescWord::Comma)
-            MATCH_AND_CONTINUE("%", DescWord::Percent)
+            MATCH_AND_CONTINUE(".", DescToken::Period)
+            MATCH_AND_CONTINUE(",", DescToken::Comma)
+            MATCH_AND_CONTINUE("%", DescToken::Percent)
 
             if (p == start || !IsChar(p[-1]))
             {
-                MATCH_AND_CONTINUE("-second", DescWord::Seconds) // Special case for Shadowsong which has unusual formatting: "30-second lifespan"
-                MATCH_AND_CONTINUE("-", DescWord::Minus)
-                MATCH_AND_CONTINUE("+", DescWord::Plus)
+                MATCH_AND_CONTINUE("-second", DescToken::Seconds) // Special case for Shadowsong which has unusual formatting: "30-second lifespan"
+                MATCH_AND_CONTINUE("-", DescToken::Minus)
+                MATCH_AND_CONTINUE("+", DescToken::Plus)
 
                 if (TryReadWord("one") ||
                     TryReadWord("an") ||
                     TryReadWord("a"))
                 {
                     lits.push_back(SkillParam(1, 1));
-                    words.push_back(DescWord::Literal);
+                    tokens.push_back(DescToken::Literal);
                     continue;
                 }
 
                 if (TryReadWord("all"))
                 {
                     lits.push_back(SkillParam(std::numeric_limits<uint32_t>::max(), std::numeric_limits<uint32_t>::max()));
-                    words.push_back(DescWord::Literal);
+                    tokens.push_back(DescToken::Literal);
                     continue;
                 }
 
                 if (TryReadWord("Half of all"))
                 {
                     lits.push_back(SkillParam(50, 50));
-                    words.push_back(DescWord::Literal);
-                    words.push_back(DescWord::Percent);
+                    tokens.push_back(DescToken::Literal);
+                    tokens.push_back(DescToken::Percent);
                     continue;
                 }
 
                 // a
-                MATCH_AND_CONTINUE("and", DescWord::And)
-                MATCH_AND_CONTINUE("ally", DescWord::Ally)
-                MATCH_AND_CONTINUE("above", DescWord::Above)
-                MATCH_AND_CONTINUE("after", DescWord::After)
-                MATCH_AND_CONTINUE("armor", DescWord::Armor)
-                MATCH_AND_CONTINUE("attack", DescWord::Attack)
-                MATCH_AND_CONTINUE("absorb", DescWord::Absorb)
-                MATCH_AND_CONTINUE("activat", DescWord::Activate)
-                MATCH_AND_CONTINUE("attribute", DescWord::Attribute)
-                MATCH_AND_CONTINUE("adrenaline", DescWord::Adrenaline)
-                MATCH_AND_CONTINUE("additional", DescWord::Additional)
+                MATCH_AND_CONTINUE("and", DescToken::And)
+                MATCH_AND_CONTINUE("ally", DescToken::Ally)
+                MATCH_AND_CONTINUE("above", DescToken::Above)
+                MATCH_AND_CONTINUE("after", DescToken::After)
+                MATCH_AND_CONTINUE("armor", DescToken::Armor)
+                MATCH_AND_CONTINUE("attack", DescToken::Attack)
+                MATCH_AND_CONTINUE("absorb", DescToken::Absorb)
+                MATCH_AND_CONTINUE("activat", DescToken::Activate)
+                MATCH_AND_CONTINUE("attribute", DescToken::Attribute)
+                MATCH_AND_CONTINUE("adrenaline", DescToken::Adrenaline)
+                MATCH_AND_CONTINUE("additional", DescToken::Additional)
 
                 // b
-                MATCH_AND_CONTINUE("burn", DescWord::Burn)
-                MATCH_AND_CONTINUE("block", DescWord::Block)
-                MATCH_AND_CONTINUE("blind", DescWord::Blind)
-                MATCH_AND_CONTINUE("blunt", DescWord::Blunt)
-                MATCH_AND_CONTINUE("bleed", DescWord::Bleed)
-                MATCH_AND_CONTINUE("below", DescWord::Below)
+                MATCH_AND_CONTINUE("burn", DescToken::Burn)
+                MATCH_AND_CONTINUE("block", DescToken::Block)
+                MATCH_AND_CONTINUE("blind", DescToken::Blind)
+                MATCH_AND_CONTINUE("blunt", DescToken::Blunt)
+                MATCH_AND_CONTINUE("bleed", DescToken::Bleed)
+                MATCH_AND_CONTINUE("below", DescToken::Below)
 
                 // c
-                MATCH_AND_CONTINUE("cost", DescWord::Cost)
-                MATCH_AND_CONTINUE("cold", DescWord::Cold)
-                MATCH_AND_CONTINUE("cast", DescWord::Cast)
-                MATCH_AND_CONTINUE("chaos", DescWord::Chaos)
-                MATCH_AND_CONTINUE("chant", DescWord::Chant)
-                MATCH_AND_CONTINUE("chance", DescWord::Chance)
-                MATCH_AND_CONTINUE("cripple", DescWord::Cripple)
-                MATCH_AND_CONTINUE("condition and hex", DescWord::ConditionAndHex)
-                MATCH_AND_CONTINUE("conditions and hexes", DescWord::ConditionsAndHexes)
-                MATCH_AND_CONTINUE("condition", DescWord::Condition)
-                MATCH_AND_CONTINUE("Cracked Armor", DescWord::CrackedArmor)
+                MATCH_AND_CONTINUE("cost", DescToken::Cost)
+                MATCH_AND_CONTINUE("cold", DescToken::Cold)
+                MATCH_AND_CONTINUE("cast", DescToken::Cast)
+                MATCH_AND_CONTINUE("chaos", DescToken::Chaos)
+                MATCH_AND_CONTINUE("chant", DescToken::Chant)
+                MATCH_AND_CONTINUE("chance", DescToken::Chance)
+                MATCH_AND_CONTINUE("cripple", DescToken::Cripple)
+                MATCH_AND_CONTINUE("condition and hex", DescToken::ConditionAndHex)
+                MATCH_AND_CONTINUE("conditions and hexes", DescToken::ConditionsAndHexes)
+                MATCH_AND_CONTINUE("condition", DescToken::Condition)
+                MATCH_AND_CONTINUE("Cracked Armor", DescToken::CrackedArmor)
 
                 // d
-                MATCH_AND_CONTINUE("die", DescWord::Die)
-                MATCH_AND_CONTINUE("daze", DescWord::Daze)
-                MATCH_AND_CONTINUE("dark", DescWord::Dark)
-                MATCH_AND_CONTINUE("degen", DescWord::Degen)
-                MATCH_AND_CONTINUE("damage", DescWord::Damage)
-                MATCH_AND_CONTINUE("disease", DescWord::Disease)
-                MATCH_AND_CONTINUE("disable", DescWord::Disable)
-                MATCH_AND_CONTINUE("Deep Wound", DescWord::DeepWound)
+                MATCH_AND_CONTINUE("die", DescToken::Die)
+                MATCH_AND_CONTINUE("daze", DescToken::Daze)
+                MATCH_AND_CONTINUE("dark", DescToken::Dark)
+                MATCH_AND_CONTINUE("degen", DescToken::Degen)
+                MATCH_AND_CONTINUE("damage", DescToken::Damage)
+                MATCH_AND_CONTINUE("disease", DescToken::Disease)
+                MATCH_AND_CONTINUE("disable", DescToken::Disable)
+                MATCH_AND_CONTINUE("Deep Wound", DescToken::DeepWound)
 
                 // e
-                MATCH_AND_CONTINUE("end", DescWord::End)
-                MATCH_AND_CONTINUE("earth", DescWord::Earth)
-                MATCH_AND_CONTINUE("expire", DescWord::Expire)
-                MATCH_AND_CONTINUE("effect", DescWord::Effect)
-                MATCH_AND_CONTINUE("Energy Storage", DescWord::EnergyStorage)
-                MATCH_AND_CONTINUE("energy", DescWord::Energy)
-                MATCH_AND_CONTINUE("elemental", DescWord::Elemental)
-                MATCH_AND_CONTINUE("enchantment", DescWord::Enchantment)
+                MATCH_AND_CONTINUE("end", DescToken::End)
+                MATCH_AND_CONTINUE("earth", DescToken::Earth)
+                MATCH_AND_CONTINUE("expire", DescToken::Expire)
+                MATCH_AND_CONTINUE("effect", DescToken::Effect)
+                MATCH_AND_CONTINUE("Energy Storage", DescToken::EnergyStorage)
+                MATCH_AND_CONTINUE("energy", DescToken::Energy)
+                MATCH_AND_CONTINUE("elemental", DescToken::Elemental)
+                MATCH_AND_CONTINUE("enchantment", DescToken::Enchantment)
 
                 // f
-                MATCH_AND_CONTINUE("foe", DescWord::Foe)
-                MATCH_AND_CONTINUE("for", DescWord::For)
-                MATCH_AND_CONTINUE("fail", DescWord::Fail)
-                MATCH_AND_CONTINUE("fire", DescWord::Fire)
-                MATCH_AND_CONTINUE("faster", DescWord::Faster)
-                MATCH_AND_CONTINUE("for each", DescWord::ForEach)
+                MATCH_AND_CONTINUE("foe", DescToken::Foe)
+                MATCH_AND_CONTINUE("for", DescToken::For)
+                MATCH_AND_CONTINUE("fail", DescToken::Fail)
+                MATCH_AND_CONTINUE("fire", DescToken::Fire)
+                MATCH_AND_CONTINUE("faster", DescToken::Faster)
+                MATCH_AND_CONTINUE("for each", DescToken::ForEach)
 
                 // g
-                MATCH_AND_CONTINUE("gain", DescWord::Gain)
+                MATCH_AND_CONTINUE("gain", DescToken::Gain)
 
                 // h
-                MATCH_AND_CONTINUE("hex and condition", DescWord::ConditionAndHex)
-                MATCH_AND_CONTINUE("hexes and conditions", DescWord::ConditionsAndHexes)
-                MATCH_AND_CONTINUE("hex", DescWord::Hex)
-                MATCH_AND_CONTINUE("holy", DescWord::Holy)
-                MATCH_AND_CONTINUE("health", DescWord::Health)
-                MATCH_AND_CONTINUE("heal", DescWord::Heal)
+                MATCH_AND_CONTINUE("hex and condition", DescToken::ConditionAndHex)
+                MATCH_AND_CONTINUE("hexes and conditions", DescToken::ConditionsAndHexes)
+                MATCH_AND_CONTINUE("hex", DescToken::Hex)
+                MATCH_AND_CONTINUE("holy", DescToken::Holy)
+                MATCH_AND_CONTINUE("health", DescToken::Health)
+                MATCH_AND_CONTINUE("heal", DescToken::Heal)
 
                 // i
-                MATCH_AND_CONTINUE("if", DescWord::If)
-                MATCH_AND_CONTINUE("interrupt", DescWord::Interrupt)
-                MATCH_AND_CONTINUE("illusion", DescWord::IllusionMagic)
+                MATCH_AND_CONTINUE("if", DescToken::If)
+                MATCH_AND_CONTINUE("interrupt", DescToken::Interrupt)
+                MATCH_AND_CONTINUE("illusion", DescToken::IllusionMagic)
 
                 // j
 
                 // k
-                MATCH_AND_CONTINUE("knock", DescWord::Knockdown)
+                MATCH_AND_CONTINUE("knock", DescToken::Knockdown)
 
                 // l
-                MATCH_AND_CONTINUE("los", DescWord::Lose)
-                MATCH_AND_CONTINUE("last", DescWord::Last)
-                MATCH_AND_CONTINUE("less", DescWord::Less)
-                MATCH_AND_CONTINUE("level", DescWord::Level)
-                MATCH_AND_CONTINUE("longer", DescWord::Longer)
-                MATCH_AND_CONTINUE("lifespan", DescWord::Lifespan)
-                MATCH_AND_CONTINUE("lightning", DescWord::Lightning)
+                MATCH_AND_CONTINUE("los", DescToken::Lose)
+                MATCH_AND_CONTINUE("last", DescToken::Last)
+                MATCH_AND_CONTINUE("less", DescToken::Less)
+                MATCH_AND_CONTINUE("level", DescToken::Level)
+                MATCH_AND_CONTINUE("longer", DescToken::Longer)
+                MATCH_AND_CONTINUE("lifespan", DescToken::Lifespan)
+                MATCH_AND_CONTINUE("lightning", DescToken::Lightning)
 
                 // m
-                MATCH_AND_CONTINUE("max", DescWord::Max)
-                MATCH_AND_CONTINUE("miss", DescWord::Miss)
-                MATCH_AND_CONTINUE("more", DescWord::More)
-                MATCH_AND_CONTINUE("melee", DescWord::Melee)
-                MATCH_AND_CONTINUE("move", DescWord::Movement)
+                MATCH_AND_CONTINUE("max", DescToken::Max)
+                MATCH_AND_CONTINUE("miss", DescToken::Miss)
+                MATCH_AND_CONTINUE("more", DescToken::More)
+                MATCH_AND_CONTINUE("melee", DescToken::Melee)
+                MATCH_AND_CONTINUE("move", DescToken::Movement)
 
                 // n
-                MATCH_AND_CONTINUE("non-spirit", DescWord::NonSpirit)
-                MATCH_AND_CONTINUE("no", DescWord::Not)
-                MATCH_AND_CONTINUE("cannot", DescWord::Not)
-                MATCH_AND_CONTINUE("next", DescWord::Next)
+                MATCH_AND_CONTINUE("non-spirit", DescToken::NonSpirit)
+                MATCH_AND_CONTINUE("no", DescToken::Not)
+                MATCH_AND_CONTINUE("cannot", DescToken::Not)
+                MATCH_AND_CONTINUE("next", DescToken::Next)
 
                 // o
-                MATCH_AND_CONTINUE("or", DescWord::Or)
+                MATCH_AND_CONTINUE("or", DescToken::Or)
 
                 // p
-                MATCH_AND_CONTINUE("poison", DescWord::Poison)
-                MATCH_AND_CONTINUE("physical", DescWord::Physical)
-                MATCH_AND_CONTINUE("piercing", DescWord::Piercing)
-                MATCH_AND_CONTINUE("proximity", DescWord::Proximity)
+                MATCH_AND_CONTINUE("poison", DescToken::Poison)
+                MATCH_AND_CONTINUE("physical", DescToken::Physical)
+                MATCH_AND_CONTINUE("piercing", DescToken::Piercing)
+                MATCH_AND_CONTINUE("proximity", DescToken::Proximity)
 
                 // q
 
                 // r
-                MATCH_AND_CONTINUE("regen", DescWord::Regen)
-                MATCH_AND_CONTINUE("ranged", DescWord::Ranged)
-                MATCH_AND_CONTINUE("remove", DescWord::Remove)
-                MATCH_AND_CONTINUE("reduc", DescWord::Reduce)
-                MATCH_AND_CONTINUE("recharge", DescWord::Recharge)
+                MATCH_AND_CONTINUE("regen", DescToken::Regen)
+                MATCH_AND_CONTINUE("ranged", DescToken::Ranged)
+                MATCH_AND_CONTINUE("remove", DescToken::Remove)
+                MATCH_AND_CONTINUE("reduc", DescToken::Reduce)
+                MATCH_AND_CONTINUE("recharge", DescToken::Recharge)
 
                 // s
-                MATCH_AND_CONTINUE("start", DescWord::Start)
-                MATCH_AND_CONTINUE("spell", DescWord::Spell)
-                MATCH_AND_CONTINUE("steal", DescWord::Steal)
-                MATCH_AND_CONTINUE("stance", DescWord::Stance)
-                MATCH_AND_CONTINUE("signet", DescWord::Signet)
-                MATCH_AND_CONTINUE("skills", DescWord::Skills)
-                MATCH_AND_CONTINUE("shadow", DescWord::Shadow)
-                MATCH_AND_CONTINUE("slower", DescWord::Slower)
-                MATCH_AND_CONTINUE("secondary", DescWord::Secondary)
-                MATCH_AND_CONTINUE("second", DescWord::Seconds)
-                MATCH_AND_CONTINUE("slashing", DescWord::Slashing)
+                MATCH_AND_CONTINUE("start", DescToken::Start)
+                MATCH_AND_CONTINUE("spell", DescToken::Spell)
+                MATCH_AND_CONTINUE("steal", DescToken::Steal)
+                MATCH_AND_CONTINUE("stance", DescToken::Stance)
+                MATCH_AND_CONTINUE("signet", DescToken::Signet)
+                MATCH_AND_CONTINUE("skills", DescToken::Skills)
+                MATCH_AND_CONTINUE("shadow", DescToken::Shadow)
+                MATCH_AND_CONTINUE("slower", DescToken::Slower)
+                MATCH_AND_CONTINUE("secondary", DescToken::Secondary)
+                MATCH_AND_CONTINUE("second", DescToken::Seconds)
+                MATCH_AND_CONTINUE("slashing", DescToken::Slashing)
 
                 // t
-                MATCH_AND_CONTINUE("target", DescWord::Target)
-                MATCH_AND_CONTINUE("transfer", DescWord::Transfer)
+                MATCH_AND_CONTINUE("target", DescToken::Target)
+                MATCH_AND_CONTINUE("transfer", DescToken::Transfer)
 
                 // u
 
                 // v
 
                 // w
-                MATCH_AND_CONTINUE("weak", DescWord::Weakness)
-                MATCH_AND_CONTINUE("whenever", DescWord::Whenever)
-                MATCH_AND_CONTINUE("water magic", DescWord::WaterMagic)
+                MATCH_AND_CONTINUE("weak", DescToken::Weakness)
+                MATCH_AND_CONTINUE("whenever", DescToken::Whenever)
+                MATCH_AND_CONTINUE("water magic", DescToken::WaterMagic)
 
                 // x
 
@@ -1778,21 +1696,21 @@ namespace HerosInsight
     }
 
     // "We have AI at home"
-    void ParseContext(FixedArrayRef<ParsedSkillParam> pps, ParsedSkillParam &pp, std::span<DescWord> sentence, int32_t lit_pos)
+    void ParseParamContext(std::vector<ParsedSkillData> &pds, ParsedSkillData &pd, std::span<DescToken> sentence, int32_t lit_pos)
     {
         auto n_words = sentence.size();
 
-        auto IsMatch = [&](int32_t index, DescWord word)
+        auto IsMatch = [&](int32_t index, DescToken word)
         {
             if (index >= 0 && index < n_words)
                 return sentence[index] == word;
             return false;
         };
-        auto IsListMatch = [&](int32_t index, std::initializer_list<DescWord> words)
+        auto IsListMatch = [&](int32_t index, std::initializer_list<DescToken> words)
         {
             if (index >= 0 && index + words.size() <= n_words)
             {
-                return std::memcmp(&sentence[index], words.begin(), words.size() * sizeof(DescWord)) == 0;
+                return std::memcmp(&sentence[index], words.begin(), words.size() * sizeof(DescToken)) == 0;
             }
             return false;
         };
@@ -1804,28 +1722,28 @@ namespace HerosInsight
             {
                 // clang-format off
                 switch (sentence[index]) {
-                    case DescWord::Fire:      result = DamageType::Fire;      break;
-                    case DescWord::Lightning: result = DamageType::Lightning; break;
-                    case DescWord::Earth:     result = DamageType::Earth;     break;
-                    case DescWord::Cold:      result = DamageType::Cold;      break;
-                    case DescWord::Slashing:  result = DamageType::Slashing;  break;
-                    case DescWord::Piercing:  result = DamageType::Piercing;  break;
-                    case DescWord::Blunt:     result = DamageType::Blunt;     break;
-                    case DescWord::Chaos:     result = DamageType::Chaos;     break;
-                    case DescWord::Dark:      result = DamageType::Dark;      break;
-                    case DescWord::Holy:      result = DamageType::Holy;      break;
-                    case DescWord::Shadow:    result = DamageType::Shadow;    break;
+                    case DescToken::Fire:      result = DamageType::Fire;      break;
+                    case DescToken::Lightning: result = DamageType::Lightning; break;
+                    case DescToken::Earth:     result = DamageType::Earth;     break;
+                    case DescToken::Cold:      result = DamageType::Cold;      break;
+                    case DescToken::Slashing:  result = DamageType::Slashing;  break;
+                    case DescToken::Piercing:  result = DamageType::Piercing;  break;
+                    case DescToken::Blunt:     result = DamageType::Blunt;     break;
+                    case DescToken::Chaos:     result = DamageType::Chaos;     break;
+                    case DescToken::Dark:      result = DamageType::Dark;      break;
+                    case DescToken::Holy:      result = DamageType::Holy;      break;
+                    case DescToken::Shadow:    result = DamageType::Shadow;    break;
                 }
                 // clang-format on
             }
             return result;
         };
 
-        auto PushParam = [&](SkillParamType ty, bool is_negative = false)
+        auto PushParam = [&](ParsedSkillData::Type ty, bool is_negative = false)
         {
-            pp.type = ty;
-            pp.is_negative = is_negative;
-            pps.try_push(pp);
+            pd.type = ty;
+            pd.is_negative = is_negative;
+            pds.push_back(pd);
         };
 
 #define PUSH_PARAM_AND_RETURN(ty, ...) \
@@ -1840,9 +1758,9 @@ namespace HerosInsight
         PUSH_PARAM_AND_RETURN(ty, __VA_ARGS__)               \
     }
 
-        bool has_plus = IsMatch(lit_pos - 1, DescWord::Plus);
-        bool has_minus = IsMatch(lit_pos - 1, DescWord::Minus);
-        bool has_percent = IsMatch(lit_pos + 1, DescWord::Percent);
+        bool has_plus = IsMatch(lit_pos - 1, DescToken::Plus);
+        bool has_minus = IsMatch(lit_pos - 1, DescToken::Minus);
+        bool has_percent = IsMatch(lit_pos + 1, DescToken::Percent);
         bool is_less = has_minus;
         bool is_more = has_plus;
         bool is_reduced = false;
@@ -1850,20 +1768,20 @@ namespace HerosInsight
         int32_t just_after = has_percent ? lit_pos + 2 : lit_pos + 1;
         int32_t just_before = has_minus || has_plus ? lit_pos - 2 : lit_pos - 1;
 
-        if (IsMatch(just_after, DescWord::Less))
+        if (IsMatch(just_after, DescToken::Less))
         {
             is_less = true;
             just_after++;
         }
 
-        if (IsMatch(just_after, DescWord::More) ||
-            IsMatch(just_after, DescWord::Additional))
+        if (IsMatch(just_after, DescToken::More) ||
+            IsMatch(just_after, DescToken::Additional))
         {
             is_more = true;
             just_after++;
         }
 
-        if (IsMatch(just_before, DescWord::Additional))
+        if (IsMatch(just_before, DescToken::Additional))
         {
             is_more = true;
             just_before--;
@@ -1871,14 +1789,14 @@ namespace HerosInsight
 
         for (int32_t i = 0; i <= just_before; i++)
         {
-            if (IsMatch(i, DescWord::Reduce))
+            if (IsMatch(i, DescToken::Reduce))
             {
                 is_reduced = true;
                 break;
             }
         }
 
-        auto GetPropsBefore = [&](std::span<const DescWord> words, std::function<void(DescWord)> handler)
+        auto GetPropsBefore = [&](std::span<const DescToken> words, std::function<void(DescToken)> handler)
         {
             int32_t i = just_before;
             bool any_found = false;
@@ -1898,8 +1816,8 @@ namespace HerosInsight
             ok:
                 i--;
                 if (i >= 0 &&
-                    (sentence[i] == DescWord::And ||
-                        sentence[i] == DescWord::Comma))
+                    (sentence[i] == DescToken::And ||
+                        sentence[i] == DescToken::Comma))
                     i--;
             }
             return any_found;
@@ -1907,148 +1825,148 @@ namespace HerosInsight
 
         if (has_percent)
         {
-            if (IsListMatch(just_after, {DescWord::Chance, DescWord::Block}) ||
-                IsListMatch(just_after, {DescWord::Block, DescWord::Chance}))
-                PUSH_PARAM_AND_RETURN(SkillParamType::ChanceToBlock)
+            if (IsListMatch(just_after, {DescToken::Chance, DescToken::Block}) ||
+                IsListMatch(just_after, {DescToken::Block, DescToken::Chance}))
+                PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::ChanceToBlock)
 
-            if (IsListMatch(just_after, {DescWord::Fail, DescWord::Chance}))
-                PUSH_PARAM_AND_RETURN(SkillParamType::ChanceToFail)
+            if (IsListMatch(just_after, {DescToken::Fail, DescToken::Chance}))
+                PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::ChanceToFail)
 
-            if (IsListMatch(just_after, {DescWord::Chance, DescWord::Miss}) ||
-                IsMatch(just_before, DescWord::Miss))
-                PUSH_PARAM_AND_RETURN(SkillParamType::ChanceToMiss)
+            if (IsListMatch(just_after, {DescToken::Chance, DescToken::Miss}) ||
+                IsMatch(just_before, DescToken::Miss))
+                PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::ChanceToMiss)
 
-            if (IsMatch(just_after, DescWord::Faster))
+            if (IsMatch(just_after, DescToken::Faster))
             {
-                if (IsMatch(just_before, DescWord::Recharge) ||
-                    IsListMatch(just_before - 1, {DescWord::Recharge, DescWord::Skills}))
-                    PUSH_PARAM_AND_RETURN(SkillParamType::RechargeTimeMod, true)
+                if (IsMatch(just_before, DescToken::Recharge) ||
+                    IsListMatch(just_before - 1, {DescToken::Recharge, DescToken::Skills}))
+                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::RechargeTimeMod, true)
 
-                constexpr std::array<DescWord, 2> allowed = {DescWord::Movement, DescWord::Attack};
-                auto Handler = [&](DescWord prop)
+                constexpr std::array<DescToken, 2> allowed = {DescToken::Movement, DescToken::Attack};
+                auto Handler = [&](DescToken prop)
                 {
-                    if (prop == DescWord::Movement)
-                        PushParam(SkillParamType::MovementSpeedMod);
-                    else if (prop == DescWord::Attack)
-                        PushParam(SkillParamType::AttackTimeMod, true);
+                    if (prop == DescToken::Movement)
+                        PushParam(ParsedSkillData::Type::MovementSpeedMod);
+                    else if (prop == DescToken::Attack)
+                        PushParam(ParsedSkillData::Type::AttackTimeMod, true);
                 };
                 if (GetPropsBefore(allowed, Handler))
                     return;
 
-                if (IsMatch(just_before, DescWord::Expire))
-                    PUSH_PARAM_AND_RETURN(SkillParamType::DurationMod, true)
+                if (IsMatch(just_before, DescToken::Expire))
+                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::DurationMod, true)
             }
 
-            if (IsMatch(just_after, DescWord::Slower))
+            if (IsMatch(just_after, DescToken::Slower))
             {
-                if (IsMatch(just_before, DescWord::Recharge) ||
-                    IsListMatch(just_before - 1, {DescWord::Recharge, DescWord::Skills}))
-                    PUSH_PARAM_AND_RETURN(SkillParamType::RechargeTimeMod)
+                if (IsMatch(just_before, DescToken::Recharge) ||
+                    IsListMatch(just_before - 1, {DescToken::Recharge, DescToken::Skills}))
+                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::RechargeTimeMod)
 
-                if (IsMatch(just_before, DescWord::Movement) ||
-                    IsMatch(just_after + 1, DescWord::Movement))
-                    PUSH_PARAM_AND_RETURN(SkillParamType::MovementSpeedMod, true)
+                if (IsMatch(just_before, DescToken::Movement) ||
+                    IsMatch(just_after + 1, DescToken::Movement))
+                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::MovementSpeedMod, true)
 
-                if (IsMatch(just_before, DescWord::Attack))
-                    PUSH_PARAM_AND_RETURN(SkillParamType::AttackTimeMod)
+                if (IsMatch(just_before, DescToken::Attack))
+                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::AttackTimeMod)
             }
 
-            if (IsMatch(just_after, DescWord::Longer))
+            if (IsMatch(just_after, DescToken::Longer))
             {
-                if (IsMatch(just_before, DescWord::Last))
-                    PUSH_PARAM_AND_RETURN(SkillParamType::DurationMod)
+                if (IsMatch(just_before, DescToken::Last))
+                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::DurationMod)
             }
 
-            if (IsMatch(just_after, DescWord::Damage))
+            if (IsMatch(just_after, DescToken::Damage))
             {
                 if (is_less)
-                    PUSH_PARAM_AND_RETURN(SkillParamType::DamageMod, true)
+                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::DamageMod, true)
                 else if (is_more)
-                    PUSH_PARAM_AND_RETURN(SkillParamType::DamageMod)
+                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::DamageMod)
             }
 
-            if (IsMatch(just_after, DescWord::Heal))
+            if (IsMatch(just_after, DescToken::Heal))
             {
                 if (is_less)
-                    PUSH_PARAM_AND_RETURN(SkillParamType::HealMod, true)
+                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::HealMod, true)
             }
             if (is_reduced)
             {
                 for (int32_t i = just_before; i >= 0; i--)
                 {
-                    IF_MATCH_PUSH_PARAM_AND_RETURN(i, DescWord::Heal, SkillParamType::HealMod, true)
+                    IF_MATCH_PUSH_PARAM_AND_RETURN(i, DescToken::Heal, ParsedSkillData::Type::HealMod, true)
                 }
             }
         }
         else // No % after literal
         {
-            IF_MATCH_PUSH_PARAM_AND_RETURN(just_before, DescWord::Level, SkillParamType::Level)
+            IF_MATCH_PUSH_PARAM_AND_RETURN(just_before, DescToken::Level, ParsedSkillData::Type::Level)
 
-            if (IsMatch(just_before, DescWord::Max))
+            if (IsMatch(just_before, DescToken::Max))
             {
-                if (IsMatch(just_before - 1, DescWord::Damage) ||
-                    IsMatch(just_after, DescWord::Damage))
+                if (IsMatch(just_before - 1, DescToken::Damage) ||
+                    IsMatch(just_after, DescToken::Damage))
                 {
-                    if (IsMatch(just_after + 1, DescWord::Reduce))
-                        PUSH_PARAM_AND_RETURN(SkillParamType::DamageReduction)
+                    if (IsMatch(just_after + 1, DescToken::Reduce))
+                        PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::DamageReduction)
 
-                    PUSH_PARAM_AND_RETURN(SkillParamType::Damage)
+                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::Damage)
                 }
             }
 
-            if (IsMatch(just_before, DescWord::For))
+            if (IsMatch(just_before, DescToken::For))
             {
                 for (int32_t i = just_before - 1; i >= 0; i--)
                 {
-                    IF_MATCH_PUSH_PARAM_AND_RETURN(i, DescWord::Heal, SkillParamType::Heal)
+                    IF_MATCH_PUSH_PARAM_AND_RETURN(i, DescToken::Heal, ParsedSkillData::Type::Heal)
                 }
             }
 
-            if (IsMatch(just_after, DescWord::Seconds))
+            if (IsMatch(just_after, DescToken::Seconds))
             {
-                if (IsMatch(just_after + 1, DescWord::Lifespan) ||
-                    IsMatch(just_before, DescWord::Lifespan) ||
-                    IsListMatch(just_before - 1, {DescWord::Die, DescWord::After}))
+                if (IsMatch(just_after + 1, DescToken::Lifespan) ||
+                    IsMatch(just_before, DescToken::Lifespan) ||
+                    IsListMatch(just_before - 1, {DescToken::Die, DescToken::After}))
                 {
-                    PUSH_PARAM_AND_RETURN(SkillParamType::Duration);
+                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::Duration);
                 }
 
-                if ((IsMatch(just_before, DescWord::Recharge) && IsMatch(just_after + 1, DescWord::Faster)))
+                if ((IsMatch(just_before, DescToken::Recharge) && IsMatch(just_after + 1, DescToken::Faster)))
                 {
-                    PUSH_PARAM_AND_RETURN(SkillParamType::RechargeTimeAdd, true)
+                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::RechargeTimeAdd, true)
                 }
 
-                if (is_more && IsMatch(just_after + 1, DescWord::Recharge))
+                if (is_more && IsMatch(just_after + 1, DescToken::Recharge))
                 {
-                    PUSH_PARAM_AND_RETURN(SkillParamType::RechargeTimeAdd)
+                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::RechargeTimeAdd)
                 }
 
-                if ((IsMatch(just_before, DescWord::Activate) && IsMatch(just_after + 1, DescWord::Faster)))
+                if ((IsMatch(just_before, DescToken::Activate) && IsMatch(just_after + 1, DescToken::Faster)))
                 {
-                    IF_MATCH_PUSH_PARAM_AND_RETURN(just_before, DescWord::Cast, SkillParamType::ActivationTimeAdd, true)
+                    IF_MATCH_PUSH_PARAM_AND_RETURN(just_before, DescToken::Cast, ParsedSkillData::Type::ActivationTimeAdd, true)
                 }
-                else if (!IsMatch(just_before, DescWord::Max))
+                else if (!IsMatch(just_before, DescToken::Max))
                 {
-                    FixedArray<SkillParamType, 8> salloc;
+                    FixedArray<ParsedSkillData::Type, 8> salloc;
                     auto buffer = salloc.ref();
                     for (int32_t i = just_before; i >= 0; i--)
                     {
-                        if (IsMatch(i, DescWord::Seconds))
+                        if (IsMatch(i, DescToken::Seconds))
                             break;
                         // clang-format off
                         switch (sentence[i]) {
-                            case DescWord::Disable: PUSH_PARAM_AND_RETURN(SkillParamType::Disable)
+                            case DescToken::Disable: PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::Disable)
 
-                            case DescWord::Cripple:      buffer.try_push(SkillParamType::Crippled);     break;
-                            case DescWord::Blind:        buffer.try_push(SkillParamType::Blind);        break;
-                            case DescWord::Weakness:     buffer.try_push(SkillParamType::Weakness);     break;
-                            case DescWord::CrackedArmor: buffer.try_push(SkillParamType::CrackedArmor); break;
-                            case DescWord::Daze:         buffer.try_push(SkillParamType::Dazed);        break;
-                            case DescWord::Bleed:        buffer.try_push(SkillParamType::Bleeding);     break;
-                            case DescWord::Poison:       buffer.try_push(SkillParamType::Poison);       break;
-                            case DescWord::Disease:      buffer.try_push(SkillParamType::Disease);      break;
-                            case DescWord::Burn:         buffer.try_push(SkillParamType::Burning);      break;
-                            case DescWord::DeepWound:    buffer.try_push(SkillParamType::DeepWound);    break;
+                            case DescToken::Cripple:      buffer.try_push(ParsedSkillData::Type::Crippled);     break;
+                            case DescToken::Blind:        buffer.try_push(ParsedSkillData::Type::Blind);        break;
+                            case DescToken::Weakness:     buffer.try_push(ParsedSkillData::Type::Weakness);     break;
+                            case DescToken::CrackedArmor: buffer.try_push(ParsedSkillData::Type::CrackedArmor); break;
+                            case DescToken::Daze:         buffer.try_push(ParsedSkillData::Type::Dazed);        break;
+                            case DescToken::Bleed:        buffer.try_push(ParsedSkillData::Type::Bleeding);     break;
+                            case DescToken::Poison:       buffer.try_push(ParsedSkillData::Type::Poison);       break;
+                            case DescToken::Disease:      buffer.try_push(ParsedSkillData::Type::Disease);      break;
+                            case DescToken::Burn:         buffer.try_push(ParsedSkillData::Type::Burning);      break;
+                            case DescToken::DeepWound:    buffer.try_push(ParsedSkillData::Type::DeepWound);    break;
                         }
                         // clang-format on
                     }
@@ -2058,62 +1976,62 @@ namespace HerosInsight
                             PushParam(buffer.pop());
                         return;
                     }
-                    PUSH_PARAM_AND_RETURN(SkillParamType::Duration);
+                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::Duration);
                 }
             }
 
-            if (IsMatch(just_after, DescWord::Armor))
+            if (IsMatch(just_after, DescToken::Armor))
             {
                 if (is_less)
-                    PUSH_PARAM_AND_RETURN(SkillParamType::ArmorChange, true)
+                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::ArmorChange, true)
                 else
-                    PUSH_PARAM_AND_RETURN(SkillParamType::ArmorChange)
+                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::ArmorChange)
             }
 
-            if (IsListMatch(just_after, {DescWord::Max, DescWord::Health}) ||
-                IsListMatch(0, {DescWord::Max, DescWord::Health}))
+            if (IsListMatch(just_after, {DescToken::Max, DescToken::Health}) ||
+                IsListMatch(0, {DescToken::Max, DescToken::Health}))
             {
                 if (is_less || is_reduced)
-                    PUSH_PARAM_AND_RETURN(SkillParamType::MaxHealthAdd, true)
+                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::MaxHealthAdd, true)
                 else
-                    PUSH_PARAM_AND_RETURN(SkillParamType::MaxHealthAdd)
+                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::MaxHealthAdd)
             }
 
-            if (IsMatch(just_after, DescWord::Health))
+            if (IsMatch(just_after, DescToken::Health))
             {
-                IF_MATCH_PUSH_PARAM_AND_RETURN(just_after + 1, DescWord::Regen, SkillParamType::HealthPips)
-                IF_MATCH_PUSH_PARAM_AND_RETURN(just_after + 1, DescWord::Degen, SkillParamType::HealthPips, true)
+                IF_MATCH_PUSH_PARAM_AND_RETURN(just_after + 1, DescToken::Regen, ParsedSkillData::Type::HealthPips)
+                IF_MATCH_PUSH_PARAM_AND_RETURN(just_after + 1, DescToken::Degen, ParsedSkillData::Type::HealthPips, true)
                 for (int32_t i = just_before; i >= 0; i--)
                 {
-                    IF_MATCH_PUSH_PARAM_AND_RETURN(i, DescWord::Gain, SkillParamType::HealthGain)
-                    IF_MATCH_PUSH_PARAM_AND_RETURN(i, DescWord::Lose, SkillParamType::HealthLoss)
-                    IF_MATCH_PUSH_PARAM_AND_RETURN(i, DescWord::Steal, SkillParamType::HealthSteal)
+                    IF_MATCH_PUSH_PARAM_AND_RETURN(i, DescToken::Gain, ParsedSkillData::Type::HealthGain)
+                    IF_MATCH_PUSH_PARAM_AND_RETURN(i, DescToken::Lose, ParsedSkillData::Type::HealthLoss)
+                    IF_MATCH_PUSH_PARAM_AND_RETURN(i, DescToken::Steal, ParsedSkillData::Type::HealthSteal)
                 }
             }
 
-            if (IsMatch(just_after, DescWord::Energy) && !IsMatch(0, DescWord::Not))
+            if (IsMatch(just_after, DescToken::Energy) && !IsMatch(0, DescToken::Not))
             {
-                IF_MATCH_PUSH_PARAM_AND_RETURN(just_after + 1, DescWord::Regen, SkillParamType::EnergyPips)
-                IF_MATCH_PUSH_PARAM_AND_RETURN(just_after + 1, DescWord::Degen, SkillParamType::EnergyPips, true)
-                IF_MATCH_PUSH_PARAM_AND_RETURN(just_after + 1, DescWord::Lose, SkillParamType::EnergyLoss)
+                IF_MATCH_PUSH_PARAM_AND_RETURN(just_after + 1, DescToken::Regen, ParsedSkillData::Type::EnergyPips)
+                IF_MATCH_PUSH_PARAM_AND_RETURN(just_after + 1, DescToken::Degen, ParsedSkillData::Type::EnergyPips, true)
+                IF_MATCH_PUSH_PARAM_AND_RETURN(just_after + 1, DescToken::Lose, ParsedSkillData::Type::EnergyLoss)
 
                 if (is_less)
-                    PUSH_PARAM_AND_RETURN(SkillParamType::EnergyDiscount)
+                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::EnergyDiscount)
 
                 for (int32_t i = just_before; i >= 0; i--)
                 {
-                    IF_MATCH_PUSH_PARAM_AND_RETURN(i, DescWord::Gain, SkillParamType::EnergyGain)
-                    IF_MATCH_PUSH_PARAM_AND_RETURN(i, DescWord::Lose, SkillParamType::EnergyLoss)
-                    IF_MATCH_PUSH_PARAM_AND_RETURN(i, DescWord::Steal, SkillParamType::EnergySteal)
+                    IF_MATCH_PUSH_PARAM_AND_RETURN(i, DescToken::Gain, ParsedSkillData::Type::EnergyGain)
+                    IF_MATCH_PUSH_PARAM_AND_RETURN(i, DescToken::Lose, ParsedSkillData::Type::EnergyLoss)
+                    IF_MATCH_PUSH_PARAM_AND_RETURN(i, DescToken::Steal, ParsedSkillData::Type::EnergySteal)
                 }
             }
 
-            if (IsMatch(just_after, DescWord::Adrenaline))
+            if (IsMatch(just_after, DescToken::Adrenaline))
             {
                 for (int32_t i = just_before; i >= 0; i--)
                 {
-                    IF_MATCH_PUSH_PARAM_AND_RETURN(i, DescWord::Gain, SkillParamType::AdrenalineGain)
-                    IF_MATCH_PUSH_PARAM_AND_RETURN(i, DescWord::Lose, SkillParamType::AdrenalineLoss)
+                    IF_MATCH_PUSH_PARAM_AND_RETURN(i, DescToken::Gain, ParsedSkillData::Type::AdrenalineGain)
+                    IF_MATCH_PUSH_PARAM_AND_RETURN(i, DescToken::Lose, ParsedSkillData::Type::AdrenalineLoss)
                 }
             }
 
@@ -2122,43 +2040,43 @@ namespace HerosInsight
                 auto i = just_after;
                 if (dmg_type)
                 {
-                    pp.damage_type = dmg_type;
+                    pd.damage_type = dmg_type;
                     i++;
                 }
-                if (IsMatch(i, DescWord::Damage))
+                if (IsMatch(i, DescToken::Damage))
                 {
-                    if (is_less || IsMatch(i + 1, DescWord::Reduce))
-                        PUSH_PARAM_AND_RETURN(SkillParamType::DamageReduction)
+                    if (is_less || IsMatch(i + 1, DescToken::Reduce))
+                        PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::DamageReduction)
 
                     for (int32_t j = just_before; j >= 0; j--)
                     {
-                        IF_MATCH_PUSH_PARAM_AND_RETURN(j, DescWord::Absorb, SkillParamType::DamageReduction)
+                        IF_MATCH_PUSH_PARAM_AND_RETURN(j, DescToken::Absorb, ParsedSkillData::Type::DamageReduction)
                     }
 
-                    PUSH_PARAM_AND_RETURN(SkillParamType::Damage)
+                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::Damage)
                 }
             }
 
             for (int32_t i = just_before; i >= 0; i--)
             {
-                if (IsListMatch(i - 2, {DescWord::Gain, DescWord::Or, DescWord::Lose}))
+                if (IsListMatch(i - 2, {DescToken::Gain, DescToken::Or, DescToken::Lose}))
                     continue;
 
-                if ((IsMatch(i, DescWord::Transfer) ||
-                        IsMatch(i, DescWord::Remove) ||
-                        IsMatch(i, DescWord::Lose)) &&
-                    !IsMatch(i - 1, DescWord::Whenever))
+                if ((IsMatch(i, DescToken::Transfer) ||
+                        IsMatch(i, DescToken::Remove) ||
+                        IsMatch(i, DescToken::Lose)) &&
+                    !IsMatch(i - 1, DescToken::Whenever))
                 {
-                    if (IsMatch(just_after, DescWord::ConditionAndHex) ||
-                        IsMatch(just_after, DescWord::ConditionsAndHexes))
+                    if (IsMatch(just_after, DescToken::ConditionAndHex) ||
+                        IsMatch(just_after, DescToken::ConditionsAndHexes))
                     {
-                        PushParam(SkillParamType::ConditionsRemoved);
-                        PushParam(SkillParamType::HexesRemoved);
+                        PushParam(ParsedSkillData::Type::ConditionsRemoved);
+                        PushParam(ParsedSkillData::Type::HexesRemoved);
                         return;
                     }
-                    IF_MATCH_PUSH_PARAM_AND_RETURN(just_after, DescWord::Condition, SkillParamType::ConditionsRemoved)
-                    IF_MATCH_PUSH_PARAM_AND_RETURN(just_after, DescWord::Hex, SkillParamType::HexesRemoved)
-                    IF_MATCH_PUSH_PARAM_AND_RETURN(just_after, DescWord::Enchantment, SkillParamType::EnchantmentsRemoved)
+                    IF_MATCH_PUSH_PARAM_AND_RETURN(just_after, DescToken::Condition, ParsedSkillData::Type::ConditionsRemoved)
+                    IF_MATCH_PUSH_PARAM_AND_RETURN(just_after, DescToken::Hex, ParsedSkillData::Type::HexesRemoved)
+                    IF_MATCH_PUSH_PARAM_AND_RETURN(just_after, DescToken::Enchantment, ParsedSkillData::Type::EnchantmentsRemoved)
                 }
             }
         }
@@ -2167,15 +2085,15 @@ namespace HerosInsight
         {
             for (int32_t i = just_before; i > 0; i--)
             {
-                if (IsMatch(i, DescWord::Attribute))
+                if (IsMatch(i, DescToken::Attribute))
                     break;
 
-                if (IsMatch(i, DescWord::Damage))
+                if (IsMatch(i, DescToken::Damage))
                 {
                     if (has_percent)
-                        PUSH_PARAM_AND_RETURN(SkillParamType::DamageMod, true)
+                        PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::DamageMod, true)
                     else
-                        PUSH_PARAM_AND_RETURN(SkillParamType::DamageReduction)
+                        PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::DamageReduction)
                 }
             }
         }
@@ -2183,57 +2101,87 @@ namespace HerosInsight
 
     void ParseSkillData(CustomSkillData &cskill)
     {
-        auto pps = cskill.parsed_params.ref();
-        ParsedSkillParam pp = {};
+        auto &parsed_data = cskill.parsed_data;
+        ParsedSkillData pd = {};
 
         // Hardcoded cases
         switch (cskill.skill_id)
         {
             case GW::Constants::SkillID::Unseen_Fury:
             {
-                pp.type = SkillParamType::Blind;
-                pp.param = {3, 10};
-                pps.try_push(pp);
-                pp.type = SkillParamType::Duration;
-                pp.param = {10, 30};
-                pps.try_push(pp);
+                pd.type = ParsedSkillData::Type::Blind;
+                pd.param = {3, 10};
+                parsed_data.push_back(pd);
+                pd.type = ParsedSkillData::Type::Duration;
+                pd.param = {10, 30};
+                parsed_data.push_back(pd);
                 return;
             }
 
             case GW::Constants::SkillID::Ursan_Roar_Blood_Washes_Blood:
-                pp.param = {4, 4};
+                pd.param = {4, 4};
             case GW::Constants::SkillID::Ursan_Roar:
             {
-                if (!pp.param)
-                    pp.param = {2, 5};
+                if (!pd.param)
+                    pd.param = {2, 5};
 
-                pp.type = SkillParamType::Duration;
-                pps.try_push(pp);
+                pd.type = ParsedSkillData::Type::Duration;
+                parsed_data.push_back(pd);
 
-                pp.type = SkillParamType::Weakness;
-                pps.try_push(pp);
+                pd.type = ParsedSkillData::Type::Weakness;
+                parsed_data.push_back(pd);
                 return;
-            }
-
-            case GW::Constants::SkillID::Signet_of_Suffering:
-            {
-                cskill.end_effect_index = 1;
-                break;
             }
 
             case GW::Constants::SkillID::Ash_Blast:
             {
-                pp.type = SkillParamType::Damage;
-                pp.damage_type = DamageType::Earth;
-                pp.param = {35, 65};
-                pps.try_push(pp);
-                pp = {};
-                pp.type = SkillParamType::Duration;
-                pp.param = {5, 5};
-                pps.try_push(pp);
-                pp.type = SkillParamType::ChanceToMiss;
-                pp.param = {20, 75};
-                pps.try_push(pp);
+                pd.type = ParsedSkillData::Type::Damage;
+                pd.damage_type = DamageType::Earth;
+                pd.param = {35, 65};
+                parsed_data.push_back(pd);
+                pd = {};
+                pd.type = ParsedSkillData::Type::Duration;
+                pd.param = 5;
+                parsed_data.push_back(pd);
+                pd.type = ParsedSkillData::Type::ChanceToMiss;
+                pd.param = {20, 75};
+                parsed_data.push_back(pd);
+                return;
+            }
+
+            case GW::Constants::SkillID::Crippling_Victory: // Has weird formatting for a skill which applies a condition
+            {
+                pd.type = ParsedSkillData::Type::Crippled;
+                pd.param = {3, 8};
+                parsed_data.push_back(pd);
+                pd.type = ParsedSkillData::Type::Damage;
+                pd.damage_type = DamageType::Earth;
+                pd.param = {10, 30};
+                parsed_data.push_back(pd);
+                return;
+            }
+
+            case GW::Constants::SkillID::Hungers_Bite:
+            {
+                pd.type = ParsedSkillData::Type::HealthSteal;
+                pd.param = 30;
+                parsed_data.push_back(pd);
+
+                ParsedSkillData::Type types[] = {
+                    ParsedSkillData::Type::Poison,
+                    ParsedSkillData::Type::Bleeding,
+                    ParsedSkillData::Type::Disease,
+                    ParsedSkillData::Type::DeepWound,
+                    ParsedSkillData::Type::Crippled,
+                    ParsedSkillData::Type::Weakness,
+                    ParsedSkillData::Type::Dazed,
+                };
+                pd.param = 15;
+                for (auto type : types)
+                {
+                    pd.type = type;
+                    parsed_data.push_back(pd);
+                }
                 return;
             }
         }
@@ -2241,42 +2189,42 @@ namespace HerosInsight
         auto rich_desc = cskill.TryGetDescription(true, -1);
         assert(rich_desc);
         auto &desc = rich_desc->str;
-        auto machine_description = MachineDesc(desc);
+        auto tokenized_desc = TokenizedDesc(desc);
 
-        auto words = machine_description.words;
-        auto start = words.data();
-        auto end = start + words.size();
+        auto tokens = tokenized_desc.tokens;
+        auto start = tokens.data();
+        auto end = start + tokens.size();
         auto w = start;
         uint32_t lit_counter = 0;
 
         while (w < end)
         {
-            if (w[0] == DescWord::End && w + 1 < end && w[1] == DescWord::Effect)
+            if (w[0] == DescToken::End && w + 1 < end && w[1] == DescToken::Effect)
             {
-                assert(!cskill.end_effect_index.has_value());
-                cskill.end_effect_index = (uint16_t)cskill.parsed_params.ref().size();
+                pd.type = ParsedSkillData::Type::EndEffect;
+                parsed_data.push_back(pd);
 
                 w += 2;
                 continue;
             }
 
-            if (*w == DescWord::Literal)
+            if (*w == DescToken::Literal)
             {
                 auto sentence_start = w;
-                while (start < sentence_start && (sentence_start[-1] != DescWord::Period))
+                while (start < sentence_start && (sentence_start[-1] != DescToken::Period))
                     sentence_start--;
                 auto sentence_end = w;
-                while (sentence_end < end && (sentence_end[0] != DescWord::Period))
+                while (sentence_end < end && (sentence_end[0] != DescToken::Period))
                     sentence_end++;
 
                 auto sentence = std::span(sentence_start, sentence_end - sentence_start);
                 auto lit_pos = w - sentence_start;
-                auto pp = ParsedSkillParam();
-                auto lit = machine_description.lits[lit_counter++];
+                auto pp = ParsedSkillData();
+                auto lit = tokenized_desc.lits[lit_counter++];
                 if (!lit.IsNull())
                 {
                     pp.param = lit;
-                    ParseContext(pps, pp, sentence, lit_pos);
+                    ParseParamContext(parsed_data, pp, sentence, lit_pos);
                 }
             }
             w++;
@@ -2335,88 +2283,6 @@ namespace HerosInsight
         // clang-format on
     }
 
-    GW::Constants::SkillID SkillParamTypeToSkillID(SkillParamType type)
-    {
-        // clang-format off
-        switch (type) {
-            case SkillParamType::Bleeding:     return GW::Constants::SkillID::Bleeding;
-            case SkillParamType::Blind:        return GW::Constants::SkillID::Blind;
-            case SkillParamType::Burning:      return GW::Constants::SkillID::Burning;
-            case SkillParamType::CrackedArmor: return GW::Constants::SkillID::Cracked_Armor;
-            case SkillParamType::Crippled:     return GW::Constants::SkillID::Crippled;
-            case SkillParamType::Dazed:        return GW::Constants::SkillID::Dazed;
-            case SkillParamType::DeepWound:    return GW::Constants::SkillID::Deep_Wound;
-            case SkillParamType::Disease:      return GW::Constants::SkillID::Disease;
-            case SkillParamType::Poison:       return GW::Constants::SkillID::Poison;
-            case SkillParamType::Weakness:     return GW::Constants::SkillID::Weakness;
-            
-            default:                           return GW::Constants::SkillID::No_Skill;
-        }
-        // clang-format on
-    }
-
-    std::string_view SkillParamTypeToString(SkillParamType type)
-    {
-        // clang-format off
-        switch (type) {
-            case SkillParamType::Duration:          return "Duration (s)";
-            case SkillParamType::Level:             return "Level";
-            case SkillParamType::Disable:           return "Disable (s)";
-            case SkillParamType::ArmorChange:       return "Armor";
-            case SkillParamType::MovementSpeedMod:  return "Movement speed modifier (%)";
-            case SkillParamType::AttackTimeMod:     return "Attack time modifier (%)";
-            case SkillParamType::RechargeTimeMod:   return "Recharge time modifier (%)";
-            case SkillParamType::RechargeTimeAdd:   return "Recharge time added (s)";
-            case SkillParamType::ActivationTimeAdd: return "Activation time added (s)";
-            case SkillParamType::DurationMod:       return "Duration modifier (%)";
-
-            case SkillParamType::ConditionsRemoved:   return "Conditions removed";
-            case SkillParamType::HexesRemoved:        return "Hexes removed";
-            case SkillParamType::EnchantmentsRemoved: return "Enchantments removed";
-
-            case SkillParamType::Heal:             return "Healing";
-            case SkillParamType::HealMod:          return "Healing modifier (%)";
-
-            case SkillParamType::Damage:           return "Damage";
-            case SkillParamType::DamageReduction:  return "Damage reduction";
-            case SkillParamType::DamageMod:        return "Damage modifier (%)";
-
-            case SkillParamType::ChanceToBlock:    return "Block chance (%)";
-            case SkillParamType::ChanceToFail:     return "Failure chance (%)";
-            case SkillParamType::ChanceToMiss:     return "Miss chance (%)";
-
-            case SkillParamType::MaxHealthAdd:     return "Max health";
-            case SkillParamType::HealthPips:       return "Health pips";
-            case SkillParamType::HealthGain:       return "Health gain";
-            case SkillParamType::HealthLoss:       return "Health loss";
-            case SkillParamType::HealthSteal:      return "Health steal";
-
-            case SkillParamType::EnergyDiscount:   return "Energy discount";
-            case SkillParamType::EnergyPips:       return "Energy pips";
-            case SkillParamType::EnergyGain:       return "Energy gain";
-            case SkillParamType::EnergyLoss:       return "Energy loss";
-            case SkillParamType::EnergySteal:      return "Energy steal";
-
-            case SkillParamType::AdrenalineGain:   return "Adrenaline gain";
-            case SkillParamType::AdrenalineLoss:   return "Adrenaline loss";
-
-            case SkillParamType::Bleeding:         return "Bleeding (s)";
-            case SkillParamType::Blind:            return "Blind (s)";
-            case SkillParamType::Burning:          return "Burning (s)";
-            case SkillParamType::CrackedArmor:     return "Cracked Armor (s)";
-            case SkillParamType::Crippled:         return "Crippled (s)";
-            case SkillParamType::Dazed:            return "Dazed (s)";
-            case SkillParamType::DeepWound:        return "Deep Wound (s)";
-            case SkillParamType::Disease:          return "Disease (s)";
-            case SkillParamType::Poison:           return "Poison (s)";
-            case SkillParamType::Weakness:         return "Weakness (s)";
-
-            case SkillParamType::Null:             return "";
-            default:                               return "ERROR";
-        }
-        // clang-format on
-    }
-
     SkillParam GetSkillParam(const GW::Skill &skill, uint32_t id)
     {
         // clang-format off
@@ -2432,9 +2298,9 @@ namespace HerosInsight
         // clang-format on
     }
 
-    void ParsedSkillParam::ImGuiRender(int8_t attr_lvl)
+    void ParsedSkillData::ImGuiRender(int8_t attr_lvl)
     {
-        auto str = SkillParamTypeToString(type);
+        auto str = this->ToStr();
         ImGui::TextUnformatted(str.data(), str.data() + str.size());
         if (damage_type)
         {
@@ -2449,7 +2315,7 @@ namespace HerosInsight
         ImGui::SameLine();
         ImGui::TextUnformatted(": ");
 
-        if (type > SkillParamType::MAY_BE_NEGATIVE_AFTER)
+        if (type > ParsedSkillData::Type::MAY_BE_NEGATIVE_AFTER)
         {
             ImGui::SameLine();
             if (is_negative)
@@ -2465,16 +2331,111 @@ namespace HerosInsight
         ImGui::SameLine();
         param.ImGuiRender(attr_lvl);
 
-        if (type > SkillParamType::PERCENT_START && type < SkillParamType::PERCENT_END)
+        if (type > ParsedSkillData::Type::PERCENT_START && type < ParsedSkillData::Type::PERCENT_END)
         {
             ImGui::SameLine();
             ImGui::Text("%%");
         }
-        else if (type > SkillParamType::SECONDS_START && type < SkillParamType::SECONDS_END)
+        else if (type > ParsedSkillData::Type::SECONDS_START && type < ParsedSkillData::Type::SECONDS_END)
         {
             ImGui::SameLine();
             ImGui::Text(" seconds");
         }
+    }
+
+    GW::Constants::SkillID ParsedSkillData::GetCondition() const
+    {
+        // clang-format off
+        switch (type) {
+            case Type::Bleeding:     return GW::Constants::SkillID::Bleeding;
+            case Type::Blind:        return GW::Constants::SkillID::Blind;
+            case Type::Burning:      return GW::Constants::SkillID::Burning;
+            case Type::CrackedArmor: return GW::Constants::SkillID::Cracked_Armor;
+            case Type::Crippled:     return GW::Constants::SkillID::Crippled;
+            case Type::Dazed:        return GW::Constants::SkillID::Dazed;
+            case Type::DeepWound:    return GW::Constants::SkillID::Deep_Wound;
+            case Type::Disease:      return GW::Constants::SkillID::Disease;
+            case Type::Poison:       return GW::Constants::SkillID::Poison;
+            case Type::Weakness:     return GW::Constants::SkillID::Weakness;
+            
+            default:                 return GW::Constants::SkillID::No_Skill;
+        }
+        // clang-format on
+    }
+
+    RemovalMask ParsedSkillData::GetRemovalMask() const
+    {
+        // clang-format off
+        switch (type) {
+            case Type::HexesRemoved:        return RemovalMask::Hex;
+            case Type::ConditionsRemoved:   return RemovalMask::Condition;
+            case Type::EnchantmentsRemoved: return RemovalMask::Enchantment;
+            
+            default:                        return RemovalMask::Null;
+        }
+        // clang-format on
+    }
+
+    std::string_view ParsedSkillData::ToStr() const
+    {
+        // clang-format off
+        switch (type) {
+            case Type::Duration:          return "Duration (s)";
+            case Type::Level:             return "Level";
+            case Type::Disable:           return "Disable (s)";
+            case Type::ArmorChange:       return "Armor";
+            case Type::MovementSpeedMod:  return "Movement speed modifier (%)";
+            case Type::AttackTimeMod:     return "Attack time modifier (%)";
+            case Type::RechargeTimeMod:   return "Recharge time modifier (%)";
+            case Type::RechargeTimeAdd:   return "Recharge time added (s)";
+            case Type::ActivationTimeAdd: return "Activation time added (s)";
+            case Type::DurationMod:       return "Duration modifier (%)";
+
+            case Type::ConditionsRemoved:   return "Conditions removed";
+            case Type::HexesRemoved:        return "Hexes removed";
+            case Type::EnchantmentsRemoved: return "Enchantments removed";
+
+            case Type::Heal:             return "Healing";
+            case Type::HealMod:          return "Healing modifier (%)";
+
+            case Type::Damage:           return "Damage";
+            case Type::DamageReduction:  return "Damage reduction";
+            case Type::DamageMod:        return "Damage modifier (%)";
+
+            case Type::ChanceToBlock:    return "Block chance (%)";
+            case Type::ChanceToFail:     return "Failure chance (%)";
+            case Type::ChanceToMiss:     return "Miss chance (%)";
+
+            case Type::MaxHealthAdd:     return "Max health";
+            case Type::HealthPips:       return "Health pips";
+            case Type::HealthGain:       return "Health gain";
+            case Type::HealthLoss:       return "Health loss";
+            case Type::HealthSteal:      return "Health steal";
+
+            case Type::EnergyDiscount:   return "Energy discount";
+            case Type::EnergyPips:       return "Energy pips";
+            case Type::EnergyGain:       return "Energy gain";
+            case Type::EnergyLoss:       return "Energy loss";
+            case Type::EnergySteal:      return "Energy steal";
+
+            case Type::AdrenalineGain:   return "Adrenaline gain";
+            case Type::AdrenalineLoss:   return "Adrenaline loss";
+
+            case Type::Bleeding:         return "Bleeding (s)";
+            case Type::Blind:            return "Blind (s)";
+            case Type::Burning:          return "Burning (s)";
+            case Type::CrackedArmor:     return "Cracked Armor (s)";
+            case Type::Crippled:         return "Crippled (s)";
+            case Type::Dazed:            return "Dazed (s)";
+            case Type::DeepWound:        return "Deep Wound (s)";
+            case Type::Disease:          return "Disease (s)";
+            case Type::Poison:           return "Poison (s)";
+            case Type::Weakness:         return "Weakness (s)";
+
+            case Type::Null:             return "";
+            default:                     return "ERROR";
+        }
+        // clang-format on
     }
 
     namespace CustomSkillDataModule
@@ -2524,28 +2485,55 @@ namespace HerosInsight
         }
     }
 
-    SkillParam DetermineBaseDuration(CustomSkillData &custom_sd)
+    SkillParam DetermineBaseDuration(CustomSkillData &cskill)
     {
+        auto &parsed_data = cskill.parsed_data;
+
         // Typically this param is the duration, but it may sometimes be condition duration or other.
-        auto base_duration = custom_sd.GetSkillParam(2);
+        auto base_duration = cskill.GetSkillParam(2);
+
+        // Special cases
+        switch (cskill.skill_id)
+        {
+            case GW::Constants::SkillID::Pious_Assault:
+            case GW::Constants::SkillID::Pious_Assault_PvP:
+                return {0, 0};
+            default:
+            {
+                if (cskill.tags.SpiritAttack)
+                {
+                    return {0, 0};
+                }
+
+                if (!base_duration.IsNull() &&
+                    cskill.skill->type == GW::Constants::SkillType::Attack)
+                {
+                    auto desc = cskill.TryGetPredecodedDescription(cskill.GetDescKey(true, -1));
+                    if (desc->contains("nock"))
+                    {
+                        return {0, 0};
+                    }
+                }
+            }
+        }
 
         if (!base_duration.IsNull())
         {
             // So we have to cross-check with the parsed params
-            for (auto pp : custom_sd.parsed_params.ref())
+            for (auto pd : parsed_data)
             {
-                if (pp.type == SkillParamType::Duration &&
-                    pp.param == base_duration)
+                if (pd.type == ParsedSkillData::Type::Duration &&
+                    pd.param == base_duration)
                 {
                     return base_duration;
                 }
             }
 
             // If no match, we only assume it's the duration as long as no other parsed param has the same value
-            for (auto pp : custom_sd.parsed_params.ref())
+            for (auto pd : parsed_data)
             {
-                if (pp.type != SkillParamType::Duration &&
-                    pp.param == base_duration)
+                if (pd.type != ParsedSkillData::Type::Duration &&
+                    pd.param == base_duration)
                 {
                     return {0, 0};
                 }
@@ -2555,390 +2543,799 @@ namespace HerosInsight
         return base_duration;
     }
 
-    void DetermineInitEffects(CustomSkillData &cskill, std::vector<StaticSkillEffect> &result)
+    void DetermineEffects(CustomSkillData &cskill)
     {
         auto skill_id = cskill.skill_id;
         auto &skill = *cskill.skill;
 
+        // Ignored skill types
+        switch (skill.type)
+        {
+            case GW::Constants::SkillType::Well:
+            case GW::Constants::SkillType::Ward:
+            case GW::Constants::SkillType::Trap:
+            case GW::Constants::SkillType::Ritual:
+            case GW::Constants::SkillType::Condition:
+            case GW::Constants::SkillType::Bounty:
+            case GW::Constants::SkillType::Disguise:
+            case GW::Constants::SkillType::Scroll:
+            case GW::Constants::SkillType::Environmental:
+            case GW::Constants::SkillType::EnvironmentalTrap:
+            case GW::Constants::SkillType::Passive:
+            case GW::Constants::SkillType::Title:
+                return;
+        }
+
+        FixedArray<ParsedSkillData, 8> conditions_salloc, end_conditions_salloc, removals_salloc, end_removals_salloc;
+        auto conditions = conditions_salloc.ref();
+        auto end_conditions = end_conditions_salloc.ref();
+        auto removals = removals_salloc.ref();
+        auto end_removals = end_removals_salloc.ref();
+
+        ParsedSkillData::Type stage = ParsedSkillData::Type::Null;
+        for (ParsedSkillData pd : cskill.parsed_data)
+        {
+            if (pd.type == ParsedSkillData::Type::EndEffect)
+            {
+                stage = pd.type;
+                continue;
+            }
+
+            bool success = true;
+
+            if (pd.IsCondition())
+            {
+                if (stage == ParsedSkillData::Type::EndEffect)
+                    success &= end_conditions.try_push(pd);
+                else
+                    success &= conditions.try_push(pd);
+            }
+            else if (pd.IsRemoval())
+            {
+                if (stage == ParsedSkillData::Type::EndEffect)
+                    success &= end_removals.try_push(pd);
+                else
+                    success &= removals.try_push(pd);
+            }
+
+            assert(success);
+        }
+
         StaticSkillEffect effect = {};
 
-        auto PushConditions = [&](std::span<const ParsedSkillParam> pps)
+        auto MakeAndPushEffect = [&](std::vector<StaticSkillEffect> &dst, std::span<ParsedSkillData> src)
         {
-            for (const auto &pp : pps)
+            for (const auto &pd : src)
             {
-                const auto condition_skill_id = SkillParamTypeToSkillID(pp.type);
-                if (condition_skill_id == GW::Constants::SkillID::No_Skill)
-                    continue;
-
-                effect.skill_id = condition_skill_id;
-                effect.duration = pp.param;
-                result.push_back(effect);
+                effect.duration_or_count = pd.param;
+                if (pd.IsCondition())
+                {
+                    effect.skill_id_or_removal = pd.GetCondition();
+                    dst.push_back(effect);
+                }
+                else if (pd.IsRemoval())
+                {
+                    effect.skill_id_or_removal = pd.GetRemovalMask();
+                    dst.push_back(effect);
+                }
+                else
+                {
+                    throw std::runtime_error("Unknown effect type");
+                }
             }
         };
 
-        // Initial conditions
-        switch (skill_id)
+        auto MakeAndPushConditions = [&]()
         {
-            // Skills inflicting initial conditions on foes around target
-            case GW::Constants::SkillID::Youre_All_Alone:
-            case GW::Constants::SkillID::Throw_Dirt:
-            case GW::Constants::SkillID::Barbed_Signet:
-            case GW::Constants::SkillID::Oppressive_Gaze:
-            case GW::Constants::SkillID::Enfeebling_Blood:
-            case GW::Constants::SkillID::Enfeebling_Blood_PvP:
-            case GW::Constants::SkillID::Weaken_Armor:
-            case GW::Constants::SkillID::Signet_of_Weariness:
-            case GW::Constants::SkillID::Ride_the_Lightning:
-            case (GW::Constants::SkillID)2807: // Ride the lightning (PvP)
-            case GW::Constants::SkillID::Blinding_Surge:
-            case GW::Constants::SkillID::Blinding_Surge_PvP:
-            case GW::Constants::SkillID::Thunderclap:
-            case GW::Constants::SkillID::Lightning_Touch:
-            case GW::Constants::SkillID::Teinais_Crystals:
-            case GW::Constants::SkillID::Eruption:
-            case GW::Constants::SkillID::Mind_Burn:
-            case GW::Constants::SkillID::UNUSED_Searing_Flames:
-            case GW::Constants::SkillID::Star_Burst:
-            case GW::Constants::SkillID::Searing_Flames:
-            case GW::Constants::SkillID::Finish_Him:
-            case GW::Constants::SkillID::You_Are_All_Weaklings:
-            case GW::Constants::SkillID::You_Move_Like_a_Dwarf:
-            case GW::Constants::SkillID::Maddening_Laughter:
-            case GW::Constants::SkillID::Queen_Wail:
-            case GW::Constants::SkillID::REMOVE_Queen_Wail:
-            case GW::Constants::SkillID::Raven_Shriek:
-            case GW::Constants::SkillID::Raven_Shriek_A_Gate_Too_Far:
-            case GW::Constants::SkillID::Ursan_Roar:
-            case GW::Constants::SkillID::Ursan_Roar_Blood_Washes_Blood:
-            case GW::Constants::SkillID::Unseen_Fury: // Only stance that applies a condition on activation
-            case GW::Constants::SkillID::Shadow_Sanctuary_kurzick:
-            case GW::Constants::SkillID::Shadow_Sanctuary_luxon:
-            case GW::Constants::SkillID::Aura_of_Thorns:
-            case GW::Constants::SkillID::Aura_of_Thorns_PvP:
-            case GW::Constants::SkillID::Balthazars_Rage:
-            case GW::Constants::SkillID::Mystic_Corruption:
-            case GW::Constants::SkillID::Ebon_Dust_Aura:
+            MakeAndPushEffect(cskill.init_effects, conditions);
+            MakeAndPushEffect(cskill.end_effects, end_conditions);
+        };
+
+        auto MakeAndPushRemovals = [&]()
+        {
+            MakeAndPushEffect(cskill.init_effects, removals);
+            MakeAndPushEffect(cskill.end_effects, end_removals);
+        };
+
+        auto DetermineConditions = [&]()
+        {
+            effect = {};
+
+            switch (skill_id) // CONDITIONS
             {
-                effect.mask = EffectMask::Foes;
-                effect.location = EffectLocation::Target;
-                effect.radius = (Utils::Range)skill.aoe_range;
-
-                auto init_pps = cskill.GetInitParsedParams();
-                PushConditions(init_pps);
-                break;
-            }
-
-            // Skills inflicting condition of self
-            case GW::Constants::SkillID::Headbutt:
-            case GW::Constants::SkillID::Signet_of_Suffering:
-            case GW::Constants::SkillID::Signet_of_Agony:
-            case GW::Constants::SkillID::Signet_of_Agony_PvP:
-            case GW::Constants::SkillID::Blood_Drinker:
-            case GW::Constants::SkillID::Chilblains:
-            {
-                effect.mask = EffectMask::Caster;
-                effect.location = EffectLocation::Caster;
-
-                auto init_pps = cskill.GetInitParsedParams();
-                PushConditions(init_pps);
-                break;
-            }
-
-            case GW::Constants::SkillID::Shockwave:
-            {
-                effect.mask = EffectMask::Foes;
-                effect.location = EffectLocation::Caster;
-
-                effect.radius = Utils::Range::Adjacent;
-                effect.skill_id = GW::Constants::SkillID::Blind;
-                result.push_back(effect);
-
-                effect.radius = Utils::Range::Nearby;
-                effect.skill_id = GW::Constants::SkillID::Cracked_Armor;
-                result.push_back(effect);
-
-                effect.radius = Utils::Range::InTheArea;
-                effect.skill_id = GW::Constants::SkillID::Weakness;
-                result.push_back(effect);
-                return;
-            }
-
-            case GW::Constants::SkillID::Stone_Sheath:
-            {
-                effect.mask = EffectMask::Foes;
-                effect.radius = Utils::Range::Nearby;
-                effect.skill_id = GW::Constants::SkillID::Weakness;
-                effect.duration = {5, 20};
-
-                effect.location = EffectLocation::Caster;
-                result.push_back(effect);
-
-                effect.location = EffectLocation::Target;
-                result.push_back(effect);
-                break;
-            }
-
-            case GW::Constants::SkillID::Poisoned_Heart:
-            {
-                effect.mask = EffectMask::Foes | EffectMask::Caster;
-                effect.location = EffectLocation::Caster;
-                effect.radius = (Utils::Range)skill.aoe_range;
-
-                auto init_pps = cskill.GetInitParsedParams();
-                PushConditions(init_pps);
-                break;
-            }
-
-            case GW::Constants::SkillID::Signet_of_Midnight:
-            {
-                effect.mask = EffectMask::Foes | EffectMask::Caster;
-                effect.skill_id = GW::Constants::SkillID::Blind;
-
-                effect.location = EffectLocation::Caster;
-                result.push_back(effect);
-
-                effect.location = EffectLocation::Target;
-                result.push_back(effect);
-                break;
-            }
-
-            // Discards / Handled elsewhere
-            case GW::Constants::SkillID::Swift_Chop:
-            case GW::Constants::SkillID::Seeking_Blade:
-            case GW::Constants::SkillID::Drunken_Blow:     // We discard this because of randomness
-            case GW::Constants::SkillID::Desperation_Blow: // We discard this because of randomness
-            case GW::Constants::SkillID::Mark_of_Fury:     // Only end effect condition
-            case GW::Constants::SkillID::Tainted_Flesh:
-            case GW::Constants::SkillID::Death_Nova:
-            case GW::Constants::SkillID::Withering_Aura:
-            case GW::Constants::SkillID::Putrid_Flesh:
-            case GW::Constants::SkillID::Necrotic_Traversal:
-            case GW::Constants::SkillID::Ulcerous_Lungs:
-            case GW::Constants::SkillID::Well_of_Ruin:
-            case GW::Constants::SkillID::Fevered_Dreams:
-            case GW::Constants::SkillID::Ineptitude:
-            case GW::Constants::SkillID::Illusion_of_Haste:
-            case GW::Constants::SkillID::Illusion_of_Haste_PvP:
-            case GW::Constants::SkillID::Shrinking_Armor:
-            case GW::Constants::SkillID::Phantom_Pain:
-            case GW::Constants::SkillID::Lightning_Surge:
-            case GW::Constants::SkillID::Earthen_Shackles:
-            case GW::Constants::SkillID::Ward_of_Weakness:
-            case GW::Constants::SkillID::Double_Dragon:
-            case GW::Constants::SkillID::Burning_Speed:
-            case GW::Constants::SkillID::Elemental_Flame:
-            case GW::Constants::SkillID::Elemental_Flame_PvP:
-            case GW::Constants::SkillID::UNUSED_Glyph_of_Immolation:
-            case GW::Constants::SkillID::Glyph_of_Immolation:
-            case GW::Constants::SkillID::Incendiary_Bonds:
-            case GW::Constants::SkillID::Mark_of_Rodgort: // TODO: Continue fill in using Skill book filter "condition source" current skill_id: immolate
-                break;
-
-            default:
-            {
-                if (cskill.tags.ConditionSource)
+                // Skills inflicting initial conditions on foes around target
+                case GW::Constants::SkillID::Youre_All_Alone:
+                case GW::Constants::SkillID::Throw_Dirt:
+                case GW::Constants::SkillID::Barbed_Signet:
+                case GW::Constants::SkillID::Oppressive_Gaze:
+                case GW::Constants::SkillID::Enfeebling_Blood:
+                case GW::Constants::SkillID::Enfeebling_Blood_PvP:
+                case GW::Constants::SkillID::Weaken_Armor:
+                case GW::Constants::SkillID::Signet_of_Weariness:
+                case GW::Constants::SkillID::Ride_the_Lightning:
+                case (GW::Constants::SkillID)2807: // Ride the lightning (PvP)
+                case GW::Constants::SkillID::Blinding_Surge:
+                case GW::Constants::SkillID::Blinding_Surge_PvP:
+                case GW::Constants::SkillID::Thunderclap:
+                case GW::Constants::SkillID::Lightning_Touch:
+                case GW::Constants::SkillID::Teinais_Crystals:
+                case GW::Constants::SkillID::Eruption:
+                case GW::Constants::SkillID::Mind_Burn:
+                case GW::Constants::SkillID::UNUSED_Searing_Flames:
+                case GW::Constants::SkillID::Star_Burst:
+                case GW::Constants::SkillID::Burning_Speed:
+                case GW::Constants::SkillID::Searing_Flames:
+                case GW::Constants::SkillID::Rodgorts_Invocation:
+                case GW::Constants::SkillID::Caltrops:
+                case GW::Constants::SkillID::Blinding_Powder:
+                case GW::Constants::SkillID::Unseen_Fury: // Only stance that applies a condition on activation
+                case GW::Constants::SkillID::Holy_Spear:
+                case GW::Constants::SkillID::Finish_Him:
+                case GW::Constants::SkillID::You_Are_All_Weaklings:
+                case GW::Constants::SkillID::You_Move_Like_a_Dwarf:
+                case GW::Constants::SkillID::Maddening_Laughter:
+                case GW::Constants::SkillID::Queen_Wail:
+                case GW::Constants::SkillID::REMOVE_Queen_Wail:
+                case GW::Constants::SkillID::Raven_Shriek:
+                case GW::Constants::SkillID::Raven_Shriek_A_Gate_Too_Far:
+                case GW::Constants::SkillID::Ursan_Roar:
+                case GW::Constants::SkillID::Ursan_Roar_Blood_Washes_Blood:
+                case GW::Constants::SkillID::Armor_of_Sanctity: // Currently at dervish skills
                 {
+                    effect.mask = EffectMask::Foes;
+                    effect.location = EffectLocation::Target;
+                    effect.radius = (Utils::Range)skill.aoe_range;
+
+                    MakeAndPushConditions();
+                    return;
+                }
+
+                // Skills inflicting condition on self
+                case GW::Constants::SkillID::Headbutt:
+                case GW::Constants::SkillID::Signet_of_Agony:
+                case GW::Constants::SkillID::Signet_of_Agony_PvP:
+                case GW::Constants::SkillID::Blood_Drinker:
+                case GW::Constants::SkillID::Chilblains:
+                case GW::Constants::SkillID::Shadow_Sanctuary_kurzick:
+                case GW::Constants::SkillID::Shadow_Sanctuary_luxon:
+                case GW::Constants::SkillID::Wearying_Spear:
+                {
+                    effect.mask = EffectMask::Caster;
+                    effect.location = EffectLocation::Caster;
+
+                    MakeAndPushConditions();
+                    return;
+                }
+
+                case GW::Constants::SkillID::Signet_of_Suffering:
+                {
+                    effect.mask = EffectMask::Caster;
+                    effect.location = EffectLocation::Caster;
+                    effect.skill_id_or_removal = GW::Constants::SkillID::Bleeding;
+                    effect.duration_or_count = {6, 6};
+                    cskill.init_effects.push_back(effect);
+                }
+
+                case GW::Constants::SkillID::Shockwave:
+                {
+                    effect.mask = EffectMask::Foes;
+                    effect.location = EffectLocation::Caster;
+                    effect.duration_or_count = {1, 10};
+
+                    effect.radius = Utils::Range::Nearby;
+                    effect.skill_id_or_removal = GW::Constants::SkillID::Cracked_Armor;
+                    cskill.init_effects.push_back(effect);
+
+                    effect.radius = Utils::Range::InTheArea;
+                    effect.skill_id_or_removal = GW::Constants::SkillID::Weakness;
+                    cskill.init_effects.push_back(effect);
+
+                    effect.radius = Utils::Range::Adjacent;
+                    effect.skill_id_or_removal = GW::Constants::SkillID::Blind;
+                    cskill.init_effects.push_back(effect);
+                    return;
+                }
+
+                case GW::Constants::SkillID::Stone_Sheath:
+                {
+                    effect.mask = EffectMask::Foes;
+                    effect.radius = Utils::Range::Nearby;
+                    effect.skill_id_or_removal = GW::Constants::SkillID::Weakness;
+                    effect.duration_or_count = {5, 20};
+
+                    effect.location = EffectLocation::Caster;
+                    cskill.init_effects.push_back(effect);
+
+                    effect.location = EffectLocation::Target;
+                    cskill.init_effects.push_back(effect);
+                    return;
+                }
+
+                case GW::Constants::SkillID::Poisoned_Heart:
+                {
+                    effect.mask = EffectMask::Foes | EffectMask::Caster;
+                    effect.location = EffectLocation::Caster;
+                    effect.radius = (Utils::Range)skill.aoe_range;
+
+                    MakeAndPushConditions();
+                    return;
+                }
+
+                case GW::Constants::SkillID::Earthen_Shackles:
+                {
+                    effect.mask = EffectMask::Foes;
+                    effect.location = EffectLocation::Target;
+
+                    MakeAndPushEffect(cskill.end_effects, conditions);
+                }
+
+                case GW::Constants::SkillID::Signet_of_Midnight:
+                {
+                    effect.mask = EffectMask::Foes | EffectMask::Caster;
+                    effect.skill_id_or_removal = GW::Constants::SkillID::Blind;
+
+                    effect.location = EffectLocation::Caster;
+                    cskill.init_effects.push_back(effect);
+
+                    effect.location = EffectLocation::Target;
+                    cskill.init_effects.push_back(effect);
+                    return;
+                }
+
+                // Conditions on foes around caster
+                case GW::Constants::SkillID::Return:
+                case GW::Constants::SkillID::Vipers_Defense:
+                {
+                    effect.mask = EffectMask::Foes;
+                    effect.location = EffectLocation::Caster;
+                    effect.radius = (Utils::Range)skill.aoe_range;
+                    MakeAndPushConditions();
+                    return;
+                }
+
+                // Conditions on foes around spirit-ally closest to target
+                case GW::Constants::SkillID::Rupture_Soul:
+                {
+                    effect.mask = EffectMask::Foes;
+                    effect.location = EffectLocation::SpiritAllyClosestToTarget;
+                    effect.radius = (Utils::Range)skill.aoe_range;
+                    MakeAndPushConditions();
+                    return;
+                }
+
+                // Discards / Handled elsewhere
+                case GW::Constants::SkillID::Swift_Chop:
+                case GW::Constants::SkillID::Seeking_Blade:
+                case GW::Constants::SkillID::Drunken_Blow:     // We discard this because of randomness
+                case GW::Constants::SkillID::Desperation_Blow: // We discard this because of randomness
+                case GW::Constants::SkillID::Hungers_Bite:     // We discard this because of randomness
+                case GW::Constants::SkillID::Deflect_Arrows:
+                case GW::Constants::SkillID::Strike_as_One:
+                case GW::Constants::SkillID::Putrid_Flesh:
+                case GW::Constants::SkillID::Necrotic_Traversal:
+                case GW::Constants::SkillID::Ulcerous_Lungs:
+                case GW::Constants::SkillID::Fevered_Dreams:
+                case GW::Constants::SkillID::Ineptitude:
+                case GW::Constants::SkillID::Illusion_of_Haste:
+                case GW::Constants::SkillID::Illusion_of_Haste_PvP:
+                case GW::Constants::SkillID::Double_Dragon:
+                case GW::Constants::SkillID::Elemental_Flame:
+                case GW::Constants::SkillID::Elemental_Flame_PvP:
+                case GW::Constants::SkillID::Mark_of_Rodgort:
+                case GW::Constants::SkillID::Bed_of_Coals:
+                case GW::Constants::SkillID::Searing_Heat:
+                case GW::Constants::SkillID::Augury_of_Death:
+                case GW::Constants::SkillID::Shadow_Fang:
+                case GW::Constants::SkillID::UNUSED_Hidden_Caltrops:
+                case GW::Constants::SkillID::Hidden_Caltrops:
+                case GW::Constants::SkillID::Smoke_Powder_Defense:
+                case GW::Constants::SkillID::Sharpen_Daggers:
+                case GW::Constants::SkillID::Shadowsong:
+                case GW::Constants::SkillID::Shadowsong_Master_Riyo:
+                case GW::Constants::SkillID::Shadowsong_PvP:
+                case GW::Constants::SkillID::Sundering_Weapon:
+                case GW::Constants::SkillID::Blind_Was_Mingson:
+                case GW::Constants::SkillID::Weapon_of_Shadow:
+                case GW::Constants::SkillID::Spirit_Rift:
+                case GW::Constants::SkillID::UNUSED_Anthem_of_Weariness:
+                case GW::Constants::SkillID::Anthem_of_Weariness:
+                case GW::Constants::SkillID::Crippling_Anthem:
+                case GW::Constants::SkillID::Find_Their_Weakness:
+                case GW::Constants::SkillID::Find_Their_Weakness_PvP:
+                case GW::Constants::SkillID::Find_Their_Weakness_Thackeray:
+                case GW::Constants::SkillID::Anthem_of_Flame:
+                case GW::Constants::SkillID::Blazing_Finale:
+                case GW::Constants::SkillID::Blazing_Finale_PvP:
+                case GW::Constants::SkillID::Burning_Refrain:
+                case GW::Constants::SkillID::Burning_Shield:
+                case GW::Constants::SkillID::Cautery_Signet:
+                case GW::Constants::SkillID::Wearying_Strike:
+                case GW::Constants::SkillID::Grenths_Grasp:
+                case GW::Constants::SkillID::REMOVE_Wind_Prayers_skill:
+                case GW::Constants::SkillID::Attackers_Insight:
+                case GW::Constants::SkillID::Rending_Aura:
+                case GW::Constants::SkillID::Signet_of_Pious_Restraint:
+                case GW::Constants::SkillID::Test_of_Faith:
+                case GW::Constants::SkillID::Ebon_Dust_Aura_PvP:
+                case GW::Constants::SkillID::Shield_of_Force:
+                    return;
+
+                default:
+                {
+                    if (!cskill.tags.ConditionSource)
+                        return;
+
+                    if (skill.profession == GW::Constants::ProfessionByte::Dervish &&
+                        skill.special & (uint32_t)Utils::SkillSpecialFlags::FlashEnchantment)
+                    {
+                        effect.location = EffectLocation::Caster;
+                        effect.mask = EffectMask::Foes;
+                        effect.radius = (Utils::Range)skill.aoe_range;
+                        MakeAndPushConditions();
+                        return;
+                    }
+
+                    switch (skill.type)
+                    {
+                        case GW::Constants::SkillType::Enchantment:
+                        case GW::Constants::SkillType::PetAttack:
+                        case GW::Constants::SkillType::Preparation:
+                        case GW::Constants::SkillType::Glyph:
+                        case GW::Constants::SkillType::Form:
+                        case GW::Constants::SkillType::Well:
+                        case GW::Constants::SkillType::Ward:
+                            return;
+                    }
+
                     if (skill.type == GW::Constants::SkillType::Attack ||
                         skill.type == GW::Constants::SkillType::Spell ||
+                        skill.type == GW::Constants::SkillType::Hex ||
                         skill.type == GW::Constants::SkillType::Signet ||
+                        skill.type == GW::Constants::SkillType::Skill ||
+                        skill.type == GW::Constants::SkillType::Skill2 ||
                         skill.special & (uint32_t)Utils::SkillSpecialFlags::Touch)
                     {
                         effect.location = EffectLocation::Target;
-                        effect.mask = EffectMask::Foes;
-
-                        auto init_pps = cskill.GetInitParsedParams();
-                        PushConditions(init_pps);
-                        break;
+                        effect.mask = EffectMask::Target;
+                        MakeAndPushConditions();
+                        return;
                     }
 
-                    SOFT_ASSERT(false, L"Unhandled condition source skill: {}", (uint32_t)skill_id);
+                    SOFT_ASSERT(false, L"Unhandled condition source skill: {} ({})", (uint32_t)skill_id, Utils::GetSkillName(skill_id));
                 }
-                break;
             }
-        }
-
-        if (cskill.base_duration.IsNull())
-            return;
-
-        effect = {};
-        effect.skill_id = skill_id;
-        effect.duration = cskill.base_duration;
-
-        // Special cases
-        switch (skill_id)
+        };
+        auto DetermineDuration = [&]()
         {
-            // Skills affecting both caster and pet
-            case GW::Constants::SkillID::Never_Rampage_Alone:
-            case GW::Constants::SkillID::Run_as_One:
-            case GW::Constants::SkillID::Rampage_as_One:
-            case GW::Constants::SkillID::Strike_as_One:
+            effect = {};
+            effect.skill_id_or_removal = skill_id;
+            effect.duration_or_count = cskill.base_duration;
+
+            switch (skill_id) // DURATIONAL SKILLS
             {
-                effect.mask = EffectMask::CasterAndPet;
-                effect.location = EffectLocation::Null;
-                effect.radius = Utils::Range::CompassRange;
-                result.push_back(effect);
-                return;
-            }
-
-            // Affects allies
-            case GW::Constants::SkillID::Dwaynas_Sorrow:
-                effect.radius = Utils::Range::Nearby;
-            case GW::Constants::SkillID::Charge:
-            case GW::Constants::SkillID::Storm_of_Swords:
-            case GW::Constants::SkillID::Cant_Touch_This:
-            case GW::Constants::SkillID::Fall_Back:
-            case GW::Constants::SkillID::Fall_Back_PvP:
-            case GW::Constants::SkillID::Go_for_the_Eyes:
-            case GW::Constants::SkillID::Go_for_the_Eyes_PvP:
-            case GW::Constants::SkillID::Godspeed:
-            case GW::Constants::SkillID::The_Power_Is_Yours:
-            case GW::Constants::SkillID::Angelic_Bond:
-            case GW::Constants::SkillID::Its_Good_to_Be_King:
-            case GW::Constants::SkillID::Advance:
-            case GW::Constants::SkillID::Song_of_the_Mists:
-            case GW::Constants::SkillID::Enemies_Must_Die:
-            case GW::Constants::SkillID::Rands_Attack:
-            case GW::Constants::SkillID::Lets_Get_Em:
-            case GW::Constants::SkillID::Cry_of_Madness:
-            case GW::Constants::SkillID::Ursan_Roar:
-            case GW::Constants::SkillID::Ursan_Roar_Blood_Washes_Blood:
-            case GW::Constants::SkillID::Volfen_Bloodlust:
-            case GW::Constants::SkillID::Volfen_Bloodlust_Curse_of_the_Nornbear:
-            case GW::Constants::SkillID::Theres_Nothing_to_Fear_Thackeray:
-            case GW::Constants::SkillID::Natures_Blessing:
-            case GW::Constants::SkillID::For_Elona:
-            case GW::Constants::SkillID::Form_Up_and_Advance:
-            {
-                effect.mask = EffectMask::Allies;
-                effect.location = EffectLocation::Target;
-                if (!effect.radius)
-                    effect.radius = (Utils::Range)(uint32_t)skill.aoe_range;
-                result.push_back(effect);
-                return;
-            }
-
-            case GW::Constants::SkillID::Save_Yourselves_kurzick:
-            case GW::Constants::SkillID::Save_Yourselves_luxon:
-            {
-                effect.mask = EffectMask::OtherPartyMembers;
-                effect.location = EffectLocation::Caster;
-                effect.radius = Utils::Range::Earshot;
-                result.push_back(effect);
-                return;
-            }
-
-            // Party wide skills
-            case GW::Constants::SkillID::Retreat:
-            case GW::Constants::SkillID::Celestial_Stance:
-            case GW::Constants::SkillID::Celestial_Haste:
-            case GW::Constants::SkillID::Order_of_the_Vampire:
-            case GW::Constants::SkillID::Order_of_Pain:
-            case GW::Constants::SkillID::Dark_Fury:
-            case GW::Constants::SkillID::Order_of_Apostasy:
-                effect.radius = Utils::Range::CompassRange;
-            case GW::Constants::SkillID::Shields_Up:
-            case GW::Constants::SkillID::Watch_Yourself:
-            case GW::Constants::SkillID::Watch_Yourself_PvP:
-            case GW::Constants::SkillID::Aegis:
-            case GW::Constants::SkillID::Shield_Guardian:
-            case GW::Constants::SkillID::Magnetic_Surge: // The desc is wrong: this is a party wide skill
-            case GW::Constants::SkillID::Magnetic_Aura:
-            case GW::Constants::SkillID::Swirling_Aura:
-            case GW::Constants::SkillID::Never_Surrender:
-            case GW::Constants::SkillID::Never_Surrender_PvP:
-            case GW::Constants::SkillID::Stand_Your_Ground:
-            case GW::Constants::SkillID::Stand_Your_Ground_PvP:
-            case GW::Constants::SkillID::We_Shall_Return_PvP:
-            case GW::Constants::SkillID::Theyre_on_Fire:
-            case GW::Constants::SkillID::Theres_Nothing_to_Fear:
-            case GW::Constants::SkillID::By_Urals_Hammer:
-            case GW::Constants::SkillID::Dont_Trip:
-            {
-                effect.mask = EffectMask::PartyMembers;
-                effect.location = EffectLocation::Caster;
-                if (!effect.radius)
-                    effect.radius = Utils::Range::Earshot;
-                result.push_back(effect);
-                return;
-            }
-
-            case GW::Constants::SkillID::Together_as_one:
-            {
-                StaticSkillEffect effect = {};
-                effect.mask = EffectMask::PartyMembers | EffectMask::PartyPets;
-                effect.radius = Utils::Range::InTheArea;
-
-                effect.location = EffectLocation::Caster;
-                result.push_back(effect);
-
-                effect.location = EffectLocation::Pet;
-                result.push_back(effect);
-            }
-        }
-
-        // Skills affecting only pet
-        if (skill.attribute == GW::Constants::AttributeByte::BeastMastery)
-        {
-            switch (skill.type)
-            {
-                case GW::Constants::SkillType::Shout:
-                case GW::Constants::SkillType::Skill:
-                case GW::Constants::SkillType::Skill2:
-                case GW::Constants::SkillType::PetAttack:
+                // Skills affecting both caster and pet
+                case GW::Constants::SkillID::Never_Rampage_Alone:
+                case GW::Constants::SkillID::Run_as_One:
+                case GW::Constants::SkillID::Rampage_as_One:
+                case GW::Constants::SkillID::Strike_as_One:
                 {
-                    effect.mask = EffectMask::CastersPet;
-                    effect.location = EffectLocation::Caster;
+                    effect.mask = EffectMask::CasterAndPet;
+                    effect.location = EffectLocation::Null;
                     effect.radius = Utils::Range::CompassRange;
-                    result.push_back(effect);
+                    cskill.init_effects.push_back(effect);
                     return;
                 }
-            }
-        }
 
-        auto desc = cskill.TryGetPredecodedDescription(cskill.GetDescKey(true, -1));
-        assert(desc);
-
-        switch (skill.type)
-        {
-            case GW::Constants::SkillType::ItemSpell:
-            case GW::Constants::SkillType::Preparation:
-            case GW::Constants::SkillType::Form:
-            case GW::Constants::SkillType::Stance:
-            {
-                effect.location = EffectLocation::Caster;
-                result.push_back(effect);
-                return;
-            }
-
-            case GW::Constants::SkillType::Shout:
-            case GW::Constants::SkillType::Signet:
-            case GW::Constants::SkillType::WeaponSpell:
-            case GW::Constants::SkillType::Enchantment:
-            case GW::Constants::SkillType::Hex:
-            case GW::Constants::SkillType::Spell:
-            case GW::Constants::SkillType::Skill:
-            case GW::Constants::SkillType::Skill2:
-            {
-                effect.location = EffectLocation::Target;
-                result.push_back(effect);
-                return;
-            }
-
-            case GW::Constants::SkillType::Chant:
-            {
-                effect.location = EffectLocation::Caster;
-                effect.radius = Utils::Range::Earshot;
-                if (desc->contains("arty members"))
-                    effect.mask = EffectMask::PartyMembers;
-                else
+                // Affects allies
+                case GW::Constants::SkillID::Dwaynas_Sorrow:
+                    effect.radius = Utils::Range::Nearby;
+                case GW::Constants::SkillID::Charge:
+                case GW::Constants::SkillID::Storm_of_Swords:
+                case GW::Constants::SkillID::Cant_Touch_This:
+                case GW::Constants::SkillID::Fall_Back:
+                case GW::Constants::SkillID::Fall_Back_PvP:
+                case GW::Constants::SkillID::Go_for_the_Eyes:
+                case GW::Constants::SkillID::Go_for_the_Eyes_PvP:
+                case GW::Constants::SkillID::Godspeed:
+                case GW::Constants::SkillID::The_Power_Is_Yours:
+                case GW::Constants::SkillID::Angelic_Bond:
+                case GW::Constants::SkillID::Its_Good_to_Be_King:
+                case GW::Constants::SkillID::Advance:
+                case GW::Constants::SkillID::Song_of_the_Mists:
+                case GW::Constants::SkillID::Enemies_Must_Die:
+                case GW::Constants::SkillID::Rands_Attack:
+                case GW::Constants::SkillID::Lets_Get_Em:
+                case GW::Constants::SkillID::Cry_of_Madness:
+                case GW::Constants::SkillID::Ursan_Roar:
+                case GW::Constants::SkillID::Ursan_Roar_Blood_Washes_Blood:
+                case GW::Constants::SkillID::Volfen_Bloodlust:
+                case GW::Constants::SkillID::Volfen_Bloodlust_Curse_of_the_Nornbear:
+                case GW::Constants::SkillID::Theres_Nothing_to_Fear_Thackeray:
+                case GW::Constants::SkillID::Natures_Blessing:
+                case GW::Constants::SkillID::For_Elona:
+                case GW::Constants::SkillID::Form_Up_and_Advance:
+                {
                     effect.mask = EffectMask::Allies;
-                result.push_back(effect);
-                return;
-            }
-        }
+                    effect.location = EffectLocation::Target;
+                    if (!effect.radius)
+                        effect.radius = (Utils::Range)skill.aoe_range;
+                    cskill.init_effects.push_back(effect);
+                    return;
+                }
 
-        assert(!result.empty());
-        return;
+                case GW::Constants::SkillID::Save_Yourselves_kurzick:
+                case GW::Constants::SkillID::Save_Yourselves_luxon:
+                {
+                    effect.mask = EffectMask::OtherPartyMembers;
+                    effect.location = EffectLocation::Caster;
+                    effect.radius = Utils::Range::Earshot;
+                    cskill.init_effects.push_back(effect);
+                    return;
+                }
+
+                // AOE hexes
+                case GW::Constants::SkillID::Parasitic_Bite:
+                case GW::Constants::SkillID::Scourge_Sacrifice:
+                case GW::Constants::SkillID::Life_Transfer:
+                case GW::Constants::SkillID::Blood_Bond:
+                case GW::Constants::SkillID::Lingering_Curse:
+                case GW::Constants::SkillID::Suffering:
+                case GW::Constants::SkillID::Reckless_Haste:
+                case GW::Constants::SkillID::Meekness:
+                case GW::Constants::SkillID::Ulcerous_Lungs:
+                case GW::Constants::SkillID::Vocal_Minority:
+                case GW::Constants::SkillID::Shadow_of_Fear:
+                case GW::Constants::SkillID::Stolen_Speed:
+                case GW::Constants::SkillID::Stolen_Speed_PvP:
+                case GW::Constants::SkillID::Shared_Burden:
+                case GW::Constants::SkillID::Shared_Burden_PvP:
+                case GW::Constants::SkillID::Air_of_Disenchantment:
+                case GW::Constants::SkillID::Ineptitude:
+                case GW::Constants::SkillID::Arcane_Conundrum:
+                case GW::Constants::SkillID::Clumsiness:
+                case GW::Constants::SkillID::Fragility:
+                case GW::Constants::SkillID::Soothing_Images:
+                case GW::Constants::SkillID::Visions_of_Regret:
+                case GW::Constants::SkillID::Visions_of_Regret_PvP:
+                case GW::Constants::SkillID::Panic:
+                case GW::Constants::SkillID::Panic_PvP:
+                case GW::Constants::SkillID::Earthen_Shackles:
+                case GW::Constants::SkillID::Ash_Blast:
+                case GW::Constants::SkillID::Mark_of_Rodgort:
+                case GW::Constants::SkillID::Blurred_Vision:
+                case GW::Constants::SkillID::Deep_Freeze:
+                case GW::Constants::SkillID::Ice_Spikes:
+                case GW::Constants::SkillID::Rust:
+                case GW::Constants::SkillID::Binding_Chains:
+                case GW::Constants::SkillID::Dulled_Weapon:
+                case GW::Constants::SkillID::Lamentation:
+                case GW::Constants::SkillID::Painful_Bond:
+                case GW::Constants::SkillID::Isaiahs_Balance:
+                case GW::Constants::SkillID::Snaring_Web:
+                case GW::Constants::SkillID::Spirit_World_Retreat:
+                case GW::Constants::SkillID::Corsairs_Net:
+                case GW::Constants::SkillID::Crystal_Haze:
+                case GW::Constants::SkillID::Icicles:
+                case GW::Constants::SkillID::Shared_Burden_Gwen:
+                {
+                    effect.mask = EffectMask::Foes;
+                    effect.location = EffectLocation::Target;
+                    effect.radius = (Utils::Range)skill.aoe_range;
+                    cskill.init_effects.push_back(effect);
+                    return;
+                }
+
+                // AOE hexes around caster
+                case GW::Constants::SkillID::Amity:
+                case GW::Constants::SkillID::Grasping_Earth:
+                case GW::Constants::SkillID::Frozen_Burst:
+                case GW::Constants::SkillID::Wurm_Bile:
+                case GW::Constants::SkillID::Suicidal_Impulse:
+                case GW::Constants::SkillID::Last_Rites_of_Torment:
+                {
+                    effect.mask = EffectMask::Foes;
+                    effect.location = EffectLocation::Caster;
+                    effect.radius = (Utils::Range)skill.aoe_range;
+                    cskill.init_effects.push_back(effect);
+                    return;
+                }
+
+                case GW::Constants::SkillID::Mirror_of_Ice:
+                {
+                    effect.mask = EffectMask::Foes;
+                    effect.radius = (Utils::Range)skill.aoe_range;
+                    effect.location = EffectLocation::AllyClosestToTarget;
+                    cskill.init_effects.push_back(effect);
+                    effect.location = EffectLocation::Caster;
+                    cskill.init_effects.push_back(effect);
+                    return;
+                }
+
+                // Party wide skills
+                case GW::Constants::SkillID::Retreat:
+                case GW::Constants::SkillID::Celestial_Stance:
+                case GW::Constants::SkillID::Celestial_Haste:
+                case GW::Constants::SkillID::Order_of_the_Vampire:
+                case GW::Constants::SkillID::Order_of_Pain:
+                case GW::Constants::SkillID::Dark_Fury:
+                case GW::Constants::SkillID::Order_of_Apostasy:
+                    effect.radius = Utils::Range::CompassRange;
+                case GW::Constants::SkillID::Shields_Up:
+                case GW::Constants::SkillID::Watch_Yourself:
+                case GW::Constants::SkillID::Watch_Yourself_PvP:
+                case GW::Constants::SkillID::Aegis:
+                case GW::Constants::SkillID::Shield_Guardian:
+                case GW::Constants::SkillID::Magnetic_Surge: // The desc is wrong: this is a party wide skill
+                case GW::Constants::SkillID::Magnetic_Aura:
+                case GW::Constants::SkillID::Swirling_Aura:
+                case GW::Constants::SkillID::Never_Surrender:
+                case GW::Constants::SkillID::Never_Surrender_PvP:
+                case GW::Constants::SkillID::Stand_Your_Ground:
+                case GW::Constants::SkillID::Stand_Your_Ground_PvP:
+                case GW::Constants::SkillID::We_Shall_Return_PvP:
+                case GW::Constants::SkillID::Theyre_on_Fire:
+                case GW::Constants::SkillID::Theres_Nothing_to_Fear:
+                case GW::Constants::SkillID::By_Urals_Hammer:
+                case GW::Constants::SkillID::Dont_Trip:
+                {
+                    effect.mask = EffectMask::PartyMembers;
+                    effect.location = EffectLocation::Caster;
+                    if (!effect.radius)
+                        effect.radius = Utils::Range::Earshot;
+                    cskill.init_effects.push_back(effect);
+                    return;
+                }
+
+                case GW::Constants::SkillID::Together_as_one:
+                {
+                    effect.mask = EffectMask::PartyMembers | EffectMask::PartyPets;
+                    effect.radius = Utils::Range::InTheArea;
+
+                    effect.location = EffectLocation::Caster;
+                    cskill.init_effects.push_back(effect);
+
+                    effect.location = EffectLocation::Pet;
+                    cskill.init_effects.push_back(effect);
+                    return;
+                }
+
+                case GW::Constants::SkillID::Weight_of_Dhuum:
+                {
+                    effect.skill_id_or_removal = GW::Constants::SkillID::Weight_of_Dhuum_hex;
+                    effect.mask = EffectMask::Target;
+                    effect.location = EffectLocation::Target;
+                    cskill.init_effects.push_back(effect);
+                    return;
+                }
+
+                // Discards / Handled elsewhere
+                case GW::Constants::SkillID::Jaundiced_Gaze:
+                case GW::Constants::SkillID::Corrupt_Enchantment:
+                case GW::Constants::SkillID::Flurry_of_Splinters:
+                case (GW::Constants::SkillID)3001:
+                case GW::Constants::SkillID::Brutal_Mauling:
+                case GW::Constants::SkillID::Frost_Vortex:
+                    return;
+
+                default:
+                {
+                    if (cskill.base_duration.IsNull())
+                        return;
+
+                    // Skills affecting only pet
+                    if (skill.attribute == GW::Constants::AttributeByte::BeastMastery)
+                    {
+                        switch (skill.type)
+                        {
+                            case GW::Constants::SkillType::Shout:
+                            case GW::Constants::SkillType::Skill:
+                            case GW::Constants::SkillType::Skill2:
+                            case GW::Constants::SkillType::PetAttack:
+                            {
+                                effect.mask = EffectMask::CastersPet;
+                                effect.location = EffectLocation::Caster;
+                                effect.radius = Utils::Range::CompassRange;
+                                cskill.init_effects.push_back(effect);
+                                return;
+                            }
+                        }
+                    }
+
+                    switch (skill.type)
+                    {
+                        case GW::Constants::SkillType::ItemSpell:
+                        case GW::Constants::SkillType::Preparation:
+                        case GW::Constants::SkillType::Form:
+                        case GW::Constants::SkillType::Stance:
+                        case GW::Constants::SkillType::Glyph:
+                        {
+                            effect.mask = EffectMask::Caster;
+                            effect.location = EffectLocation::Caster;
+                            cskill.init_effects.push_back(effect);
+                            return;
+                        }
+
+                        case GW::Constants::SkillType::Shout:
+                        case GW::Constants::SkillType::Signet:
+                        case GW::Constants::SkillType::WeaponSpell:
+                        case GW::Constants::SkillType::Enchantment:
+                        case GW::Constants::SkillType::Hex:
+                        case GW::Constants::SkillType::Spell:
+                        case GW::Constants::SkillType::Skill:
+                        case GW::Constants::SkillType::Skill2:
+                        case GW::Constants::SkillType::EchoRefrain:
+                        {
+                            effect.mask = EffectMask::Target;
+                            effect.location = EffectLocation::Target;
+                            cskill.init_effects.push_back(effect);
+                            return;
+                        }
+
+                        case GW::Constants::SkillType::Chant:
+                        {
+                            auto desc = cskill.TryGetPredecodedDescription(cskill.GetDescKey(true, -1));
+                            assert(desc);
+
+                            effect.location = EffectLocation::Caster;
+                            effect.radius = Utils::Range::Earshot;
+                            if (desc->contains("arty members"))
+                                effect.mask = EffectMask::PartyMembers;
+                            else
+                                effect.mask = EffectMask::Allies;
+                            cskill.init_effects.push_back(effect);
+                            return;
+                        }
+                    }
+
+                    SOFT_ASSERT(!cskill.init_effects.empty(), L"Unhandled durational skill: {} ({})", (uint32_t)skill_id, Utils::GetSkillName(skill_id));
+                }
+            }
+        };
+        auto DetermineRemovals = [&]()
+        {
+            effect = {};
+
+            switch (skill_id) // REMOVALS
+            {
+                // Party wide
+                case GW::Constants::SkillID::Extinguish:
+                case GW::Constants::SkillID::Star_Shine:
+                {
+                    effect.mask = EffectMask::PartyMembers;
+                    effect.location = EffectLocation::Caster;
+                    effect.radius = (Utils::Range)skill.aoe_range;
+                    MakeAndPushRemovals();
+                    return;
+                }
+
+                // AoE at target
+                case GW::Constants::SkillID::Withdraw_Hexes:
+                case GW::Constants::SkillID::Pure_Was_Li_Ming:
+                    effect.mask = EffectMask::Allies;
+                case GW::Constants::SkillID::Chilblains:
+                case GW::Constants::SkillID::Air_of_Disenchantment:
+                {
+                    if (effect.mask == EffectMask::None)
+                        effect.mask = EffectMask::Foes;
+                    effect.location = EffectLocation::Target;
+                    effect.radius = (Utils::Range)skill.aoe_range;
+                    MakeAndPushRemovals();
+                    return;
+                }
+
+                // Self removal
+                case GW::Constants::SkillID::Ether_Prodigy:
+                case GW::Constants::SkillID::Energy_Font:
+                case GW::Constants::SkillID::Second_Wind:
+                {
+                    effect.mask = EffectMask::Caster;
+                    effect.location = EffectLocation::Caster;
+                    MakeAndPushRemovals();
+                    return;
+                }
+
+                case GW::Constants::SkillID::Antidote_Signet:
+                {
+                    effect.mask = EffectMask::Target;
+                    effect.location = EffectLocation::Target;
+                    effect.skill_id_or_removal = RemovalMask::Poison | RemovalMask::Disease | RemovalMask::Blind;
+                    effect.duration_or_count = std::numeric_limits<uint32_t>::max();
+                    cskill.init_effects.push_back(effect);
+
+                    effect.skill_id_or_removal = RemovalMask::Condition;
+                    effect.duration_or_count = 1;
+                    cskill.init_effects.push_back(effect);
+                    return;
+                }
+
+                case GW::Constants::SkillID::Crystal_Wave:
+                {
+                    effect.mask = EffectMask::Foes;
+                    effect.location = EffectLocation::Caster;
+                    effect.radius = (Utils::Range)skill.aoe_range;
+                    MakeAndPushRemovals();
+                    return;
+                }
+
+                case GW::Constants::SkillID::UNUSED_Empathic_Removal:
+                case GW::Constants::SkillID::Empathic_Removal:
+                {
+                    effect.mask = EffectMask::Target;
+                    effect.location = EffectLocation::Target;
+                    MakeAndPushRemovals();
+
+                    effect.mask = EffectMask::Caster;
+                    effect.location = EffectLocation::Caster;
+                    MakeAndPushRemovals();
+                    return;
+                }
+
+                // Discards / Handled elsewhere
+                case GW::Constants::SkillID::Spotless_Mind:
+                case GW::Constants::SkillID::Spotless_Soul:
+                case GW::Constants::SkillID::Divert_Hexes:
+                case GW::Constants::SkillID::Purifying_Veil:
+                case GW::Constants::SkillID::Draw_Conditions:
+                case GW::Constants::SkillID::Peace_and_Harmony:
+                case GW::Constants::SkillID::Contemplation_of_Purity:
+                case GW::Constants::SkillID::Deny_Hexes:
+                case GW::Constants::SkillID::Martyr:
+                case GW::Constants::SkillID::Holy_Veil:
+                case GW::Constants::SkillID::Veratas_Sacrifice:
+                case GW::Constants::SkillID::Well_of_the_Profane:
+                case GW::Constants::SkillID::UNUSED_Foul_Feast:
+                case GW::Constants::SkillID::Foul_Feast:
+                case GW::Constants::SkillID::Order_of_Apostasy:
+                case GW::Constants::SkillID::Plague_Signet:
+                case GW::Constants::SkillID::UNUSED_Plague_Sending:
+                case GW::Constants::SkillID::Plague_Sending:
+                case GW::Constants::SkillID::Plague_Touch:
+                case GW::Constants::SkillID::Hex_Eater_Vortex:
+                case GW::Constants::SkillID::Shatter_Delusions:
+                case GW::Constants::SkillID::Shatter_Delusions_PvP:
+                case GW::Constants::SkillID::Drain_Delusions:
+                case GW::Constants::SkillID::Hex_Eater_Signet:
+                case GW::Constants::SkillID::Hypochondria:
+                case GW::Constants::SkillID::Dark_Apostasy:
+                case GW::Constants::SkillID::Assassins_Remedy:
+                case GW::Constants::SkillID::Assassins_Remedy_PvP:
+                case GW::Constants::SkillID::Signet_of_Malice:
+                case GW::Constants::SkillID::Signet_of_Twilight:
+                case GW::Constants::SkillID::Lift_Enchantment:
+                case GW::Constants::SkillID::Disenchantment:
+                case GW::Constants::SkillID::Disenchantment_PvP:
+                case GW::Constants::SkillID::Weapon_of_Remedy:
+                    return;
+
+                default:
+                {
+                    effect.mask = EffectMask::Target;
+                    effect.location = EffectLocation::Target;
+
+                    bool is_end_effect = false;
+                    for (auto &pd : cskill.parsed_data)
+                    {
+                        if (pd.type == ParsedSkillData::Type::EndEffect)
+                            is_end_effect = true;
+
+                        RemovalMask removal_mask = pd.GetRemovalMask();
+                        if (removal_mask != RemovalMask::Null)
+                        {
+                            effect.skill_id_or_removal = removal_mask;
+                            effect.duration_or_count = pd.param;
+
+                            if (is_end_effect)
+                                cskill.end_effects.push_back(effect);
+                            else
+                                cskill.init_effects.push_back(effect);
+                        }
+                    }
+                }
+            }
+        };
+        DetermineConditions();
+        DetermineDuration();
+        DetermineRemovals();
     }
 
     void CustomSkillData::Init()
@@ -2997,10 +3394,9 @@ namespace HerosInsight
 
         ParseSkillData(*this);
 
-        for (auto &pp : parsed_params.ref())
+        for (auto &pd : parsed_data)
         {
-            if (pp.type > SkillParamType::CONDITION_START &&
-                pp.type < SkillParamType::CONDITION_END)
+            if (pd.IsCondition())
             {
                 tags.ConditionSource = true;
                 break;
@@ -3011,7 +3407,7 @@ namespace HerosInsight
         attribute = AttributeOrTitle(*skill);
 
         this->base_duration = DetermineBaseDuration(*this);
-        DetermineInitEffects(*this, this->init_effects);
+        DetermineEffects(*this);
     }
 
     SkillParam CustomSkillData::GetSkillParam(uint32_t id) const
@@ -3019,34 +3415,34 @@ namespace HerosInsight
         return HerosInsight::GetSkillParam(*skill, id);
     }
 
-    SkillParam CustomSkillData::GetParsedSkillParam(std::function<bool(const ParsedSkillParam &)> predicate) const
+    SkillParam CustomSkillData::GetParsedSkillParam(std::function<bool(const ParsedSkillData &)> predicate) const
     {
-        for (const auto &param : parsed_params.ref())
+        for (const auto &pd : this->parsed_data)
         {
-            if (predicate(param))
-                return param.param;
+            if (predicate(pd))
+                return pd.param;
         }
         return {0, 0};
     }
 
-    void CustomSkillData::GetParsedSkillParams(SkillParamType type, FixedArrayRef<ParsedSkillParam> result) const
+    void CustomSkillData::GetParsedSkillParams(ParsedSkillData::Type type, FixedArrayRef<ParsedSkillData> result) const
     {
-        for (const auto &param : parsed_params.ref())
+        for (const auto &pd : this->parsed_data)
         {
-            if (param.type == type)
-                result.try_push(param);
+            if (pd.type == type)
+                result.try_push(pd);
         }
     }
 
-    void GetConditionsFromSpan(std::span<const ParsedSkillParam> params, GW::Constants::SkillID source_skill_id, uint8_t attr_lvl, FixedArrayRef<SkillEffect> result)
+    void GetConditionsFromSpan(std::span<const ParsedSkillData> parsed_data, GW::Constants::SkillID source_skill_id, uint8_t attr_lvl, FixedArrayRef<SkillEffect> result)
     {
         bool success = true;
-        for (const auto &param : params)
+        for (const auto &pd : parsed_data)
         {
-            const auto condition_skill_id = SkillParamTypeToSkillID(param.type);
+            const auto condition_skill_id = pd.GetCondition();
             if (condition_skill_id == GW::Constants::SkillID::No_Skill)
                 continue;
-            success &= result.try_push({condition_skill_id, source_skill_id, param.param.Resolve(attr_lvl)});
+            success &= result.try_push({condition_skill_id, source_skill_id, pd.param.Resolve(attr_lvl)});
         }
         SOFT_ASSERT(success, L"Failed to push condition");
     }
@@ -3056,7 +3452,7 @@ namespace HerosInsight
         if (!tags.ConditionSource)
             return;
 
-        GetConditionsFromSpan(GetInitParsedParams(), skill_id, attr_lvl, result);
+        GetConditionsFromSpan(GetInitParsedData(), skill_id, attr_lvl, result);
     }
 
     void CustomSkillData::GetEndConditions(uint8_t attr_lvl, FixedArrayRef<SkillEffect> result) const
@@ -3064,23 +3460,33 @@ namespace HerosInsight
         if (!tags.ConditionSource)
             return;
 
-        GetConditionsFromSpan(GetEndParsedParams(), skill_id, attr_lvl, result);
+        GetConditionsFromSpan(GetEndParsedData(), skill_id, attr_lvl, result);
     }
 
-    std::span<const ParsedSkillParam> CustomSkillData::GetInitParsedParams() const
+    std::span<const ParsedSkillData> CustomSkillData::GetInitParsedData() const
     {
-        std::span<const ParsedSkillParam> full_span = parsed_params.ref();
-        return end_effect_index.has_value()
-                   ? full_span.subspan(0, end_effect_index.value())
-                   : full_span;
+        std::span<const ParsedSkillData> full_span = this->parsed_data;
+        uint32_t init_count = 0;
+        for (auto &pp : full_span)
+        {
+            if (pp.type == ParsedSkillData::Type::EndEffect)
+                break;
+            ++init_count;
+        }
+        return full_span.subspan(0, init_count);
     }
 
-    std::span<const ParsedSkillParam> CustomSkillData::GetEndParsedParams() const
+    std::span<const ParsedSkillData> CustomSkillData::GetEndParsedData() const
     {
-        std::span<const ParsedSkillParam> full_span = parsed_params.ref();
-        return end_effect_index.has_value()
-                   ? full_span.subspan(end_effect_index.value(), full_span.size() - end_effect_index.value())
-                   : std::span<const ParsedSkillParam>{};
+        std::span<const ParsedSkillData> full_span = this->parsed_data;
+        uint32_t init_count = 0;
+        for (auto &pp : full_span)
+        {
+            if (pp.type == ParsedSkillData::Type::EndEffect)
+                break;
+            ++init_count;
+        }
+        return full_span.subspan(init_count, full_span.size() - init_count);
     }
 
     std::string *CustomSkillData::TryGetName()
@@ -3173,10 +3579,10 @@ namespace HerosInsight
         FixedArray<char, 64> salloc1;
         auto result = salloc1.ref();
 
-        FixedArray<ParsedSkillParam, 3> salloc2;
+        FixedArray<ParsedSkillData, 3> salloc2;
         auto health_pips = salloc2.ref();
 
-        GetParsedSkillParams(SkillParamType::HealthPips, health_pips);
+        GetParsedSkillParams(ParsedSkillData::Type::HealthPips, health_pips);
 
         for (const auto &pp : health_pips)
         {
@@ -3690,13 +4096,17 @@ namespace HerosInsight
 
     bool StaticSkillEffect::IsAffected(uint32_t caster_id, uint32_t target_id, uint32_t candidate_agent_id) const
     {
-        if (!(mask & EffectMask::Caster) &&
-            candidate_agent_id == caster_id)
-            return false;
+        if (candidate_agent_id == caster_id)
+        {
+            // If the candidate is the caster, only apply if the mask has "Caster"
+            return (bool)(mask & EffectMask::Caster);
+        }
 
-        if (!(mask & EffectMask::Target) &&
-            candidate_agent_id == target_id)
-            return false;
+        if (candidate_agent_id == target_id)
+        {
+            // If the candidate is the target, only apply if the mask has "Target"
+            return (bool)(mask & EffectMask::Target);
+        }
 
         if ((bool)(mask & EffectMask::CastersPet) &&
             candidate_agent_id == Utils::GetPetOfAgent(caster_id))
@@ -3745,7 +4155,7 @@ namespace HerosInsight
         return false;
     }
 
-    void StaticSkillEffect::Apply(uint32_t caster_id, uint32_t target_id, uint8_t attr_lvl) const
+    void StaticSkillEffect::Apply(uint32_t caster_id, uint32_t target_id, uint8_t attr_lvl, std::function<bool(GW::AgentLiving &)> predicate) const
     {
         uint32_t effect_target_id;
         switch (location)
@@ -3774,33 +4184,86 @@ namespace HerosInsight
         if (!caster || !target || !effect_target)
             return;
 
-        auto base_duration = duration.Resolve(attr_lvl);
-        auto &skill = *GW::SkillbarMgr::GetSkillConstantData(skill_id);
-        auto duration = Utils::CalculateDuration(skill, base_duration, caster_id);
-
-        auto TryApply = [&](GW::AgentLiving &candidate)
+        auto ApplyToValidAgents = [&](auto &&applier)
         {
-            auto candidate_id = candidate.agent_id;
-            if (IsAffected(caster_id, target_id, candidate_id))
+            auto TryApply = [&](GW::AgentLiving &candidate)
             {
+                if (predicate && !predicate(candidate))
+                    return;
 
-                EffectTracking::EffectTracker tracker = {};
-                tracker.cause_agent_id = caster_id;
-                tracker.skill_id = skill_id;
-                tracker.duration_sec = duration;
-                tracker.attribute_level = attr_lvl;
+                auto candidate_id = candidate.agent_id;
+                if (IsAffected(caster_id, target_id, candidate_id))
+                {
+                    applier(candidate);
+                }
+            };
 
-                EffectTracking::AddTracker(candidate_id, tracker);
+            if (radius == Utils::Range::Null)
+            {
+                TryApply(*effect_target);
+            }
+            else
+            {
+                Utils::ForAgentsInCircle(effect_target->pos, (float)(uint32_t)radius, TryApply);
             }
         };
 
-        if (radius == Utils::Range::Null)
+        auto duration_or_count_resolved = duration_or_count.Resolve(attr_lvl);
+        if (auto skill_id = std::get_if<GW::Constants::SkillID>(&skill_id_or_removal))
         {
-            TryApply(*effect_target);
+            auto base_duration = duration_or_count_resolved;
+            auto &skill = *GW::SkillbarMgr::GetSkillConstantData(*skill_id);
+            auto duration = Utils::CalculateDuration(skill, base_duration, caster_id);
+
+            ApplyToValidAgents(
+                [&](GW::AgentLiving &agent)
+                {
+                    EffectTracking::EffectTracker tracker = {};
+                    tracker.cause_agent_id = caster_id;
+                    tracker.skill_id = *skill_id;
+                    tracker.duration_sec = duration;
+                    tracker.attribute_level = attr_lvl;
+
+                    EffectTracking::AddTracker(agent.agent_id, tracker);
+                });
+        }
+        else if (auto removal = std::get_if<RemovalMask>(&skill_id_or_removal))
+        {
+            auto count = duration_or_count_resolved;
+
+            ApplyToValidAgents(
+                [&](GW::AgentLiving &agent)
+                {
+                    EffectTracking::CondiHexEnchRemoval(agent.agent_id, *removal, count);
+                });
         }
         else
         {
-            Utils::ForAgentsInCircle(effect_target->pos, (float)(uint32_t)radius, TryApply);
+            SOFT_ASSERT(false, L"Invalid skill_id_or_removal");
         }
+    }
+
+    std::wstring StaticSkillEffect::ToWString() const
+    {
+        std::wstring out = L"StaticSkillEffect: ";
+
+        FixedArray<char, 64> salloc;
+        auto buffer = salloc.ref();
+        duration_or_count.Print(buffer, -1);
+        auto dur_or_count_string = Utils::StrToWStr(buffer);
+
+        if (auto skill_id = std::get_if<GW::Constants::SkillID>(&skill_id_or_removal))
+        {
+            out += std::format(L"skill_id={}, duration={}", (uint32_t)*skill_id, dur_or_count_string);
+        }
+        else if (auto removal = std::get_if<RemovalMask>(&skill_id_or_removal))
+        {
+            out += std::format(L"removal={}, count={}", (uint32_t)*removal, dur_or_count_string);
+        }
+        else
+        {
+        }
+
+        return out;
     }
 }
