@@ -2680,7 +2680,7 @@ namespace HerosInsight
                 case GW::Constants::SkillID::Raven_Shriek_A_Gate_Too_Far:
                 case GW::Constants::SkillID::Ursan_Roar:
                 case GW::Constants::SkillID::Ursan_Roar_Blood_Washes_Blood:
-                case GW::Constants::SkillID::Armor_of_Sanctity: // Currently at dervish skills
+                case GW::Constants::SkillID::Armor_of_Sanctity:
                 {
                     effect.mask = EffectMask::Foes;
                     effect.location = EffectLocation::Target;
