@@ -548,7 +548,7 @@ namespace HerosInsight::SkillBook
         Range,
         ID,
         PARSED,
-        PARSED_END = PARSED + (uint32_t)SkillParamType::COUNT,
+        PARSED_END = PARSED + (uint32_t)ParsedSkillData::Type::COUNT,
 
         // Raw struct data
         RAW,
@@ -585,7 +585,9 @@ namespace HerosInsight::SkillBook
         {
             if (type >= SkillPropertyType::PARSED && type < SkillPropertyType::PARSED_END)
             {
-                return std::string(SkillParamTypeToString(static_cast<SkillParamType>((uint32_t)type - (uint32_t)SkillPropertyType::PARSED)));
+                ParsedSkillData temp = {};
+                temp.type = static_cast<ParsedSkillData::Type>((uint32_t)type - (uint32_t)SkillPropertyType::PARSED);
+                return std::string(temp.ToStr());
             }
 
             if (IsRawNumberType())
@@ -791,7 +793,7 @@ namespace HerosInsight::SkillBook
         return true;
     }
 
-    constexpr SkillPropertyType FromParam(SkillParamType type)
+    constexpr SkillPropertyType FromParam(ParsedSkillData::Type type)
     {
         return static_cast<SkillPropertyType>((uint32_t)SkillPropertyType::PARSED + (uint32_t)type);
     }
@@ -822,52 +824,52 @@ namespace HerosInsight::SkillBook
         {"Range", SkillPropertyType::Range},
         {"ID", SkillPropertyType::ID},
 
-        {"Duration", FromParam(SkillParamType::Duration)},
-        {"Disable", FromParam(SkillParamType::Disable)},
-        {"Level", FromParam(SkillParamType::Level)},
-        {"Damage", FromParam(SkillParamType::Damage)},
-        {"Healing", FromParam(SkillParamType::Heal)},
-        {"Armor", FromParam(SkillParamType::ArmorChange)},
+        {"Duration", FromParam(ParsedSkillData::Type::Duration)},
+        {"Disable", FromParam(ParsedSkillData::Type::Disable)},
+        {"Level", FromParam(ParsedSkillData::Type::Level)},
+        {"Damage", FromParam(ParsedSkillData::Type::Damage)},
+        {"Healing", FromParam(ParsedSkillData::Type::Heal)},
+        {"Armor", FromParam(ParsedSkillData::Type::ArmorChange)},
 
-        {"ConditionsRemoved", FromParam(SkillParamType::ConditionsRemoved)},
-        {"HexesRemoved", FromParam(SkillParamType::HexesRemoved)},
-        {"EnchantmentsRemoved", FromParam(SkillParamType::EnchantmentsRemoved)},
+        {"ConditionsRemoved", FromParam(ParsedSkillData::Type::ConditionsRemoved)},
+        {"HexesRemoved", FromParam(ParsedSkillData::Type::HexesRemoved)},
+        {"EnchantmentsRemoved", FromParam(ParsedSkillData::Type::EnchantmentsRemoved)},
 
-        {"HealthPips", FromParam(SkillParamType::HealthPips)},
-        {"HealthGain", FromParam(SkillParamType::HealthGain)},
-        {"HealthLoss", FromParam(SkillParamType::HealthLoss)},
-        {"HealthSteal", FromParam(SkillParamType::HealthSteal)},
-        {"MaxHealth", FromParam(SkillParamType::MaxHealthAdd)},
+        {"HealthPips", FromParam(ParsedSkillData::Type::HealthPips)},
+        {"HealthGain", FromParam(ParsedSkillData::Type::HealthGain)},
+        {"HealthLoss", FromParam(ParsedSkillData::Type::HealthLoss)},
+        {"HealthSteal", FromParam(ParsedSkillData::Type::HealthSteal)},
+        {"MaxHealth", FromParam(ParsedSkillData::Type::MaxHealthAdd)},
 
-        {"EnergyPips", FromParam(SkillParamType::EnergyPips)},
-        {"EnergyGain", FromParam(SkillParamType::EnergyGain)},
-        {"EnergyLoss", FromParam(SkillParamType::EnergyLoss)},
-        {"EnergySteal", FromParam(SkillParamType::EnergySteal)},
-        {"EnergyDiscount", FromParam(SkillParamType::EnergyDiscount)},
+        {"EnergyPips", FromParam(ParsedSkillData::Type::EnergyPips)},
+        {"EnergyGain", FromParam(ParsedSkillData::Type::EnergyGain)},
+        {"EnergyLoss", FromParam(ParsedSkillData::Type::EnergyLoss)},
+        {"EnergySteal", FromParam(ParsedSkillData::Type::EnergySteal)},
+        {"EnergyDiscount", FromParam(ParsedSkillData::Type::EnergyDiscount)},
 
-        {"AdrenalineGain", FromParam(SkillParamType::AdrenalineGain)},
-        {"AdrenalineLoss", FromParam(SkillParamType::AdrenalineLoss)},
+        {"AdrenalineGain", FromParam(ParsedSkillData::Type::AdrenalineGain)},
+        {"AdrenalineLoss", FromParam(ParsedSkillData::Type::AdrenalineLoss)},
 
-        {"Bleeding", FromParam(SkillParamType::Bleeding)},
-        {"Blind", FromParam(SkillParamType::Blind)},
-        {"Burning", FromParam(SkillParamType::Burning)},
-        {"CrackedArmor", FromParam(SkillParamType::CrackedArmor)},
-        {"Crippled", FromParam(SkillParamType::Crippled)},
-        {"Dazed", FromParam(SkillParamType::Dazed)},
-        {"DeepWound", FromParam(SkillParamType::DeepWound)},
-        {"Disease", FromParam(SkillParamType::Disease)},
-        {"Poison", FromParam(SkillParamType::Poison)},
-        {"Weakness", FromParam(SkillParamType::Weakness)},
+        {"Bleeding", FromParam(ParsedSkillData::Type::Bleeding)},
+        {"Blind", FromParam(ParsedSkillData::Type::Blind)},
+        {"Burning", FromParam(ParsedSkillData::Type::Burning)},
+        {"CrackedArmor", FromParam(ParsedSkillData::Type::CrackedArmor)},
+        {"Crippled", FromParam(ParsedSkillData::Type::Crippled)},
+        {"Dazed", FromParam(ParsedSkillData::Type::Dazed)},
+        {"DeepWound", FromParam(ParsedSkillData::Type::DeepWound)},
+        {"Disease", FromParam(ParsedSkillData::Type::Disease)},
+        {"Poison", FromParam(ParsedSkillData::Type::Poison)},
+        {"Weakness", FromParam(ParsedSkillData::Type::Weakness)},
 
-        {"ActivationModifier", FromParam(SkillParamType::ActivationTimeAdd)},
-        {"MoveSpeedModifier%", FromParam(SkillParamType::MovementSpeedMod)},
-        {"RechargeModifier", FromParam(SkillParamType::RechargeTimeAdd)},
-        {"RechargeModifier%", FromParam(SkillParamType::RechargeTimeMod)},
-        {"AttackTimeModifier%", FromParam(SkillParamType::AttackTimeMod)},
-        {"DamageModifier", FromParam(SkillParamType::DamageReduction)},
-        {"DamageModifier%", FromParam(SkillParamType::DamageMod)},
-        {"DurationModifier%", FromParam(SkillParamType::DurationMod)},
-        {"HealingModifier%", FromParam(SkillParamType::HealMod)},
+        {"ActivationModifier", FromParam(ParsedSkillData::Type::ActivationTimeAdd)},
+        {"MoveSpeedModifier%", FromParam(ParsedSkillData::Type::MovementSpeedMod)},
+        {"RechargeModifier", FromParam(ParsedSkillData::Type::RechargeTimeAdd)},
+        {"RechargeModifier%", FromParam(ParsedSkillData::Type::RechargeTimeMod)},
+        {"AttackTimeModifier%", FromParam(ParsedSkillData::Type::AttackTimeMod)},
+        {"DamageModifier", FromParam(ParsedSkillData::Type::DamageReduction)},
+        {"DamageModifier%", FromParam(ParsedSkillData::Type::DamageMod)},
+        {"DurationModifier%", FromParam(ParsedSkillData::Type::DurationMod)},
+        {"HealingModifier%", FromParam(ParsedSkillData::Type::HealMod)},
     };
 
     static constexpr std::span<const std::pair<std::string_view, SkillPropertyType>> text_filter_targets = {filter_targets, n_text_filter_targets};
@@ -1229,9 +1231,9 @@ namespace HerosInsight::SkillBook
 
         if (target.type >= SkillPropertyType::PARSED && target.type < SkillPropertyType::PARSED_END)
         {
-            auto PushSkillParam = [&](SkillParamType type)
+            auto PushSkillParam = [&](ParsedSkillData::Type type)
             {
-                FixedArray<ParsedSkillParam, 8> salloc;
+                FixedArray<ParsedSkillData, 8> salloc;
                 auto pps = salloc.ref();
                 custom_sd.GetParsedSkillParams(type, pps);
                 if (pps.size() == 0)
@@ -1253,7 +1255,7 @@ namespace HerosInsight::SkillBook
                     }
                 }
             };
-            const auto param_type = static_cast<SkillParamType>((uint32_t)target.type - (uint32_t)SkillPropertyType::PARSED);
+            const auto param_type = static_cast<ParsedSkillData::Type>((uint32_t)target.type - (uint32_t)SkillPropertyType::PARSED);
             PushSkillParam(param_type);
             SOFT_ASSERT(success);
             return;
@@ -2106,8 +2108,8 @@ namespace HerosInsight::SkillBook
         // bool is_equipable = GW::SkillbarMgr::GetIsSkillLearnt(custom_sd.skill_id);
         bool is_hovered = ImGui::IsMouseHoveringRect(icon_cursor_ss, icon_cursor_ss + ImVec2(skill_icon_size, skill_icon_size));
         bool is_effect = custom_sd.tags.EffectOnly;
-        if (TextureModule::DrawSkill(*custom_sd.skill, skill_icon_size, is_effect, is_hovered) ||
-            TextureModule::DrawSkill(*GW::SkillbarMgr::GetSkillConstantData(GW::Constants::SkillID::No_Skill), skill_icon_size, is_effect, is_hovered))
+        if (TextureModule::DrawSkill(*custom_sd.skill, icon_cursor_ss, skill_icon_size, is_effect, is_hovered) ||
+            TextureModule::DrawSkill(*GW::SkillbarMgr::GetSkillConstantData(GW::Constants::SkillID::No_Skill), icon_cursor_ss, skill_icon_size, is_effect, is_hovered))
         {
             icon_cursor.y += skill_icon_size;
             ImGui::SameLine();
@@ -2438,9 +2440,9 @@ namespace HerosInsight::SkillBook
 
         auto attr_lvl = state.GetAttribute(custom_sd.attribute);
         // auto duration = custom_sd.GetDuration();
-        for (auto &param : custom_sd.parsed_params.ref())
+        for (auto &pd : custom_sd.parsed_data)
         {
-            param.ImGuiRender(attr_lvl);
+            pd.ImGuiRender(attr_lvl);
         }
         // if (show_null_stats || !duration.IsNull())
         // {

@@ -1122,12 +1122,12 @@ namespace HerosInsight::Utils
         if (csd == nullptr)
             return std::nullopt;
 
-        FixedArray<ParsedSkillParam, 8> salloc;
+        FixedArray<ParsedSkillData, 8> salloc;
         auto pps = salloc.ref();
 
         int32_t regen_hp_per_second = 0;
         int32_t degen_hp_per_second = 0;
-        custom_sd.GetParsedSkillParams(SkillParamType::HealthPips, pps);
+        custom_sd.GetParsedSkillParams(ParsedSkillData::Type::HealthPips, pps);
         for (auto &pp : pps)
         {
             const auto hp_per_sec = 2 * pp.param.Resolve(attribute_level);
