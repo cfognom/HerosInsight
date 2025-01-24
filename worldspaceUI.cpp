@@ -216,7 +216,10 @@ namespace HerosInsight::WorldSpaceUI
         {
             if (a.agent_id == b.agent_id)
             {
-                return a.IsFinished() > b.IsFinished();
+                if (a.IsFinished() != b.IsFinished())
+                    return a.IsFinished() > b.IsFinished();
+
+                return a.pos_type > b.pos_type;
             }
 
             const auto agent_a = GW::Agents::GetAgentByID(a.agent_id);
@@ -230,12 +233,12 @@ namespace HerosInsight::WorldSpaceUI
             return dist_a > dist_b;
         };
 
-        std::stable_sort(effect_draw_list.begin(), effect_draw_list.end(), Sorter);
+        std::sort(effect_draw_list.begin(), effect_draw_list.end(), Sorter);
     }
 
     void Draw(IDirect3DDevice9 *device)
     {
-        // WARNING: This thing is a mess, but it works (and or worked)
+        // WARNING: This thing is a mess, but it works (and/or worked)
 
         auto player_agent_id = GW::Agents::GetControlledCharacterId();
 
@@ -316,18 +319,14 @@ namespace HerosInsight::WorldSpaceUI
             {
                 it2--;
 
+                if (it2->agent_id != agent_id)
+                    break;
+
                 if (it2->pos_type != it->pos_type)
                     continue;
 
-                if (it2->agent_id == agent_id)
-                {
-                    if (!it2->IsFinished())
-                        n_same_pos++;
-                }
-                else
-                {
-                    break;
-                }
+                if (!it2->IsFinished())
+                    n_same_pos++;
             }
 
             if (!it->timestamp_first_update)
