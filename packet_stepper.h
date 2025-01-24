@@ -132,6 +132,11 @@ namespace HerosInsight::PacketStepper
         {
         }
 
+        AfterEffectsAwaiter(uint32_t caster_id)
+            : caster_id(caster_id), target_ids(std::nullopt)
+        {
+        }
+
         bool await_ready() const noexcept { return false; }
         void await_suspend(std::coroutine_handle<> handle) noexcept;
         void await_resume() noexcept
@@ -144,9 +149,10 @@ namespace HerosInsight::PacketStepper
     private:
         std::coroutine_handle<> handle = nullptr;
         uint32_t caster_id;
-        std::span<uint32_t> target_ids;
+        std::optional<std::span<uint32_t>> target_ids;
 
         friend void OmniHandler(GW::HookStatus *, const StoC::PacketBase *packet);
+        friend void OnFrameEnd(GW::HookStatus *);
     };
 
     struct PermaAwaiter

@@ -110,7 +110,7 @@ namespace HerosInsight::PacketStepper
         }
     }
 
-    bool IsAssociatedWithSkillPacket(const StoC::PacketBase *packet, uint32_t caster_id, std::span<uint32_t> target_ids)
+    bool IsAssociatedWithSkillPacket(const StoC::PacketBase *packet, uint32_t caster_id, std::optional<std::span<uint32_t>> target_ids)
     {
         constexpr auto allowed_value_ids = MakeFixedSet<uint32_t>(
             StoC::GenericValueID::knocked_down,
@@ -122,12 +122,25 @@ namespace HerosInsight::PacketStepper
             StoC::GenericValueID::remove_effect,
             StoC::GenericValueID::effect_on_agent,
             StoC::GenericValueID::change_health_regen,
+            StoC::GenericValueID::max_hp_update,
             StoC::GenericValueID::effect_on_target);
 
         auto IsRelated = [=](uint32_t agent_id)
         {
-            return caster_id == agent_id ||
-                   std::find(target_ids.begin(), target_ids.end(), agent_id) != target_ids.end();
+            if (caster_id == agent_id)
+                return true;
+
+            if (target_ids.has_value())
+            {
+                auto target_ids_value = target_ids.value();
+                return std::find(target_ids_value.begin(), target_ids_value.end(), agent_id) != target_ids_value.end();
+            }
+            else
+            {
+                return true; // We assume its related if no target span is provided
+            }
+
+            return false;
         };
 
         switch (packet->header)
@@ -277,14 +290,14 @@ namespace HerosInsight::PacketStepper
             delayed_coro.handle.resume();
         }
 
-        // //
-        // auto size = after_effects_awaiters.size();
-        // for (uint32_t i = 0; i < size; ++i)
-        // {
-        //     auto &awaiter = after_effects_awaiters[i];
-        //     awaiter.handle.resume();
-        // }
-        // after_effects_awaiters.erase(after_effects_awaiters.begin(), after_effects_awaiters.begin() + size);
+        //
+        auto size = after_effects_awaiters.size();
+        for (uint32_t i = 0; i < size; ++i)
+        {
+            auto &awaiter = after_effects_awaiters[i];
+            awaiter.handle.resume();
+        }
+        after_effects_awaiters.erase(after_effects_awaiters.begin(), after_effects_awaiters.begin() + size);
 
         is_frame_end = false;
     }

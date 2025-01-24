@@ -13,6 +13,7 @@ namespace GW::Packet::StoC
     namespace GenericValueID
     {
         const uint32_t attack_missed = 38; // GenericValueTarget
+        const uint32_t max_hp_update = 42; // GenericValue
     }
 
     struct ProjectileCreated : StoC::Packet<ProjectileCreated>
@@ -105,12 +106,23 @@ namespace GW::Packet::StoC
     };
     constexpr uint32_t StoC::Packet<UnkOnMapLoad>::STATIC_HEADER = 238;
 
-    struct InitialEffects : StoC::Packet<InitialEffects>
+    struct InitialEffect : StoC::Packet<InitialEffect>
     {
         uint32_t agent_id;
-        uint32_t unk1; // always 0 ?
+        uint32_t unk_bitwise;
         uint32_t padding1;
-        uint32_t unk2[10];
+        uint32_t effect_id;
+        float duration;
     };
-    constexpr uint32_t StoC::Packet<InitialEffects>::STATIC_HEADER = GAME_SMSG_AGENT_INITIAL_EFFECTS;
+    constexpr uint32_t StoC::Packet<InitialEffect>::STATIC_HEADER = GAME_SMSG_AGENT_INITIAL_EFFECTS;
+
+    struct CreateNPC : StoC::Packet<CreateNPC>
+    {
+        uint32_t agent_id;
+        uint32_t allegiance_bits;
+        uint32_t agent_type; // Bitwise field. 0x20000000 = NPC | PlayerNumber, 0x30000000 = Player | PlayerNumber, 0x00000000 = Signpost
+        uint32_t effect_id;
+        float lifetime;
+    };
+    constexpr uint32_t StoC::Packet<CreateNPC>::STATIC_HEADER = GAME_SMSG_AGENT_CREATE_NPC;
 }

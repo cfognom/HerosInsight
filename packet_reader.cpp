@@ -591,17 +591,15 @@ namespace HerosInsight::PacketReader
                     Utils::DecodeString(p->name_enc));
                 break;
             }
-            case StoC::InitialEffects::STATIC_HEADER:
+            case StoC::InitialEffect::STATIC_HEADER:
             {
-                auto p = reinterpret_cast<const StoC::InitialEffects *>(packet);
-                message = std::format(L"InitialEffects: agent={}, unk1={}, unk2[0]={}, unk2[1]={}, unk2[2]={}, unk2[3]={}, unk2[4]={}",
+                auto p = reinterpret_cast<const StoC::InitialEffect *>(packet);
+                message = std::format(L"InitialEffects: agent_id={}, unk_bitwise={}, padding1={}, effect_id={}, duration={}",
                     p->agent_id,
-                    p->unk1,
-                    p->unk2[0],
-                    p->unk2[1],
-                    p->unk2[2],
-                    p->unk2[3],
-                    p->unk2[4]);
+                    p->unk_bitwise,
+                    p->padding1,
+                    p->effect_id,
+                    p->duration);
                 break;
             }
             case StoC::AgentUnk2::STATIC_HEADER:
@@ -622,6 +620,17 @@ namespace HerosInsight::PacketReader
                     p->skill_id,
                     p->effect_type,
                     p->effect_id);
+                break;
+            }
+            case StoC::CreateNPC::STATIC_HEADER:
+            {
+                auto p = reinterpret_cast<const StoC::CreateNPC *>(packet);
+                message = std::format(L"CreateNPC: agent_id={}, allegiance_bits={}, agent_type={}, effect_id={}, lifetime={}",
+                    p->agent_id,
+                    p->allegiance_bits,
+                    p->agent_type,
+                    p->effect_id,
+                    p->lifetime);
                 break;
             }
             default:
@@ -923,7 +932,7 @@ namespace HerosInsight::PacketReader
         new_tracker.effect_id = effect_id;
         new_tracker.duration_sec = static_cast<uint32_t>(duration);
 
-        EffectTracking::AddTracker(target_id, new_tracker);
+        // EffectTracking::AddTracker(target_id, new_tracker);
 
         if (caster_id)
         {
@@ -1119,19 +1128,19 @@ namespace HerosInsight::PacketReader
 
         if (DEBUG_PACKETS)
         {
-            for (auto &header : headers_to_debug)
-            // for (uint32_t header = 0; header < 500; header++)
+            // for (auto &header : headers_to_debug)
+            for (uint32_t header = 0; header < 500; header++)
             {
-                // if (header == GAME_SMSG_AGENT_MOVEMENT_TICK ||
-                //     header == GAME_SMSG_AGENT_MOVE_TO_POINT ||
-                //     header == GAME_SMSG_AGENT_STOP_MOVING ||
-                //     header == GAME_SMSG_AGENT_UPDATE_EFFECTS ||
-                //     header == GAME_SMSG_AGENT_UPDATE_ROTATION ||
-                //     header == GAME_SMSG_PING_REQUEST ||
-                //     header == GAME_SMSG_PING_REPLY ||
-                //     header == StoC::UnkOnMapLoad::STATIC_HEADER ||
-                //     header == GAME_SMSG_AGENT_UPDATE_DESTINATION)
-                //     continue;
+                if (header == GAME_SMSG_AGENT_MOVEMENT_TICK ||
+                    header == GAME_SMSG_AGENT_MOVE_TO_POINT ||
+                    header == GAME_SMSG_AGENT_STOP_MOVING ||
+                    header == GAME_SMSG_AGENT_UPDATE_EFFECTS ||
+                    header == GAME_SMSG_AGENT_UPDATE_ROTATION ||
+                    header == GAME_SMSG_PING_REQUEST ||
+                    header == GAME_SMSG_PING_REPLY ||
+                    header == StoC::UnkOnMapLoad::STATIC_HEADER ||
+                    header == GAME_SMSG_AGENT_UPDATE_DESTINATION)
+                    continue;
                 GW::StoC::RegisterPacketCallback(&packet_reader_debug_entry, header, &WritePacketDebugInfo, 0);
             }
         }
