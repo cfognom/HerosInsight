@@ -2,8 +2,8 @@
 #include <Windows.h>
 #include <Windowsx.h>
 #include <cstdint>
-#include <iostream>
 #include <filesystem>
+#include <iostream>
 #include <iterator>
 
 #include <string>
@@ -12,50 +12,50 @@
 #include <GWCA/Utilities/Hooker.h>
 #include <GWCA/Utilities/Scanner.h>
 
-#include <GWCA/GameEntities/Map.h>
 #include <GWCA/GameEntities/Agent.h>
+#include <GWCA/GameEntities/Map.h>
 #include <GWCA/GameEntities/NPC.h>
 #include <GWCA/GameEntities/Party.h>
 #include <GWCA/GameEntities/Player.h>
 #include <GWCA/GameEntities/Skill.h>
 
-#include <GWCA/Context/PreGameContext.h>
-#include <GWCA/Context/CharContext.h>
 #include <GWCA/Context/AgentContext.h>
-#include <GWCA/Context/PartyContext.h>
-#include <GWCA/Context/MapContext.h>
+#include <GWCA/Context/CharContext.h>
 #include <GWCA/Context/GadgetContext.h>
 #include <GWCA/Context/GameContext.h>
+#include <GWCA/Context/MapContext.h>
+#include <GWCA/Context/PartyContext.h>
+#include <GWCA/Context/PreGameContext.h>
 
 #include <GWCA/Constants/AgentIDs.h>
+#include <GWCA/Constants/Constants.h>
 #include <GWCA/Constants/Maps.h>
 #include <GWCA/Constants/Skills.h>
-#include <GWCA/Constants/Constants.h>
 
 #include <GWCA/GameContainers/Array.h>
 #include <GWCA/GameContainers/GamePos.h>
 #include <GWCA/GameContainers/List.h>
 
-#include <GWCA/Managers/GameThreadMgr.h>
-#include <GWCA/Managers/Module.h>
-#include <GWCA/Managers/UIMgr.h>
-#include <GWCA/Managers/StoCMgr.h>
-#include <GWCA/Managers/MemoryMgr.h>
-#include <GWCA/Managers/MapMgr.h>
-#include <GWCA/Managers/ChatMgr.h>
-#include <GWCA/Managers/RenderMgr.h>
-#include <GWCA/Managers/EffectMgr.h>
-#include <GWCA/Managers/SkillbarMgr.h>
 #include <GWCA/Managers/AgentMgr.h>
+#include <GWCA/Managers/ChatMgr.h>
+#include <GWCA/Managers/EffectMgr.h>
+#include <GWCA/Managers/GameThreadMgr.h>
+#include <GWCA/Managers/MapMgr.h>
+#include <GWCA/Managers/MemoryMgr.h>
+#include <GWCA/Managers/Module.h>
 #include <GWCA/Managers/PartyMgr.h>
+#include <GWCA/Managers/RenderMgr.h>
+#include <GWCA/Managers/SkillbarMgr.h>
+#include <GWCA/Managers/StoCMgr.h>
+#include <GWCA/Managers/UIMgr.h>
 
 #include <GWCA/Packets/StoC.h>
 
+#include <constants.h>
 #include <imgui.h>
 #include <imgui_impl_dx9.h>
 #include <imgui_internal.h>
 #include <skill_book.h>
-#include <constants.h>
 
 #include <update_manager.h>
 
@@ -147,71 +147,71 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM l
 
     switch (Message)
     {
-    case WM_LBUTTONDOWN:
-    case WM_LBUTTONDBLCLK:
-        if (!right_mouse_down)
-            io.MouseDown[0] = true;
-        break;
-    case WM_LBUTTONUP:
-        io.MouseDown[0] = false;
-        break;
-    case WM_MBUTTONDOWN:
-    case WM_MBUTTONDBLCLK:
-        if (!right_mouse_down)
-        {
-            io.KeysDown[VK_MBUTTON] = true;
-            io.MouseDown[2] = true;
-        }
-        break;
-    case WM_MBUTTONUP:
-        io.KeysDown[VK_MBUTTON] = false;
-        io.MouseDown[2] = false;
-        break;
-    case WM_MOUSEWHEEL:
-        if (!right_mouse_down)
-        {
-            io.MouseWheel += (float)GET_WHEEL_DELTA_WPARAM(wParam) / 120.f; // The values seem to come in multiples of 120
-            // io.MouseWheel += GET_WHEEL_DELTA_WPARAM(wParam) > 0 ? +1.0f : -1.0f;
-        }
-        break;
-    case WM_MOUSEMOVE:
-        if (!right_mouse_down)
-        {
-            io.MousePos.x = (float)GET_X_LPARAM(lParam);
-            io.MousePos.y = (float)GET_Y_LPARAM(lParam);
-        }
-        break;
-    case WM_XBUTTONDOWN:
-        if (!right_mouse_down)
-        {
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONDBLCLK:
+            if (!right_mouse_down)
+                io.MouseDown[0] = true;
+            break;
+        case WM_LBUTTONUP:
+            io.MouseDown[0] = false;
+            break;
+        case WM_MBUTTONDOWN:
+        case WM_MBUTTONDBLCLK:
+            if (!right_mouse_down)
+            {
+                io.KeysDown[VK_MBUTTON] = true;
+                io.MouseDown[2] = true;
+            }
+            break;
+        case WM_MBUTTONUP:
+            io.KeysDown[VK_MBUTTON] = false;
+            io.MouseDown[2] = false;
+            break;
+        case WM_MOUSEWHEEL:
+            if (!right_mouse_down)
+            {
+                io.MouseWheel += (float)GET_WHEEL_DELTA_WPARAM(wParam) / 120.f; // The values seem to come in multiples of 120
+                // io.MouseWheel += GET_WHEEL_DELTA_WPARAM(wParam) > 0 ? +1.0f : -1.0f;
+            }
+            break;
+        case WM_MOUSEMOVE:
+            if (!right_mouse_down)
+            {
+                io.MousePos.x = (float)GET_X_LPARAM(lParam);
+                io.MousePos.y = (float)GET_Y_LPARAM(lParam);
+            }
+            break;
+        case WM_XBUTTONDOWN:
+            if (!right_mouse_down)
+            {
+                if (GET_XBUTTON_WPARAM(wParam) == XBUTTON1)
+                    io.KeysDown[VK_XBUTTON1] = true;
+                if (GET_XBUTTON_WPARAM(wParam) == XBUTTON2)
+                    io.KeysDown[VK_XBUTTON2] = true;
+            }
+            break;
+        case WM_XBUTTONUP:
             if (GET_XBUTTON_WPARAM(wParam) == XBUTTON1)
-                io.KeysDown[VK_XBUTTON1] = true;
+                io.KeysDown[VK_XBUTTON1] = false;
             if (GET_XBUTTON_WPARAM(wParam) == XBUTTON2)
-                io.KeysDown[VK_XBUTTON2] = true;
-        }
-        break;
-    case WM_XBUTTONUP:
-        if (GET_XBUTTON_WPARAM(wParam) == XBUTTON1)
-            io.KeysDown[VK_XBUTTON1] = false;
-        if (GET_XBUTTON_WPARAM(wParam) == XBUTTON2)
-            io.KeysDown[VK_XBUTTON2] = false;
-        break;
-    case WM_SYSKEYDOWN:
-    case WM_KEYDOWN:
-        if (wParam < 256)
-            io.KeysDown[wParam] = true;
-        break;
-    case WM_SYSKEYUP:
-    case WM_KEYUP:
-        if (wParam < 256)
-            io.KeysDown[wParam] = false;
-        break;
-    case WM_CHAR: // You can also use ToAscii()+GetKeyboardState() to retrieve characters.
-        if (wParam > 0 && wParam < 0x10000)
-            io.AddInputCharacter((unsigned short)wParam);
-        break;
-    default:
-        break;
+                io.KeysDown[VK_XBUTTON2] = false;
+            break;
+        case WM_SYSKEYDOWN:
+        case WM_KEYDOWN:
+            if (wParam < 256)
+                io.KeysDown[wParam] = true;
+            break;
+        case WM_SYSKEYUP:
+        case WM_KEYUP:
+            if (wParam < 256)
+                io.KeysDown[wParam] = false;
+            break;
+        case WM_CHAR: // You can also use ToAscii()+GetKeyboardState() to retrieve characters.
+            if (wParam > 0 && wParam < 0x10000)
+                io.AddInputCharacter((unsigned short)wParam);
+            break;
+        default:
+            break;
     }
 
     //
@@ -222,68 +222,68 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM l
     bool is_up = false;
     switch (Message)
     {
-    // Send button up mouse events to everything, to avoid being stuck on mouse-down
-    case WM_LBUTTONUP:
-        break;
-
-    // Other mouse events:
-    // - If right mouse down, leave it to gw
-    // - ImGui first (above), if WantCaptureMouse that's it
-    // - Toolbox module second (e.g.: minimap), if captured, that's it
-    // - otherwise pass to gw
-    case WM_LBUTTONDOWN:
-    case WM_LBUTTONDBLCLK:
-        is_dragging_passthough = false;
-    case WM_MOUSEMOVE:
-    case WM_MOUSEWHEEL:
-    {
-        if (is_dragging_passthough)
+        // Send button up mouse events to everything, to avoid being stuck on mouse-down
+        case WM_LBUTTONUP:
             break;
 
-        if (!right_mouse_down && io.WantCaptureMouse)
-            return true;
-        break;
-    }
-
-    // keyboard messages
-    case WM_KEYUP:
-    case WM_SYSKEYUP:
-        is_up = true;
-        [[fallthrough]];
-    case WM_KEYDOWN:
-    case WM_SYSKEYDOWN:
-    case WM_CHAR:
-    case WM_SYSCHAR:
-    case WM_IME_CHAR:
-    case WM_XBUTTONDOWN:
-    case WM_XBUTTONDBLCLK:
-    case WM_XBUTTONUP:
-    case WM_MBUTTONDOWN:
-    case WM_MBUTTONDBLCLK:
-    case WM_MBUTTONUP:
-        if (CheckKeyBinds())
-            return true;
-
-        if (io.WantTextInput)
+        // Other mouse events:
+        // - If right mouse down, leave it to gw
+        // - ImGui first (above), if WantCaptureMouse that's it
+        // - Toolbox module second (e.g.: minimap), if captured, that's it
+        // - otherwise pass to gw
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONDBLCLK:
+            is_dragging_passthough = false;
+        case WM_MOUSEMOVE:
+        case WM_MOUSEWHEEL:
         {
-            if (is_up)
-                break; // if imgui wants them, send to imgui (above) and to gw
-            else
-                return true; // if imgui wants them, send just to imgui (above)
+            if (is_dragging_passthough)
+                break;
+
+            if (!right_mouse_down && io.WantCaptureMouse)
+                return true;
+            break;
         }
 
-        // note: capturing those events would prevent typing if you have a hotkey assigned to normal letters.
-        // We may want to not send events to toolbox if the player is typing in-game
-        // Otherwise, we may want to capture events.
-        // For that, we may want to only capture *successfull* hotkey activations.
-        break;
+        // keyboard messages
+        case WM_KEYUP:
+        case WM_SYSKEYUP:
+            is_up = true;
+            [[fallthrough]];
+        case WM_KEYDOWN:
+        case WM_SYSKEYDOWN:
+        case WM_CHAR:
+        case WM_SYSCHAR:
+        case WM_IME_CHAR:
+        case WM_XBUTTONDOWN:
+        case WM_XBUTTONDBLCLK:
+        case WM_XBUTTONUP:
+        case WM_MBUTTONDOWN:
+        case WM_MBUTTONDBLCLK:
+        case WM_MBUTTONUP:
+            if (CheckKeyBinds())
+                return true;
 
-    case WM_SIZE:
-        // ImGui doesn't need this, it reads the viewport size directly
-        break;
+            if (io.WantTextInput)
+            {
+                if (is_up)
+                    break; // if imgui wants them, send to imgui (above) and to gw
+                else
+                    return true; // if imgui wants them, send just to imgui (above)
+            }
 
-    default:
-        break;
+            // note: capturing those events would prevent typing if you have a hotkey assigned to normal letters.
+            // We may want to not send events to toolbox if the player is typing in-game
+            // Otherwise, we may want to capture events.
+            // For that, we may want to only capture *successfull* hotkey activations.
+            break;
+
+        case WM_SIZE:
+            // ImGui doesn't need this, it reads the viewport size directly
+            break;
+
+        default:
+            break;
     }
 
     return CallWindowProc((WNDPROC)OldWndProc, hWnd, Message, wParam, lParam);
@@ -372,8 +372,11 @@ static DWORD WINAPI ThreadProc(LPVOID lpModule)
     GW::Initialize();
 
     GW::Render::SetRenderCallback(OnRender);
-    GW::Render::SetResetCallback([](IDirect3DDevice9 *device)
-                                 { ImGui_ImplDX9_InvalidateDeviceObjects(); });
+    GW::Render::SetResetCallback(
+        [](IDirect3DDevice9 *device)
+        {
+            ImGui_ImplDX9_InvalidateDeviceObjects();
+        });
 
     running = true;
     while (running)
