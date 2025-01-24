@@ -210,9 +210,10 @@ namespace HerosInsight::PacketStepper
         {
             using PacketType = std::decay_t<typename function_traits<PacketCallback>::argument_type>;
             header = PacketType::STATIC_HEADER;
-            registered_id = RegisterListener(header, [callback](const StoC::PacketBase *packet)
+            registered_id = RegisterListener(header,
+                [callback](const StoC::PacketBase *packet)
                 {
-                    return callback(*(static_cast<const PacketType *>(packet))); //
+                    return callback(*(static_cast<const PacketType *>(packet)));
                 });
         }
 
