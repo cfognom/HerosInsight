@@ -63,7 +63,9 @@
 
 #include "effect_initiator.h"
 
+#ifdef _DEBUG
 #define DEBUG_ACTIVATIONS 1
+#endif
 #define DEBUG_ACTIVATIONS_COLOR 0xFFFF00FF
 
 namespace StoC = GW::Packet::StoC;
