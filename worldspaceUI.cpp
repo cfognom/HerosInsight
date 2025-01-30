@@ -250,6 +250,7 @@ namespace HerosInsight::WorldSpaceUI
 
         auto bg_draw_list = ImGui::GetBackgroundDrawList();
 
+        GW::Vec3f icon_world_pos = GW::Vec3f(0, 0, 0);
         ImVec2 screen_base_pos = ImVec2(0, 0);
         ImVec2 screen_body_pos = ImVec2(0, 0);
         for (auto it = effect_draw_list.begin(); it != effect_draw_list.end();)
@@ -271,21 +272,18 @@ namespace HerosInsight::WorldSpaceUI
             const auto animation_min_scale = 1.f;
             const auto animation_max_scale = 1.4f;
             const auto animation_screen_distance = 65.f;
-            const auto distance_scale_min = 0.5f;
-            const auto distance_scale_max = 1.2f;
-            const auto distance_min = 0.f;
-            const auto distance_max = 2500.f;
+            const auto distance_max = 5000.f;
             float icon_size = 28.f;
             float alpha = 1.f;
 
             const auto agent_pos = GW::Vec3f(agent->x, agent->y, agent->z);
             const auto cam_to_target = camera->look_at_target - camera->position;
-            const auto cam_to_agent = agent_pos - camera->position;
-            const auto target_is_infront = Utils::Dot(cam_to_target, cam_to_agent) > 0;
-            const auto distance_to_agent = std::sqrt(Utils::Dot(cam_to_agent, cam_to_agent));
+            const auto cam_to_agent_feet = agent_pos - camera->position;
+            const auto target_is_infront = Utils::Dot(cam_to_target, cam_to_agent_feet) > 0;
+            const auto distance_to_agent_feet = std::sqrt(Utils::Dot(cam_to_agent_feet, cam_to_agent_feet));
 
             if (!target_is_infront ||
-                distance_to_agent > distance_max)
+                distance_to_agent_feet > distance_max)
             {
                 it++;
                 continue;
@@ -342,37 +340,42 @@ namespace HerosInsight::WorldSpaceUI
 
             const auto animation_progress = (float)ms_since_finished / (float)animation_ms;
 
+            if (n_same_pos == 0)
+            {
+                // We only have to calculate this once per agent
+                icon_world_pos = agent_pos; // Foot position
+
+                if (it->pos_type == PositionType::AgentCenter)
+                    icon_world_pos.z -= agent->height1 * 0.5f; // For some reason, up is down. *Pirates of the Caribbean track plays*
+                else
+                    icon_world_pos.z -= agent->height1 + 20.f;
+
+                screen_base_pos = Utils::WorldSpaceToScreenSpace(icon_world_pos);
+            }
+
+            const auto cam_to_icon = icon_world_pos - camera->position;
+            const auto distance_to_icon = std::sqrt(Utils::Dot(cam_to_icon, cam_to_icon)) / 800.f;
+
             auto scale = 1.0f;
 
-            scale *= std::clamp(
-                Utils::Remap(distance_min, distance_max, distance_scale_max, distance_scale_min, distance_to_agent),
-                distance_scale_min,
-                distance_scale_max);
+            // scale *= std::clamp(
+            //     Utils::Remap(distance_min, distance_max, distance_scale_max, distance_scale_min, distance_to_agent),
+            //     distance_scale_min,
+            //     distance_scale_max);
+
+            scale *= std::sqrt(distance_to_icon) / distance_to_icon; // The sqrt factor is not realistic but it makes closer numbers smaller and further ones bigger which looks better
 
             scale *= std::clamp(
                 Utils::Remap(0.f, 1.f, animation_min_scale, animation_max_scale, animation_progress),
                 animation_min_scale,
                 animation_max_scale);
 
-            if (n_same_pos == 0)
-            {
-                // We only have to calculate this once per agent
-                auto icon_world_pos = agent_pos; // Foot position
-
-                if (it->pos_type == PositionType::AgentCenter)
-                    icon_world_pos.z -= agent->height1 * 0.5f; // For some reason, up is down. *Pirates of the Caribbean track plays*
-                else
-                    icon_world_pos.z -= agent->height1 + 30.f * scale;
-
-                screen_base_pos = Utils::WorldSpaceToScreenSpace(icon_world_pos);
-
-                if (it->pos_type == PositionType::AgentTopLeft)
-                    screen_base_pos.x -= 20.f * scale;
-                else if (it->pos_type == PositionType::AgentTopRight)
-                    screen_base_pos.x += 20.f * scale;
-            }
-
             auto screen_pos = screen_base_pos;
+            if (it->pos_type == PositionType::AgentTopLeft)
+                screen_pos.x -= 20.f * scale;
+            else if (it->pos_type == PositionType::AgentTopRight)
+                screen_pos.x += 20.f * scale;
+
             if (!it->IsFinished())
             {
                 it->last_render_pos = n_same_pos;
