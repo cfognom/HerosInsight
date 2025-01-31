@@ -71,44 +71,21 @@ namespace HerosInsight::PacketStepper
         DWORD timestamp_resume;
     };
 
-    uint32_t registration_counter = 0;
     struct RegisteredListener
     {
-        RegisteredListener(GenericPacketCallback callback) : callback(callback), id(registration_counter++) {}
-
         GenericPacketCallback callback;
+        std::optional<uint32_t> header;
         uint32_t id;
-        bool is_removed = false; // We cant remove from vector while iterating, so we mark it for removal. Removal happens after all listeners have been notified.
+        Altitude altitude;
     };
 
     uint32_t last_coroutine_id = 0;
     std::set<uint32_t> live_coroutine_ids;
     std::vector<DelayedCoro> delayed_coros; // sorted by timestamp_resume: higher to lower
-    std::vector<NextPacketAwaiter *> next_packet_awaiters;
     std::vector<std::coroutine_handle<>> awaiting_frame_end;
     std::vector<AfterEffectsAwaiter> after_effects_awaiters;
-    std::array<std::vector<RegisteredListener>, HerosInsight::PacketStepper::HEADER_COUNT> listeners;
+    std::vector<std::optional<RegisteredListener>> listeners;
     bool is_frame_end = false;
-
-    uint32_t RegisterListener(uint32_t header, GenericPacketCallback callback)
-    {
-        auto listener = RegisteredListener(callback);
-        listeners[header].push_back(listener);
-        return listener.id;
-    }
-
-    void UnregisterListener(uint32_t header, uint32_t id)
-    {
-        auto &listeners_for_header = listeners[header];
-        for (auto &listener : listeners_for_header)
-        {
-            if (listener.id == id)
-            {
-                listener.is_removed = true;
-                return;
-            }
-        }
-    }
 
     bool IsAssociatedWithSkillPacket(const StoC::PacketBase *packet, uint32_t caster_id, std::optional<std::span<uint32_t>> target_ids)
     {
@@ -193,10 +170,11 @@ namespace HerosInsight::PacketStepper
         return false;
     }
 
-    void OmniHandler(GW::HookStatus *, const StoC::PacketBase *packet)
+    void OmniHandler(const StoC::PacketBase *packet, Altitude altitude)
     {
+        auto header = packet->header;
         //
-        if (!after_effects_awaiters.empty())
+        if (!after_effects_awaiters.empty() && altitude == Altitude::Before)
         {
             // Copy out the handles to resume, since resuming might add more after_effects_awaiters
             std::vector<std::coroutine_handle<>> to_resume;
@@ -220,43 +198,31 @@ namespace HerosInsight::PacketStepper
         }
 
         //
-        auto header = packet->header;
-        auto &listeners_for_header = listeners[header];
-        if (!listeners_for_header.empty())
+        if (!listeners.empty())
         {
-            // We need to cache the size because the vector can grow during iteration
-            size_t size = listeners_for_header.size();
-            for (size_t i = 0; i < size; ++i)
-            {
-                auto &listener = listeners_for_header[i];
-                if (!listener.is_removed)
-                    listener.callback(packet);
-            }
-            // Remove all listeners that were marked for removal
-            listeners_for_header.erase(
-                std::remove_if(
-                    listeners_for_header.begin(),
-                    listeners_for_header.end(),
-                    [](const RegisteredListener &listener)
-                    {
-                        return listener.is_removed;
-                    }),
-                listeners_for_header.end());
-        }
+            // Try to prune trailing nullopts
+            auto new_size = listeners.size();
+            while (new_size > 0 && !listeners[new_size - 1].has_value())
+                new_size--;
+            listeners.resize(new_size);
 
-        //
-        if (!next_packet_awaiters.empty())
-        {
             // We need to cache the size because the vector can grow during iteration
-            size_t size = next_packet_awaiters.size();
+            size_t size = listeners.size();
             for (size_t i = 0; i < size; ++i)
             {
-                auto awaiter = next_packet_awaiters[i];
-                awaiter->next_packet = packet;
-                awaiter->handle.resume();
+                auto &listener = listeners[i];
+
+                if (!listener.has_value())
+                    continue;
+
+                if (listener->header && listener->header != header)
+                    continue;
+
+                if (listener->altitude != altitude)
+                    continue;
+
+                listener->callback(packet);
             }
-            // Remove the first size elements
-            next_packet_awaiters.erase(next_packet_awaiters.begin(), next_packet_awaiters.begin() + size);
         }
     }
 
@@ -303,11 +269,25 @@ namespace HerosInsight::PacketStepper
     }
 
     GW::HookEntry entry;
+    GW::HookEntry entry2;
     void HerosInsight::PacketStepper::Initialize()
     {
         for (uint32_t i = 0; i < HEADER_COUNT; ++i)
         {
-            GW::StoC::RegisterPacketCallback(&entry, i, &OmniHandler, -2);
+            GW::StoC::RegisterPacketCallback(
+                &entry, i,
+                [&](GW::HookStatus *, const StoC::PacketBase *packet)
+                {
+                    OmniHandler(packet, Altitude::Before);
+                },
+                -2);
+            GW::StoC::RegisterPacketCallback(
+                &entry2, i,
+                [&](GW::HookStatus *, const StoC::PacketBase *packet)
+                {
+                    OmniHandler(packet, Altitude::After);
+                },
+                2);
         }
         GW::GameThread::RegisterGameThreadCallback(&entry, &OnFrameEnd, -1);
     }
@@ -315,6 +295,7 @@ namespace HerosInsight::PacketStepper
     void HerosInsight::PacketStepper::Terminate()
     {
         GW::StoC::RemoveCallbacks(&entry);
+        GW::StoC::RemoveCallbacks(&entry2);
         GW::GameThread::RemoveGameThreadCallback(&entry);
     }
 
@@ -372,10 +353,35 @@ namespace HerosInsight::PacketStepper
             delayed_coros.erase(it);
         this->handle.resume();
     }
-    void NextPacketAwaiter::await_suspend(std::coroutine_handle<> handle) noexcept
+
+    uint32_t registration_counter = 0;
+    PacketListenerScope::PacketListenerScope(std::optional<uint32_t> header, GenericPacketCallback callback, Altitude altitude)
+        : id(++registration_counter)
     {
-        this->handle = handle;
-        next_packet_awaiters.push_back(this);
+
+        for (auto &opt_listener : listeners)
+        {
+            if (!opt_listener.has_value())
+            {
+                opt_listener.emplace(callback, header, id, altitude);
+                return;
+            }
+        }
+        listeners.emplace_back(std::in_place, callback, header, id, altitude);
+    }
+
+    PacketListenerScope::~PacketListenerScope()
+    {
+        auto size = listeners.size();
+        for (uint32_t i = 0; i < size; ++i)
+        {
+            auto &entry = listeners[i];
+            if (entry.has_value() && entry->id == id)
+            {
+                entry = std::nullopt;
+                return;
+            }
+        }
     }
 
     std::array<std::coroutine_handle<>, std::numeric_limits<uint8_t>::max()> channel_exclusives;

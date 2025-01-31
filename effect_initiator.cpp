@@ -310,30 +310,27 @@ namespace HerosInsight::EffectInitiator
             }
         }
 
-        if (skill.type == GW::Constants::SkillType::Ritual)
+        switch (skill.type)
         {
-            PermaAwaiter awaiter;
-            float duration = 0;
-            uint32_t effect_id = 0;
-            PacketListenerScope listener1(
-                [&](const StoC::CreateNPC &packet)
-                {
-                    duration = packet.lifetime;
-                    effect_id = packet.effect_id;
-                });
-            PacketListenerScope listener2(
-                [&](const StoC::AgentAdd &packet)
-                {
-                    EffectTracking::CreateAuraEffect(
-                        packet.agent_id,
-                        (float)Utils::Range::SpiritRange,
-                        skill_id,
-                        effect_id,
-                        caster_id,
-                        duration);
-                    awaiter.stop();
-                });
-            co_await awaiter;
+            case GW::Constants::SkillType::Ritual:
+            {
+                auto npc_packet = co_await PacketAwaiter<StoC::CreateNPC>();
+                co_await PacketAwaiter<StoC::AgentAdd>(Altitude::After); // The npc needs to be created before we can "attach" the effect to it
+                EffectTracking::CreateAuraEffect(
+                    npc_packet.agent_id,
+                    (float)Utils::Range::SpiritRange,
+                    skill_id,
+                    npc_packet.effect_id,
+                    caster_id,
+                    npc_packet.lifetime);
+                break;
+            }
+
+            case GW::Constants::SkillType::Well:
+            {
+
+                break;
+            }
         }
     }
 
@@ -696,13 +693,13 @@ namespace HerosInsight::EffectInitiator
 
     TrackedCoroutine TrackAttack(uint32_t attacker_id, uint32_t target_id, GW::Constants::SkillID skill_id)
     {
+        while (true)
         {
-            PermaAwaiter awaiter;
-            PacketListenerScope melee_listener(
-                [&](const StoC::GenericValue &packet)
-                {
+            NEXT_PACKET_SWITCH
+            {
+                NEXT_PACKET_CASE(StoC::GenericValue, packet, {
                     if (packet.agent_id != attacker_id)
-                        return;
+                        continue;
 
                     switch (packet.value_id)
                     {
@@ -710,21 +707,53 @@ namespace HerosInsight::EffectInitiator
                             auto attack = CreateMeleeAttack(attacker_id, skill_id);
                             TrackHit(attacker_id, attack);
                         case StoC::GenericValueID::attack_stopped:
-                            awaiter.stop();
+                            goto success;
                     }
-                });
-            PacketListenerScope ranged_listener(
-                [&](const StoC::ProjectileCreated &packet)
-                {
+
+                    break;
+                })
+
+                NEXT_PACKET_CASE(StoC::ProjectileCreated, packet, {
                     if (packet.agent_id != attacker_id)
-                        return;
+                        continue;
 
                     auto proj = CreateRangedAttack(attacker_id, skill_id);
                     TrackProjectile(packet.projectile_id, attacker_id, packet.air_time, proj);
-                    awaiter.stop();
-                });
-            co_await awaiter;
+                    goto success;
+                })
+            }
         }
+    success:
+        // {
+
+        //     PermaAwaiter awaiter;
+        //     PacketListenerScope melee_listener(
+        //         [=, &awaiter](const StoC::GenericValue &packet)
+        //         {
+        //             if (packet.agent_id != attacker_id)
+        //                 return;
+
+        //             switch (packet.value_id)
+        //             {
+        //                 case StoC::GenericValueID::melee_attack_finished:
+        //                     auto attack = CreateMeleeAttack(attacker_id, skill_id);
+        //                     TrackHit(attacker_id, attack);
+        //                 case StoC::GenericValueID::attack_stopped:
+        //                     awaiter.stop();
+        //             }
+        //         });
+        //     PacketListenerScope ranged_listener(
+        //         [=, &awaiter](const StoC::ProjectileCreated &packet)
+        //         {
+        //             if (packet.agent_id != attacker_id)
+        //                 return;
+
+        //             auto proj = CreateRangedAttack(attacker_id, skill_id);
+        //             TrackProjectile(packet.projectile_id, attacker_id, packet.air_time, proj); // <- coroutine
+        //             awaiter.stop();
+        //         });
+        //     co_await awaiter;
+        // }
 
         co_return;
     }

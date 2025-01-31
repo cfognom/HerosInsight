@@ -1,7 +1,10 @@
 #pragma once
 
+#include <concepts>
 #include <coroutine>
+#include <optional>
 #include <set>
+#include <type_traits>
 #include <vector>
 
 #include <GWCA/GWCA.h>
@@ -14,11 +17,77 @@ namespace HerosInsight::PacketStepper
     void Initialize();
     void Terminate();
 
+#define NEXT_PACKET_SWITCH                           \
+    auto base_packet = co_await NextPacketAwaiter(); \
+    switch (base_packet->header)
+
+#define NEXT_PACKET_CASE(type, name, expr)                          \
+    case type::STATIC_HEADER:                                       \
+    {                                                               \
+        const type &name = static_cast<const type &>(*base_packet); \
+        expr;                                                       \
+    }
+
     using GenericPacketCallback = std::function<void(const StoC::PacketBase *)>;
 
+    enum struct Altitude
+    {
+        Before,
+        After,
+    };
+
     // These support register/unregister from inside callbacks, unlike GWCA's
-    uint32_t RegisterListener(uint32_t header, GenericPacketCallback callback);
-    void UnregisterListener(uint32_t header, uint32_t id);
+    struct PacketListenerScope
+    {
+        PacketListenerScope() = default;
+        PacketListenerScope(PacketListenerScope &&) = default;
+        PacketListenerScope &operator=(PacketListenerScope &&) = default;
+        PacketListenerScope(std::optional<uint32_t> header, GenericPacketCallback callback, Altitude altitude = Altitude::Before);
+
+        // Callable traits
+        template <typename T>
+        struct callable_traits;
+
+        template <typename R, typename Arg>
+        struct callable_traits<R (*)(Arg)>
+        {
+            using argument_type = Arg;
+        };
+
+        template <typename R, typename C, typename Arg>
+        struct callable_traits<R (C::*)(Arg) const>
+        {
+            using argument_type = Arg;
+        };
+
+        template <typename R, typename Arg>
+        struct callable_traits<R(Arg)>
+        {
+            using argument_type = Arg;
+        };
+
+        template <typename Callable>
+        struct callable_traits : callable_traits<decltype(&Callable::operator())>
+        {
+        };
+
+        template <typename TypedPacketCallback>
+        PacketListenerScope(TypedPacketCallback &&callback, Altitude altitude = Altitude::Before)
+            : PacketListenerScope(
+                  std::decay_t<typename callable_traits<TypedPacketCallback>::argument_type>::STATIC_HEADER,
+                  [callback = std::forward<TypedPacketCallback>(callback)](const StoC::PacketBase *packet) mutable
+                  {
+                      return callback(*(static_cast<const std::decay_t<typename callable_traits<TypedPacketCallback>::argument_type> *>(packet)));
+                  },
+                  altitude)
+        {
+        }
+
+        ~PacketListenerScope();
+
+    private:
+        uint32_t id;
+    };
 
     struct TrackedCoroutine // Just a handle to the actual coroutine frame
     {
@@ -92,19 +161,66 @@ namespace HerosInsight::PacketStepper
 
     struct NextPacketAwaiter
     {
+        NextPacketAwaiter(Altitude altitude = Altitude::Before) : altitude(altitude) {};
+
         bool await_ready() const noexcept { return false; }
-        void await_suspend(std::coroutine_handle<> handle) noexcept;
-        const StoC::PacketBase *await_resume() const noexcept
+        void await_suspend(std::coroutine_handle<> handle) noexcept
+        {
+            this->listener.emplace(
+                std::nullopt,
+                [=](const StoC::PacketBase *packet)
+                {
+                    this->next_packet = packet;
+                    handle.resume();
+                },
+                altitude);
+        }
+        const StoC::PacketBase *await_resume() noexcept
         {
             assert(next_packet && "next_packet is null");
+            this->listener = std::nullopt;
             return next_packet;
         }
 
     private:
-        std::coroutine_handle<> handle;
+        Altitude altitude;
+        std::optional<PacketListenerScope> listener = std::nullopt;
         const StoC::PacketBase *next_packet = nullptr;
+    };
 
-        friend void OmniHandler(GW::HookStatus *, const StoC::PacketBase *packet);
+    template <typename PacketType>
+    struct PacketAwaiter
+    {
+        static_assert(std::is_base_of_v<StoC::PacketBase, PacketType>,
+            "PacketType must inherit from StoC::PacketBase");
+
+        PacketAwaiter(Altitude altitude = Altitude::Before) : altitude(altitude) {};
+
+        bool await_ready() const noexcept { return false; }
+        void await_suspend(std::coroutine_handle<> handle) noexcept
+        {
+            this->listener.emplace(
+                PacketType::STATIC_HEADER,
+                [=](const StoC::PacketBase *packet)
+                {
+                    this->next_packet = static_cast<const PacketType *>(packet);
+                    handle.resume();
+                },
+                altitude);
+        }
+        PacketType await_resume() noexcept
+        {
+            assert(next_packet && "next_packet is null");
+            auto packet = *next_packet;
+            next_packet = nullptr;
+            this->listener = std::nullopt;
+            return packet;
+        }
+
+    private:
+        Altitude altitude;
+        std::optional<PacketListenerScope> listener = std::nullopt;
+        const PacketType *next_packet = nullptr;
     };
 
     // Awaits until another ExclusiveAwaiter is awaited
@@ -151,7 +267,7 @@ namespace HerosInsight::PacketStepper
         uint32_t caster_id;
         std::optional<std::span<uint32_t>> target_ids;
 
-        friend void OmniHandler(GW::HookStatus *, const StoC::PacketBase *packet);
+        friend void OmniHandler(const StoC::PacketBase *packet, Altitude altitude);
         friend void OnFrameEnd(GW::HookStatus *);
     };
 
@@ -171,59 +287,55 @@ namespace HerosInsight::PacketStepper
         }
 
     private:
-        std::coroutine_handle<> handle;
+        std::coroutine_handle<> handle = nullptr;
     };
 
-    // When it exists, it listens
-    class PacketListenerScope
-    {
-        // Function traits
-        template <typename T>
-        struct function_traits;
+    //     // When it exists, it listens
+    //     class PacketListenerScope
+    //     {
+    //         // Function traits
+    //         template <typename T>
+    //         struct function_traits;
 
-        template <typename R, typename Arg>
-        struct function_traits<R (*)(Arg)>
-        {
-            using argument_type = Arg;
-        };
+    //         template <typename R, typename Arg>
+    //         struct function_traits<R (*)(Arg)>
+    //         {
+    //             using argument_type = Arg;
+    //         };
 
-        template <typename R, typename C, typename Arg>
-        struct function_traits<R (C::*)(Arg) const>
-        {
-            using argument_type = Arg;
-        };
+    //         template <typename R, typename C, typename Arg>
+    //         struct function_traits<R (C::*)(Arg) const>
+    //         {
+    //             using argument_type = Arg;
+    //         };
 
-        template <typename R, typename Arg>
-        struct function_traits<R(Arg)>
-        {
-            using argument_type = Arg;
-        };
+    //         template <typename R, typename Arg>
+    //         struct function_traits<R(Arg)>
+    //         {
+    //             using argument_type = Arg;
+    //         };
 
-        template <typename Callable>
-        struct function_traits : function_traits<decltype(&Callable::operator())>
-        {
-        };
+    //         template <typename Callable>
+    //         struct function_traits : function_traits<decltype(&Callable::operator())>
+    //         {
+    //         };
 
-    public:
-        template <typename PacketCallback>
-        PacketListenerScope(PacketCallback &&callback)
-        {
-            using PacketType = std::decay_t<typename function_traits<PacketCallback>::argument_type>;
-            header = PacketType::STATIC_HEADER;
-            registered_id = RegisterListener(header,
-                [callback](const StoC::PacketBase *packet)
-                {
-                    return callback(*(static_cast<const PacketType *>(packet)));
-                });
-        }
+    // #define PACKET_TYPE std::decay_t<typename function_traits<PacketCallback>::argument_type>
 
-        ~PacketListenerScope()
-        {
-            UnregisterListener(header, registered_id);
-        }
+    //     public:
+    //         template <typename PacketCallback>
+    //         PacketListenerScope(PacketCallback &&callback, Altitude altitude = Altitude::Before)
+    //             : listener(
+    //                   [callback](const StoC::PacketBase *packet)
+    //                   {
+    //                       return callback(*(static_cast<const PACKET_TYPE *>(packet)));
+    //                   },
+    //                   PACKET_TYPE::STATIC_HEADER,
+    //                   altitude)
+    //         {
+    //         }
 
-    private:
-        uint32_t header;
-        uint32_t registered_id;
-    };
+    //     private:
+    //         ActiveListener listener;
+    //     };
 }
