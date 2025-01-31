@@ -358,11 +358,6 @@ namespace HerosInsight::WorldSpaceUI
 
             auto scale = 1.0f;
 
-            // scale *= std::clamp(
-            //     Utils::Remap(distance_min, distance_max, distance_scale_max, distance_scale_min, distance_to_agent),
-            //     distance_scale_min,
-            //     distance_scale_max);
-
             scale *= std::sqrt(distance_to_icon) / distance_to_icon; // The sqrt factor is not realistic but it makes closer numbers smaller and further ones bigger which looks better
 
             scale *= std::clamp(
