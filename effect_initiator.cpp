@@ -271,7 +271,7 @@ namespace HerosInsight::EffectInitiator
             auto effects = effects_salloc.ref();
             GetSpellEffects(caster_id, target_id, skill_id, attr_lvl, effects);
 
-            FixedSet<uint32_t, 16> handled_agents;
+            FixedSet<uint32_t, (size_t)(16 / 0.75)> handled_agents;
             {
                 EffectClaimingScope scope(caster_id,
                     [&](const StoC::AddEffect &packet)
@@ -933,7 +933,7 @@ namespace HerosInsight::EffectInitiator
     GW::HookEntry entry;
     void Initialize()
     {
-        int altitude = -1;
+        constexpr int altitude = -1;
         GW::StoC::RegisterPacketCallback<StoC::GenericValue>(&entry, &GenericValueCallback, altitude);
         GW::StoC::RegisterPacketCallback<StoC::GenericValueTarget>(&entry, &GenericValueTargetCallback, altitude);
         GW::StoC::RegisterPacketCallback<StoC::AddEffect>(&entry, &AddEffectCallback, altitude);
