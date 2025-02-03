@@ -51,9 +51,6 @@ namespace HerosInsight::EffectTracking
 {
     std::unordered_map<uint32_t, AgentEffectTrackers> agent_trackers;
 
-    // effect_ids to remove after update
-    std::unordered_map<uint32_t, std::vector<uint32_t>> scheduled_removals;
-
     uint32_t effect_added_counter = 0;
 
     void ApplySkillEffect(uint32_t target_id, uint32_t cause_id, SkillEffect effect)
@@ -334,18 +331,6 @@ namespace HerosInsight::EffectTracking
         }
     }
 
-    void ScheduleTrackerRemoval(uint32_t agent_id, uint32_t effect_id)
-    {
-        auto effects = GetTrackerSpan(agent_id);
-        for (auto &effect : effects)
-        {
-            if (effect.effect_id == effect_id)
-            {
-                scheduled_removals[agent_id].push_back(effect.unique_id);
-            }
-        }
-    }
-
     std::span<EffectTracker> GetTrackerSpan(uint32_t agent_id)
     {
         auto it = agent_trackers.find(agent_id);
@@ -380,7 +365,6 @@ namespace HerosInsight::EffectTracking
     void Reset()
     {
         agent_trackers.clear();
-        scheduled_removals.clear();
     }
 
     bool EffectTimedOut(GW::AgentLiving *agent, EffectTracker &effect, DWORD timestamp_now)
@@ -674,16 +658,5 @@ namespace HerosInsight::EffectTracking
 
         UpdateAuras();
         UpdateAOEEffects();
-
-        // Remove effects scheduled for removal
-        for (auto &[agent_id, unique_ids_to_remove] : scheduled_removals)
-        {
-            for (const auto unique_id_to_remove : unique_ids_to_remove)
-            {
-                RemoveTrackers(agent_id, [=](EffectTracker &effect)
-                    { return effect.unique_id == unique_id_to_remove; });
-            }
-            unique_ids_to_remove.clear();
-        }
     }
 }

@@ -164,7 +164,6 @@ namespace HerosInsight::EffectTracking
     void CondiHexEnchRemoval(uint32_t agent_id, RemovalMask mask, uint32_t count);
     void RemoveTrackers(uint32_t agent_id, std::function<bool(EffectTracker &)> predicate);
     void SpendCharge(uint32_t agent_id, GW::Constants::SkillID effect_skill_id);
-    void ScheduleTrackerRemoval(uint32_t agent_id, uint32_t effect_id);
     std::span<EffectTracker> GetTrackerSpan(uint32_t agent_id);
     AgentEffectTrackers &GetTrackers(uint32_t agent_id);
     EffectTracker *GetEffectBySkillID(uint32_t agent_id, GW::Constants::SkillID skill_id);
