@@ -1,6 +1,7 @@
 #include <cassert>
 #include <chrono>
 #include <coroutine>
+#include <deque>
 #include <format>
 #include <functional>
 #include <initializer_list>
@@ -73,6 +74,10 @@ namespace HerosInsight::PacketStepper
 
     struct RegisteredListener
     {
+        inline static uint32_t id_counter = 0;
+        RegisteredListener(GenericPacketCallback callback, std::optional<uint32_t> header, Altitude altitude)
+            : callback(callback), header(header), id(++id_counter), altitude(altitude) {}
+
         GenericPacketCallback callback;
         std::optional<uint32_t> header;
         uint32_t id;
@@ -84,8 +89,40 @@ namespace HerosInsight::PacketStepper
     std::vector<DelayedCoro> delayed_coros; // sorted by timestamp_resume: higher to lower
     std::vector<std::coroutine_handle<>> awaiting_frame_end;
     std::vector<AfterEffectsAwaiter> after_effects_awaiters;
-    std::vector<std::optional<RegisteredListener>> listeners;
+    std::deque<std::optional<RegisteredListener>> listeners; // We use a deque to prevent reallocations that would invalidate references
     bool is_frame_end = false;
+
+    uint32_t RegisterListener(std::optional<uint32_t> header, GenericPacketCallback &&callback, Altitude altitude)
+    {
+        auto &listener = listeners.emplace_back(std::in_place, callback, header, altitude);
+        return listener->id;
+    }
+
+    bool UnregisterListener(uint32_t id)
+    {
+        for (size_t i = 0; i < listeners.size(); ++i)
+        {
+            auto &listener = listeners[i];
+            if (listener.has_value() && listener->id == id)
+            {
+                if (i == 0)
+                {
+                    do
+                    {
+                        ++i;
+                    } while (i < listeners.size() && !listeners[i].has_value());
+
+                    listeners.erase(listeners.begin(), listeners.begin() + i);
+                }
+                else
+                {
+                    listener = std::nullopt;
+                }
+                return true;
+            }
+        }
+        return false;
+    }
 
     bool IsAssociatedWithSkillPacket(const StoC::PacketBase *packet, uint32_t caster_id, std::optional<std::span<uint32_t>> target_ids)
     {
@@ -200,18 +237,8 @@ namespace HerosInsight::PacketStepper
         //
         if (!listeners.empty())
         {
-            // Try to prune trailing nullopts
-            auto new_size = listeners.size();
-            while (new_size > 0 && !listeners[new_size - 1].has_value())
-                new_size--;
-            listeners.resize(new_size);
-
-            // We need to cache the size because the vector can grow during iteration
-            size_t size = listeners.size();
-            for (size_t i = 0; i < size; ++i)
+            for (auto &listener : listeners)
             {
-                auto &listener = listeners[i];
-
                 if (!listener.has_value())
                     continue;
 
@@ -276,14 +303,14 @@ namespace HerosInsight::PacketStepper
         {
             GW::StoC::RegisterPacketCallback(
                 &entry, i,
-                [&](GW::HookStatus *, const StoC::PacketBase *packet)
+                [](GW::HookStatus *, const StoC::PacketBase *packet)
                 {
                     OmniHandler(packet, Altitude::Before);
                 },
                 -2);
             GW::StoC::RegisterPacketCallback(
                 &entry2, i,
-                [&](GW::HookStatus *, const StoC::PacketBase *packet)
+                [](GW::HookStatus *, const StoC::PacketBase *packet)
                 {
                     OmniHandler(packet, Altitude::After);
                 },
@@ -352,36 +379,6 @@ namespace HerosInsight::PacketStepper
         if (it != delayed_coros.end())
             delayed_coros.erase(it);
         this->handle.resume();
-    }
-
-    uint32_t registration_counter = 0;
-    PacketListenerScope::PacketListenerScope(std::optional<uint32_t> header, GenericPacketCallback callback, Altitude altitude)
-        : id(++registration_counter)
-    {
-
-        for (auto &opt_listener : listeners)
-        {
-            if (!opt_listener.has_value())
-            {
-                opt_listener.emplace(callback, header, id, altitude);
-                return;
-            }
-        }
-        listeners.emplace_back(std::in_place, callback, header, id, altitude);
-    }
-
-    PacketListenerScope::~PacketListenerScope()
-    {
-        auto size = listeners.size();
-        for (uint32_t i = 0; i < size; ++i)
-        {
-            auto &entry = listeners[i];
-            if (entry.has_value() && entry->id == id)
-            {
-                entry = std::nullopt;
-                return;
-            }
-        }
     }
 
     std::array<std::coroutine_handle<>, std::numeric_limits<uint8_t>::max()> channel_exclusives;
