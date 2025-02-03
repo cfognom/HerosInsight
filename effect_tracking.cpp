@@ -155,6 +155,7 @@ namespace HerosInsight::EffectTracking
         float radius;
         GW::Constants::SkillID skill_id;
         uint32_t effect_id;
+        uint32_t unique_id;
         uint32_t cause_agent_id;
         float duration;
         uint8_t attribute_level;
@@ -184,6 +185,7 @@ namespace HerosInsight::EffectTracking
         aoe_effect.radius = radius;
         aoe_effect.skill_id = skill_id;
         aoe_effect.effect_id = effect_id;
+        aoe_effect.unique_id = effect_added_counter++;
         aoe_effect.cause_agent_id = cause_agent_id;
         aoe_effect.duration = duration;
 
@@ -549,6 +551,7 @@ namespace HerosInsight::EffectTracking
                         tracker.cause_agent_id = aoe_effect->cause_agent_id;
                         tracker.skill_id = aoe_effect->skill_id;
                         tracker.effect_id = aoe_effect->effect_id;
+                        tracker.unique_id = aoe_effect->unique_id;
                         tracker.duration_sec = rem_duration;
                         tracker.attribute_level = aoe_effect->attribute_level;
 
@@ -568,7 +571,7 @@ namespace HerosInsight::EffectTracking
                     RemoveTrackers(agent_id_in_range & ~remove_marker,
                         [&](EffectTracker &effect)
                         {
-                            return effect.effect_id == aoe_effect->effect_id;
+                            return effect.unique_id == aoe_effect->unique_id;
                         });
                 }
             }
