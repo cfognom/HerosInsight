@@ -261,6 +261,7 @@ namespace HerosInsight::PacketStepper
             if (timestamp_now < it->timestamp_resume)
                 break;
 
+            it->handle.resume();
             it = delayed_coros.erase(it);
         }
 
