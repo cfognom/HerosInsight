@@ -75,8 +75,8 @@ namespace HerosInsight::PacketStepper
     struct RegisteredListener
     {
         inline static uint32_t id_counter = 0;
-        RegisteredListener(GenericPacketCallback callback, std::optional<uint32_t> header, Altitude altitude)
-            : callback(callback), header(header), id(++id_counter), altitude(altitude) {}
+        RegisteredListener(GenericPacketCallback &&callback, std::optional<uint32_t> header, Altitude altitude)
+            : callback(std::move(callback)), header(header), id(++id_counter), altitude(altitude) {}
 
         GenericPacketCallback callback;
         std::optional<uint32_t> header;
@@ -94,7 +94,7 @@ namespace HerosInsight::PacketStepper
 
     uint32_t RegisterListener(std::optional<uint32_t> header, GenericPacketCallback &&callback, Altitude altitude)
     {
-        auto &listener = listeners.emplace_back(std::in_place, callback, header, altitude);
+        auto &listener = listeners.emplace_back(std::in_place, std::forward<GenericPacketCallback>(callback), header, altitude);
         return listener->id;
     }
 
