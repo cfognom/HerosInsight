@@ -12,8 +12,9 @@ namespace GW::Packet::StoC
 {
     namespace GenericValueID
     {
-        const uint32_t attack_missed = 38; // GenericValueTarget
-        const uint32_t max_hp_update = 42; // GenericValue
+        const uint32_t attack_missed = 38;       // GenericValueTarget
+        const uint32_t max_hp_update = 42;       // GenericValue
+        const uint32_t change_energy_regen = 43; // GenericFloat
     }
 
     struct ProjectileCreated : StoC::Packet<ProjectileCreated>

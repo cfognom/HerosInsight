@@ -1846,6 +1846,7 @@ namespace HerosInsight::Utils
             case 36: return L"level_update";
             case 38: return L"missed";
             case 42: return L"max_hp_update";
+            case 43: return L"change_energy_regen";
             case 44: return L"change_health_regen";
             case 46: return L"attack_skill_finished";
             case 48: return L"instant_skill_activated";
