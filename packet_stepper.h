@@ -37,8 +37,8 @@ namespace HerosInsight::PacketStepper
     };
 
     // These support register/unregister from inside callbacks, unlike GWCA's
-    uint32_t RegisterListener(std::optional<uint32_t> header, GenericPacketCallback &&callback, Altitude altitude = Altitude::Before);
-    bool UnregisterListener(uint32_t id);
+    void RegisterListener(std::optional<uint32_t> header, GenericPacketCallback &callback, Altitude altitude = Altitude::Before);
+    bool UnregisterListener(GenericPacketCallback &callback);
 
     // Callable traits
     template <typename T>
@@ -67,19 +67,6 @@ namespace HerosInsight::PacketStepper
     {
     };
 
-    template <typename TypedPacketCallback>
-    uint32_t RegisterListener(TypedPacketCallback &&callback, Altitude altitude = Altitude::Before)
-    {
-        using PacketType = std::decay_t<typename callable_traits<TypedPacketCallback>::argument_type>;
-        return RegisterListener(
-            PacketType::STATIC_HEADER,
-            [callback = std::forward<TypedPacketCallback>(callback)](const StoC::PacketBase *packet)
-            {
-                callback(*static_cast<const PacketType *>(packet));
-            },
-            altitude);
-    }
-
     // When constructed, registers a listener. When destroyed, unregisters it
     struct PacketListenerScope
     {
@@ -91,19 +78,29 @@ namespace HerosInsight::PacketStepper
         PacketListenerScope &operator=(PacketListenerScope &&) = delete;
 
         PacketListenerScope(std::optional<uint32_t> header, GenericPacketCallback &&callback, Altitude altitude = Altitude::Before)
-            : id(RegisterListener(header, std::forward<GenericPacketCallback>(callback), altitude)) {}
+            : callback(std::move(callback))
+        {
+            RegisterListener(header, this->callback, altitude);
+        }
 
         template <typename TypedPacketCallback>
         PacketListenerScope(TypedPacketCallback &&callback, Altitude altitude = Altitude::Before)
-            : id(RegisterListener(std::forward<TypedPacketCallback>(callback), altitude)) {}
+        {
+            using PacketType = std::decay_t<typename callable_traits<TypedPacketCallback>::argument_type>;
+            this->callback = [cb = std::move(callback)](const StoC::PacketBase *packet)
+            {
+                cb(*static_cast<const PacketType *>(packet));
+            };
+            RegisterListener(PacketType::STATIC_HEADER, this->callback, altitude);
+        }
 
         ~PacketListenerScope()
         {
-            UnregisterListener(id);
+            UnregisterListener(callback);
         }
 
     private:
-        uint32_t id;
+        GenericPacketCallback callback;
     };
 
     struct TrackedCoroutine // Just a handle to the actual coroutine frame

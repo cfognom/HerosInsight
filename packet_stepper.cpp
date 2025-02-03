@@ -74,36 +74,33 @@ namespace HerosInsight::PacketStepper
 
     struct RegisteredListener
     {
-        inline static uint32_t id_counter = 0;
-        RegisteredListener(GenericPacketCallback &&callback, std::optional<uint32_t> header, Altitude altitude)
-            : callback(std::move(callback)), header(header), id(++id_counter), altitude(altitude) {}
-
-        GenericPacketCallback callback;
+        GenericPacketCallback *callback;
         std::optional<uint32_t> header;
-        uint32_t id;
         Altitude altitude;
     };
 
     uint32_t last_coroutine_id = 0;
     std::set<uint32_t> live_coroutine_ids;
-    std::vector<DelayedCoro> delayed_coros; // sorted by timestamp_resume: higher to lower
+
     std::vector<std::coroutine_handle<>> awaiting_frame_end;
-    std::vector<AfterEffectsAwaiter> after_effects_awaiters;
-    std::deque<std::optional<RegisteredListener>> listeners; // We use a deque to prevent reallocations that would invalidate references
+
+    // We use deques to prevent reallocations that would invalidate references
+    std::deque<DelayedCoro> delayed_coros; // sorted by timestamp_resume: higher to lower
+    std::deque<AfterEffectsAwaiter> after_effects_awaiters;
+    std::deque<std::optional<RegisteredListener>> listeners;
     bool is_frame_end = false;
 
-    uint32_t RegisterListener(std::optional<uint32_t> header, GenericPacketCallback &&callback, Altitude altitude)
+    void RegisterListener(std::optional<uint32_t> header, GenericPacketCallback &callback, Altitude altitude)
     {
-        auto &listener = listeners.emplace_back(std::in_place, std::forward<GenericPacketCallback>(callback), header, altitude);
-        return listener->id;
+        listeners.emplace_back(std::in_place, &callback, header, altitude);
     }
 
-    bool UnregisterListener(uint32_t id)
+    bool UnregisterListener(GenericPacketCallback &callback)
     {
         for (size_t i = 0; i < listeners.size(); ++i)
         {
             auto &listener = listeners[i];
-            if (listener.has_value() && listener->id == id)
+            if (listener.has_value() && listener->callback == &callback)
             {
                 if (i == 0)
                 {
@@ -211,45 +208,38 @@ namespace HerosInsight::PacketStepper
     {
         auto header = packet->header;
         //
-        if (!after_effects_awaiters.empty() && altitude == Altitude::Before)
+        if (altitude == Altitude::Before && !after_effects_awaiters.empty())
         {
-            // Copy out the handles to resume, since resuming might add more after_effects_awaiters
-            std::vector<std::coroutine_handle<>> to_resume;
             auto it = after_effects_awaiters.begin();
-            while (it != after_effects_awaiters.end())
+            auto rem_count = after_effects_awaiters.size(); // Anything added during the loop will be skipped this time
+            while (rem_count > 0)
             {
                 if (!IsAssociatedWithSkillPacket(packet, it->caster_id, it->target_ids))
                 {
-                    to_resume.push_back(it->handle);
+                    it->handle.resume();
                     it = after_effects_awaiters.erase(it);
                 }
                 else
                 {
                     ++it;
                 }
-            }
-            for (auto handle : to_resume)
-            {
-                handle.resume();
+                --rem_count;
             }
         }
 
         //
-        if (!listeners.empty())
+        for (auto &listener : listeners)
         {
-            for (auto &listener : listeners)
-            {
-                if (!listener.has_value())
-                    continue;
+            if (!listener.has_value())
+                continue;
 
-                if (listener->header && listener->header != header)
-                    continue;
+            if (listener->header && listener->header != header)
+                continue;
 
-                if (listener->altitude != altitude)
-                    continue;
+            if (listener->altitude != altitude)
+                continue;
 
-                listener->callback(packet);
-            }
+            (*listener->callback)(packet);
         }
     }
 
@@ -258,7 +248,7 @@ namespace HerosInsight::PacketStepper
         is_frame_end = true;
 
         //
-        for (auto handle : awaiting_frame_end)
+        for (auto handle : awaiting_frame_end) // This wont get invalidated because we dont push to it while we already are at the frame end
         {
             handle.resume();
         }
@@ -266,21 +256,12 @@ namespace HerosInsight::PacketStepper
 
         //
         DWORD timestamp_now = GW::MemoryMgr::GetSkillTimer();
-        // Pop out all delayed coroutines that should be resumed into a new vector,
-        // since resuming might add more delayed coroutines
-        std::vector<DelayedCoro> to_resume;
-        for (int32_t i = delayed_coros.size() - 1; i >= 0; --i)
+        for (auto it = delayed_coros.begin(); it != delayed_coros.end();)
         {
-            auto &delayed_coro = delayed_coros[i];
-            if (timestamp_now < delayed_coro.timestamp_resume)
+            if (timestamp_now < it->timestamp_resume)
                 break;
 
-            to_resume.push_back(delayed_coro);
-            delayed_coros.pop_back();
-        }
-        for (auto &delayed_coro : to_resume)
-        {
-            delayed_coro.handle.resume();
+            it = delayed_coros.erase(it);
         }
 
         //
@@ -366,9 +347,9 @@ namespace HerosInsight::PacketStepper
     {
         auto timestamp_resume = GW::MemoryMgr::GetSkillTimer() + this->delay_ms;
         this->handle = handle;
-        // Do binary search to insert in order: higher to lower
+        // Do binary search to insert in order: lower to higher
         auto it = std::lower_bound(delayed_coros.begin(), delayed_coros.end(), timestamp_resume, [](const DelayedCoro &a, DWORD b)
-            { return a.timestamp_resume > b; });
+            { return a.timestamp_resume < b; });
         delayed_coros.insert(it, DelayedCoro{handle, timestamp_resume});
     }
     void DelayAwaiter::stop() const
