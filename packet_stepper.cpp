@@ -85,7 +85,7 @@ namespace HerosInsight::PacketStepper
     std::vector<std::coroutine_handle<>> awaiting_frame_end;
 
     // We use deques to prevent reallocations that would invalidate references
-    std::deque<DelayedCoro> delayed_coros; // sorted by timestamp_resume: higher to lower
+    std::deque<DelayedCoro> delayed_coros; // sorted by timestamp_resume: lower to higher
     std::deque<AfterEffectsAwaiter> after_effects_awaiters;
     std::deque<std::optional<RegisteredListener>> listeners;
     bool is_frame_end = false;
