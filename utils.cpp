@@ -1417,7 +1417,6 @@ namespace HerosInsight::Utils
     D3DVIEWPORT9 GetViewport()
     {
         D3DVIEWPORT9 viewport;
-        // device->GetViewport(&viewport);
         viewport.X = 0;
         viewport.Y = 0;
         viewport.Width = GW::Render::GetViewportWidth();
@@ -1428,30 +1427,41 @@ namespace HerosInsight::Utils
         return viewport;
     }
 
-    ImVec2 WorldSpaceToScreenSpace(GW::Vec3f world_pos)
+    D3DXMATRIX GetViewMatrix()
     {
         const auto camera = GW::CameraMgr::GetCamera();
         if (!camera)
             return {};
-
-        const auto viewport = GetViewport();
-
-        // Construct the view matrix
         D3DXMATRIX view;
         D3DXVECTOR3 eye(camera->position.x, camera->position.y, camera->position.z);
         D3DXVECTOR3 at(camera->look_at_target.x, camera->look_at_target.y, camera->look_at_target.z);
         D3DXVECTOR3 up(0, 0, 1);
         D3DXMatrixLookAtRH(&view, &eye, &at, &up);
+        return view;
+    }
 
-        // Construct the projection matrix
+    D3DXMATRIX GetProjectionMatrix()
+    {
+        const auto viewport = GetViewport();
         D3DXMATRIX projection;
         float fov = GW::Render::GetFieldOfView();
         float aspectRatio = static_cast<float>(viewport.Width) / static_cast<float>(viewport.Height);
         float nearPlane = 0.1f;
         float farPlane = 5000.f;
         D3DXMatrixPerspectiveFovRH(&projection, fov, aspectRatio, nearPlane, farPlane);
+        return projection;
+    }
+
+    ImVec2 WorldSpaceToScreenSpace(GW::Vec3f world_pos)
+    {
+        // Construct the view matrix
+        D3DXMATRIX view = GetViewMatrix();
+
+        // Construct the projection matrix
+        D3DXMATRIX projection = GetProjectionMatrix();
 
         // Project the world position to screen space
+        const auto viewport = GetViewport();
         D3DXVECTOR3 screen_pos;
         D3DXVECTOR3 world_pos_dx(world_pos.x, world_pos.y, world_pos.z);
         D3DXVec3Project(&screen_pos, &world_pos_dx, &viewport, &projection, &view, nullptr);

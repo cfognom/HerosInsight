@@ -23,6 +23,7 @@
 #include <GWCA/GameEntities/Skill.h>
 
 #include <d3d9.h>
+#include <d3dx9.h>
 #include <imgui.h>
 #include <imgui_internal.h>
 
@@ -225,6 +226,8 @@ namespace HerosInsight::Utils
     bool DisableSkill(uint32_t hero_index, uint32_t slot_index);
 
     D3DVIEWPORT9 GetViewport();
+    D3DXMATRIX GetViewMatrix();
+    D3DXMATRIX GetProjectionMatrix();
     ImVec2 WorldSpaceToScreenSpace(GW::Vec3f world_pos);
 
     float DistanceSqrd(GW::Vec3f a, GW::Vec3f b);
