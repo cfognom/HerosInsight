@@ -517,6 +517,11 @@ namespace HerosInsight::EffectTracking
                 {
                     auto agent_id = agent.agent_id;
 
+                    if (Utils::ReceivesStoCEffects(agent_id))
+                    {
+                        return;
+                    }
+
                     while (i < agents_in_range.size())
                     {
                         auto &agent_id_in_range = agents_in_range[i];
