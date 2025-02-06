@@ -236,9 +236,115 @@ namespace HerosInsight::WorldSpaceUI
         std::sort(effect_draw_list.begin(), effect_draw_list.end(), Sorter);
     }
 
+    struct AgentBB
+    {
+        AgentBB(GW::Agent &agent, GW::Camera &camera)
+        {
+            const auto agent_feet = D3DXVECTOR3(agent.x, agent.y, -agent.z);
+            const auto agent_head = agent_feet + D3DXVECTOR3(0, 0, agent.height1);
+            const auto cam_to_feet = agent_feet - D3DXVECTOR3(camera.position.x, camera.position.y, -camera.position.z);
+            D3DXVECTOR3 side_normal;
+            const D3DXVECTOR3 up(0, 0, 1);
+            D3DXVec3Cross(&side_normal, &up, &cam_to_feet);
+            D3DXVec3Normalize(&side_normal, &side_normal);
+            D3DXVECTOR3 side = side_normal * agent.width1;
+
+            ul = agent_head - side;
+            ur = agent_head + side;
+            ll = agent_feet - side;
+            lr = agent_feet + side;
+        }
+        D3DXVECTOR3 ul;
+        D3DXVECTOR3 ur;
+        D3DXVECTOR3 ll;
+        D3DXVECTOR3 lr;
+    };
+
+    std::vector<bool> is_occluded;
+    std::vector<AgentBB> agent_bounds;
+    std::vector<IDirect3DQuery9 *> occlusion_queries;
+    void OcclusionCheck(IDirect3DDevice9 *device)
+    {
+        auto cam = GW::CameraMgr::GetCamera();
+        if (!cam)
+            return;
+
+        IDirect3DStateBlock9 *saved_state;
+        device->CreateStateBlock(D3DSBT_ALL, &saved_state);
+
+        // Disable lighting (so it doesn't interfere with color)
+        device->SetRenderState(D3DRS_LIGHTING, FALSE);
+
+        device->SetRenderState(D3DRS_ZENABLE, D3DZB_TRUE);
+        device->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
+        device->SetRenderState(D3DRS_ZFUNC, D3DCMP_LESSEQUAL);
+        // Disable color writes
+#ifdef _DEBUG
+        device->SetRenderState(D3DRS_COLORWRITEENABLE, TRUE); // During debug we show the point
+#else
+        device->SetRenderState(D3DRS_COLORWRITEENABLE, FALSE);
+#endif
+
+        const D3DXMATRIX identity = D3DXMATRIX(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+
+        D3DXMATRIX viewMatrix = Utils::GetViewMatrix();
+        D3DXMATRIX projMatrix = Utils::GetProjectionMatrix();
+
+        device->SetTransform(D3DTS_PROJECTION, &projMatrix);
+        device->SetTransform(D3DTS_VIEW, &viewMatrix);
+        device->SetTransform(D3DTS_WORLD, &identity);
+
+        agent_bounds.clear();
+        uint32_t prev_agent_id = 0;
+        for (auto &draw_data : effect_draw_list)
+        {
+            auto agent = GW::Agents::GetAgentByID(draw_data.agent_id);
+            if (!agent)
+                continue;
+
+            if (draw_data.agent_id != prev_agent_id)
+            {
+                agent_bounds.push_back(AgentBB(*agent, *cam));
+                prev_agent_id = draw_data.agent_id;
+            }
+        }
+
+        // Use an occlusion query to check if the point is not occluded by other geometry
+        occlusion_queries.clear();
+        for (auto &quad : agent_bounds)
+        {
+            IDirect3DQuery9 *pOcclusionQuery = nullptr;
+            device->CreateQuery(D3DQUERYTYPE_OCCLUSION, &pOcclusionQuery);
+            pOcclusionQuery->Issue(D3DISSUE_BEGIN);
+            device->SetFVF(D3DFVF_XYZ); // Using XYZ position and color
+            device->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, &quad, sizeof(D3DXVECTOR3));
+            pOcclusionQuery->Issue(D3DISSUE_END);
+
+            occlusion_queries.push_back(pOcclusionQuery);
+        }
+
+        is_occluded.clear();
+        for (auto &query : occlusion_queries)
+        {
+            DWORD numPixelsDrawn;
+            while (query->GetData(NULL, 0, D3DGETDATA_FLUSH) == S_FALSE)
+                ;
+
+            query->GetData(&numPixelsDrawn, sizeof(DWORD), D3DGETDATA_FLUSH);
+            is_occluded.push_back(numPixelsDrawn == 0);
+            query->Release();
+        }
+
+        // Restore state
+        saved_state->Apply();
+        saved_state->Release();
+    }
+
     void Draw(IDirect3DDevice9 *device)
     {
         // WARNING: This thing is a mess, but it works (and/or worked)
+
+        OcclusionCheck(device);
 
         auto player_agent_id = GW::Agents::GetControlledCharacterId();
 
@@ -253,10 +359,18 @@ namespace HerosInsight::WorldSpaceUI
         GW::Vec3f icon_world_pos = GW::Vec3f(0, 0, 0);
         ImVec2 screen_base_pos = ImVec2(0, 0);
         ImVec2 screen_body_pos = ImVec2(0, 0);
+        uint32_t prev_agent_id = 0;
+        int32_t agent_index = -1;
         for (auto it = effect_draw_list.begin(); it != effect_draw_list.end();)
         {
             const auto skill_id = it->skill_id;
             const auto agent_id = it->agent_id;
+
+            if (prev_agent_id != agent_id)
+            {
+                agent_index++;
+                prev_agent_id = agent_id;
+            }
 
             const auto agent = GW::Agents::GetAgentByID(agent_id);
 
@@ -276,18 +390,14 @@ namespace HerosInsight::WorldSpaceUI
             float icon_size = 28.f;
             float alpha = 1.f;
 
-            const auto agent_pos = GW::Vec3f(agent->x, agent->y, agent->z);
-            const auto cam_to_target = camera->look_at_target - camera->position;
-            const auto cam_to_agent_feet = agent_pos - camera->position;
-            const auto target_is_infront = Utils::Dot(cam_to_target, cam_to_agent_feet) > 0;
-            const auto distance_to_agent_feet = std::sqrt(Utils::Dot(cam_to_agent_feet, cam_to_agent_feet));
-
-            if (!target_is_infront ||
-                distance_to_agent_feet > distance_max)
-            {
-                it++;
-                continue;
-            }
+            // In GW, up is down
+            const auto agent_pos_feet = GW::Vec3f(agent->x, agent->y, -agent->z);
+            const auto agent_pos_head = GW::Vec3f(agent->x, agent->y, -agent->z + agent->height1);
+            const auto cam_pos = GW::Vec3f(camera->position.x, camera->position.y, -camera->position.z);
+            const auto cam_to_target = camera->look_at_target - cam_pos;
+            const auto cam_to_agent_head = agent_pos_feet - cam_pos;
+            const auto target_is_infront = Utils::Dot(cam_to_target, cam_to_agent_head) > 0;
+            const auto distance_to_agent_feet = std::sqrt(Utils::Dot(cam_to_agent_head, cam_to_agent_head));
 
             auto ms_since_finished = 0;
             if (it->timestamp_finished)
@@ -310,6 +420,14 @@ namespace HerosInsight::WorldSpaceUI
             else if (it->frame_id_changed != UpdateManager::frame_id)
             {
                 it->SetFinished(timestamp_now);
+            }
+
+            if (!target_is_infront ||
+                distance_to_agent_feet > distance_max ||
+                (is_occluded[agent_index] && !it->timestamp_finished))
+            {
+                it++;
+                continue;
             }
 
             uint32_t n_same_pos = 0;
@@ -343,12 +461,16 @@ namespace HerosInsight::WorldSpaceUI
             if (n_same_pos == 0)
             {
                 // We only have to calculate this once per agent
-                icon_world_pos = agent_pos; // Foot position
+                icon_world_pos = agent_pos_head;
 
                 if (it->pos_type == PositionType::AgentCenter)
-                    icon_world_pos.z -= agent->height1 * 0.5f; // For some reason, up is down. *Pirates of the Caribbean track plays*
+                {
+                    icon_world_pos.z = agent_pos_feet.z + agent->height1 * 0.5f;
+                }
                 else
-                    icon_world_pos.z -= agent->height1 + 20.f;
+                {
+                    icon_world_pos.z += 20.f;
+                }
 
                 screen_base_pos = Utils::WorldSpaceToScreenSpace(icon_world_pos);
             }
@@ -473,6 +595,9 @@ namespace HerosInsight::WorldSpaceUI
 
             ++it;
         }
+
+        state_before->Apply();
+        state_before->Release();
     }
 
     void Reset()

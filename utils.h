@@ -229,6 +229,7 @@ namespace HerosInsight::Utils
     D3DXMATRIX GetViewMatrix();
     D3DXMATRIX GetProjectionMatrix();
     ImVec2 WorldSpaceToScreenSpace(GW::Vec3f world_pos);
+    IDirect3DStateBlock9 *PrepareWorldSpaceRendering(IDirect3DDevice9 *device);
 
     float DistanceSqrd(GW::Vec3f a, GW::Vec3f b);
     float Dot(GW::Vec2f a, GW::Vec2f b);

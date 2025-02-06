@@ -1432,42 +1432,67 @@ namespace HerosInsight::Utils
         const auto camera = GW::CameraMgr::GetCamera();
         if (!camera)
             return {};
-        D3DXMATRIX view;
-        D3DXVECTOR3 eye(camera->position.x, camera->position.y, camera->position.z);
-        D3DXVECTOR3 at(camera->look_at_target.x, camera->look_at_target.y, camera->look_at_target.z);
+        // For some reason, up is down. *Pirates of the Caribbean track plays*
+        D3DXVECTOR3 eye(camera->position.x, camera->position.y, -camera->position.z);
+        D3DXVECTOR3 at(camera->look_at_target.x, camera->look_at_target.y, -camera->look_at_target.z);
         D3DXVECTOR3 up(0, 0, 1);
+        D3DXMATRIX view;
         D3DXMatrixLookAtRH(&view, &eye, &at, &up);
         return view;
     }
 
     D3DXMATRIX GetProjectionMatrix()
     {
-        const auto viewport = GetViewport();
-        D3DXMATRIX projection;
         float fov = GW::Render::GetFieldOfView();
-        float aspectRatio = static_cast<float>(viewport.Width) / static_cast<float>(viewport.Height);
-        float nearPlane = 0.1f;
-        float farPlane = 5000.f;
+        float aspectRatio = static_cast<float>(GW::Render::GetViewportWidth()) /
+                            static_cast<float>(GW::Render::GetViewportHeight());
+        float nearPlane = 48000.0f / 1024; // ty tedy
+        float farPlane = 48000.0f;
+        D3DXMATRIX projection;
         D3DXMatrixPerspectiveFovRH(&projection, fov, aspectRatio, nearPlane, farPlane);
         return projection;
     }
 
     ImVec2 WorldSpaceToScreenSpace(GW::Vec3f world_pos)
     {
-        // Construct the view matrix
-        D3DXMATRIX view = GetViewMatrix();
-
-        // Construct the projection matrix
-        D3DXMATRIX projection = GetProjectionMatrix();
+        const auto view = GetViewMatrix();
+        const auto projection = GetProjectionMatrix();
+        const auto viewport = GetViewport();
 
         // Project the world position to screen space
-        const auto viewport = GetViewport();
         D3DXVECTOR3 screen_pos;
         D3DXVECTOR3 world_pos_dx(world_pos.x, world_pos.y, world_pos.z);
         D3DXVec3Project(&screen_pos, &world_pos_dx, &viewport, &projection, &view, nullptr);
-        screen_pos.y = viewport.Height - screen_pos.y; // Invert y-axis
 
         return ImVec2(screen_pos.x, screen_pos.y);
+    }
+
+    IDirect3DStateBlock9 *PrepareWorldSpaceRendering(IDirect3DDevice9 *device)
+    {
+        // Save current state
+        IDirect3DStateBlock9 *changes = nullptr;
+        device->CreateStateBlock(D3DSBT_ALL, &changes);
+
+        // Disable lighting (so it doesn't interfere with color)
+        device->SetRenderState(D3DRS_LIGHTING, FALSE);
+
+        device->SetRenderState(D3DRS_ZENABLE, D3DZB_TRUE);     // Enable depth testing
+        device->SetRenderState(D3DRS_ZWRITEENABLE, TRUE);      // Enable depth writing (maybe not needed)
+        device->SetRenderState(D3DRS_ZFUNC, D3DCMP_LESSEQUAL); // Standard depth comparison
+
+        // Set up the view transformation (camera position and target)
+        D3DXMATRIX viewMatrix = Utils::GetViewMatrix();
+        device->SetTransform(D3DTS_VIEW, &viewMatrix);
+
+        // Set the projection transformation (field of view, near/far planes)
+        D3DXMATRIX projMatrix = Utils::GetProjectionMatrix();
+        device->SetTransform(D3DTS_PROJECTION, &projMatrix);
+
+        // Set the world transformation to identity
+        D3DXMATRIX identity = D3DXMATRIX(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+        device->SetTransform(D3DTS_WORLD, &identity);
+
+        return changes;
     }
 
     template <typename T>
