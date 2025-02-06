@@ -627,6 +627,7 @@ namespace HerosInsight::Debug
         if (living_agent == nullptr)
             return;
 
+        DebugDisplay::PushToDisplay(L"target position x: {}, y: {}, z: {}", living_agent->x, living_agent->y, living_agent->z);
         DebugDisplay::PushToDisplay("target weapon type", living_agent->weapon_type);
         DebugDisplay::PushToDisplay("target weapon item type", living_agent->weapon_item_type);
         DebugDisplay::PushToDisplay("target offhand item type", living_agent->offhand_item_type);
