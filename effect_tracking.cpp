@@ -110,12 +110,11 @@ namespace HerosInsight::EffectTracking
         {
             // There can only be one of this type active at a time
 
-            // clang-format off
-            EffectTracking::RemoveTrackers(agent_id, [=](EffectTracking::EffectTracker &tracker)
+            EffectTracking::RemoveTrackers(agent_id,
+                [=](EffectTracking::EffectTracker &tracker)
             {
                 return GW::SkillbarMgr::GetSkillConstantData(tracker.skill_id)->type == skill_type;
             });
-            // clang-format on
         }
 
         if (!new_effect.begin_timestamp)
