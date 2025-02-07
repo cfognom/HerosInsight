@@ -595,9 +595,6 @@ namespace HerosInsight::WorldSpaceUI
 
             ++it;
         }
-
-        state_before->Apply();
-        state_before->Release();
     }
 
     void Reset()
