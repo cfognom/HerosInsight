@@ -1,18 +1,18 @@
 #pragma once
 
 #include <GWCA/Constants/Constants.h>
-#include <GWCA/GameEntities/Skill.h>
-#include <GWCA/GameEntities/Attribute.h>
 #include <GWCA/GameEntities/Agent.h>
-#include <GWCA/GameEntities/Party.h>
+#include <GWCA/GameEntities/Attribute.h>
 #include <GWCA/GameEntities/Item.h>
+#include <GWCA/GameEntities/Party.h>
+#include <GWCA/GameEntities/Skill.h>
 
-#include <GWCA/Managers/SkillbarMgr.h>
 #include <GWCA/Managers/AgentMgr.h>
+#include <GWCA/Managers/SkillbarMgr.h>
 
-#include <custom_skill_data.h>
 #include <attribute_or_title.h>
 #include <attribute_store.h>
+#include <custom_skill_data.h>
 
 namespace HerosInsight
 {
