@@ -336,7 +336,15 @@ namespace HerosInsight::EffectInitiator
 
             case GW::Constants::SkillType::Well:
             {
-
+                auto well_effect = co_await PacketAwaiter<StoC::PlayEffect>();
+                float duration = GetSkillParam(skill, 2).Resolve(attr_lvl);
+                EffectTracking::CreateAOEEffect(
+                    GW::GamePos(well_effect.coords.x, well_effect.coords.y, well_effect.plane),
+                    (float)Utils::Range::InTheArea,
+                    skill_id,
+                    0,
+                    caster_id,
+                    duration);
                 break;
             }
         }
