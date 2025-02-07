@@ -435,7 +435,6 @@ namespace HerosInsight
         SkillParam base_duration;
         std::vector<ParsedSkillData> parsed_data;
         std::vector<StaticSkillEffect> init_effects;
-        std::vector<StaticSkillEffect> hit_effects;
         std::vector<StaticSkillEffect> end_effects;
         std::vector<StaticSkillEffect> drop_effects;
 

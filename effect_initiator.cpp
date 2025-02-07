@@ -528,7 +528,7 @@ namespace HerosInsight::EffectInitiator
             {
                 case GW::Constants::SkillID::Apply_Poison:
                 {
-                    if (is_melee)
+                    if (is_melee) // Ranged is handeled elsewhere
                     {
                         auto base_duration = Utils::LinearAttributeScale(3, 15, attacker_effect.attribute_level);
                         auto poison_effect = SkillEffect{GW::Constants::SkillID::Poison, GW::Constants::SkillID::Apply_Poison, base_duration};
@@ -550,7 +550,7 @@ namespace HerosInsight::EffectInitiator
                 case GW::Constants::SkillID::Anthem_of_Weariness:
                 case GW::Constants::SkillID::Anthem_of_Flame:
                 case GW::Constants::SkillID::Crippling_Anthem:
-                    if (skill_id == GW::Constants::SkillID::No_Skill) // These require an attack skill
+                    if (skill_id == GW::Constants::SkillID::No_Skill) // The skills above require an attack skill
                         break;
                 case GW::Constants::SkillID::Hidden_Rock:
                 case GW::Constants::SkillID::Yellow_Snow:
@@ -563,7 +563,8 @@ namespace HerosInsight::EffectInitiator
                 case GW::Constants::SkillID::Find_Their_Weakness_PvP: // We dont spend charge yet. Needs special handling because it requires a critical hit.
                 {
                     auto &cskill = CustomSkillDataModule::GetCustomSkillData(effect_skill_id);
-                    cskill.GetInitConditions(attacker_effect.attribute_level, conditions);
+                    cskill.init_effects
+                        cskill.GetInitConditions(attacker_effect.attribute_level, conditions);
 #ifdef _DEBUG
                     SOFT_ASSERT(conditions.size() > 0, L"Missing conditions for skill {}", Utils::GetSkillName(effect_skill_id));
 #endif
