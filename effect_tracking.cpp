@@ -112,9 +112,9 @@ namespace HerosInsight::EffectTracking
 
             EffectTracking::RemoveTrackers(agent_id,
                 [=](EffectTracking::EffectTracker &tracker)
-            {
-                return GW::SkillbarMgr::GetSkillConstantData(tracker.skill_id)->type == skill_type;
-            });
+                {
+                    return GW::SkillbarMgr::GetSkillConstantData(tracker.skill_id)->type == skill_type;
+                });
         }
 
         if (!new_effect.begin_timestamp)
@@ -154,7 +154,6 @@ namespace HerosInsight::EffectTracking
         float radius;
         GW::Constants::SkillID skill_id;
         uint32_t effect_id;
-        uint32_t unique_id;
         uint32_t cause_agent_id;
         float duration;
         uint8_t attribute_level;
@@ -163,6 +162,18 @@ namespace HerosInsight::EffectTracking
     };
 
     std::vector<std::optional<AOEEffect>> aoe_effects;
+    AOEEffect *GetAOEEffect(uint32_t id)
+    {
+        if (id >= aoe_effects.size())
+            return nullptr;
+
+        auto &aoe = aoe_effects[id];
+        if (!aoe.has_value())
+            return nullptr;
+
+        return &aoe.value();
+    }
+
     size_t GetFreeAOESlot()
     {
         for (size_t i = 0; i < aoe_effects.size(); i++)
@@ -184,7 +195,6 @@ namespace HerosInsight::EffectTracking
         aoe_effect.radius = radius;
         aoe_effect.skill_id = skill_id;
         aoe_effect.effect_id = effect_id;
-        aoe_effect.unique_id = effect_added_counter++;
         aoe_effect.cause_agent_id = cause_agent_id;
         aoe_effect.duration = duration;
 
@@ -195,8 +205,11 @@ namespace HerosInsight::EffectTracking
 
     void RemoveAOEEffect(uint32_t id)
     {
-        auto &aoe = aoe_effects[id];
-        if (!aoe)
+        if (id >= aoe_effects.size())
+            return;
+
+        auto aoe = aoe_effects[id];
+        if (!aoe.has_value())
             return;
 
         for (auto agent_id : aoe->agents_in_range)
@@ -204,22 +217,29 @@ namespace HerosInsight::EffectTracking
             RemoveTrackers(agent_id,
                 [=](EffectTracker &tracker)
                 {
-                    return tracker.effect_id == aoe->effect_id;
+                    return tracker.aoe_id == id;
                 });
         }
         aoe = std::nullopt;
     }
 
-    std::unordered_map<uint32_t, uint32_t> active_auras;
+    struct Aura
+    {
+        uint32_t agent_id;
+        uint32_t aoe_id;
+    };
+
+    std::vector<Aura> active_auras;
     void CreateAuraEffect(uint32_t agent_id, float radius, GW::Constants::SkillID skill_id, uint32_t effect_id, uint32_t cause_agent_id, float duration)
     {
+        assert(duration > 0);
         auto agent = Utils::GetAgentLivingByID(agent_id);
         SOFT_ASSERT(agent, L"Attempt to create an aura effect on invalid agent");
         if (!agent)
             return;
 
         auto id = CreateAOEEffect(agent->pos, radius, skill_id, effect_id, cause_agent_id, duration);
-        active_auras[agent_id] = id;
+        active_auras.emplace_back(agent_id, id);
     }
 
     void RemoveAndElectNew(std::vector<EffectTracker> &effects, uint32_t index)
@@ -458,10 +478,9 @@ namespace HerosInsight::EffectTracking
     {
         for (auto it = active_auras.begin(); it != active_auras.end();)
         {
-            auto agent_id = it->first;
-            auto aoe_id = it->second;
+            auto agent_id = it->agent_id;
+            auto aoe_id = it->aoe_id;
             auto agent = Utils::GetAgentLivingByID(agent_id);
-            auto &aoe_effect = aoe_effects[aoe_id];
             if (!agent || agent->GetIsDead() || agent->GetIsDeadByTypeMap())
             {
                 // Source agent is dead
@@ -470,6 +489,7 @@ namespace HerosInsight::EffectTracking
                 continue;
             }
 
+            auto aoe_effect = GetAOEEffect(aoe_id);
             if (!aoe_effect)
             {
                 // Expired
@@ -485,8 +505,9 @@ namespace HerosInsight::EffectTracking
 
     void UpdateAOEEffects()
     {
-        for (auto &aoe_effect : aoe_effects)
+        for (uint32_t id = 0; id < aoe_effects.size(); ++id)
         {
+            auto &aoe_effect = aoe_effects[id];
             if (!aoe_effect)
                 continue;
 
@@ -501,13 +522,13 @@ namespace HerosInsight::EffectTracking
             {
                 aoe_effect = std::nullopt;
                 auto new_size = aoe_effects.size();
-                while (new_size > 0 && !aoe_effects[new_size - 1])
+                while (new_size > 0 && !aoe_effects[new_size - 1].has_value())
                     --new_size;
                 aoe_effects.resize(new_size);
                 continue;
             }
 
-            const auto remove_marker = 0x80000000;
+            constexpr auto remove_marker = 0x80000000;
 
             auto &agents_in_range = aoe_effect->agents_in_range;
             size_t i = 0;
@@ -555,7 +576,7 @@ namespace HerosInsight::EffectTracking
                         tracker.cause_agent_id = aoe_effect->cause_agent_id;
                         tracker.skill_id = aoe_effect->skill_id;
                         tracker.effect_id = aoe_effect->effect_id;
-                        tracker.unique_id = aoe_effect->unique_id;
+                        tracker.aoe_id = id;
                         tracker.duration_sec = rem_duration;
                         tracker.attribute_level = aoe_effect->attribute_level;
 
@@ -568,19 +589,20 @@ namespace HerosInsight::EffectTracking
             {
                 auto &agent_id_in_range = agents_in_range[j];
                 if (j >= i)
-                    agent_id_in_range |= remove_marker;
+                    agent_id_in_range |= remove_marker; // Any agents left over are no longer in range
 
+                // Remove trackers from agents no longer in range
                 if (agent_id_in_range & remove_marker)
                 {
                     RemoveTrackers(agent_id_in_range & ~remove_marker,
                         [&](EffectTracker &effect)
                         {
-                            return effect.unique_id == aoe_effect->unique_id;
+                            return effect.aoe_id == id;
                         });
                 }
             }
 
-            // Remove marked
+            // Remove agents no longer in range from aoe's tracking
             std::erase_if(agents_in_range,
                 [&](uint32_t agent_id)
                 {

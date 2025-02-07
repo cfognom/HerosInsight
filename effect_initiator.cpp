@@ -316,13 +316,21 @@ namespace HerosInsight::EffectInitiator
             {
                 auto npc_packet = co_await PacketAwaiter<StoC::CreateNPC>();
                 co_await PacketAwaiter<StoC::AgentAdd>(Altitude::After); // The npc needs to be created before we can "attach" the effect to it
+
+                auto lifetime = npc_packet.lifetime; // May also be 0...
+                auto effect_id = npc_packet.effect_id;
+                if (!lifetime)
+                {
+                    lifetime = GetSkillParam(skill, 2).Resolve(attr_lvl);
+                    effect_id = 0;
+                }
                 EffectTracking::CreateAuraEffect(
                     npc_packet.agent_id,
                     (float)Utils::Range::SpiritRange,
                     skill_id,
-                    npc_packet.effect_id,
+                    effect_id,
                     caster_id,
-                    npc_packet.lifetime);
+                    lifetime);
                 break;
             }
 

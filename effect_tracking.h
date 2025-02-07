@@ -60,7 +60,8 @@ namespace HerosInsight::EffectTracking
         uint32_t duration_sec;
         DWORD begin_timestamp;
         DWORD observed_timestamp;
-        uint32_t unique_id; // An id we make ourselves to track effects
+        uint32_t unique_id;                                     // An id we make ourselves to track effects
+        uint32_t aoe_id = std::numeric_limits<uint32_t>::max(); // the aoe id responsible for this effect
         float accum_damage;
         uint8_t charges;
         bool is_active; // Whether is it the currently active effect (there may be multiple instances of the same effect)
