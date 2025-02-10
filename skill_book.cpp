@@ -480,33 +480,6 @@ namespace HerosInsight::SkillBook
         ImGui::PopFont();
     }
 
-    // uint32_t current_hero_index = 0;
-    // int8_t GetCurrentAttributeLevel(const GW::Skill &skill)
-    // {
-    //     if (attribute_mode == AttributeMode::Characters)
-    //     {
-    //         auto player_agent_id = GW::Agents::GetControlledCharacterId();
-
-    //         AttributeOrTitle attr_or_title;
-    //         if (skill.attribute != 51)
-    //             attr_or_title = static_cast<GW::Constants::AttributeByte>(skill.attribute);
-    //         else if (skill.title != 48)
-    //             attr_or_title = static_cast<GW::Constants::TitleID>(skill.title);
-    //         else
-    //             attr_or_title = 0;
-
-    //         const auto cad = CustomAgentDataModule::GetCustomAgentData(player_agent_id);
-    //         const auto result = cad.GetAttributeOrTitle(attr_or_title);
-    //         const auto attr_lvl = result == -1 ? 0 : result;
-    //         return attr_lvl;
-    //     }
-    //     else if (attribute_mode == AttributeMode::Manual)
-    //     {
-    //         return manual_attribute_level;
-    //     }
-    //     return -1;
-    // }
-
     enum struct FilterJoin
     {
         None,
