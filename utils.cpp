@@ -535,12 +535,19 @@ namespace HerosInsight::Utils
 
     uint32_t LinearAttributeScale(uint32_t value0, uint32_t value15, uint32_t attribute_level)
     {
-        return value0 + ((value15 - value0) * attribute_level * 2 + 15) / 30;
+        int32_t diff = (int32_t)value15 - (int32_t)value0;
+        int32_t add = diff < 0 ? -15 : 15;
+        int32_t result = (int32_t)value0 + (diff * (int32_t)attribute_level * 2 + add) / 30;
+        assert(result > 0);
+        return (uint32_t)result;
     }
 
     uint8_t ReverseLinearAttributeScale(uint32_t value0, uint32_t value15, uint32_t value)
     {
-        auto attribute_level = ((value - value0) * 30 - 15) / (2 * (value15 - value0));
+        int32_t diffX_0 = (int32_t)value - (int32_t)value0;
+        int32_t diff15_0 = (int32_t)value15 - (int32_t)value0;
+        int32_t add = diffX_0 < 0 ? -15 : 15;
+        auto attribute_level = std::clamp((diffX_0 * 30 + add) / (2 * diff15_0), 0, 20);
         return attribute_level;
     }
 
