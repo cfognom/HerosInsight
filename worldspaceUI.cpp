@@ -480,7 +480,7 @@ namespace HerosInsight::WorldSpaceUI
 
             auto scale = 1.0f;
 
-            scale *= std::sqrt(distance_to_icon) / distance_to_icon; // The sqrt factor is not realistic but it makes closer numbers smaller and further ones bigger which looks better
+            scale *= std::sqrt(distance_to_icon) / distance_to_icon; // The sqrt factor is not realistic but it makes closer numbers smaller and further ones bigger which improves readability
 
             scale *= std::clamp(
                 Utils::Remap(0.f, 1.f, animation_min_scale, animation_max_scale, animation_progress),
