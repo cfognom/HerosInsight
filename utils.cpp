@@ -538,7 +538,7 @@ namespace HerosInsight::Utils
         int32_t diff = (int32_t)value15 - (int32_t)value0;
         int32_t rounder = diff < 0 ? -15 : 15;
         int32_t result = (int32_t)value0 + (diff * (int32_t)attribute_level * 2 + rounder) / 30;
-        assert(result > 0);
+        assert(result >= 0);
         return (uint32_t)result;
     }
 
