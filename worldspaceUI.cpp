@@ -395,9 +395,9 @@ namespace HerosInsight::WorldSpaceUI
             const auto agent_pos_head = GW::Vec3f(agent->x, agent->y, -agent->z + agent->height1);
             const auto cam_pos = GW::Vec3f(camera->position.x, camera->position.y, -camera->position.z);
             const auto cam_to_target = camera->look_at_target - cam_pos;
-            const auto cam_to_agent_head = agent_pos_feet - cam_pos;
-            const auto target_is_infront = Utils::Dot(cam_to_target, cam_to_agent_head) > 0;
-            const auto distance_to_agent_feet = std::sqrt(Utils::Dot(cam_to_agent_head, cam_to_agent_head));
+            const auto cam_to_agent_feet = agent_pos_feet - cam_pos;
+            const auto target_is_infront = Utils::Dot(cam_to_target, cam_to_agent_feet) > 0;
+            const auto distance_to_agent_feet = std::sqrt(Utils::Dot(cam_to_agent_feet, cam_to_agent_feet));
 
             auto ms_since_finished = 0;
             if (it->timestamp_finished)
@@ -475,7 +475,7 @@ namespace HerosInsight::WorldSpaceUI
                 screen_base_pos = Utils::WorldSpaceToScreenSpace(icon_world_pos);
             }
 
-            const auto cam_to_icon = icon_world_pos - camera->position;
+            const auto cam_to_icon = icon_world_pos - cam_pos;
             const auto distance_to_icon = std::sqrt(Utils::Dot(cam_to_icon, cam_to_icon)) / 800.f;
 
             auto scale = 1.0f;
