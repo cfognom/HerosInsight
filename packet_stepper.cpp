@@ -156,6 +156,11 @@ namespace HerosInsight::PacketStepper
 
         switch (packet->header)
         {
+            case StoC::AdrenalineGain::STATIC_HEADER:
+            {
+                auto p = (StoC::AdrenalineGain *)packet;
+                return IsRelated(p->agent_id);
+            }
             case StoC::GenericValue::STATIC_HEADER:
             {
                 auto p = (StoC::GenericValue *)packet;
