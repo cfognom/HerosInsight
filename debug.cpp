@@ -12,6 +12,7 @@
 #include <GWCA/Utilities/Scanner.h>
 
 #include <GWCA/GameEntities/Agent.h>
+#include <GWCA/GameEntities/Camera.h>
 #include <GWCA/GameEntities/Hero.h>
 #include <GWCA/GameEntities/Item.h>
 #include <GWCA/GameEntities/Map.h>
@@ -41,6 +42,7 @@
 #include <GWCA/GameContainers/List.h>
 
 #include <GWCA/Managers/AgentMgr.h>
+#include <GWCA/Managers/CameraMgr.h>
 #include <GWCA/Managers/ChatMgr.h>
 #include <GWCA/Managers/EffectMgr.h>
 #include <GWCA/Managers/GameThreadMgr.h>
@@ -628,6 +630,12 @@ namespace HerosInsight::Debug
             return;
 
         DebugDisplay::PushToDisplay(L"target position x: {}, y: {}, z: {}", living_agent->x, living_agent->y, living_agent->z);
+        DebugDisplay::PushToDisplay(L"target height1: {}", living_agent->height1);
+        DebugDisplay::PushToDisplay(L"target height2: {}", living_agent->height2);
+        DebugDisplay::PushToDisplay(L"target height3: {}", living_agent->height3);
+        DebugDisplay::PushToDisplay(L"target width1: {}", living_agent->width1);
+        DebugDisplay::PushToDisplay(L"target width2: {}", living_agent->width2);
+        DebugDisplay::PushToDisplay(L"target width3: {}", living_agent->width3);
         DebugDisplay::PushToDisplay("target weapon type", living_agent->weapon_type);
         DebugDisplay::PushToDisplay("target weapon item type", living_agent->weapon_item_type);
         DebugDisplay::PushToDisplay("target offhand item type", living_agent->offhand_item_type);
@@ -682,6 +690,16 @@ namespace HerosInsight::Debug
         DebugDisplay::PushToDisplay("target allegiance", allegiance_str);
 
         DebugDisplay::PushToDisplay("target is bleeding", std::to_string(living_agent->GetIsBleeding()));
+    }
+
+    void DebugCamera()
+    {
+        DebugDisplay::ClearDisplay("camera");
+        auto cam = GW::CameraMgr::GetCamera();
+        if (cam == nullptr)
+            return;
+
+        DebugDisplay::PushToDisplay(L"camera position x: {}, y: {}, z: {}", cam->position.x, cam->position.y, cam->position.z);
     }
 
     void DebugPreGameContext()
@@ -1078,6 +1096,7 @@ namespace HerosInsight::Debug
         DebugMarkedTarget();
         DebugHoveredSkill();
         DebugTarget();
+        DebugCamera();
 
         // DebugGameplayContext();
         // DebugItemContext();
