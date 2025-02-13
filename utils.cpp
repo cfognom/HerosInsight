@@ -181,6 +181,21 @@ namespace HerosInsight::Utils
         return false;
     }
 
+    std::string_view PopWord(std::string_view &str)
+    {
+        char *p = (char *)str.data();
+        char *end = p + str.size();
+        while (p < end && std::isspace(*p))
+            p++;
+
+        char *word_start = p;
+        while (p < end && !std::isspace(*p))
+            p++;
+
+        str = std::string_view(p, end - p);
+        return std::string_view(word_start, p - word_start);
+    }
+
     bool TryRead(const char c, char *&p, char *end)
     {
         if (p < end && c == *p || std::tolower(c) == *p)

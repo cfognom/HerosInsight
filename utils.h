@@ -147,6 +147,7 @@ namespace HerosInsight::Utils
 
     uint32_t StrCountEqual(std::string_view a, std::string_view b);
     bool StrFind(const char *&cursor, const char *end, std::string_view substr);
+    std::string_view PopWord(std::string_view &str);
     bool TryRead(const char c, char *&p, char *end);
     bool TryRead(const std::string_view str, char *&p, char *end);
     uint32_t TryReadPartial(const std::string_view str, char *&p, char *end);
