@@ -3109,6 +3109,7 @@ namespace HerosInsight
                 }
 
                 // Discards / Handled elsewhere
+                case GW::Constants::SkillID::Arcane_Mimicry:
                 case GW::Constants::SkillID::Jaundiced_Gaze:
                 case GW::Constants::SkillID::Corrupt_Enchantment:
                 case GW::Constants::SkillID::Flurry_of_Splinters:
