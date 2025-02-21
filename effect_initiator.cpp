@@ -563,8 +563,7 @@ namespace HerosInsight::EffectInitiator
                 case GW::Constants::SkillID::Find_Their_Weakness_PvP: // We dont spend charge yet. Needs special handling because it requires a critical hit.
                 {
                     auto &cskill = CustomSkillDataModule::GetCustomSkillData(effect_skill_id);
-                    cskill.init_effects
-                        cskill.GetInitConditions(attacker_effect.attribute_level, conditions);
+                    cskill.GetInitConditions(attacker_effect.attribute_level, conditions);
 #ifdef _DEBUG
                     SOFT_ASSERT(conditions.size() > 0, L"Missing conditions for skill {}", Utils::GetSkillName(effect_skill_id));
 #endif
