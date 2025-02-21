@@ -151,6 +151,11 @@ namespace HerosInsight::Utils
         // clang-format on
     }
 
+    bool IsSpace(char c)
+    {
+        return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v';
+    }
+
     // Returns the number of characters that are equal between the two strings.
     // The comparison is case-insensitive if a is uppercase OR b is lowercase.
     uint32_t StrCountEqual(std::string_view a, std::string_view b)
