@@ -621,124 +621,22 @@ namespace HerosInsight::SkillBook
         LessThan,
     };
 
-    struct MatchAtom
-    {
-        enum struct Type : uint8_t
-        {
-            AnyWord,
-            AnyWords,
-            AnyNumber,
-            Colon,
-            Not,
-
-            WordPrefix,
-            Text,
-            Number,
-            NumberGreaterThan, // Dont reorder!
-            NumberGreaterThanOrEqual,
-            NumberLessThan,
-            NumberLessThanOrEqual,
-        };
-
-        Type type;
-        std::variant<std::string_view, double> value;
-    };
-
-    void ParseFilter(std::string_view filter, std::vector<MatchAtom> &out)
-    {
-        char *p = (const char *)filter.data();
-        char *end = p + filter.size();
-        while (p < end)
-        {
-            if (std::isspace(p[0]))
-            {
-                ++p;
-                continue;
-            }
-
-            if (Utils::TryRead(':', p, end))
-            {
-                out.push_back({MatchAtom::Type::Colon, {}});
-                continue;
-            }
-
-            if (Utils::TryRead('!', p, end))
-            {
-                out.push_back({MatchAtom::Type::Not, {}});
-                continue;
-            }
-
-            if (Utils::TryRead('#', p, end))
-            {
-                out.push_back({MatchAtom::Type::AnyNumber, {}});
-                continue;
-            }
-
-            if (Utils::TryRead('..', p, end))
-            {
-                out.push_back({MatchAtom::Type::AnyWord, {}});
-                continue;
-            }
-
-            if (Utils::TryRead('...', p, end))
-            {
-                out.push_back({MatchAtom::Type::AnyWords, {}});
-                continue;
-            }
-
-            if (isdigit(p[0]))
-            {
-                double value = strtod(p, &p);
-                out.push_back({MatchAtom::Type::Number, value});
-                continue;
-            }
-
-            MatchAtom::Type type = MatchAtom::Type::NumberLessThan;
-            switch (p[0])
-            {
-                case '>':
-                    type = MatchAtom::Type::NumberGreaterThan;
-                case '<':
-                {
-                    ++p;
-                    if (Utils::TryRead('=', p, end))
-                    {
-                        ++(*(uint8_t *)&type);
-                    }
-                    double value = strtod(p, &p);
-                    out.push_back({type, value});
-                    continue;
-                }
-            }
-
-            if (Utils::TryRead('"', p, end))
-            {
-                auto start = p;
-                SkipUntil(p, end, '"');
-                out.push_back({MatchAtom::Type::Text, std::string_view(start, p - start)});
-                continue;
-            }
-
-            auto start = p;
-            while (p < end && !std::isspace(*p))
-                ++p;
-            out.push_back({MatchAtom::Type::WordPrefix, std::string_view(start, p - start)});
-        }
-    }
-
     struct Filter
     {
         FilterJoin join;
-        std::vector<MatchAtom> atoms;
+        SkillPropertyID target;
+        FilterOperator op;
+        std::vector<std::string_view> str_values;
+        std::vector<double> num_values;
         const char *start;
         const char *end;
         const char *value_start;
         const char *value_end;
 
-        bool IsValid(size_t index) const
+        bool IsValid() const
         {
-            return ((targets[index].IsNumberType() && !num_values.empty()) ||
-                       (targets[index].IsStringType() && !str_values.empty())) &&
+            return ((target.IsNumberType() && !num_values.empty()) ||
+                       (target.IsStringType() && !str_values.empty())) &&
                    op > FilterOperator::Unknown;
         }
     };
@@ -906,9 +804,9 @@ namespace HerosInsight::SkillBook
         {"Healing", FromParam(ParsedSkillData::Type::Heal)},
         {"Armor", FromParam(ParsedSkillData::Type::ArmorChange)},
 
-        {"Condition removed", FromParam(ParsedSkillData::Type::ConditionsRemoved)},
-        {"Hex removed", FromParam(ParsedSkillData::Type::HexesRemoved)},
-        {"Enchantment removed", FromParam(ParsedSkillData::Type::EnchantmentsRemoved)},
+        {"ConditionsRemoved", FromParam(ParsedSkillData::Type::ConditionsRemoved)},
+        {"HexesRemoved", FromParam(ParsedSkillData::Type::HexesRemoved)},
+        {"EnchantmentsRemoved", FromParam(ParsedSkillData::Type::EnchantmentsRemoved)},
 
         {"HealthPips", FromParam(ParsedSkillData::Type::HealthPips)},
         {"HealthGain", FromParam(ParsedSkillData::Type::HealthGain)},
@@ -925,212 +823,30 @@ namespace HerosInsight::SkillBook
         {"AdrenalineGain", FromParam(ParsedSkillData::Type::AdrenalineGain)},
         {"AdrenalineLoss", FromParam(ParsedSkillData::Type::AdrenalineLoss)},
 
-        {"Condition (Bleeding)", FromParam(ParsedSkillData::Type::Bleeding)},
-        {"Condition (Blind)", FromParam(ParsedSkillData::Type::Blind)},
-        {"Condition (Burning)", FromParam(ParsedSkillData::Type::Burning)},
-        {"Condition (CrackedArmor)", FromParam(ParsedSkillData::Type::CrackedArmor)},
-        {"Condition (Crippled)", FromParam(ParsedSkillData::Type::Crippled)},
-        {"Condition (Dazed)", FromParam(ParsedSkillData::Type::Dazed)},
-        {"Condition (DeepWound)", FromParam(ParsedSkillData::Type::DeepWound)},
-        {"Condition (Disease)", FromParam(ParsedSkillData::Type::Disease)},
-        {"Condition (Poison)", FromParam(ParsedSkillData::Type::Poison)},
-        {"Condition (Weakness)", FromParam(ParsedSkillData::Type::Weakness)},
+        {"Bleeding", FromParam(ParsedSkillData::Type::Bleeding)},
+        {"Blind", FromParam(ParsedSkillData::Type::Blind)},
+        {"Burning", FromParam(ParsedSkillData::Type::Burning)},
+        {"CrackedArmor", FromParam(ParsedSkillData::Type::CrackedArmor)},
+        {"Crippled", FromParam(ParsedSkillData::Type::Crippled)},
+        {"Dazed", FromParam(ParsedSkillData::Type::Dazed)},
+        {"DeepWound", FromParam(ParsedSkillData::Type::DeepWound)},
+        {"Disease", FromParam(ParsedSkillData::Type::Disease)},
+        {"Poison", FromParam(ParsedSkillData::Type::Poison)},
+        {"Weakness", FromParam(ParsedSkillData::Type::Weakness)},
 
-        {"Modifier (Activation, Flat)", FromParam(ParsedSkillData::Type::ActivationTimeAdd)},
-        {"Modifier (Movement)", FromParam(ParsedSkillData::Type::MovementSpeedMod)},
-        {"Modifier (Recharge, Flat)", FromParam(ParsedSkillData::Type::RechargeTimeAdd)},
-        {"Modifier (Recharge, Percentage)", FromParam(ParsedSkillData::Type::RechargeTimeMod)},
-        {"Modifier (Attack duration)", FromParam(ParsedSkillData::Type::AttackTimeMod)},
-        {"Modifier (Damage, Flat)", FromParam(ParsedSkillData::Type::DamageReduction)},
-        {"Modifier (Damage, Percentage)", FromParam(ParsedSkillData::Type::DamageMod)},
-        {"Modifier (Duration)", FromParam(ParsedSkillData::Type::DurationMod)},
-        {"Modifier (Healing)", FromParam(ParsedSkillData::Type::HealMod)},
+        {"ActivationModifier", FromParam(ParsedSkillData::Type::ActivationTimeAdd)},
+        {"MoveSpeedModifier%", FromParam(ParsedSkillData::Type::MovementSpeedMod)},
+        {"RechargeModifier", FromParam(ParsedSkillData::Type::RechargeTimeAdd)},
+        {"RechargeModifier%", FromParam(ParsedSkillData::Type::RechargeTimeMod)},
+        {"AttackTimeModifier%", FromParam(ParsedSkillData::Type::AttackTimeMod)},
+        {"DamageModifier", FromParam(ParsedSkillData::Type::DamageReduction)},
+        {"DamageModifier%", FromParam(ParsedSkillData::Type::DamageMod)},
+        {"DurationModifier%", FromParam(ParsedSkillData::Type::DurationMod)},
+        {"HealingModifier%", FromParam(ParsedSkillData::Type::HealMod)},
     };
 
     static constexpr std::span<const std::pair<std::string_view, SkillPropertyType>> text_filter_targets = {filter_targets, n_text_filter_targets};
     static constexpr std::span<const std::pair<std::string_view, SkillPropertyType>> number_filter_targets = {filter_targets + n_text_filter_targets, std::size(filter_targets) - n_text_filter_targets};
-
-    void AddHighlightRange(std::vector<uint16_t> &highlighting, uint16_t start, uint16_t end)
-    {
-        assert(start < end);
-        const auto count = highlighting.size();
-        if (count == 0)
-        {
-            highlighting.push_back(start);
-            highlighting.push_back(end);
-            return;
-        }
-
-        const auto &prev_start = highlighting[count - 2];
-        if (prev_start <= start) // Common case
-        {
-            auto &prev_end = highlighting[count - 1];
-            if (prev_end < start)
-            {
-                highlighting.push_back(start);
-                highlighting.push_back(end);
-            }
-            else
-            {
-                prev_end = end;
-            }
-            return;
-        }
-
-        // Find the insertion point using std::lower_bound
-        auto it_start = std::lower_bound(highlighting.begin(), highlighting.end(), start, [](uint16_t a, uint16_t b)
-            { return a < b; });
-
-        auto index_start = std::distance(highlighting.begin(), it_start);
-        bool is_intersecting_start = index_start & 1;
-
-        // Find the insertion point using std::lower_bound
-        auto it_end = std::lower_bound(highlighting.begin(), highlighting.end(), end, [](uint16_t a, uint16_t b)
-            { return a < b; });
-
-        auto index_end = std::distance(highlighting.begin(), it_end);
-        bool is_intersecting_end = index_end & 1;
-
-        auto removal_count = index_end - index_start;
-
-        auto eit = highlighting.erase(it_start, it_end);
-
-        if (!is_intersecting_end)
-        {
-            eit = highlighting.insert(eit, end);
-        }
-        if (!is_intersecting_start)
-        {
-            eit = highlighting.insert(eit, start);
-        }
-    }
-
-    bool MatchAlgo(std::string_view text, std::string_view filter, bool negated, bool matches_must_start_at_beginning, std::vector<uint16_t> &matches)
-    {
-        const auto filter_len = filter.size();
-        if (filter_len == 0)
-        {
-            return true;
-        }
-
-        if (matches_must_start_at_beginning)
-        {
-            if (Utils::StrCountEqual(text, filter) == filter_len)
-            {
-                if (negated)
-                    return false;
-
-                AddHighlightRange(matches, 0, filter_len);
-                return true;
-            }
-            return negated;
-        }
-        else
-        {
-            bool filter_found = false;
-            const auto text_start = text.data();
-            auto first_filter_word = Utils::PopWord(filter);
-            while (true)
-            {
-            new_attempt:
-                auto text_word = Utils::PopWord(text);
-                if (text_word.empty())
-                    break;
-
-                if (Utils::StrCountEqual(text_word, first_filter_word) == first_filter_word.size())
-                {
-                    auto text_copy = text;
-                    auto filter_copy = filter;
-
-                    FixedArray<std::pair<uint16_t, uint16_t>, 250> temp_matches_salloc;
-                    auto temp_matches = temp_matches_salloc.ref();
-
-                    auto TryAddTempMatch = [&](const char *start, size_t len)
-                    {
-                        assert(len > 0);
-                        uint16_t start_index = start - text_start;
-                        uint16_t end_index = start_index + len;
-                        if (!temp_matches.try_push({start_index, end_index}))
-                        {
-                            SOFT_ASSERT(false, L"Too many words in filter");
-                            return false;
-                        }
-                        return true;
-                    };
-
-                    TryAddTempMatch(text_word.data(), first_filter_word.size());
-
-                    while (true)
-                    {
-                        auto filter_word = Utils::PopWord(filter_copy);
-                        std::string_view text_word;
-                        bool single_wild = filter_word == "..";
-                        if (single_wild)
-                        {
-                            text_word = Utils::PopWord(text_copy);
-                            if (text_word.empty())
-                                break;
-                            continue;
-                        }
-
-                        bool multiple_wild = filter_word == "...";
-                        if (multiple_wild)
-                            filter_word = Utils::PopWord(filter_copy);
-
-                        if (filter_word.empty())
-                        {
-                            // success
-                            if (negated)
-                                return false;
-
-                            for (auto &match : temp_matches)
-                                AddHighlightRange(matches, match.first, match.second);
-
-                            filter_found = true;
-                            break;
-                        }
-
-                        bool match;
-                        do
-                        {
-                            text_word = Utils::PopWord(text_copy);
-                            if (text_word.empty())
-                                goto new_attempt; // == break 2 levels
-
-                            match = Utils::StrCountEqual(text_word, filter_word) == filter_word.size();
-                        } while (multiple_wild && !match);
-
-                        if (!match)
-                            break;
-
-                        if (!TryAddTempMatch(text_word.data(), filter_word.size()))
-                            return false;
-                    }
-                }
-            }
-            return filter_found ^ negated;
-
-            // while (Utils::StrFind(search_ptr, search_end, word))
-            // {
-            //     if (negated)
-            //         break;
-
-            //     auto start_index = search_ptr - text_start;
-            //     auto end_index = start_index + filter_len;
-            //     AddHighlightRange(matches, start_index, end_index);
-            //     search_ptr += 1;
-            //     filter_found = true;
-            // }
-            // return filter_found ^ negated;
-        }
-    }
-
-    uint32_t GetHighlightKey(SkillPropertyType target, GW::Constants::SkillID skill_id = GW::Constants::SkillID::No_Skill)
-    {
-        assert((uint32_t)skill_id < 0x10000);
-        assert((uint32_t)target < 0x10000);
-        return (((uint32_t)skill_id) << 16) | (uint32_t)target;
-    }
 
     uint32_t MatchIdent(std::string_view ident, std::string_view shorthand, uint32_t i, uint32_t s)
     {
@@ -1160,14 +876,13 @@ namespace HerosInsight::SkillBook
         return std::max(opt_a, opt_b);
     }
 
-    bool ParseFilterTarget(char *&p, char *end, std::vector<SkillPropertyID> &out, bool must_match_whole_word = true)
+    SkillPropertyID ParseFilterTarget(char *&p, char *end, bool must_match_whole_word = true)
     {
         SkillPropertyID target = {};
 
         if (TryParseRawFilterTarget(p, end, target))
         {
-            out.push_back(target);
-            return true;
+            return target;
         }
 
         auto view = std::string_view(p, end - p);
@@ -1175,32 +890,23 @@ namespace HerosInsight::SkillBook
         uint32_t best_match_count = 0;
         int32_t best_match_index = -1;
         char *best_match_end = p;
-        bool success = false;
         for (uint32_t i = 0; i < std::size(filter_targets); i++)
         {
             auto &pair = filter_targets[i];
             auto ident = pair.first;
-            target.type = pair.second;
+            auto &type = pair.second;
 
-            auto &highlighting = pending_state.highlighting_map[GetHighlightKey(target.type)];
-
-            if (MatchAlgo(ident, view, false, false, highlighting))
+            auto match_count = MatchIdent(ident, view, 0, 0);
+            char *match_end = p + match_count;
+            if (must_match_whole_word && (match_end < end && std::isalpha(*match_end)))
+                continue;
+            if (match_count > best_match_count)
             {
-                success = true;
-                out.push_back(target);
+                target.type = type;
+                best_match_count = match_count;
+                best_match_index = i;
+                best_match_end = match_end;
             }
-
-            // auto match_count = MatchIdent(ident, view, 0, 0);
-            // char *match_end = p + match_count;
-            // if (must_match_whole_word && (match_end < end && std::isalpha(*match_end)))
-            //     continue;
-            // if (match_count > best_match_count)
-            // {
-            //     target.type = type;
-            //     best_match_count = match_count;
-            //     best_match_index = i;
-            //     best_match_end = match_end;
-            // }
             // else if (best_match_index != -1 && match_count == best_match_count)
             // {
             //     auto old_ident = filter_targets[best_match_index].first;
@@ -1215,13 +921,12 @@ namespace HerosInsight::SkillBook
 
         p = best_match_end;
 
-        return success;
+        return target;
     }
 
     static constexpr std::pair<std::string_view, FilterOperator> filter_operators[] = {
         {":", FilterOperator::Contain},
         {"!:", FilterOperator::NotContain},
-        {"==", FilterOperator::Equal}, // Special case for programmers habit of using == for equality instead of =
         {"=", FilterOperator::Equal},
         {"!=", FilterOperator::NotEqual},
         {">=", FilterOperator::GreaterThanOrEqual},
@@ -1230,8 +935,8 @@ namespace HerosInsight::SkillBook
         {"<", FilterOperator::LessThan},
     };
 
-    static constexpr std::span<const std::pair<std::string_view, FilterOperator>> text_filter_operators = {filter_operators, 5};
-    static constexpr std::span<const std::pair<std::string_view, FilterOperator>> number_filter_operators = {filter_operators + 2, 7};
+    static constexpr std::span<const std::pair<std::string_view, FilterOperator>> text_filter_operators = {filter_operators, 4};
+    static constexpr std::span<const std::pair<std::string_view, FilterOperator>> number_filter_operators = {filter_operators + 2, 6};
     static constexpr std::span<const std::pair<std::string_view, FilterOperator>> adv_filter_operators = {filter_operators, 2};
 
     std::string_view GetOpDescription(SkillPropertyID target, FilterOperator op)
@@ -1251,23 +956,24 @@ namespace HerosInsight::SkillBook
         // clang-format on
     }
 
-    FilterOperator FindOperatorAhead(char *&p, char *end, size_t &len)
+    FilterOperator ParseFilterOperator(SkillPropertyID target, char *&p, char *end)
     {
-        while (p < end)
+        if (p == end)
+            return FilterOperator::None;
+
+        if (Utils::TryRead("==", p, end)) // Special case for programmers habit of using == for equality instead of =
+            return FilterOperator::Equal;
+
+        auto operators = target.IsStringType()
+                             ? text_filter_operators
+                         : target.IsRawNumberType()
+                             ? filter_operators
+                             : number_filter_operators;
+
+        for (const auto &[op, op_enum] : operators)
         {
-            auto p_before = p;
-
-            for (const auto &[op_str, op_enum] : filter_operators)
-            {
-                if (Utils::TryRead(op_str, p, end))
-                {
-                    len = p - p_before;
-                    p = p_before;
-                    return op_enum;
-                }
-            }
-
-            ++p;
+            if (Utils::TryRead(op, p, end))
+                return op_enum;
         }
 
         return FilterOperator::None;
@@ -1275,30 +981,36 @@ namespace HerosInsight::SkillBook
 
     bool TryParseFilterTargetAndOperator(char *&p, char *end, Filter &filter)
     {
-        auto p_op = p;
+        auto p_copy = p;
 
-        size_t op_len;
-        filter.op = FindOperatorAhead(p_op, end, op_len);
+        SkipWhitespace(p_copy, end);
 
-        if (filter.op != FilterOperator::None)
+        filter.target = ParseFilterTarget(p_copy, end);
+        if (filter.target.type == SkillPropertyType::None)
         {
-            auto p_target = p;
-            SkipWhitespace(p_target, end);
+            filter.target = {SkillPropertyType::TEXT, 0};
+        }
 
-            if (!ParseFilterTarget(p_target, p_op, filter.targets))
+        SkipWhitespace(p_copy, end);
+
+        filter.op = ParseFilterOperator(filter.target, p_copy, end);
+        if (filter.op == FilterOperator::None)
+        {
+            if (filter.target.IsRawNumberType())
             {
-                filter.targets.push_back({SkillPropertyType::TEXT, 0});
+                filter.op = FilterOperator::Unknown;
             }
-
-            p = p_op + op_len;
-            SkipOneWhitespace(p, end);
-        }
-        else
-        {
-            filter.op = FilterOperator::Contain;
-            filter.targets.push_back({SkillPropertyType::TEXT, 0});
+            else
+            {
+                filter.target = {SkillPropertyType::TEXT, 0};
+                filter.op = FilterOperator::Contain;
+                return true;
+            }
         }
 
+        SkipOneWhitespace(p_copy, end);
+
+        p = p_copy;
         return true;
     }
 
@@ -1336,21 +1048,33 @@ namespace HerosInsight::SkillBook
 
         while (true)
         {
-            char *str_start = p;
-
-            SkipWhitespace(p, end);
-            double value = strtod(str_start, &p);
-            bool success = (p == end || *p == ' ' || *p == '/' || IsSeparator(*p));
-            SkipWhitespace(p, end);
-
-            if (success)
+            char *str_start;
+            size_t str_len;
+            if (filter.target.IsNumberType())
             {
-                filter.num_values.push_back(value);
+                SkipWhitespace(p, end);
+                str_start = p;
+                double value = strtod(str_start, &p);
+                str_len = p - str_start;
+                bool success = (p == end || *p == ' ' || *p == '/' || IsSeparator(*p));
+                SkipWhitespace(p, end);
+
+                if (str_len > 0)
+                    filter.num_values.push_back(value);
+                else if (filter.num_values.empty())
+                    success = false;
+
+                if (!success)
+                {
+                    break;
+                }
             }
-
-            SkipUntil(p, end, '/');
-
-            size_t str_len = p - str_start;
+            else
+            {
+                str_start = p;
+                SkipUntil(p, end, '/');
+                str_len = p - str_start;
+            }
 
             filter.str_values.push_back(std::string_view(str_start, str_len));
 
@@ -1376,7 +1100,6 @@ namespace HerosInsight::SkillBook
         if (!Utils::TryRead('#', p_copy, end))
             return false;
 
-        std::vector<SkillPropertyID> sort_targets = {};
         if (Utils::TryRead("SORT", p_copy, end))
         {
             SortCommand sort_com = {};
@@ -1387,12 +1110,10 @@ namespace HerosInsight::SkillBook
                 SortCommandArg sort_arg = {};
                 auto start = p_copy;
                 bool has_excl = Utils::TryRead('!', p_copy, end);
-                sort_targets.clear();
-                if (!ParseFilterTarget(p_copy, end, sort_targets))
+                sort_arg.target = ParseFilterTarget(p_copy, end);
+                if (sort_arg.target.type == SkillPropertyType::None ||
+                    sort_arg.target.type == SkillPropertyType::TEXT)
                     break;
-                if (sort_targets.size() != 1)
-                    break;
-                sort_arg.target = sort_targets[0];
 
                 if (sort_arg.target.type == SkillPropertyType::ID)
                     sort_arg.is_negated = false;
@@ -1466,6 +1187,13 @@ namespace HerosInsight::SkillBook
         SkillPropertyType type;
         std::variant<double, std::string_view> val;
     };
+
+    uint32_t GetHighlightKey(GW::Constants::SkillID skill_id, SkillPropertyType target)
+    {
+        assert((uint32_t)skill_id < 0x10000);
+        assert((uint32_t)target < 0x10000);
+        return (((uint32_t)skill_id) << 16) | (uint32_t)target;
+    }
 
     void GetSkillProperty(SkillPropertyID target, CustomSkillData &custom_sd, FixedArrayRef<SkillProperty> out)
     {
@@ -1583,90 +1311,171 @@ namespace HerosInsight::SkillBook
         SOFT_ASSERT(success);
     }
 
+    void AddHighlightRange(std::vector<uint16_t> &highlighting, uint16_t start, uint16_t end)
+    {
+        const auto count = highlighting.size();
+        if (count == 0)
+        {
+            highlighting.push_back(start);
+            highlighting.push_back(end);
+            return;
+        }
+
+        const auto &prev_start = highlighting[count - 2];
+        if (prev_start <= start) // Common case
+        {
+            auto &prev_end = highlighting[count - 1];
+            if (prev_end < start)
+            {
+                highlighting.push_back(start);
+                highlighting.push_back(end);
+            }
+            else
+            {
+                prev_end = end;
+            }
+            return;
+        }
+
+        // Find the insertion point using std::lower_bound
+        auto it_start = std::lower_bound(highlighting.begin(), highlighting.end(), start, [](uint16_t a, uint16_t b)
+            { return a < b; });
+
+        auto index_start = std::distance(highlighting.begin(), it_start);
+        bool is_intersecting_start = index_start & 1;
+
+        // Find the insertion point using std::lower_bound
+        auto it_end = std::lower_bound(highlighting.begin(), highlighting.end(), end, [](uint16_t a, uint16_t b)
+            { return a < b; });
+
+        auto index_end = std::distance(highlighting.begin(), it_end);
+        bool is_intersecting_end = index_end & 1;
+
+        auto removal_count = index_end - index_start;
+
+        auto eit = highlighting.erase(it_start, it_end);
+
+        if (!is_intersecting_end)
+        {
+            eit = highlighting.insert(eit, end);
+        }
+        if (!is_intersecting_start)
+        {
+            eit = highlighting.insert(eit, start);
+        }
+    }
+
     bool CheckPassesFilter(const Filter &filter, CustomSkillData &custom_sd)
     {
         bool negated = filter.op == FilterOperator::NotEqual ||
                        filter.op == FilterOperator::NotContain;
 
-        bool passes = false;
-        for (auto &target : filter.targets)
+        if (filter.target.IsStringType())
         {
-            if (target.IsStringType())
+            bool matches_must_start_at_beginning = filter.op == FilterOperator::Equal ||
+                                                   filter.op == FilterOperator::NotEqual;
+
+            FixedArray<SkillProperty, 16> salloc;
+            auto buffer = salloc.ref();
+            GetSkillProperty(filter.target, custom_sd, buffer);
+
+            bool str_found = false;
+            for (auto prop : buffer)
             {
-                bool matches_must_start_at_beginning = filter.op == FilterOperator::Equal ||
-                                                       filter.op == FilterOperator::NotEqual;
-
-                FixedArray<SkillProperty, 16> salloc;
-                auto buffer = salloc.ref();
-                GetSkillProperty(target, custom_sd, buffer);
-
-                for (auto prop : buffer)
+                const auto str = prop.GetStr();
+                auto str_len = str.size();
+                if (str_len == 0)
                 {
-                    const auto str = prop.GetStr();
-                    auto str_len = str.size();
-                    if (str_len == 0)
+                    // We treat empty strings as not matching any filter
+                    continue;
+                }
+
+                auto &highlighting = pending_state.highlighting_map[GetHighlightKey(custom_sd.skill_id, prop.type)];
+
+                for (auto filter_str : filter.str_values)
+                {
+                    auto filter_str_len = filter_str.size();
+
+                    if (filter_str_len == 0)
                     {
-                        // We treat empty strings as not matching any filter
+                        // But if the filter string is empty, we treat it as a match
+                        str_found = true;
                         continue;
                     }
 
-                    auto &highlighting = pending_state.highlighting_map[GetHighlightKey(prop.type, custom_sd.skill_id)];
-
-                    for (auto filter_str : filter.str_values)
+                    if (matches_must_start_at_beginning)
                     {
-                        bool success = MatchAlgo(str, filter_str, negated, matches_must_start_at_beginning, highlighting);
-                        if (!success && negated)
-                            return false;
+                        if (Utils::StrCountEqual(str, filter_str) == filter_str_len)
+                        {
+                            str_found = true;
+                            if (negated)
+                                break;
 
-                        passes |= success;
-                    }
-                }
-            }
-            else if (target.IsNumberType())
-            {
-                FixedArray<SkillProperty, 8> salloc;
-                auto buffer = salloc.ref();
-                GetSkillProperty(target, custom_sd, buffer);
-
-                for (auto prop : buffer)
-                {
-                    auto skill_val = prop.GetNumber();
-                    for (auto filt_val : filter.num_values)
-                    {
-                        bool cond_satisfied;
-                        // clang-format off
-                        switch (filter.op) {
-                            case FilterOperator::GreaterThan:        cond_satisfied = skill_val >  filt_val; break;
-                            case FilterOperator::LessThan:           cond_satisfied = skill_val <  filt_val; break;
-                            case FilterOperator::GreaterThanOrEqual: cond_satisfied = skill_val >= filt_val; break;
-                            case FilterOperator::LessThanOrEqual:    cond_satisfied = skill_val <= filt_val; break;
-                            
-                            case FilterOperator::NotContain:
-                            case FilterOperator::Contain:            cond_satisfied = ((uint32_t)skill_val & (uint32_t)filt_val) == (uint32_t)filt_val; break;
-                            
-                            case FilterOperator::None:
-                            case FilterOperator::NotEqual:
-                            case FilterOperator::Equal:
-                            default:                                 cond_satisfied = skill_val == filt_val; break;
+                            AddHighlightRange(highlighting, 0, filter_str_len);
                         }
-                        // clang-format on
+                    }
+                    else
+                    {
+                        const auto str_start = str.data();
+                        auto search_ptr = str_start;
+                        const auto search_end = search_ptr + str_len;
+                        std::string_view found;
+                        while (Utils::StrFind(search_ptr, search_end, filter_str))
+                        {
+                            str_found = true;
+                            if (negated)
+                                break;
 
-                        bool success = cond_satisfied ^ negated;
-
-                        if (!success && negated)
-                            return false;
-
-                        passes |= success;
+                            auto start_index = search_ptr - str_start;
+                            auto end_index = start_index + filter_str_len;
+                            AddHighlightRange(highlighting, start_index, end_index);
+                            search_ptr += 1;
+                        }
                     }
                 }
             }
-            else
-            {
-                SOFT_ASSERT(false, L"Invalid filter target type");
-                return false;
-            }
+
+            return str_found ^ negated;
         }
-        return passes;
+        else if (filter.target.IsNumberType())
+        {
+            FixedArray<SkillProperty, 8> salloc;
+            auto buffer = salloc.ref();
+            GetSkillProperty(filter.target, custom_sd, buffer);
+
+            bool cond_satisfied = false;
+
+            for (auto prop : buffer)
+            {
+                auto skill_val = prop.GetNumber();
+                for (auto filt_val : filter.num_values)
+                {
+                    // clang-format off
+                    switch (filter.op) {
+                        case FilterOperator::GreaterThan:        cond_satisfied |= skill_val >  filt_val; break;
+                        case FilterOperator::LessThan:           cond_satisfied |= skill_val <  filt_val; break;
+                        case FilterOperator::GreaterThanOrEqual: cond_satisfied |= skill_val >= filt_val; break;
+                        case FilterOperator::LessThanOrEqual:    cond_satisfied |= skill_val <= filt_val; break;
+                        
+                        case FilterOperator::NotContain:
+                        case FilterOperator::Contain:            cond_satisfied |= ((uint32_t)skill_val & (uint32_t)filt_val) == (uint32_t)filt_val; break;
+                        
+                        case FilterOperator::None:
+                        case FilterOperator::NotEqual:
+                        case FilterOperator::Equal:
+                        default:                                 cond_satisfied |= skill_val == filt_val; break;
+                    }
+                    // clang-format on
+                }
+            }
+
+            return cond_satisfied ^ negated;
+        }
+        else
+        {
+            SOFT_ASSERT(false, L"Invalid filter target type");
+            return false;
+        }
     }
 
     bool CheckPassesFilters(const std::vector<Filter> &filters, CustomSkillData &custom_sd)
@@ -1674,8 +1483,8 @@ namespace HerosInsight::SkillBook
         bool passes = true;
         for (auto &filter : filters)
         {
-            // if (!filter.IsValid())
-            //     continue;
+            if (!filter.IsValid())
+                continue;
 
             auto join = filter.join;
             if (join == FilterJoin::And ||
@@ -1878,75 +1687,70 @@ namespace HerosInsight::SkillBook
         input_feedback.color_changes.clear();
         for (auto &filter : parsed_filters)
         {
-            for (size_t i = 0; i < filter.targets.size(); i++)
+            if (!filter.IsValid())
             {
-                auto &target = filter.targets[i];
-                bool is_valid = filter.IsValid(i);
-                if (!is_valid)
-                {
-                    input_feedback.color_changes.push_back({input_feedback.str.size(), Constants::GWColors::skill_dull_gray});
-                }
-
-                const auto target_name = target.ToString();
-                const auto op_desc = GetOpDescription(target, filter.op).data();
-                bool is_string = target.IsStringType();
-                bool is_number = target.IsNumberType();
-
-                if (filter.join == FilterJoin::Or)
-                {
-                    input_feedback.str += "OR ";
-                }
-                else if (filter.join == FilterJoin::And)
-                {
-                    input_feedback.str += "AND ";
-                }
-
-                if (is_string)
-                {
-                    Utils::AppendFormatted(input_feedback.str, 64, "%s %s: ", target_name.data(), op_desc);
-                }
-                else if (is_number)
-                {
-                    Utils::AppendFormatted(input_feedback.str, 128, "%s %s ", target_name.data(), op_desc);
-                }
-                else
-                {
-                    input_feedback.str += "...";
-                }
-
-                auto value_str_len = filter.value_end - filter.value_start;
-
-                const auto n_values = filter.str_values.size();
-                for (uint32_t i = 0; i < n_values; i++)
-                {
-                    auto filt_str = filter.str_values[i];
-                    if (is_number && filt_str.size() == 0)
-                        filt_str = "...";
-                    auto kind = i == 0             ? 0
-                                : i < n_values - 1 ? 1
-                                                   : 2;
-                    // clang-format off
-                    if (kind == 1)      input_feedback.str += ", ";
-                    else if (kind == 2) input_feedback.str += " or ";
-                    if (is_string)      input_feedback.str += "\"";
-                                        input_feedback.str += filt_str;
-                    if (is_string)      input_feedback.str += "\"";
-                    // if (kind = 2)       input_feedback.str += ".";
-                    // clang-format on
-                }
-
-                if (n_values == 0 && is_number)
-                {
-                    input_feedback.str += "...";
-                }
-
-                if (!is_valid)
-                {
-                    input_feedback.color_changes.push_back({input_feedback.str.size(), 0}); // Reset color
-                }
-
-                input_feedback.str += "\n";
+                input_feedback.color_changes.push_back({input_feedback.str.size(), Constants::GWColors::skill_dull_gray});
             }
+
+            const auto target_name = filter.target.ToString();
+            const auto op_desc = GetOpDescription(filter.target, filter.op).data();
+            bool is_string = filter.target.IsStringType();
+            bool is_number = filter.target.IsNumberType();
+
+            if (filter.join == FilterJoin::Or)
+            {
+                input_feedback.str += "OR ";
+            }
+            else if (filter.join == FilterJoin::And)
+            {
+                input_feedback.str += "AND ";
+            }
+
+            if (is_string)
+            {
+                Utils::AppendFormatted(input_feedback.str, 64, "%s %s: ", target_name.data(), op_desc);
+            }
+            else if (is_number)
+            {
+                Utils::AppendFormatted(input_feedback.str, 128, "%s %s ", target_name.data(), op_desc);
+            }
+            else
+            {
+                input_feedback.str += "...";
+            }
+
+            auto value_str_len = filter.value_end - filter.value_start;
+
+            const auto n_values = filter.str_values.size();
+            for (uint32_t i = 0; i < n_values; i++)
+            {
+                auto filt_str = filter.str_values[i];
+                if (is_number && filt_str.size() == 0)
+                    filt_str = "...";
+                auto kind = i == 0             ? 0
+                            : i < n_values - 1 ? 1
+                                               : 2;
+                // clang-format off
+                if (kind == 1)      input_feedback.str += ", ";
+                else if (kind == 2) input_feedback.str += " or ";
+                if (is_string)      input_feedback.str += "\"";
+                                    input_feedback.str += filt_str;
+                if (is_string)      input_feedback.str += "\"";
+                // if (kind = 2)       input_feedback.str += ".";
+                // clang-format on
+            }
+
+            if (n_values == 0 && is_number)
+            {
+                input_feedback.str += "...";
+            }
+
+            if (!filter.IsValid())
+            {
+                input_feedback.color_changes.push_back({input_feedback.str.size(), 0});
+            }
+
+            input_feedback.str += "\n";
         }
 
         for (auto &command : parsed_commands)
@@ -2293,7 +2097,7 @@ namespace HerosInsight::SkillBook
             ImGui::PushFont(Constants::Fonts::skill_name_font);
             auto name_color = custom_sd.tags.Archived ? Constants::GWColors::skill_dull_gray : Constants::GWColors::header_beige;
             ImGui::PushStyleColor(ImGuiCol_Text, name_color);
-            auto &hightlighting = state.highlighting_map[GetHighlightKey(SkillPropertyType::Name, custom_sd.skill_id)];
+            auto &hightlighting = state.highlighting_map[GetHighlightKey(custom_sd.skill_id, SkillPropertyType::Name)];
             auto p = name.data();
             Utils::DrawMultiColoredText(p, p + name.size(), cursor_x, content_max, {}, hightlighting);
 
@@ -2344,7 +2148,7 @@ namespace HerosInsight::SkillBook
         // Draw skill type
         {
             ImGui::SetCursorPos(name_cursor);
-            auto &hightlighting = state.highlighting_map[GetHighlightKey(SkillPropertyType::SkillType, custom_sd.skill_id)];
+            auto &hightlighting = state.highlighting_map[GetHighlightKey(custom_sd.skill_id, SkillPropertyType::SkillType)];
             auto str = custom_sd.GetTypeString();
             auto p = str.data();
             Utils::DrawMultiColoredText(p, p + str.size(), cursor_x, content_max, {}, hightlighting);
@@ -2362,7 +2166,7 @@ namespace HerosInsight::SkillBook
             {
                 auto &tag = tags[i];
                 auto type = (SkillPropertyType)((uint32_t)SkillPropertyType::TAGS + i);
-                auto &hightlighting = state.highlighting_map[GetHighlightKey(type, custom_sd.skill_id)];
+                auto &hightlighting = state.highlighting_map[GetHighlightKey(custom_sd.skill_id, type)];
                 if (i > 0)
                 {
                     ImGui::SameLine(0, 0);
@@ -2497,8 +2301,8 @@ namespace HerosInsight::SkillBook
         auto skill_id = custom_sd.skill_id;
         auto attr_lvl = state.GetAttribute(custom_sd.attribute);
         constexpr SkillPropertyType type[2] = {SkillPropertyType::Description, SkillPropertyType::Concise};
-        auto &hightlighting = state.highlighting_map[GetHighlightKey(type[prefer_concise_descriptions], skill_id)];
-        auto &hightlighting_other = state.highlighting_map[GetHighlightKey(type[!prefer_concise_descriptions], skill_id)];
+        auto &hightlighting = state.highlighting_map[GetHighlightKey(skill_id, type[prefer_concise_descriptions])];
+        auto &hightlighting_other = state.highlighting_map[GetHighlightKey(skill_id, type[!prefer_concise_descriptions])];
 
         bool draw_full_desc = !prefer_concise_descriptions || !hightlighting.empty();
 
@@ -2557,7 +2361,7 @@ namespace HerosInsight::SkillBook
             ImGui::SameLine();
             auto str = custom_sd.GetAttributeString();
             auto p = str.data();
-            auto &highlighting = state.highlighting_map[GetHighlightKey(SkillPropertyType::Attribute, skill.skill_id)];
+            auto &highlighting = state.highlighting_map[GetHighlightKey(skill.skill_id, SkillPropertyType::Attribute)];
             Utils::DrawMultiColoredText(p, p + str.size(), cursor_x, content_max, {}, highlighting);
         }
         // if (show_null_stats || skill.title != 48)
@@ -2566,7 +2370,7 @@ namespace HerosInsight::SkillBook
         //     ImGui::SameLine();
         //     auto str = Utils::GetTitleString((GW::Constants::TitleID)skill.title);
         //     auto p = str.data();
-        //     auto &highlighting = highlighting_map[GetHighlightKey(FilterTargetType::Attribute, skill.skill_id)];
+        //     auto &highlighting = highlighting_map[GetHighlightKey(skill.skill_id, FilterTargetType::Attribute)];
         //     Utils::DrawMultiColoredText(p, p + str.size(), cursor_x, content_max, {}, highlighting);
         // }
         if (show_null_stats || skill.profession != GW::Constants::ProfessionByte::None)
@@ -2575,7 +2379,7 @@ namespace HerosInsight::SkillBook
             ImGui::SameLine();
             auto str = Utils::GetProfessionString(skill.profession);
             auto p = str.data();
-            auto &highlighting = state.highlighting_map[GetHighlightKey(SkillPropertyType::Profession, skill.skill_id)];
+            auto &highlighting = state.highlighting_map[GetHighlightKey(skill.skill_id, SkillPropertyType::Profession)];
             Utils::DrawMultiColoredText(p, p + str.size(), cursor_x, content_max, {}, highlighting);
         }
         if (show_null_stats || true)
@@ -2584,7 +2388,7 @@ namespace HerosInsight::SkillBook
             ImGui::SameLine();
             auto str = Utils::GetCampaignString(skill.campaign);
             auto p = str.data();
-            auto &highlighting = state.highlighting_map[GetHighlightKey(SkillPropertyType::Campaign, skill.skill_id)];
+            auto &highlighting = state.highlighting_map[GetHighlightKey(skill.skill_id, SkillPropertyType::Campaign)];
             Utils::DrawMultiColoredText(p, p + str.size(), cursor_x, content_max, {}, highlighting);
         }
 
@@ -2597,11 +2401,7 @@ namespace HerosInsight::SkillBook
         {
             for (auto range : ranges)
             {
-                FixedArray<char, 64> char_buffer_salloc;
-                auto char_buffer = char_buffer_salloc.ref();
-                char_buffer.PushFormat("Range: %d", (uint32_t)range);
-                Utils::DrawMultiColoredText(char_buffer.data(), char_buffer.data_end(), cursor_x, content_max, {}, state.highlighting_map[GetHighlightKey(SkillPropertyType::Range)]);
-                // ImGui::Text("Range: %d", (uint32_t)range);
+                ImGui::Text("Range: %d", (uint32_t)range);
                 auto range_name = Utils::GetRangeStr(range);
                 if (range_name)
                 {
@@ -2699,10 +2499,8 @@ namespace HerosInsight::SkillBook
             }
 
             auto p = char_buffer.data();
-            std::vector<SkillPropertyID> targets;
-            ParseFilterTarget(p, char_buffer.data_end(), targets);
-
-            return targets.size() > 0 ? targets[0].type == target_type : false;
+            auto target = ParseFilterTarget(p, char_buffer.data_end());
+            return target.type == target_type;
         };
 
         std::function<bool(uint32_t, std::span<uint32_t>)> DistChars =
