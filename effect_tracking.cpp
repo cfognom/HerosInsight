@@ -91,9 +91,9 @@ namespace HerosInsight::EffectTracking
 #endif
 
 #ifdef _DEBUG
-        if (Utils::ReceivesStoCEffects(agent_id) && new_effect.effect_id == 0)
+        if (Utils::ReceivesStoCEffects(agent_id))
         {
-            Utils::FormatToChat(0xFFFF0000, L"Adding effect without ID to agent {}, but agent gets StoC effects!", agent_id);
+            assert(new_effect.effect_id);
         }
 #endif
 
@@ -634,13 +634,14 @@ namespace HerosInsight::EffectTracking
                 continue;
             }
 
-            bool receives_stoc_effects = Utils::ReceivesStoCEffects(agent_id); // If true we receive effect removed events for effects with effect_id for this agent.
+            if (Utils::ReceivesStoCEffects(agent_id)) // We receive effect added/removed events for this agent and don't need to manually track effects
+            {
+                it++;
+                continue;
+            }
 
             auto ShouldRemove = [&](EffectTracker &effect)
             {
-                if (receives_stoc_effects && effect.effect_id != 0)
-                    return false; // Skip because this effect will get an event when its done.
-
                 if (EffectTimedOut(agent, effect, timestamp_now))
                 {
 #ifdef DEBUG_EFFECT_LIFETIME
