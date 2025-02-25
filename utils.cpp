@@ -560,10 +560,15 @@ namespace HerosInsight::Utils
 
     uint32_t LinearAttributeScale(uint32_t value0, uint32_t value15, uint32_t attribute_level)
     {
+        assert(attribute_level <= 21);
         int32_t diff = (int32_t)value15 - (int32_t)value0;
         int32_t rounder = diff < 0 ? -15 : 15;
         int32_t result = (int32_t)value0 + (diff * (int32_t)attribute_level * 2 + rounder) / 30;
-        return (uint32_t)result;
+
+        // Only for Withdraw Hexes and Signet of Binding might the result be negative if attribute_level is 21.
+        // It is unclear what the game does in that case. We assume it is clamped to 0.
+        uint32_t uresult = (uint32_t)std::max(result, 0);
+        return uresult;
     }
 
     uint8_t ReverseLinearAttributeScale(uint32_t value0, uint32_t value15, uint32_t value)
