@@ -156,6 +156,11 @@ namespace HerosInsight::Utils
         return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v';
     }
 
+    bool IsAlpha(char c)
+    {
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+    }
+
     // Returns the number of characters that are equal between the two strings.
     // The comparison is case-insensitive if a is uppercase OR b is lowercase.
     uint32_t StrCountEqual(std::string_view a, std::string_view b)

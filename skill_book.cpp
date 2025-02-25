@@ -898,7 +898,7 @@ namespace HerosInsight::SkillBook
 
             auto match_count = MatchIdent(ident, view, 0, 0);
             char *match_end = p + match_count;
-            if (must_match_whole_word && (match_end < end && std::isalpha(*match_end)))
+            if (must_match_whole_word && (match_end < end && Utils::IsAlpha(*match_end)))
                 continue;
             if (match_count > best_match_count)
             {
