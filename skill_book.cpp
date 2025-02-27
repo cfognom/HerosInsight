@@ -815,7 +815,8 @@ namespace HerosInsight::SkillBook
         {"HealthSteal", FromParam(ParsedSkillData::Type::HealthSteal)},
         {"MaxHealth", FromParam(ParsedSkillData::Type::MaxHealthAdd)},
 
-        {"EnergyPips", FromParam(ParsedSkillData::Type::EnergyPips)},
+        {"EnergyRegeneration", FromParam(ParsedSkillData::Type::EnergyRegen)},
+        {"EnergyDegeneration", FromParam(ParsedSkillData::Type::EnergyDegen)},
         {"EnergyGain", FromParam(ParsedSkillData::Type::EnergyGain)},
         {"EnergyLoss", FromParam(ParsedSkillData::Type::EnergyLoss)},
         {"EnergySteal", FromParam(ParsedSkillData::Type::EnergySteal)},

@@ -2011,8 +2011,8 @@ namespace HerosInsight
 
             if (IsMatch(just_after, DescToken::Energy) && !IsMatch(0, DescToken::Not))
             {
-                IF_MATCH_PUSH_PARAM_AND_RETURN(just_after + 1, DescToken::Regen, ParsedSkillData::Type::EnergyPips)
-                IF_MATCH_PUSH_PARAM_AND_RETURN(just_after + 1, DescToken::Degen, ParsedSkillData::Type::EnergyPips, true)
+                IF_MATCH_PUSH_PARAM_AND_RETURN(just_after + 1, DescToken::Regen, ParsedSkillData::Type::EnergyRegen)
+                IF_MATCH_PUSH_PARAM_AND_RETURN(just_after + 1, DescToken::Degen, ParsedSkillData::Type::EnergyDegen)
                 IF_MATCH_PUSH_PARAM_AND_RETURN(just_after + 1, DescToken::Lose, ParsedSkillData::Type::EnergyLoss)
 
                 if (is_less)
@@ -2414,7 +2414,8 @@ namespace HerosInsight
             case Type::HealthSteal:      return "Health steal";
 
             case Type::EnergyDiscount:   return "Energy discount";
-            case Type::EnergyPips:       return "Energy pips";
+            case Type::EnergyRegen:      return "Energy regeneration";
+            case Type::EnergyDegen:      return "Energy degeneration";
             case Type::EnergyGain:       return "Energy gain";
             case Type::EnergyLoss:       return "Energy loss";
             case Type::EnergySteal:      return "Energy steal";

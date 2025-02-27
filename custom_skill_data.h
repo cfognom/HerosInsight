@@ -213,7 +213,8 @@ namespace HerosInsight
             MaxHealthAdd,
             HealthRegen,
             HealthDegen,
-            EnergyPips,
+            EnergyRegen,
+            EnergyDegen,
 
             COUNT,
         };
