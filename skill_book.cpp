@@ -808,7 +808,8 @@ namespace HerosInsight::SkillBook
         {"HexesRemoved", FromParam(ParsedSkillData::Type::HexesRemoved)},
         {"EnchantmentsRemoved", FromParam(ParsedSkillData::Type::EnchantmentsRemoved)},
 
-        {"HealthPips", FromParam(ParsedSkillData::Type::HealthPips)},
+        {"HealthRegeneration", FromParam(ParsedSkillData::Type::HealthRegen)},
+        {"HealthDegeneration", FromParam(ParsedSkillData::Type::HealthDegen)},
         {"HealthGain", FromParam(ParsedSkillData::Type::HealthGain)},
         {"HealthLoss", FromParam(ParsedSkillData::Type::HealthLoss)},
         {"HealthSteal", FromParam(ParsedSkillData::Type::HealthSteal)},

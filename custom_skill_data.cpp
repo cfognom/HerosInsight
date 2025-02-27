@@ -1999,8 +1999,8 @@ namespace HerosInsight
 
             if (IsMatch(just_after, DescToken::Health))
             {
-                IF_MATCH_PUSH_PARAM_AND_RETURN(just_after + 1, DescToken::Regen, ParsedSkillData::Type::HealthPips)
-                IF_MATCH_PUSH_PARAM_AND_RETURN(just_after + 1, DescToken::Degen, ParsedSkillData::Type::HealthPips, true)
+                IF_MATCH_PUSH_PARAM_AND_RETURN(just_after + 1, DescToken::Regen, ParsedSkillData::Type::HealthRegen)
+                IF_MATCH_PUSH_PARAM_AND_RETURN(just_after + 1, DescToken::Degen, ParsedSkillData::Type::HealthDegen)
                 for (int32_t i = just_before; i >= 0; i--)
                 {
                     IF_MATCH_PUSH_PARAM_AND_RETURN(i, DescToken::Gain, ParsedSkillData::Type::HealthGain)
@@ -2407,7 +2407,8 @@ namespace HerosInsight
             case Type::ChanceToMiss:     return "Miss chance (%)";
 
             case Type::MaxHealthAdd:     return "Max health";
-            case Type::HealthPips:       return "Health pips";
+            case Type::HealthRegen:      return "Health regeneration";
+            case Type::HealthDegen:      return "Health degeneration";
             case Type::HealthGain:       return "Health gain";
             case Type::HealthLoss:       return "Health loss";
             case Type::HealthSteal:      return "Health steal";
@@ -3580,16 +3581,21 @@ namespace HerosInsight
         FixedArray<char, 64> salloc1;
         auto result = salloc1.ref();
 
-        FixedArray<ParsedSkillData, 3> salloc2;
-        auto health_pips = salloc2.ref();
+        FixedArray<ParsedSkillData, 3> salloc2, salloc3;
+        auto health_regen = salloc2.ref();
+        auto health_degen = salloc3.ref();
 
-        GetParsedSkillParams(ParsedSkillData::Type::HealthPips, health_pips);
+        GetParsedSkillParams(ParsedSkillData::Type::HealthRegen, health_regen);
+        GetParsedSkillParams(ParsedSkillData::Type::HealthDegen, health_degen);
 
-        for (const auto &pp : health_pips)
+        for (const auto &pp : health_regen)
         {
-            auto reg_or_deg = pp.param.val0 < 0 ? "degen" : "regen";
-
-            result.PushFormat("Health %s: ", reg_or_deg);
+            result.PushFormat("Health regeneration: ");
+            pp.param.Print(result, -1, true);
+        }
+        for (const auto &pp : health_degen)
+        {
+            result.PushFormat("Health degeneration: ");
             pp.param.Print(result, -1, true);
         }
 

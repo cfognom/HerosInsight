@@ -211,7 +211,8 @@ namespace HerosInsight
 
             ArmorChange,
             MaxHealthAdd,
-            HealthPips,
+            HealthRegen,
+            HealthDegen,
             EnergyPips,
 
             COUNT,

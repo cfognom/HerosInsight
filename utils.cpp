@@ -1159,19 +1159,21 @@ namespace HerosInsight::Utils
         if (csd == nullptr)
             return std::nullopt;
 
-        FixedArray<ParsedSkillData, 8> salloc;
-        auto pps = salloc.ref();
+        FixedArray<ParsedSkillData, 4> reg_salloc, deg_salloc;
+        auto regs = reg_salloc.ref();
+        auto degs = deg_salloc.ref();
 
         int32_t regen_hp_per_second = 0;
         int32_t degen_hp_per_second = 0;
-        custom_sd.GetParsedSkillParams(ParsedSkillData::Type::HealthPips, pps);
-        for (auto &pp : pps)
+        custom_sd.GetParsedSkillParams(ParsedSkillData::Type::HealthRegen, regs);
+        custom_sd.GetParsedSkillParams(ParsedSkillData::Type::HealthDegen, degs);
+        for (auto &reg : regs)
         {
-            const auto hp_per_sec = 2 * pp.param.Resolve(attribute_level);
-            if (pp.is_negative)
-                degen_hp_per_second -= hp_per_sec;
-            else
-                regen_hp_per_second += hp_per_sec;
+            regen_hp_per_second += 2 * reg.param.Resolve(attribute_level);
+        }
+        for (auto &deg : degs)
+        {
+            degen_hp_per_second -= 2 * deg.param.Resolve(attribute_level);
         }
 
         if (!regen_hp_per_second && !degen_hp_per_second)
