@@ -1134,7 +1134,7 @@ namespace HerosInsight::SkillBook
         return true;
     }
 
-    // Example input: "foe | prof= me|p & desc !: icy|ice & range !=4 & activation < 2 /sort re !e"
+    // Example input: "foe | prof= me/p & desc !: icy/ice & range !=4 & activation < 2 #sort re !e"
     void ParseInput(char *input, size_t filter_len, std::vector<Filter> &parsed_filters, std::vector<Command> &parsed_commands)
     {
         char *p = input;
