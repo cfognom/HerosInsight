@@ -195,11 +195,11 @@ namespace HerosInsight::Utils
     {
         char *p = (char *)str.data();
         char *end = p + str.size();
-        while (p < end && std::isspace(*p))
+        while (p < end && Utils::IsSpace(*p))
             p++;
 
         char *word_start = p;
-        while (p < end && !std::isspace(*p))
+        while (p < end && !Utils::IsSpace(*p))
             p++;
 
         str = std::string_view(p, end - p);
