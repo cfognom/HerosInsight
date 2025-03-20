@@ -161,6 +161,11 @@ namespace HerosInsight::Utils
         return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
     }
 
+    bool IsDigit(char c)
+    {
+        return (c >= '0' && c <= '9');
+    }
+
     // Returns the number of characters that are equal between the two strings.
     // The comparison is case-insensitive if a is uppercase OR b is lowercase.
     uint32_t StrCountEqual(std::string_view a, std::string_view b)
@@ -206,6 +211,18 @@ namespace HerosInsight::Utils
         return std::string_view(word_start, p - word_start);
     }
 
+    bool TryReadSpaces(char *&p, char *end)
+    {
+        if (p < end && Utils::IsSpace(*p))
+        {
+            do
+            {
+                ++p;
+            } while (p < end && Utils::IsSpace(*p));
+            return true;
+        }
+        return false;
+    }
     bool TryRead(const char c, char *&p, char *end)
     {
         if (p < end && c == *p || std::tolower(c) == *p)
