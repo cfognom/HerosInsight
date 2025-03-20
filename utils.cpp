@@ -166,6 +166,11 @@ namespace HerosInsight::Utils
         return (c >= '0' && c <= '9');
     }
 
+    bool IsAlphaNum(char c)
+    {
+        return IsAlpha(c) || IsDigit(c);
+    }
+
     // Returns the number of characters that are equal between the two strings.
     // The comparison is case-insensitive if a is uppercase OR b is lowercase.
     uint32_t StrCountEqual(std::string_view a, std::string_view b)

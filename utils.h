@@ -148,6 +148,7 @@ namespace HerosInsight::Utils
     bool IsSpace(char c);
     bool IsAlpha(char c);
     bool IsDigit(char c);
+    bool IsAlphaNum(char c);
     uint32_t StrCountEqual(std::string_view a, std::string_view b);
     bool StrFind(const char *&cursor, const char *end, std::string_view substr);
     std::string_view PopWord(std::string_view &str);
