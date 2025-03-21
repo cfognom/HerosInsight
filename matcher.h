@@ -52,7 +52,7 @@ namespace HerosInsight
             std::string ToString() const;
 
             bool TryReadMinimum(std::string_view text, size_t &offset);
-            bool TryReadExtend(std::string_view text, size_t &offset);
+            bool TryReadMore(std::string_view text, size_t &offset);
         };
 
         Matcher(std::string_view source);

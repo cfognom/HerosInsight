@@ -208,7 +208,7 @@ namespace HerosInsight
                         break;
                     }
 
-                    if (atoms[i].TryReadExtend(text, offset))
+                    if (atoms[i].TryReadMore(text, offset))
                     {
                         atom_ends[i] = offset;
                         break;
@@ -332,7 +332,7 @@ namespace HerosInsight
         }
     }
 
-    FORCE_INLINE bool Matcher::Atom::TryReadExtend(std::string_view text, size_t &offset)
+    FORCE_INLINE bool Matcher::Atom::TryReadMore(std::string_view text, size_t &offset)
     {
         switch (type)
         {
