@@ -18,12 +18,6 @@ namespace HerosInsight
                 continue;
             }
 
-            // if (Utils::TryRead('!', p, end))
-            // {
-            //     this->atoms.push_back({Type::Not, {}});
-            //     continue;
-            // }
-
             if (Utils::TryRead('#', p, end))
             {
                 this->atoms.push_back({Type::Number, {}});
@@ -141,42 +135,42 @@ namespace HerosInsight
     {
         const size_t n_atoms = this->atoms.size();
 
-        // Do a quick check if it's not possible to match
+        // Do a quick check if a match is even possible
         size_t offset = 0;
-        // for (const auto &atom : this->atoms)
-        // {
-        //     switch (atom.type)
-        //     {
-        //         case Atom::Type::ExactString:
-        //         {
-        //             auto req_str = std::get<std::string_view>(atom.value);
-        //             offset = text.find(req_str, offset);
-        //             if (offset == std::string_view::npos)
-        //                 return false;
-        //             break;
-        //         }
+        for (const auto &atom : this->atoms)
+        {
+            switch (atom.type)
+            {
+                case Atom::Type::ExactString:
+                {
+                    auto req_str = std::get<std::string_view>(atom.value);
+                    offset = text.find(req_str, offset); // Hopefully uses SIMD
+                    if (offset == std::string_view::npos)
+                        return false;
+                    break;
+                }
 
-        //         case Atom::Type::String:
-        //         {
-        //             auto req_str = std::get<std::string_view>(atom.value);
-        //             auto it = search(text.begin() + offset, text.end(), req_str.begin(),
-        //                 req_str.end(), CharCompare);
+                case Atom::Type::String:
+                {
+                    auto req_str = std::get<std::string_view>(atom.value);
+                    auto it = search(text.begin() + offset, text.end(), req_str.begin(),
+                        req_str.end(), CharCompare);
 
-        //             if (it == text.end())
-        //                 return false;
-        //             offset = it - text.begin();
-        //             break;
-        //         }
+                    if (it == text.end())
+                        return false;
+                    offset = it - text.begin();
+                    break;
+                }
 
-        //         case Atom::Type::OneOrMoreSpaces:
-        //         {
-        //             offset = text.find(' ', offset);
-        //             if (offset == std::string_view::npos)
-        //                 return false;
-        //             break;
-        //         }
-        //     }
-        // }
+                    // case Atom::Type::OneOrMoreSpaces:
+                    // {
+                    //     offset = text.find(' ', offset);
+                    //     if (offset == std::string_view::npos)
+                    //         return false;
+                    //     break;
+                    // }
+            }
+        }
 
         const size_t alloc_size = n_atoms * sizeof(size_t);
         assert(alloc_size <= 6000 && "Too big stack allocation");
@@ -192,7 +186,7 @@ namespace HerosInsight
             {
                 atom_ends[i] = offset;
             }
-            else
+            else // Backtrack
             {
                 if (offset == size)
                     return false;
@@ -206,7 +200,8 @@ namespace HerosInsight
 
                     offset = atom_ends[i];
 
-                    if (atoms[i].type == Atom::Type::ZeroOrMoreAnything && offset < size) // This branch is only here for optimization
+                    // This branch is not needed, but it's a common case and helps speed up the execution
+                    if (atoms[i].type == Atom::Type::ZeroOrMoreAnything && offset < size)
                     {
                         ++offset;
                         atom_ends[i] = offset;
