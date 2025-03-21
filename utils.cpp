@@ -153,7 +153,8 @@ namespace HerosInsight::Utils
 
     bool IsSpace(char c)
     {
-        return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v';
+        return c == ' ';
+        // return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v';
     }
 
     bool IsAlpha(char c)
