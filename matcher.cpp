@@ -141,15 +141,6 @@ namespace HerosInsight
         {
             switch (atom.type)
             {
-                case Atom::Type::ExactString:
-                {
-                    auto req_str = std::get<std::string_view>(atom.value);
-                    offset = text.find(req_str, offset); // Hopefully uses SIMD
-                    if (offset == std::string_view::npos)
-                        return false;
-                    break;
-                }
-
                 case Atom::Type::String:
                 {
                     auto req_str = std::get<std::string_view>(atom.value);
@@ -158,7 +149,17 @@ namespace HerosInsight
 
                     if (it == text.end())
                         return false;
-                    offset = it - text.begin();
+                    offset = it - text.begin() + req_str.size();
+                    break;
+                }
+
+                case Atom::Type::ExactString:
+                {
+                    auto req_str = std::get<std::string_view>(atom.value);
+                    offset = text.find(req_str, offset); // Hopefully uses SIMD
+                    if (offset == std::string_view::npos)
+                        return false;
+                    offset += req_str.size();
                     break;
                 }
 
@@ -167,6 +168,7 @@ namespace HerosInsight
                     //     offset = text.find(' ', offset);
                     //     if (offset == std::string_view::npos)
                     //         return false;
+                    //     ++offset;
                     //     break;
                     // }
             }
