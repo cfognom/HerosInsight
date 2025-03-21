@@ -40,7 +40,8 @@ add_library(HerosInsight SHARED
     StoC_packets.h
     autovec.h
     packet_stepper.cpp
-)
+    matcher.cpp
+    )
 
 include_directories(HerosInsight PRIVATE ${CMAKE_SOURCE_DIR})
 target_precompile_headers(HerosInsight PRIVATE pch.h)
