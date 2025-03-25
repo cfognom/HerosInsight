@@ -248,6 +248,26 @@ namespace HerosInsight::Utils
         }
         return false;
     }
+    bool TryReadNumber(char *&p, char *end, double &out)
+    {
+        if (p[0] == '+')
+            ++p;
+        auto result = std::from_chars(p, end, out);
+        switch (result.ec)
+        {
+            case std::errc::invalid_argument:
+                break;
+
+            case std::errc::result_out_of_range:
+                out = p[0] == '-' ? std::numeric_limits<double>::lowest() : std::numeric_limits<double>::max();
+            case std::errc(): // success
+            {
+                p = (char *)result.ptr;
+                return true;
+            }
+        }
+        return false;
+    }
     uint32_t TryReadPartial(const std::string_view str, char *&p, char *end)
     {
         auto eq_len = 0;
