@@ -263,6 +263,8 @@ namespace HerosInsight::Utils
             case std::errc(): // success
             {
                 p = (char *)result.ptr;
+                if (p[-1] == '.')
+                    --p;
                 return true;
             }
         }
