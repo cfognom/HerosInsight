@@ -30,6 +30,7 @@ namespace HerosInsight
                 ZeroOrMoreAnything = ZEROORMORE_START,
                 ZeroOrMoreNonSpace,
                 ZeroOrMoreSpaces,
+                ZeroOrMoreAlpha,
 
                 ZEROORMORE_END,
 
@@ -38,6 +39,7 @@ namespace HerosInsight
                 OneOrMoreAnything = ONEORMORE_START,
                 OneOrMoreNonSpace,
                 OneOrMoreSpaces,
+                OneOrMoreAlpha,
 
                 ONEORMORE_END,
             };
@@ -65,5 +67,6 @@ namespace HerosInsight
 
     private:
         std::vector<Atom> atoms;
+        bool is_degenerate;
     };
 }

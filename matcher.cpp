@@ -8,8 +8,8 @@ namespace HerosInsight
     {
         using Type = Matcher::Atom::Type;
 
-        char *p = (char *)source.data();
-        char *end = p + source.size();
+        auto p = (char *)source.data();
+        auto end = p + source.size();
         while (p < end)
         {
             if (Utils::TryReadSpaces(p, end))
@@ -38,11 +38,14 @@ namespace HerosInsight
                 continue;
             }
 
-            if (Utils::IsDigit(p[0]))
+            if (Utils::IsDigit(p[0]) || p[0] == '-' || p[0] == '+')
             {
-                double value = strtod(p, &p);
-                this->atoms.push_back({Type::NumberEqual, value});
-                continue;
+                double value;
+                if (Utils::TryReadNumber(p, end, value))
+                {
+                    this->atoms.push_back({Type::NumberEqual, value});
+                    continue;
+                }
             }
 
             Type type = Type::NumberLessThan;
@@ -57,9 +60,12 @@ namespace HerosInsight
                     {
                         ++(*(uint8_t *)&type);
                     }
-                    double value = strtod(p, &p);
-                    this->atoms.push_back({type, value});
-                    continue;
+                    double value;
+                    if (Utils::TryReadNumber(p, end, value))
+                    {
+                        this->atoms.push_back({type, value});
+                        continue;
+                    }
                 }
             }
 
@@ -81,9 +87,9 @@ namespace HerosInsight
                     ++p;
                 } while (p < end && Utils::IsAlpha(*p));
                 this->atoms.push_back({Type::String, std::string_view(start, p - start)});
+                this->atoms.push_back({Type::ZeroOrMoreAlpha, {}});
                 if (Utils::TryReadSpaces(p, end))
                 {
-                    this->atoms.push_back({Type::ZeroOrMoreNonSpace, {}});
                     this->atoms.push_back({Type::OneOrMoreSpaces, {}});
                 }
                 continue;
@@ -95,9 +101,20 @@ namespace HerosInsight
                 do
                 {
                     ++p;
-                } while (p < end && !Utils::IsSpace(*p));
+                } while (p < end && !Utils::IsSpace(*p) && !Utils::IsAlpha(*p));
                 this->atoms.push_back({Type::ExactString, std::string_view(start, p - start)});
                 continue;
+            }
+        }
+
+        this->is_degenerate = true;
+        for (const auto &atom : this->atoms)
+        {
+            bool is_zero_or_more = Type::ZEROORMORE_START <= atom.type && atom.type <= Type::ZEROORMORE_END;
+            if (!is_zero_or_more)
+            {
+                this->is_degenerate = false;
+                break;
             }
         }
     }
@@ -131,8 +148,18 @@ namespace HerosInsight
         return success;
     }
 
+    FORCE_INLINE bool TryReadAlpha(std::string_view text, size_t &offset)
+    {
+        bool success = offset < text.size() && Utils::IsAlpha(text[offset]);
+        offset += success;
+        return success;
+    }
+
     bool Matcher::Matches(std::string_view text, std::vector<uint16_t> &matches)
     {
+        if (this->is_degenerate)
+            return true;
+
         const size_t n_atoms = this->atoms.size();
 
         // Do a quick check if a match is even possible
@@ -163,7 +190,21 @@ namespace HerosInsight
                     break;
                 }
 
-                    // case Atom::Type::OneOrMoreSpaces:
+                case Atom::Type::NumberEqual:
+                case Atom::Type::NumberGreaterThan:
+                case Atom::Type::NumberGreaterThanOrEqual:
+                case Atom::Type::NumberLessThan:
+                case Atom::Type::NumberLessThanOrEqual:
+                {
+                    constexpr std::string_view digits = "0123456789";
+                    offset = text.find_first_of(digits, offset);
+                    if (offset == std::string_view::npos)
+                        return false;
+                    offset += 1;
+                    break;
+                }
+
+                    // case Atom::Type::OneOrMoreSpaces: // Probably not worth the extra cost
                     // {
                     //     offset = text.find(' ', offset);
                     //     if (offset == std::string_view::npos)
@@ -179,67 +220,72 @@ namespace HerosInsight
 
         size_t *atom_ends = (size_t *)alloca(alloc_size);
         size_t size = text.size();
-        std::memset(atom_ends, 0xFF, alloc_size);
-
         offset = 0;
-        for (size_t i = 0; i < n_atoms; ++i)
+        bool success = false;
+        while (offset < size)
         {
-            if (atoms[i].TryReadMinimum(text, offset) && (atom_ends[i] == std::numeric_limits<size_t>::max() || atom_ends[i] < offset))
-            {
-                atom_ends[i] = offset;
-            }
-            else // Backtrack
-            {
-                if (offset == size)
-                    return false;
+            std::memset(atom_ends, 0xFF, alloc_size);
 
-                while (true)
+            for (size_t i = 0; i < n_atoms; ++i)
+            {
+                if (atoms[i].TryReadMinimum(text, offset) && (atom_ends[i] == std::numeric_limits<size_t>::max() || atom_ends[i] < offset))
                 {
-                    if (i == 0)
-                        return false;
+                    atom_ends[i] = offset;
+                }
+                else // Backtrack
+                {
+                    if (offset == size)
+                        return success;
 
-                    --i;
-
-                    offset = atom_ends[i];
-
-                    // This branch is not needed, but it's a common case and helps speed up the execution
-                    if (atoms[i].type == Atom::Type::ZeroOrMoreAnything && offset < size)
+                    while (true)
                     {
-                        ++offset;
-                        atom_ends[i] = offset;
-                        break;
-                    }
+                        if (i == 0)
+                            return success;
 
-                    if (atoms[i].TryReadMore(text, offset))
-                    {
-                        atom_ends[i] = offset;
-                        break;
+                        --i;
+
+                        offset = atom_ends[i];
+
+                        // This branch is not needed, but it's a common case and helps speed up the execution
+                        if (atoms[i].type == Atom::Type::ZeroOrMoreAnything && offset < size)
+                        {
+                            ++offset;
+                            atom_ends[i] = offset;
+                            break;
+                        }
+
+                        if (atoms[i].TryReadMore(text, offset))
+                        {
+                            atom_ends[i] = offset;
+                            break;
+                        }
                     }
                 }
             }
-        }
 
-        uint16_t atom_start = 0;
-        uint16_t atom_end;
-        for (size_t i = 0; i < n_atoms; ++i)
-        {
-            auto &atom = atoms[i];
-            atom_end = (uint16_t)atom_ends[i];
-
-            if (atom.type < Atom::Type::REPEATING_START)
+            uint16_t atom_start = 0;
+            uint16_t atom_end;
+            for (size_t i = 0; i < n_atoms; ++i)
             {
-                auto size = atom_end - atom_start;
-                if (size > 0)
-                {
-                    matches.push_back(atom_start);
-                    matches.push_back(atom_end);
-                }
-            }
+                auto &atom = atoms[i];
+                atom_end = (uint16_t)atom_ends[i];
 
-            atom_start = atom_end;
+                if (atom.type < Atom::Type::REPEATING_START)
+                {
+                    auto size = atom_end - atom_start;
+                    if (size > 0)
+                    {
+                        matches.push_back(atom_start);
+                        matches.push_back(atom_end);
+                    }
+                }
+
+                atom_start = atom_end;
+            }
+            success = true;
         }
 
-        return true;
+        return success;
     }
 
     FORCE_INLINE bool Matcher::Atom::TryReadMinimum(std::string_view text, size_t &offset)
@@ -252,11 +298,13 @@ namespace HerosInsight
             case Atom::Type::OneOrMoreAnything: return TryReadAnyChar(text, offset);
             case Atom::Type::OneOrMoreNonSpace: return TryReadNonSpace(text, offset);
             case Atom::Type::OneOrMoreSpaces:   return TryReadSpace(text, offset);
+            case Atom::Type::OneOrMoreAlpha:    return TryReadAlpha(text, offset);
                 // clang-format on
 
             case Atom::Type::ZeroOrMoreAnything:
             case Atom::Type::ZeroOrMoreNonSpace:
             case Atom::Type::ZeroOrMoreSpaces:
+            case Atom::Type::ZeroOrMoreAlpha:
             {
                 return true;
             }
@@ -295,32 +343,63 @@ namespace HerosInsight
             {
                 if (offset >= size)
                     return false;
-                if (Utils::IsSpace(text[offset]))
+                auto text_ptr = (char *)text.data();
+                auto off_ptr = text_ptr + offset;
+                auto before_ptr = off_ptr - 1;
+                if (offset > 0 && (Utils::IsDigit(*before_ptr) || *before_ptr == '-' || *before_ptr == '+'))
                     return false;
-                if (offset > 0 && Utils::IsDigit(text[offset - 1]))
+                auto end_ptr = text_ptr + size;
+                double value, value2;
+                bool is_negative = false;
+                bool is_dual = false;
+                if (Utils::TryRead('-', off_ptr, end_ptr))
+                {
+                    is_negative = true;
+                }
+                else
+                {
+                    Utils::TryRead('+', off_ptr, end_ptr);
+                }
+                if (Utils::TryRead('(', off_ptr, end_ptr))
+                {
+                    is_dual = true;
+                }
+                if (!Utils::TryReadNumber(off_ptr, end_ptr, value))
                     return false;
-                const char *text_ptr = &text[offset];
-                char *after_number;
-                double value = strtod(text_ptr, &after_number);
-                if (after_number == text_ptr || Utils::IsAlpha(*after_number))
-                    return false;
-                if (after_number[-1] == '.')
-                    --after_number;
                 bool success;
+                if (is_dual)
+                {
+                    success = Utils::TryRead("...", off_ptr, end_ptr) &&
+                              Utils::TryReadNumber(off_ptr, end_ptr, value2) &&
+                              Utils::TryRead(')', off_ptr, end_ptr);
+                }
+                else
+                {
+                    success = !Utils::IsAlpha(*off_ptr);
+                }
+                if (!success)
+                    return false;
+                if (is_negative)
+                {
+                    value = -value;
+                    if (is_dual)
+                        value2 = -value2;
+                }
+
                 auto req_value = std::get<double>(this->value);
                 // clang-format off
                 switch (type)
                 {
-                    case Atom::Type::NumberEqual:              success = value == req_value; break;
-                    case Atom::Type::NumberLessThan:           success = value <  req_value; break;
-                    case Atom::Type::NumberLessThanOrEqual:    success = value <= req_value; break;
-                    case Atom::Type::NumberGreaterThan:        success = value >  req_value; break;
-                    case Atom::Type::NumberGreaterThanOrEqual: success = value >= req_value; break;
-                    default:                                   success = true;               break;
+                    case Atom::Type::NumberEqual:              success = value == req_value || (is_dual && value2 == req_value); break;
+                    case Atom::Type::NumberLessThan:           success = value <  req_value || (is_dual && value2 <  req_value); break;
+                    case Atom::Type::NumberLessThanOrEqual:    success = value <= req_value || (is_dual && value2 <= req_value); break;
+                    case Atom::Type::NumberGreaterThan:        success = value >  req_value || (is_dual && value2 >  req_value); break;
+                    case Atom::Type::NumberGreaterThanOrEqual: success = value >= req_value || (is_dual && value2 >= req_value); break;
+                    default:                                   success = true;                                                   break;
                 }
                 // clang-format on
                 if (success)
-                    offset = after_number - text.data();
+                    offset = off_ptr - text.data();
                 return success;
             }
 
@@ -347,6 +426,9 @@ namespace HerosInsight
             case Atom::Type::ZeroOrMoreSpaces:
             case Atom::Type::OneOrMoreSpaces:
                 return TryReadSpace(text, offset);
+            case Atom::Type::ZeroOrMoreAlpha:
+            case Atom::Type::OneOrMoreAlpha:
+                return TryReadAlpha(text, offset);
 
             default:
                 return false;
@@ -381,6 +463,8 @@ namespace HerosInsight
                 return "ZeroOrMoreNonSpace";
             case Atom::Type::ZeroOrMoreSpaces:
                 return "ZeroOrMoreSpaces";
+            case Atom::Type::ZeroOrMoreAlpha:
+                return "ZeroOrMoreAlpha";
 
             case Atom::Type::OneOrMoreAnything:
                 return "OneOrMoreAnything";
@@ -388,6 +472,8 @@ namespace HerosInsight
                 return "OneOrMoreNonSpace";
             case Atom::Type::OneOrMoreSpaces:
                 return "OneOrMoreSpaces";
+            case Atom::Type::OneOrMoreAlpha:
+                return "OneOrMoreAlpha";
 
             default:
                 return "Unknown";
