@@ -159,7 +159,7 @@ namespace HerosInsight::Utils
 
     bool IsAlpha(char c)
     {
-        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '\'';
     }
 
     bool IsDigit(char c)
@@ -1984,6 +1984,21 @@ namespace HerosInsight::Utils
         // clang-format on
     }
 
+    float CalcExactTextWidth(ImFont *font, const char *text, const char *end)
+    {
+        if (!end)
+            end = text + strlen(text);
+
+        float width = 0.0f;
+        for (const char *p = text; p < end; ++p)
+        {
+            char c = *p;
+            width += (c < font->IndexAdvanceX.Size ? font->IndexAdvanceX.Data[c] : font->FallbackAdvanceX);
+        }
+
+        return width;
+    }
+
     // Returns size of the bounding box
     ImVec2 CalculateTextBoundingBox(ImFont *font, const char *text, ImVec2 &out_min, ImVec2 &out_max)
     {
@@ -2794,6 +2809,7 @@ namespace HerosInsight::Utils
                 {
                     auto ptr_start = &text[i_start];
                     auto ptr_end = &text[i];
+                    // auto width = CalcExactTextWidth(ImGui::GetFont(), ptr_start, ptr_end); // More accurate, but causes the highlighting boxes to be off, since they are aligned to pixel grid
                     auto width = ImGui::CalcTextSize(ptr_start, ptr_end).x;
                     auto text_color = ImGui::GetColorU32(ImGuiCol_Text);
                     float new_ss_cursor_x = ss_cursor.x + width;

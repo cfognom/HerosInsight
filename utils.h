@@ -317,6 +317,7 @@ namespace HerosInsight::Utils
 
     std::wstring GenericValueIDToString(uint32_t id);
 
+    float CalcExactTextWidth(ImFont *font, const char *text, const char *end = nullptr);
     ImVec2 CalculateTextBoundingBox(ImFont *font, const char *text, ImVec2 &out_min, ImVec2 &out_max);
 
     std::string SkillConstantDataToString(GW::Skill &skill);
