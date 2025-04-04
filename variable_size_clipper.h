@@ -16,6 +16,7 @@ namespace HerosInsight
         uint32_t visible_index_start = 0;
         bool snap_to_items = false;
         ImGuiWindow *window = nullptr;
+        bool at_end = false;
 
         void Reset()
         {
@@ -39,10 +40,7 @@ namespace HerosInsight
             if (!window)
                 return;
 
-            if (index >= item_end_positions.size())
-                return;
-
-            ImGui::SetScrollY(window, get_start_pos(index));
+            ImGui::SetScrollY(window, GetStartPosOfEntry(index));
         }
 
         void Draw(size_t size, float est_avg_height, bool snap_to_items, std::function<void(uint32_t)> draw_item)
@@ -67,18 +65,18 @@ namespace HerosInsight
                 current_scroll = view_start;
                 target_scroll = view_start;
                 if (snap_to_items)
-                    target_scroll_index = get_index_containing_pos(view_start, false);
+                    target_scroll_index = GetEntryIndexContainingPos(view_start, false);
                 scroll_modified = true;
             }
 
             if (started_snapping)
             {
-                target_scroll_index = get_index_containing_pos(target_scroll, false);
+                target_scroll_index = GetEntryIndexContainingPos(target_scroll, false);
             }
 
             auto DrawItem = [&](uint32_t index)
             {
-                ImGui::SetCursorPosY(get_start_pos(index));
+                ImGui::SetCursorPosY(GetStartPosOfEntry(index));
                 ImGui::BeginGroup();
                 draw_item(index);
                 ImGui::EndGroup();
@@ -86,9 +84,9 @@ namespace HerosInsight
                 update_end_pos(index, after);
             };
 
-            visible_index_start = get_index_containing_pos(current_scroll, false);
+            visible_index_start = GetEntryIndexContainingPos(current_scroll, false);
             auto draw_index = visible_index_start;
-            const auto draw_cursor_start = get_start_pos(draw_index);
+            const auto draw_cursor_start = GetStartPosOfEntry(draw_index);
             auto draw_cursor = draw_cursor_start;
             ImGui::SetCursorPosY(draw_cursor);
 
@@ -126,7 +124,7 @@ namespace HerosInsight
                 {
                     // Draw items below the visible range to get an accurate position of target_scroll
                     draw_index = visible_index_end;
-                    while (draw_index < size && (get_start_pos(draw_index) < target_scroll || (snap_to_items && draw_index < target_scroll_index)))
+                    while (draw_index < size && (GetStartPosOfEntry(draw_index) < target_scroll || (snap_to_items && draw_index < target_scroll_index)))
                     {
                         DrawItem(draw_index);
                         draw_index++;
@@ -134,7 +132,7 @@ namespace HerosInsight
 
                     // Draw items above the visible range to get an accurate position of target_scroll
                     draw_index = visible_index_start;
-                    while (draw_index > 0 && (target_scroll < get_start_pos(draw_index) || (snap_to_items && target_scroll_index < draw_index)))
+                    while (draw_index > 0 && (target_scroll < GetStartPosOfEntry(draw_index) || (snap_to_items && target_scroll_index < draw_index)))
                     {
                         draw_index--;
                         DrawItem(draw_index);
@@ -142,14 +140,14 @@ namespace HerosInsight
 
                     // Draw items at end to get an accurate position of scroll_max
                     draw_index = size;
-                    while (draw_index > 0 && get_start_pos(size) - get_start_pos(draw_index) < view_height)
+                    while (draw_index > 0 && GetStartPosOfEntry(size) - GetStartPosOfEntry(draw_index) < view_height)
                     {
                         draw_index--;
                         DrawItem(draw_index);
                     }
                 }
                 ImGui::PopClipRect();
-                const auto scroll_max = std::max(get_start_pos(size) - view_height, 0.f);
+                const auto scroll_max = std::max(GetStartPosOfEntry(size) - view_height, 0.f);
 
                 if (snap_to_items)
                 {
@@ -157,17 +155,22 @@ namespace HerosInsight
                     final_target_snap_index = draw_index;
                     const auto end_target_snap_index = final_target_snap_index + 1;
 
-                    if ((scroll_modified && target_scroll == scroll_max && target_scroll != get_start_pos(target_scroll_index)) ||
+                    if ((scroll_modified && target_scroll == scroll_max && target_scroll != GetStartPosOfEntry(target_scroll_index)) ||
                         (target_scroll_index > end_target_snap_index))
                     {
                         target_scroll_index = end_target_snap_index;
                     }
 
                     // Update target_scroll based on the target snap index
-                    target_scroll = get_start_pos(target_scroll_index);
+                    target_scroll = GetStartPosOfEntry(target_scroll_index);
                 }
 
-                target_scroll = std::min(target_scroll, scroll_max);
+                at_end = false;
+                if (scroll_max <= target_scroll)
+                {
+                    target_scroll = scroll_max;
+                    at_end = true;
+                }
 
                 // Do smooth scrolling towards target scroll
                 const auto dt = ImGui::GetIO().DeltaTime;
@@ -183,6 +186,28 @@ namespace HerosInsight
 #ifdef _DEBUG
             display_wheel_input(wheel_input);
 #endif
+        }
+
+        float GetStartPosOfEntry(uint32_t index)
+        {
+            return index > 0 && index <= item_end_positions.size() ? item_end_positions[index - 1] : 0;
+        }
+
+        float GetEndPosOfEntry(uint32_t index)
+        {
+            return item_end_positions[index];
+        }
+
+        uint32_t GetEntryIndexContainingPos(float pos, bool include_end = false)
+        {
+            // Perform binary search to find the current index based on scroll position
+            auto it = std::lower_bound(item_end_positions.begin(), item_end_positions.end(), pos);
+            if (it == item_end_positions.end())
+                return item_end_positions.size();
+            auto index = std::distance(item_end_positions.begin(), it);
+            if (!include_end && *it == pos) // if the position is exactly at the end of an item, we treat it as the next item
+                index++;
+            return index;
         }
 
     private:
@@ -242,19 +267,7 @@ namespace HerosInsight
 
         void set_cursor_to_end()
         {
-            ImGui::SetCursorPosY(get_start_pos(size()));
-        }
-
-        uint32_t get_index_containing_pos(float pos, bool include_end = false)
-        {
-            // Perform binary search to find the current index based on scroll position
-            auto it = std::lower_bound(item_end_positions.begin(), item_end_positions.end(), pos);
-            if (it == item_end_positions.end())
-                return item_end_positions.size();
-            auto index = std::distance(item_end_positions.begin(), it);
-            if (!include_end && *it == pos) // if the position is exactly at the end of an item, we treat it as the next item
-                index++;
-            return index;
+            ImGui::SetCursorPosY(GetStartPosOfEntry(size()));
         }
 
         void resize(size_t size, float est_avg_height)
@@ -264,7 +277,7 @@ namespace HerosInsight
             if (old_size < size)
             {
                 item_end_positions.reserve(size);
-                float last_end = get_start_pos(old_size);
+                float last_end = GetStartPosOfEntry(old_size);
                 for (uint32_t i = old_size; i < size; i++)
                 {
                     last_end += est_avg_height;
@@ -287,19 +300,9 @@ namespace HerosInsight
             return 0.f;
         }
 
-        float get_start_pos(uint32_t index)
-        {
-            return index > 0 && index <= item_end_positions.size() ? item_end_positions[index - 1] : 0;
-        }
-
-        float get_end_pos(uint32_t index)
-        {
-            return item_end_positions[index];
-        }
-
         float get_size(uint32_t index)
         {
-            return get_end_pos(index) - get_start_pos(index);
+            return GetEndPosOfEntry(index) - GetStartPosOfEntry(index);
         }
 
         void update_end_pos(uint32_t index, float new_end)
@@ -309,7 +312,7 @@ namespace HerosInsight
             if (std::abs(old_end - new_end) <= 1.f) // For some reason the same content has different sizes by 1 pixel
                 return;
 
-            float start_pos = get_start_pos(index);
+            float start_pos = GetStartPosOfEntry(index);
 
             // auto old_size = get_size(index);
             item_end_positions[index] = new_end;
