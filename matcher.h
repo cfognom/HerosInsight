@@ -27,7 +27,7 @@ namespace HerosInsight
 
                 ZEROORMORE_START,
 
-                ZeroOrMoreAnything = ZEROORMORE_START,
+                ZeroOrMoreExcept = ZEROORMORE_START,
                 ZeroOrMoreNonSpace,
                 ZeroOrMoreSpaces,
                 ZeroOrMoreAlpha,
@@ -36,7 +36,7 @@ namespace HerosInsight
 
                 ONEORMORE_START,
 
-                OneOrMoreAnything = ONEORMORE_START,
+                OneOrMoreExcept = ONEORMORE_START,
                 OneOrMoreNonSpace,
                 OneOrMoreSpaces,
                 OneOrMoreAlpha,

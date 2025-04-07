@@ -9,9 +9,32 @@ namespace HerosInsight
         using Type = Matcher::Atom::Type;
 
         auto p = (char *)source.data();
+        auto start = p;
         auto end = p + source.size();
         while (p < end)
         {
+            auto p_tmp = p;
+            if ((p_tmp == start || Utils::TryReadSpaces(p_tmp, end)))
+            {
+                bool success = true;
+                Matcher::Atom atom;
+                if (Utils::TryRead("....", p_tmp, end))
+                    atom = {Type::ZeroOrMoreExcept, {}};
+                else if (Utils::TryRead("...", p_tmp, end))
+                    atom = {Type::ZeroOrMoreExcept, ".:"};
+                else if (Utils::TryRead("..", p_tmp, end))
+                    atom = {Type::ZeroOrMoreExcept, ".,:;"};
+                else
+                    success = false;
+
+                if (success && (p_tmp == end || Utils::TryReadSpaces(p_tmp, end)))
+                {
+                    this->atoms.push_back(atom);
+                    p = p_tmp;
+                    continue;
+                }
+            }
+
             if (Utils::TryReadSpaces(p, end))
             {
                 this->atoms.push_back({Type::OneOrMoreSpaces, {}});
@@ -27,14 +50,14 @@ namespace HerosInsight
             if ((p + 3 >= end || p[3] != '.') &&
                 Utils::TryRead("...", p, end))
             {
-                this->atoms.push_back({Type::ZeroOrMoreAnything, {}});
+                this->atoms.push_back({Type::ZeroOrMoreNonSpace, {}});
                 continue;
             }
 
             if ((p + 2 >= end || p[2] != '.') &&
                 Utils::TryRead("..", p, end))
             {
-                this->atoms.push_back({Type::OneOrMoreNonSpace, {}});
+                this->atoms.push_back({Type::ZeroOrMoreAlpha, {}});
                 continue;
             }
 
@@ -87,11 +110,7 @@ namespace HerosInsight
                     ++p;
                 } while (p < end && Utils::IsAlpha(*p));
                 this->atoms.push_back({Type::String, std::string_view(start, p - start)});
-                this->atoms.push_back({Type::ZeroOrMoreAlpha, {}});
-                if (Utils::TryReadSpaces(p, end))
-                {
-                    this->atoms.push_back({Type::OneOrMoreSpaces, {}});
-                }
+                this->atoms.push_back({Type::ZeroOrMoreNonSpace, {}});
                 continue;
             }
 
@@ -124,12 +143,24 @@ namespace HerosInsight
         return a == b || std::tolower(a) == b;
     }
 
-    FORCE_INLINE bool TryReadAnyChar(std::string_view text, size_t &offset)
+    FORCE_INLINE bool TryReadAnyExcept(std::string_view text, size_t &offset, std::string_view except)
     {
-        if (offset < text.size())
+        if (offset < text.size() && except.find(text[offset]) == std::string::npos)
         {
             ++offset;
             return true;
+        }
+        if (except[0] == '.')
+        {
+            // Special case that ignores "..." when we shouldn't read '.'s
+            auto p = (char *)text.data();
+            auto end = p + text.size();
+            p += offset;
+            if (Utils::TryRead("...", p, end))
+            {
+                offset += 3;
+                return true;
+            }
         }
         return false;
     }
@@ -247,7 +278,9 @@ namespace HerosInsight
                         offset = atom_ends[i];
 
                         // This branch is not needed, but it's a common case and helps speed up the execution
-                        if (atoms[i].type == Atom::Type::ZeroOrMoreAnything && offset < size)
+                        if (atoms[i].type == Atom::Type::ZeroOrMoreExcept &&
+                            std::get<std::string_view>(atoms[i].value).empty() &&
+                            offset < size)
                         {
                             ++offset;
                             atom_ends[i] = offset;
@@ -295,13 +328,17 @@ namespace HerosInsight
         switch (type)
         {
                 // clang-format off
-            case Atom::Type::OneOrMoreAnything: return TryReadAnyChar(text, offset);
+            case Atom::Type::OneOrMoreExcept:
+            {
+                auto except = std::get<std::string_view>(this->value);
+                return TryReadAnyExcept(text, offset, except);
+            }
             case Atom::Type::OneOrMoreNonSpace: return TryReadNonSpace(text, offset);
             case Atom::Type::OneOrMoreSpaces:   return TryReadSpace(text, offset);
             case Atom::Type::OneOrMoreAlpha:    return TryReadAlpha(text, offset);
                 // clang-format on
 
-            case Atom::Type::ZeroOrMoreAnything:
+            case Atom::Type::ZeroOrMoreExcept:
             case Atom::Type::ZeroOrMoreNonSpace:
             case Atom::Type::ZeroOrMoreSpaces:
             case Atom::Type::ZeroOrMoreAlpha:
@@ -311,7 +348,7 @@ namespace HerosInsight
 
             case Atom::Type::String:
                 case_insensitive = true;
-            case Atom::Type::ExactString:
+            case Atom::Type::ExactString: // TODO: Integrate Horspool or Boyer-Moore?
             {
                 auto req_str = std::get<std::string_view>(this->value);
                 size_t req_size = req_str.size();
@@ -386,18 +423,21 @@ namespace HerosInsight
                         value2 = -value2;
                 }
 
-                auto req_value = std::get<double>(this->value);
-                // clang-format off
-                switch (type)
+                success = true;
+                if (type != Atom::Type::Number)
                 {
-                    case Atom::Type::NumberEqual:              success = value == req_value || (is_dual && value2 == req_value); break;
-                    case Atom::Type::NumberLessThan:           success = value <  req_value || (is_dual && value2 <  req_value); break;
-                    case Atom::Type::NumberLessThanOrEqual:    success = value <= req_value || (is_dual && value2 <= req_value); break;
-                    case Atom::Type::NumberGreaterThan:        success = value >  req_value || (is_dual && value2 >  req_value); break;
-                    case Atom::Type::NumberGreaterThanOrEqual: success = value >= req_value || (is_dual && value2 >= req_value); break;
-                    default:                                   success = true;                                                   break;
+                    auto req_value = std::get<double>(this->value);
+                    // clang-format off
+                    switch (type)
+                    {
+                        case Atom::Type::NumberEqual:              success = value == req_value || (is_dual && value2 == req_value); break;
+                        case Atom::Type::NumberLessThan:           success = value <  req_value || (is_dual && value2 <  req_value); break;
+                        case Atom::Type::NumberLessThanOrEqual:    success = value <= req_value || (is_dual && value2 <= req_value); break;
+                        case Atom::Type::NumberGreaterThan:        success = value >  req_value || (is_dual && value2 >  req_value); break;
+                        case Atom::Type::NumberGreaterThanOrEqual: success = value >= req_value || (is_dual && value2 >= req_value); break;
+                    }
+                    // clang-format on
                 }
-                // clang-format on
                 if (success)
                     offset = off_ptr - text.data();
                 return success;
@@ -417,9 +457,9 @@ namespace HerosInsight
     {
         switch (type)
         {
-            case Atom::Type::ZeroOrMoreAnything:
-            case Atom::Type::OneOrMoreAnything:
-                return TryReadAnyChar(text, offset);
+            case Atom::Type::ZeroOrMoreExcept:
+            case Atom::Type::OneOrMoreExcept:
+                return TryReadAnyExcept(text, offset, std::get<std::string_view>(value));
             case Atom::Type::ZeroOrMoreNonSpace:
             case Atom::Type::OneOrMoreNonSpace:
                 return TryReadNonSpace(text, offset);
@@ -457,8 +497,8 @@ namespace HerosInsight
             case Atom::Type::Number:
                 return "Number";
 
-            case Atom::Type::ZeroOrMoreAnything:
-                return "ZeroOrMoreAnything";
+            case Atom::Type::ZeroOrMoreExcept:
+                return std::format("ZeroOrMoreExcept: '{}'", std::get<std::string_view>(value));
             case Atom::Type::ZeroOrMoreNonSpace:
                 return "ZeroOrMoreNonSpace";
             case Atom::Type::ZeroOrMoreSpaces:
@@ -466,7 +506,7 @@ namespace HerosInsight
             case Atom::Type::ZeroOrMoreAlpha:
                 return "ZeroOrMoreAlpha";
 
-            case Atom::Type::OneOrMoreAnything:
+            case Atom::Type::OneOrMoreExcept:
                 return "OneOrMoreAnything";
             case Atom::Type::OneOrMoreNonSpace:
                 return "OneOrMoreNonSpace";
