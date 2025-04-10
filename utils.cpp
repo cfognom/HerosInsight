@@ -2890,6 +2890,7 @@ namespace HerosInsight::Utils
 
             if (is_word_start || i == text_len || is_new_line)
             {
+                // Attempt to add this word to the current line ...
                 auto new_i_line_end = i;
 
                 auto ptr_end = &text[i_line_end];
@@ -2900,7 +2901,9 @@ namespace HerosInsight::Utils
 
                 if (new_used_width > max_width && used_width > 0)
                 {
+                    // ... if it doesn't fit, draw the current line...
                     DrawLine(i_line_start, i_line_end);
+                    // ... and then add the word to the next line
                     i_line_start = i_line_end;
                     i_line_end = new_i_line_end;
 
