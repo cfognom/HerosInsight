@@ -2880,16 +2880,15 @@ namespace HerosInsight::Utils
         uint32_t i_line_start = 0;
         uint32_t i_line_end = 0;
         char prev_c = '\0';
-        bool pending_newline = false;
         for (uint32_t i = 0; i <= text_len; i++)
         {
             char c = i < text_len ? text[i] : '\0';
 
-            // bool is_word_start = (!prev_c || prev_c == ' ') && c != ' ';
+            bool is_word_start = (!prev_c || prev_c == ' ') && c != ' ';
             bool is_new_line = c == '\n';
-            bool is_word_end = is_new_line || prev_c && prev_c != ' ' && (!c || c == ' ');
+            // bool is_word_end = is_new_line || prev_c && prev_c != ' ' && (!c || c == ' ');
 
-            if (is_word_end)
+            if (is_word_start || i == text_len || is_new_line)
             {
                 auto new_i_line_end = i;
 
@@ -2903,8 +2902,6 @@ namespace HerosInsight::Utils
                 {
                     DrawLine(i_line_start, i_line_end);
                     i_line_start = i_line_end;
-                    while (std::isspace(text[i_line_start]))
-                        i_line_start++;
                     i_line_end = new_i_line_end;
 
                     auto ptr_start = &text[i_line_start];
