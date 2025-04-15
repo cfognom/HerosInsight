@@ -332,79 +332,48 @@ namespace HerosInsight
             return; // Skill not learnt
         }
 
-        auto skills_and_attributes_frame = GW::UI::GetFrameByLabel(L"DeckBuilder");
-        if (!skills_and_attributes_frame)
+        auto result = Utils::GetSkillFrame(drag_skill_id_request, UpdateManager::s_FrameArray);
+
+        switch (result.error) // Handle recoverable errors
         {
-            // clang-format off
-            GW::GameThread::Enqueue([]() {
-                if (!GW::UI::Keypress(GW::UI::ControlAction_OpenSkillsAndAttributes))
-                {
-                    // If we can't open the skills and attributes we have to clear the request
-                    drag_skill_id_request = GW::Constants::SkillID::No_Skill;
-                }
-            });
-            // clang-format on
-            return; // Mission failed, we'll get them next time
+            case Utils::GetSkillFrameResult::Error::SkillAndAttributesNotOpened:
+            {
+                // clang-format off
+                GW::GameThread::Enqueue([]() {
+                    // Try to open "Skills and Attributes"
+                    if (!GW::UI::Keypress(GW::UI::ControlAction_OpenSkillsAndAttributes))
+                    {
+                        // If we can't open "Skills and Attributes" we have to clear the request
+                        drag_skill_id_request = GW::Constants::SkillID::No_Skill;
+                    }
+                });
+                // clang-format on
+                return; // Mission failed, we'll get them next time
+            }
         }
 
-        const auto skill_id = drag_skill_id_request;
-
-        // Clear the request, from here on we will either succeed or fail
+        // Clear the request, from here on we will either succeed or fail, no retries
         drag_skill_id_request = GW::Constants::SkillID::No_Skill;
 
-        const auto skill = GW::SkillbarMgr::GetSkillConstantData(skill_id);
-
-        GW::UI::Frame *found_frame = nullptr;
-        for (auto frame : *UpdateManager::s_FrameArray)
+        if (!result.error)
         {
-            if (!Utils::IsFrameValid(frame))
-                continue;
+            // SUCCESS
+            assert(result.error == Utils::GetSkillFrameResult::Error::None);
 
-            auto tooltip = frame->tooltip_info;
-            if (!tooltip || tooltip->unk1 != 12) // It seems like if unk1 != 12 then it is NOT a child of the "skills and attributes" window.
-                continue;
-
-            auto payload = tooltip->payload;
-            if (!payload)
-                continue;
-
-            auto tooltip_skill_id = payload[0];
-
-            bool matching_skill_id = skill_id == tooltip_skill_id ||
-                                     (skill && (skill->skill_id_pvp == tooltip_skill_id));
-            if (!matching_skill_id)
-                continue;
-
-            auto SaA_parent = frame;
-            do
-            {
-                SaA_parent = SaA_parent->relation.GetParent();
-            } while (SaA_parent && SaA_parent != skills_and_attributes_frame);
-
-            if (!SaA_parent)
-                continue;
-
-            found_frame = frame;
-            break;
-        }
-
-        if (!found_frame)
-            return;
-
-        { // SUCCESS
             tagPOINT pt;
             GetCursorPos(&pt);
             SetCursorPos(pt.x, pt.y); // This is a hack to make GW aware of the mouse position
 
             // clang-format off
-            GW::GameThread::Enqueue([found_frame]() {
+            GW::GameThread::Enqueue([frame = result.frame]() {
                 auto packet = ClickPacket{0};
-                GW::UI::SendFrameUIMessage(found_frame, GW::UI::UIMessage::kMouseClick, &packet);
+                GW::UI::SendFrameUIMessage(frame, GW::UI::UIMessage::kMouseClick, &packet);
             });
             // clang-format on
 
             UpdateManager::is_dragging_skill = true;
         }
+        return;
     }
 
     void UpdateManager::Draw(IDirect3DDevice9 *device)

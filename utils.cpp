@@ -3369,4 +3369,55 @@ namespace HerosInsight::Utils
         bool is_overcast = overcast_lower_bound < 1.f;
         return is_overcast;
     }
+
+    // Get the corresponding frame for a skill in the "Skills and Attributes" window
+    GetSkillFrameResult GetSkillFrame(GW::Constants::SkillID skill_id, GW::Array<GW::UI::Frame *> *all_frames)
+    {
+        assert(all_frames != nullptr);
+
+        auto skills_and_attributes_frame = GW::UI::GetFrameByLabel(L"DeckBuilder");
+        if (!skills_and_attributes_frame)
+            return {GetSkillFrameResult::Error::SkillAndAttributesNotOpened, nullptr};
+
+        const auto skill = GW::SkillbarMgr::GetSkillConstantData(skill_id);
+
+        GW::UI::Frame *found_frame = nullptr;
+        for (auto frame : *all_frames)
+        {
+            if (!Utils::IsFrameValid(frame))
+                continue;
+
+            auto tooltip = frame->tooltip_info;
+            if (!tooltip || tooltip->unk1 != 12) // It seems like if unk1 != 12 then it is NOT a child of the "skills and attributes" window.
+                continue;
+
+            auto payload = tooltip->payload;
+            if (!payload)
+                continue;
+
+            auto tooltip_skill_id = payload[0];
+
+            bool matching_skill_id = skill_id == tooltip_skill_id ||
+                                     (skill && (skill->skill_id_pvp == tooltip_skill_id));
+            if (!matching_skill_id)
+                continue;
+
+            auto SaA_parent = frame;
+            do
+            {
+                SaA_parent = SaA_parent->relation.GetParent();
+            } while (SaA_parent && SaA_parent != skills_and_attributes_frame);
+
+            if (!SaA_parent)
+                continue;
+
+            found_frame = frame;
+            break;
+        }
+
+        if (!found_frame)
+            return {GetSkillFrameResult::Error::SkillFrameNotFound, nullptr};
+
+        return {GetSkillFrameResult::Error::None, found_frame};
+    }
 }

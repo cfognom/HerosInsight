@@ -494,4 +494,18 @@ namespace HerosInsight::Utils
     bool GetIsPet(uint32_t agent_id);
 
     bool IsOvercast(GW::AgentLiving &agent);
+
+    struct GetSkillFrameResult
+    {
+        enum struct Error
+        {
+            None = 0,
+            SkillAndAttributesNotOpened = 1,
+            SkillFrameNotFound = 2,
+        };
+        Error error = Error::None;
+        GW::UI::Frame *frame = nullptr;
+    };
+
+    GetSkillFrameResult GetSkillFrame(GW::Constants::SkillID skill_id, GW::Array<GW::UI::Frame *> *frames);
 }
