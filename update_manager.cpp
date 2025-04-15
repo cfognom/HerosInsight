@@ -375,13 +375,13 @@ namespace HerosInsight
             if (!matching_skill_id)
                 continue;
 
-            auto saa_parent = frame;
+            auto SaA_parent = frame;
             do
             {
-                saa_parent = saa_parent->relation.GetParent();
-            } while (saa_parent && saa_parent != skills_and_attributes_frame);
+                SaA_parent = SaA_parent->relation.GetParent();
+            } while (SaA_parent && SaA_parent != skills_and_attributes_frame);
 
-            if (!saa_parent)
+            if (!SaA_parent)
                 continue;
 
             found_frame = frame;
