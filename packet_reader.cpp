@@ -72,7 +72,7 @@ const uint32_t headers_to_debug[] = {
 };
 
 #ifdef _DEBUG
-#define DEBUG_PACKETS 3 // 0 = none, 1 = only related to player, 2 = only related to player or same frame, 3 = all
+#define DEBUG_PACKETS 0 // 0 = none, 1 = only related to player, 2 = only related to player or same frame, 3 = all
 #define DEBUG_CALC 1    // 0 = none, 1 = only wrong, 2 = all
 // #else
 // #define DEBUG_PACKETS 0
