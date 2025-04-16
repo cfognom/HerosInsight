@@ -59,6 +59,7 @@
 #include <imgui_impl_dx9.h>
 #include <imgui_internal.h>
 
+#include "debug.h"
 #include <behaviours.h>
 #include <custom_agent_data.h>
 #include <custom_skill_data.h>
@@ -179,8 +180,11 @@ namespace HerosInsight::Debug
             DebugDisplay::PushToDisplay("Tooltip payload[" + std::to_string(i) + "]", std::to_string(payload[i]));
         }
 
-        auto decoded = Utils::DecodeString((wchar_t *)payload);
-        DebugDisplay::PushToDisplay("Tooltip decoded", Utils::WStrToStr(decoded.data()));
+        if (tooltip->payload_len > 0)
+        {
+            auto decoded = Utils::DecodeString((wchar_t *)payload);
+            DebugDisplay::PushToDisplay("Tooltip decoded", Utils::WStrToStr(decoded.data()));
+        }
     }
 
     void ListTargetEffects()
