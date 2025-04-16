@@ -63,7 +63,7 @@ namespace HerosInsight::DebugUI
         Utils::FormatToChat(L"Frame: {}, UIMessage: {}", frame->frame_id, static_cast<uint32_t>(msg));
     }
 
-    void DebugCallback(GW::HookStatus *status, GW::UI::UIMessage msg, void *p1, void *p2)
+    void DebugCallback(GW::HookStatus *status, GW::UI::UIMessage msg, void *wparam, void *lparam)
     {
         switch (msg)
         {
@@ -75,7 +75,7 @@ namespace HerosInsight::DebugUI
             case (GW::UI::UIMessage)(0x30000000 | 31):
                 return; // Prevent recursive stack overflow
         }
-        Utils::FormatToChat(L"UIMessage: {}", Utils::UIMessageToWString(msg));
+        Utils::FormatToChat(L"UIMessage: {}, wparam: {}, lparam: {}", Utils::UIMessageToWString(msg), wparam, lparam);
     }
 
     void ForAllUIMessages(std::function<void(GW::UI::UIMessage)> action)
