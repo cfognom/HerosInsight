@@ -3355,7 +3355,7 @@ namespace HerosInsight
         if (IsPvEOnlySkill(*skill))        tags.PvEOnly = true;
         if (IsPvPOnlySkill(*skill))        tags.PvPOnly = true;
         if (skill->IsPvP())                tags.PvPVersion = true;
-        if (skill->skill_id_pvp != GW::Constants::SkillID::Count &&
+        if (skill->skill_id_pvp < GW::Constants::SkillID::Count &&
            !skill->IsPvP())                tags.PvEVersion = true;
         if (IsConsumableItemSkill(*skill)) tags.Consumable = true;
         if (IsMaintainedSkill(*skill))     tags.Maintained = true;
