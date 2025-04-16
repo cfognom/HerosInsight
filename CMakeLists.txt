@@ -26,6 +26,7 @@ add_library(HerosInsight SHARED
     effect_tracking.cpp
     effect_tracking.h
     debug.cpp
+    debug_ui.cpp
     texture_module.cpp
     worldspaceUI.cpp
     custom_skill_data.cpp

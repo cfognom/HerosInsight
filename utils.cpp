@@ -3370,6 +3370,37 @@ namespace HerosInsight::Utils
         return is_overcast;
     }
 
+    ImRect GetFrameRect(const GW::UI::Frame &frame)
+    {
+        const auto root = GW::UI::GetRootFrame();
+        const auto top_left = frame.position.GetTopLeftOnScreen(root);
+        const auto bottom_right = frame.position.GetBottomRightOnScreen(root);
+        return ImRect(top_left.x, top_left.y, bottom_right.x, bottom_right.y);
+    }
+
+    bool IsHoveringFrame(const GW::UI::Frame &frame)
+    {
+        const auto rect = GetFrameRect(frame);
+        return ImGui::IsMouseHoveringRect(rect.Min, rect.Max, false);
+    }
+
+    void DrawOutlineOnFrame(const GW::UI::Frame &frame, ImColor color, std::string_view label, ImVec2 relative_position)
+    {
+        const auto rect = GetFrameRect(frame);
+        auto draw_list = ImGui::GetBackgroundDrawList();
+        draw_list->AddRect(rect.Min, rect.Max, color);
+        if (!label.empty())
+        {
+            const auto text_size = ImGui::CalcTextSize(label.data());
+            const auto frame_size = rect.GetSize();
+            const auto relpos = (frame_size - text_size) * relative_position;
+            const auto pos = rect.Min + relpos;
+            draw_list->AddRectFilled(pos, pos + text_size, IM_COL32_BLACK);
+            draw_list->AddText(pos, color, label.data());
+        }
+    }
+
+
     // Get the corresponding frame for a skill in the "Skills and Attributes" window
     GetSkillFrameResult GetSkillFrame(GW::Constants::SkillID skill_id, GW::Array<GW::UI::Frame *> *all_frames)
     {

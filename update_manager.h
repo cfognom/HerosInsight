@@ -29,6 +29,7 @@ namespace HerosInsight
         static float render_delta_seconds;
 
 #ifdef _DEBUG
+        static bool enable_ui_debug;
         static bool open_debug;
         static bool open_texture_viewer;
         static bool open_scanner_tool;

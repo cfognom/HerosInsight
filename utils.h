@@ -495,6 +495,10 @@ namespace HerosInsight::Utils
 
     bool IsOvercast(GW::AgentLiving &agent);
 
+    ImRect GetFrameRect(const GW::UI::Frame &frame);
+    bool IsHoveringFrame(const GW::UI::Frame &frame);
+    void DrawOutlineOnFrame(const GW::UI::Frame &frame, ImColor color = IM_COL32(255, 0, 0, 255), std::string_view label = "", ImVec2 relative_position = ImVec2(0.0f, 0.0f));
+
     struct GetSkillFrameResult
     {
         enum struct Error

@@ -11,6 +11,7 @@
 #include <damage_display.h>
 #include <debug.h>
 #include <debug_display.h>
+#include <debug_ui.h>
 #include <effect_initiator.h>
 #include <effect_tracking.h>
 #include <hero_ai.h>
@@ -43,6 +44,7 @@ namespace HerosInsight
 
 #ifdef _DEBUG
     ScannerTool UpdateManager::scanner_tool;
+    bool UpdateManager::enable_ui_debug = false;
     bool UpdateManager::open_debug = true;
     bool UpdateManager::open_scanner_tool = false;
     bool UpdateManager::open_texture_viewer = false;
@@ -258,6 +260,7 @@ namespace HerosInsight
             {
 #ifdef _DEBUG
                 ImGui::TextUnformatted("Windows");
+                ImGui::Checkbox("Debug UI", &UpdateManager::enable_ui_debug);
                 ImGui::Checkbox("Debug Display", &UpdateManager::open_debug);
                 ImGui::Checkbox("Texture Viewer", &UpdateManager::open_texture_viewer);
                 ImGui::Checkbox("Scanner Tool", &UpdateManager::open_scanner_tool);
@@ -411,6 +414,8 @@ namespace HerosInsight
 #ifdef _DEBUG
         if (open_texture_viewer)
             TextureViewer::Draw();
+        if (enable_ui_debug)
+            HerosInsight::DebugUI::Draw(device);
         if (open_debug)
             HerosInsight::DebugDisplay::Draw(device);
         if (open_scanner_tool)
