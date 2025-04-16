@@ -513,5 +513,5 @@ namespace HerosInsight::Utils
 
     GetSkillFrameResult GetSkillFrame(GW::Constants::SkillID skill_id, GW::Array<GW::UI::Frame *> *frames);
 
-    std::string_view UIMessageToStr(GW::UI::UIMessage msg);
+    const std::wstring UIMessageToWString(GW::UI::UIMessage msg);
 }

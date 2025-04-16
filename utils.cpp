@@ -3400,7 +3400,6 @@ namespace HerosInsight::Utils
         }
     }
 
-
     // Get the corresponding frame for a skill in the "Skills and Attributes" window
     GetSkillFrameResult GetSkillFrame(GW::Constants::SkillID skill_id, GW::Array<GW::UI::Frame *> *all_frames)
     {
@@ -3452,13 +3451,13 @@ namespace HerosInsight::Utils
         return {GetSkillFrameResult::Error::None, found_frame};
     }
 
-    std::string_view UIMessageToStr(GW::UI::UIMessage msg)
+    const std::wstring UIMessageToWString(GW::UI::UIMessage msg)
     {
         switch (msg)
         {
 #define X(a)                   \
     case GW::UI::UIMessage::a: \
-        return #a;
+        return L#a;
             X(kNone)
             X(kInitFrame)
             X(kDestroyFrame)
@@ -3562,6 +3561,15 @@ namespace HerosInsight::Utils
             X(kOpenTemplate)
 #undef X
         }
-        return "Unknown";
+        const auto raw = static_cast<uint32_t>(msg);
+        if (raw & 0x10000000)
+        {
+            return std::format(L"Unknown (0x10000000 | {})", (raw & ~0x10000000));
+        }
+        else if (raw & 0x30000000)
+        {
+            return std::format(L"Client to Server (0x30000000 | {})", (raw & ~0x30000000));
+        }
+        return std::format(L"Unknown ({})", raw);
     }
 }
