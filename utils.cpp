@@ -3384,6 +3384,21 @@ namespace HerosInsight::Utils
         return ImGui::IsMouseHoveringRect(rect.Min, rect.Max, false);
     }
 
+    void ForEachChildFrame(GW::Array<GW::UI::Frame *> *all_frames, const GW::UI::Frame &parent_frame, std::function<void(const GW::UI::Frame &)> func)
+    {
+        assert(all_frames != nullptr);
+        for (auto pot_child : *all_frames)
+        {
+            if (!Utils::IsFrameValid(pot_child))
+                continue;
+
+            if (GW::UI::GetParentFrame(pot_child) == &parent_frame)
+            {
+                func(*pot_child);
+            }
+        }
+    }
+
     void DrawOutlineOnFrame(const GW::UI::Frame &frame, ImColor color, std::string_view label, ImVec2 relative_position)
     {
         const auto rect = GetFrameRect(frame);

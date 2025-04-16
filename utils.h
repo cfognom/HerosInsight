@@ -497,6 +497,7 @@ namespace HerosInsight::Utils
 
     ImRect GetFrameRect(const GW::UI::Frame &frame);
     bool IsHoveringFrame(const GW::UI::Frame &frame);
+    void ForEachChildFrame(GW::Array<GW::UI::Frame *> *all_frames, const GW::UI::Frame &parent_frame, std::function<void(const GW::UI::Frame &)> func);
     void DrawOutlineOnFrame(const GW::UI::Frame &frame, ImColor color = IM_COL32(255, 0, 0, 255), std::string_view label = "", ImVec2 relative_position = ImVec2(0.0f, 0.0f));
 
     struct GetSkillFrameResult
