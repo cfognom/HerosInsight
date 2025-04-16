@@ -3562,13 +3562,13 @@ namespace HerosInsight::Utils
 #undef X
         }
         const auto raw = static_cast<uint32_t>(msg);
-        if (raw & 0x10000000)
-        {
-            return std::format(L"Unknown (0x10000000 | {})", (raw & ~0x10000000));
-        }
-        else if (raw & 0x30000000)
+        if ((raw & 0x30000000) == 0x30000000)
         {
             return std::format(L"Client to Server (0x30000000 | {})", (raw & ~0x30000000));
+        }
+        else if ((raw & 0x10000000) == 0x10000000)
+        {
+            return std::format(L"Unknown (0x10000000 | {})", (raw & ~0x10000000));
         }
         return std::format(L"Unknown ({})", raw);
     }

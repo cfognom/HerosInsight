@@ -166,8 +166,6 @@ namespace HerosInsight
         {
             // Game state changed
 
-            // CustomAgentDataModule::TryCollectAttributes();
-
             if (game_state == GameState::InExplorable)
             {
                 // Entered explorable
@@ -260,7 +258,13 @@ namespace HerosInsight
             {
 #ifdef _DEBUG
                 ImGui::TextUnformatted("Windows");
-                ImGui::Checkbox("Debug UI", &UpdateManager::enable_ui_debug);
+                if (ImGui::Checkbox("Debug UI", &UpdateManager::enable_ui_debug))
+                {
+                    if (UpdateManager::enable_ui_debug)
+                        HerosInsight::DebugUI::EnableUIMessageLogging();
+                    else
+                        HerosInsight::DebugUI::DisableUIMessageLogging();
+                }
                 ImGui::Checkbox("Debug Display", &UpdateManager::open_debug);
                 ImGui::Checkbox("Texture Viewer", &UpdateManager::open_texture_viewer);
                 ImGui::Checkbox("Scanner Tool", &UpdateManager::open_scanner_tool);

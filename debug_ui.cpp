@@ -56,6 +56,54 @@
 
 namespace HerosInsight::DebugUI
 {
+    GW::HookEntry entry;
+
+    void DebugFrameCallback(GW::HookStatus *status, const GW::UI::Frame *frame, GW::UI::UIMessage msg, void *p1, void *p2)
+    {
+        Utils::FormatToChat(L"Frame: {}, UIMessage: {}", frame->frame_id, static_cast<uint32_t>(msg));
+    }
+
+    void DebugCallback(GW::HookStatus *status, GW::UI::UIMessage msg, void *p1, void *p2)
+    {
+        switch (msg)
+        {
+            case GW::UI::UIMessage::kWriteToChatLog:
+            case GW::UI::UIMessage::kWriteToChatLogWithSender:
+                return; // Prevent recursive stack overflow
+        }
+        Utils::FormatToChat(L"UIMessage: {}", Utils::UIMessageToWString(msg));
+    }
+
+    void ForAllUIMessages(std::function<void(GW::UI::UIMessage)> action)
+    {
+        for (uint32_t i = 1; i < 1000; ++i)
+        {
+            action((GW::UI::UIMessage)(i));
+            action((GW::UI::UIMessage)(0x10000000 | i));
+            action((GW::UI::UIMessage)(0x30000000 | i)); // Client to server
+        }
+    }
+
+    void EnableUIMessageLogging()
+    {
+        // GW::UI::RegisterFrameUIMessageCallback(&entry, GW::UI::UIMessage::kMouseClick, DebugFrameCallback, 0x8000);
+        ForAllUIMessages(
+            [](GW::UI::UIMessage msg)
+            {
+                GW::UI::RegisterUIMessageCallback(&entry, msg, DebugCallback);
+            });
+    }
+
+    void DisableUIMessageLogging()
+    {
+        // GW::UI::RemoveFrameUIMessageCallback(&entry);
+        ForAllUIMessages(
+            [](GW::UI::UIMessage msg)
+            {
+                GW::UI::RemoveUIMessageCallback(&entry, msg);
+            });
+    }
+
     void Draw(IDirect3DDevice9 *device)
     {
         auto all_frames = UpdateManager::s_FrameArray;
