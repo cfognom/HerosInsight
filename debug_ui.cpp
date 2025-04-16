@@ -165,22 +165,19 @@ namespace HerosInsight::DebugUI
             auto cyan = ImColor(0, 255, 255);
             Utils::DrawOutlineOnFrame(*hovered_frame, cyan, label, ImVec2(0.5f, 0.5f));
 
-            size_t child_index = 0;
-            while (true)
+            for (auto frame : *all_frames)
             {
-                auto child_ptr = GW::UI::GetChildFrame(hovered_frame, child_index);
-                if (!child_ptr)
-                    break;
+                if (!Utils::IsFrameValid(frame))
+                    continue;
 
-                auto &child_frame = *child_ptr;
-
-                assert(child_frame.child_offset_id == child_index);
-                label.clear();
-                label.PushFormat("ID: %u, (child %u of hovered)", child_frame.frame_id, child_index);
-                auto magenta = ImColor(255, 0, 255);
-                Utils::DrawOutlineOnFrame(child_frame, magenta, label, ImVec2(1.f, 1.f));
-
-                ++child_index;
+                auto parent = GW::UI::GetParentFrame(frame);
+                if (parent == hovered_frame)
+                {
+                    label.clear();
+                    label.PushFormat("ID: %u, (child %u of hovered)", frame->frame_id, frame->child_offset_id);
+                    auto magenta = ImColor(255, 0, 255);
+                    Utils::DrawOutlineOnFrame(*frame, magenta, label, ImVec2(1.f, 1.f));
+                }
             }
         }
     }
