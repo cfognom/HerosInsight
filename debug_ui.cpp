@@ -69,6 +69,10 @@ namespace HerosInsight::DebugUI
         {
             case GW::UI::UIMessage::kWriteToChatLog:
             case GW::UI::UIMessage::kWriteToChatLogWithSender:
+            case (GW::UI::UIMessage)(0x30000000 | 24):
+            case (GW::UI::UIMessage)(0x30000000 | 25):
+            case (GW::UI::UIMessage)(0x30000000 | 29):
+            case (GW::UI::UIMessage)(0x30000000 | 31):
                 return; // Prevent recursive stack overflow
         }
         Utils::FormatToChat(L"UIMessage: {}", Utils::UIMessageToWString(msg));
@@ -86,6 +90,7 @@ namespace HerosInsight::DebugUI
 
     void EnableUIMessageLogging()
     {
+        Utils::FormatToChat(L"Enabling UI message logging");
         // GW::UI::RegisterFrameUIMessageCallback(&entry, GW::UI::UIMessage::kMouseClick, DebugFrameCallback, 0x8000);
         ForAllUIMessages(
             [](GW::UI::UIMessage msg)
@@ -96,6 +101,7 @@ namespace HerosInsight::DebugUI
 
     void DisableUIMessageLogging()
     {
+        Utils::FormatToChat(L"Disabling UI message logging");
         // GW::UI::RemoveFrameUIMessageCallback(&entry);
         ForAllUIMessages(
             [](GW::UI::UIMessage msg)
