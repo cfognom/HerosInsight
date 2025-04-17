@@ -393,17 +393,18 @@ namespace HerosInsight
 
         TextureModule::DxUpdate(device);
 
-        bool loading = game_state == GameState::Loading ||
-                       game_state == GameState::InCinematic;
+        bool hide = game_state == GameState::Loading ||
+                    game_state == GameState::InCinematic ||
+                    GW::UI::GetIsWorldMapShowing();
+        auto bg_draw_list = ImGui::GetBackgroundDrawList();
 
-        auto &alpha = ImGui::GetStyle().Alpha;
-        auto original_alpha = alpha;
-        if (loading)
+        if (hide)
         {
             // Instead of returning early to hide the UI,
             // we draw everything with alpha = 0 to avoid triggering
             // IsWindowAppearing etc.
-            alpha = 0.f;
+            ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.f);
+            bg_draw_list->PushClipRect(ImVec2(0, 0), ImVec2(0, 0), true); // Clip everything in bg_draw_list
         }
 
         HerosInsight::EnergyDisplay::Draw(device);
@@ -432,9 +433,10 @@ namespace HerosInsight
 
         DrawMenu();
 
-        if (loading)
+        if (hide)
         {
-            alpha = original_alpha;
+            ImGui::PopStyleVar();
+            bg_draw_list->PopClipRect();
         }
     }
 
