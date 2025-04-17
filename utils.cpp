@@ -3384,7 +3384,7 @@ namespace HerosInsight::Utils
         return ImGui::IsMouseHoveringRect(rect.Min, rect.Max, false);
     }
 
-    void ForEachChildFrame(GW::Array<GW::UI::Frame *> *all_frames, const GW::UI::Frame &parent_frame, std::function<void(const GW::UI::Frame &)> func)
+    void ForEachChildFrame(GW::Array<GW::UI::Frame *> *all_frames, const GW::UI::Frame &parent_frame, std::function<void(GW::UI::Frame &)> func)
     {
         assert(all_frames != nullptr);
         for (auto pot_child : *all_frames)
@@ -3586,5 +3586,24 @@ namespace HerosInsight::Utils
             return std::format(L"Unknown (0x10000000 | {})", (raw & ~0x10000000));
         }
         return std::format(L"Unknown ({})", raw);
+    }
+
+    void DebugFrame(GW::Array<GW::UI::Frame *> *all_frames, GW::UI::Frame &frame, size_t depth)
+    {
+        FixedArray<wchar_t, 256> buffer_salloc;
+        auto buffer = buffer_salloc.ref();
+        for (size_t i = 0; i < depth; ++i)
+        {
+            buffer.PushFormat(L"   ");
+        }
+        buffer.PushFormat(L"%u", frame.frame_id);
+
+        Utils::FormatToChat(L"{}", (std::wstring_view)buffer);
+
+        ForEachChildFrame(all_frames, frame,
+            [=](GW::UI::Frame &frame)
+            {
+                DebugFrame(all_frames, frame, depth + 1);
+            });
     }
 }
