@@ -2745,14 +2745,15 @@ namespace HerosInsight::Utils
     }
 
     void DrawMultiColoredText(
-        const char *text, const char *end,
+        std::string_view text,
         float wrapping_min, float wrapping_max,
         std::span<ColorChange> color_changes,
         std::span<uint16_t> highlighting,
         std::span<TextTooltip> tooltips,
         std::function<void(uint32_t)> draw_tooltip)
     {
-        auto text_len = end ? end - text : strlen(text);
+        auto text_ptr = text.data();
+        auto text_len = text.size();
 
         const auto initial_cursor = ImGui::GetCursorScreenPos();
 
@@ -2807,8 +2808,8 @@ namespace HerosInsight::Utils
 
                 if (i_start < i)
                 {
-                    auto ptr_start = &text[i_start];
-                    auto ptr_end = &text[i];
+                    auto ptr_start = &text_ptr[i_start];
+                    auto ptr_end = &text_ptr[i];
                     // auto width = CalcExactTextWidth(ImGui::GetFont(), ptr_start, ptr_end); // More accurate, but causes the highlighting boxes to be off, since they are aligned to pixel grid
                     auto width = ImGui::CalcTextSize(ptr_start, ptr_end).x;
                     auto text_color = ImGui::GetColorU32(ImGuiCol_Text);
@@ -2893,8 +2894,8 @@ namespace HerosInsight::Utils
                 // Attempt to add this word to the current line ...
                 auto new_i_line_end = i;
 
-                auto ptr_end = &text[i_line_end];
-                auto ptr_new_end = &text[new_i_line_end];
+                auto ptr_end = &text_ptr[i_line_end];
+                auto ptr_new_end = &text_ptr[new_i_line_end];
                 auto word_width = ImGui::CalcTextSize(ptr_end, ptr_new_end).x;
 
                 auto new_used_width = used_width + word_width;
@@ -2907,8 +2908,8 @@ namespace HerosInsight::Utils
                     i_line_start = i_line_end;
                     i_line_end = new_i_line_end;
 
-                    auto ptr_start = &text[i_line_start];
-                    auto ptr_end = &text[i_line_end];
+                    auto ptr_start = &text_ptr[i_line_start];
+                    auto ptr_end = &text_ptr[i_line_end];
                     used_width = ImGui::CalcTextSize(ptr_start, ptr_end).x;
                 }
                 else

@@ -383,7 +383,7 @@ namespace HerosInsight::Utils
 
     void UnrichText(std::string &rich_text, std::vector<ColorChange> &color_changes, std::vector<TextTooltip> &tooltips, std::span<std::string_view> replacements = {});
     void DrawMultiColoredText(
-        const char *text, const char *end,
+        std::string_view text,
         float wrapping_min, float wrapping_max,
         std::span<ColorChange> color_changes = {},
         std::span<uint16_t> highlighting = {},
