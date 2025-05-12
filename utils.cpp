@@ -3627,4 +3627,26 @@ namespace HerosInsight::Utils
         }
         return prof_mask;
     }
+
+    bool IsSkillEquipable(GW::Skill &skill, uint32_t agent_id)
+    {
+        auto skill_id = skill.skill_id;
+        bool is_player = agent_id == GW::Agents::GetControlledCharacterId();
+
+        if (is_player)
+        {
+            return GW::SkillbarMgr::GetIsSkillLearnt(skill_id);
+        }
+        else
+        {
+            if (skill.IsPvE()) // Heroes cannot equip PvE skills
+                return false;
+
+            auto prof_mask = Utils::GetProfessionMask(agent_id);
+            if ((prof_mask & (1 << (uint8_t)skill.profession)) == 0)
+                return false;
+
+            return GW::SkillbarMgr::GetIsSkillUnlocked(skill_id);
+        }
+    }
 }
