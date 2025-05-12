@@ -20,6 +20,7 @@
 #include <skill_book.h>
 #include <texture_module.h>
 #include <texture_viewer.h>
+#include <window_alpha_scope.h>
 #include <worldspaceUI.h>
 
 #include "update_manager.h"

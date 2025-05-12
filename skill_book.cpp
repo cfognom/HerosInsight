@@ -94,6 +94,7 @@
 #include <update_manager.h>
 #include <utils.h>
 #include <variable_size_clipper.h>
+#include <window_alpha_scope.h>
 
 #include "skill_book.h"
 

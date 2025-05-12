@@ -91,6 +91,7 @@
 #include <texture_module.h>
 #include <update_manager.h>
 #include <variable_size_clipper.h>
+#include <window_alpha_scope.h>
 
 #include "utils.h"
 

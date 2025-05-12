@@ -61,6 +61,7 @@
 #include <texture_module.h>
 #include <update_manager.h>
 #include <utils.h>
+#include <window_alpha_scope.h>
 
 #include "debug_display.h"
 
