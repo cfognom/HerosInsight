@@ -3607,4 +3607,24 @@ namespace HerosInsight::Utils
                 DebugFrame(all_frames, frame, depth + 1);
             });
     }
+
+    uint32_t GetProfessionMask(uint32_t agent_id)
+    {
+        uint32_t prof_mask = 1;
+        auto world_ctx = GW::GetWorldContext();
+        if (world_ctx)
+        {
+            auto &prof_states = world_ctx->party_profession_states;
+            for (auto prof_state : prof_states)
+            {
+                if (prof_state.agent_id == agent_id)
+                {
+                    prof_mask |= (1 << (uint32_t)prof_state.primary);
+                    prof_mask |= (1 << (uint32_t)prof_state.secondary);
+                    break;
+                }
+            }
+        }
+        return prof_mask;
+    }
 }

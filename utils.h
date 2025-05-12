@@ -470,8 +470,38 @@ namespace HerosInsight::Utils
 
         void ImGuiRender(float wrapping_min, float wrapping_max, std::span<uint16_t> highlighting = {}, std::function<void(uint32_t)> draw_tooltip = nullptr)
         {
-            const auto p = str.data();
-            DrawMultiColoredText(p, p + str.size(), wrapping_min, wrapping_max, color_changes, highlighting, tooltips, draw_tooltip);
+            DrawMultiColoredText(str, wrapping_min, wrapping_max, color_changes, highlighting, tooltips, draw_tooltip);
+        }
+    };
+
+    struct PrefixedStringView
+    {
+        std::string_view entire;
+        uint8_t prefix_len;
+
+        std::string_view Get() const
+        {
+            return entire;
+        }
+
+        std::string_view GetPrefix() const
+        {
+            return entire.substr(0, prefix_len);
+        }
+
+        std::string_view GetSuffix() const
+        {
+            return entire.substr(prefix_len);
+        }
+
+        bool IsInit() const
+        {
+            return entire.data() != nullptr;
+        }
+
+        bool operator==(const PrefixedStringView &other) const
+        {
+            return entire == other.entire && prefix_len == other.prefix_len;
         }
     };
 
@@ -515,4 +545,6 @@ namespace HerosInsight::Utils
     GetSkillFrameResult GetSkillFrame(GW::Constants::SkillID skill_id, GW::Array<GW::UI::Frame *> *frames);
 
     const std::wstring UIMessageToWString(GW::UI::UIMessage msg);
+
+    uint32_t GetProfessionMask(uint32_t agent_id);
 }
