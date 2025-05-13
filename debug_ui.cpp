@@ -57,6 +57,7 @@
 namespace HerosInsight::DebugUI
 {
     GW::HookEntry entry;
+    GW::HookEntry creation_entry;
 
     void DebugFrameCallback(GW::HookStatus *status, const GW::UI::Frame *frame, GW::UI::UIMessage msg, void *p1, void *p2)
     {
@@ -78,6 +79,21 @@ namespace HerosInsight::DebugUI
         Utils::FormatToChat(L"UIMessage: {}, wparam: {}, lparam: {}", Utils::UIMessageToWString(msg), wparam, lparam);
     }
 
+    void DebugCreationCallback(GW::UI::CreateUIComponentPacket *packet)
+    {
+        assert(packet);
+        if (packet->component_flags == 33280 ||
+            packet->component_flags == 768)
+            return;
+        Utils::FormatToChat(L"UI frame created: id={}, name={}, comp_label={}, comp_flags={}, tab_index={}, event_callback={}",
+            packet->frame_id,
+            static_cast<const void *>(packet->name_enc),
+            static_cast<const void *>(packet->component_label),
+            packet->component_flags,
+            packet->tab_index,
+            static_cast<const void *>(packet->event_callback));
+    }
+
     void ForAllUIMessages(std::function<void(GW::UI::UIMessage)> action)
     {
         for (uint32_t i = 1; i < 1000; ++i)
@@ -97,6 +113,7 @@ namespace HerosInsight::DebugUI
             {
                 GW::UI::RegisterUIMessageCallback(&entry, msg, DebugCallback);
             });
+        GW::UI::RegisterCreateUIComponentCallback(&creation_entry, DebugCreationCallback, 1);
     }
 
     void DisableUIMessageLogging()
@@ -108,6 +125,7 @@ namespace HerosInsight::DebugUI
             {
                 GW::UI::RemoveUIMessageCallback(&entry, msg);
             });
+        GW::UI::RemoveCreateUIComponentCallback(&creation_entry);
     }
 
     void Draw(IDirect3DDevice9 *device)
@@ -147,10 +165,11 @@ namespace HerosInsight::DebugUI
             }
         }
 
+        FixedArray<char, 64> label_salloc;
+        auto label = label_salloc.ref();
+
         if (hovered_frame)
         {
-            FixedArray<char, 64> label_salloc;
-            auto label = label_salloc.ref();
 
             auto parent = GW::UI::GetParentFrame(hovered_frame);
             if (parent)
@@ -161,7 +180,7 @@ namespace HerosInsight::DebugUI
             }
 
             label.clear();
-            label.PushFormat("ID: %u, (child %u of parent)", hovered_frame->frame_id, hovered_frame->child_offset_id);
+            label.PushFormat("ID: %u, (child %i of parent)", hovered_frame->frame_id, hovered_frame->child_offset_id);
             auto cyan = ImColor(0, 255, 255);
             Utils::DrawOutlineOnFrame(*hovered_frame, cyan, label, ImVec2(0.5f, 0.5f));
 
@@ -169,10 +188,24 @@ namespace HerosInsight::DebugUI
                 [&](const GW::UI::Frame &frame)
                 {
                     label.clear();
-                    label.PushFormat("ID: %u, (child %u of hovered)", frame.frame_id, frame.child_offset_id);
+                    label.PushFormat("ID: %u, (child %i of hovered)", frame.frame_id, frame.child_offset_id);
                     auto magenta = ImColor(255, 0, 255);
                     Utils::DrawOutlineOnFrame(frame, magenta, label, ImVec2(1.f, 1.f));
                 });
+        }
+
+        auto root = GW::UI::GetRootFrame();
+        if (root)
+        {
+            for (int32_t i = -1;; --i)
+            {
+                auto child = GW::UI::GetChildFrame(root, i);
+                if (!child)
+                    break;
+                label.clear();
+                label.PushFormat("ID: %u, (child %i of root)", child->frame_id, child->child_offset_id);
+                Utils::DrawOutlineOnFrame(*child, ImColor(255, 0, 0), label);
+            }
         }
     }
 }
