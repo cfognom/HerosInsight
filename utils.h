@@ -237,6 +237,7 @@ namespace HerosInsight::Utils
     D3DXMATRIX GetProjectionMatrix();
     ImVec2 WorldSpaceToScreenSpace(GW::Vec3f world_pos);
     IDirect3DStateBlock9 *PrepareWorldSpaceRendering(IDirect3DDevice9 *device);
+    IDirect3DStateBlock9 *PrepareStencilHoles(IDirect3DDevice9 *device, std::span<ImRect> holes);
 
     float DistanceSqrd(GW::Vec3f a, GW::Vec3f b);
     float Dot(GW::Vec2f a, GW::Vec2f b);

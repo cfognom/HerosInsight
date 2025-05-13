@@ -1554,8 +1554,8 @@ namespace HerosInsight::Utils
     IDirect3DStateBlock9 *PrepareWorldSpaceRendering(IDirect3DDevice9 *device)
     {
         // Save current state
-        IDirect3DStateBlock9 *changes = nullptr;
-        device->CreateStateBlock(D3DSBT_ALL, &changes);
+        IDirect3DStateBlock9 *old_state = nullptr;
+        device->CreateStateBlock(D3DSBT_ALL, &old_state);
 
         // Disable lighting (so it doesn't interfere with color)
         device->SetRenderState(D3DRS_LIGHTING, FALSE);
@@ -1576,7 +1576,64 @@ namespace HerosInsight::Utils
         D3DXMATRIX identity = D3DXMATRIX(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
         device->SetTransform(D3DTS_WORLD, &identity);
 
-        return changes;
+        return old_state;
+    }
+
+    // Call before rendering ImGui to mark the hole areas in the stencil buffer
+    IDirect3DStateBlock9 *PrepareStencilHoles(IDirect3DDevice9 *device, std::span<ImRect> holes)
+    {
+        // Save current state
+        IDirect3DStateBlock9 *old_state = nullptr;
+        device->CreateStateBlock(D3DSBT_ALL, &old_state);
+
+        // Disable color/depth writes
+        device->SetRenderState(D3DRS_COLORWRITEENABLE, 0);
+        device->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
+
+        // Clear stencil buffer
+        device->Clear(0, nullptr, D3DCLEAR_STENCIL, D3DCOLOR_XRGB(0, 0, 0), 0.0f, 0);
+
+        // Enable stencil and configure to write 1 where we draw the holes
+        device->SetRenderState(D3DRS_STENCILENABLE, TRUE);
+        device->SetRenderState(D3DRS_STENCILFUNC, D3DCMP_ALWAYS);
+        device->SetRenderState(D3DRS_STENCILPASS, D3DSTENCILOP_REPLACE);
+        device->SetRenderState(D3DRS_STENCILREF, 1);
+        device->SetRenderState(D3DRS_STENCILMASK, 0xFF);
+        device->SetRenderState(D3DRS_STENCILWRITEMASK, 0xFF);
+
+        // Allocate vertices on the stack and fill them
+        struct Vertex
+        {
+            float x, y, z, rhw;
+            DWORD color;
+        };
+        const size_t vertex_count = holes.size() * 6; // 6 vertices per quad
+        Vertex *verts = (Vertex *)alloca(vertex_count * sizeof(Vertex));
+
+        size_t v = 0;
+        for (const auto &rect : holes)
+        {
+            verts[v++] = {rect.Min.x, rect.Min.y, 0.0f, 1.0f, 0xFFFFFFFF};
+            verts[v++] = {rect.Max.x, rect.Min.y, 0.0f, 1.0f, 0xFFFFFFFF};
+            verts[v++] = {rect.Max.x, rect.Max.y, 0.0f, 1.0f, 0xFFFFFFFF};
+
+            verts[v++] = {rect.Min.x, rect.Min.y, 0.0f, 1.0f, 0xFFFFFFFF};
+            verts[v++] = {rect.Max.x, rect.Max.y, 0.0f, 1.0f, 0xFFFFFFFF};
+            verts[v++] = {rect.Min.x, rect.Max.y, 0.0f, 1.0f, 0xFFFFFFFF};
+        }
+
+        device->SetFVF(D3DFVF_XYZRHW | D3DFVF_DIFFUSE);
+        device->DrawPrimitiveUP(D3DPT_TRIANGLELIST, holes.size() * 2, verts, sizeof(Vertex));
+
+        // Restore color/depth writes
+        device->SetRenderState(D3DRS_COLORWRITEENABLE, 0xFFFFFFFF);
+        device->SetRenderState(D3DRS_ZWRITEENABLE, TRUE);
+
+        // Set stencil test to reject pixels where stencil == 1 (the holes)
+        device->SetRenderState(D3DRS_STENCILFUNC, D3DCMP_NOTEQUAL);   // pass where != 1
+        device->SetRenderState(D3DRS_STENCILPASS, D3DSTENCILOP_KEEP); // don't modify stencil
+
+        return old_state;
     }
 
     template <typename T>
