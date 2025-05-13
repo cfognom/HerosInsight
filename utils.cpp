@@ -3457,7 +3457,7 @@ namespace HerosInsight::Utils
         }
     }
 
-    void DrawOutlineOnFrame(const GW::UI::Frame &frame, ImColor color, std::string_view label, ImVec2 relative_position)
+    void DrawOutlineOnFrame(const GW::UI::Frame &frame, ImColor color, std::string_view label, ImVec2 rel_label_pos)
     {
         const auto rect = GetFrameRect(frame);
         auto draw_list = ImGui::GetBackgroundDrawList();
@@ -3466,7 +3466,7 @@ namespace HerosInsight::Utils
         {
             const auto text_size = ImGui::CalcTextSize(label.data());
             const auto frame_size = rect.GetSize();
-            const auto relpos = (frame_size - text_size) * relative_position;
+            const auto relpos = (frame_size - text_size) * rel_label_pos;
             const auto pos = rect.Min + relpos;
             draw_list->AddRectFilled(pos, pos + text_size, IM_COL32_BLACK);
             draw_list->AddText(pos, color, label.data());
