@@ -3706,4 +3706,35 @@ namespace HerosInsight::Utils
             return GW::SkillbarMgr::GetIsSkillUnlocked(skill_id);
         }
     }
+
+    GW::UI::Frame *GetTooltipFrame()
+    {
+        auto root = GW::UI::GetRootFrame();
+        if (root)
+        {
+            constexpr uint32_t child_offset_id = -1;
+            auto child = GW::UI::GetChildFrame(root, child_offset_id);
+            if (child)
+            {
+                return child;
+            }
+        }
+        return nullptr;
+    }
+
+    GW::UI::Frame *GetDraggedSkillFrame()
+    {
+        auto root = GW::UI::GetRootFrame();
+        if (root)
+        {
+            constexpr uint32_t child_offset_id = -2;
+            auto child = GW::UI::GetChildFrame(root, child_offset_id);
+            if (child)
+            {
+                return child;
+            }
+        }
+        return nullptr;
+    }
+
 }
