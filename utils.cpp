@@ -3736,5 +3736,4 @@ namespace HerosInsight::Utils
         }
         return nullptr;
     }
-
 }

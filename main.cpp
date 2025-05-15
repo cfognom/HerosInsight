@@ -301,6 +301,37 @@ static LRESULT CALLBACK SafeWndProc(HWND hWnd, UINT Message, WPARAM wParam, LPAR
     }
 }
 
+// This function attempts to mark regions of the screen where rendering should be disabled.
+// For example, the current tooltip frame, the current dragged skill frame, etc.
+// It returns a stateblock that can be used to restore the previous state, or a nullptr if nothing was done.
+IDirect3DStateBlock9 *TryPrepareStencil(IDirect3DDevice9 *device)
+{
+    HerosInsight::FixedArray<ImRect, 2> holes_salloc;
+    auto holes = holes_salloc.ref();
+
+    auto dragged_skill_frame = HerosInsight::Utils::GetDraggedSkillFrame();
+    if (dragged_skill_frame &&
+        dragged_skill_frame->IsVisible())
+    {
+        auto rect = HerosInsight::Utils::GetFrameRect(*dragged_skill_frame);
+        holes.try_push(rect);
+    }
+
+    auto tt_frame = HerosInsight::Utils::GetTooltipFrame();
+    if (tt_frame)
+    {
+        auto rect = HerosInsight::Utils::GetFrameRect(*tt_frame);
+        rect.Min.y -= 1.f;
+        rect.Max.y -= 1.f; // Looks better
+        holes.try_push(rect);
+    }
+
+    if (holes.size() == 0)
+        return nullptr;
+
+    return HerosInsight::Utils::PrepareStencilHoles(device, holes);
+}
+
 static void OnRender(IDirect3DDevice9 *device)
 {
     // This is call from within the game thread and all operation should be done here.
@@ -326,9 +357,17 @@ static void OnRender(IDirect3DDevice9 *device)
 
     HerosInsight::UpdateManager::Draw(device);
 
+    auto old_state = TryPrepareStencil(device);
+
     ImGui::Render();
     ImDrawData *draw_data = ImGui::GetDrawData();
     ImGui_ImplDX9_RenderDrawData(draw_data);
+
+    if (old_state)
+    {
+        old_state->Apply();
+        old_state->Release();
+    }
 
     if (!HerosInsight::UpdateManager::open_main_menu
 #ifdef _DEBUG
