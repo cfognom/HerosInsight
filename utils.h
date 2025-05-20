@@ -372,7 +372,13 @@ namespace HerosInsight::Utils
     struct ColorChange
     {
         size_t pos;
-        ImU32 color;
+        ImU32 color; // 0 = pop color
+    };
+
+    struct TextEmoji
+    {
+        size_t pos;
+        TextureModule::DrawPacket draw_packet;
     };
 
     struct TextTooltip
@@ -389,8 +395,8 @@ namespace HerosInsight::Utils
         std::span<ColorChange> color_changes = {},
         std::span<uint16_t> highlighting = {},
         std::span<TextTooltip> tooltips = {},
-        std::function<void(uint32_t)> draw_tooltip = nullptr
-        /**/);
+        std::function<void(uint32_t)> draw_tooltip = nullptr,
+        std::span<TextEmoji> emojis = {} /**/);
 
     enum struct SkillContext
     {

@@ -87,6 +87,7 @@
 #include <debug_display.h>
 #include <effect_tracking.h>
 #include <party_data.h>
+#include <texture_module.h>
 #include <update_manager.h>
 
 #include "utils.h"
@@ -2807,7 +2808,8 @@ namespace HerosInsight::Utils
         std::span<ColorChange> color_changes,
         std::span<uint16_t> highlighting,
         std::span<TextTooltip> tooltips,
-        std::function<void(uint32_t)> draw_tooltip)
+        std::function<void(uint32_t)> draw_tooltip,
+        std::span<TextEmoji> emojis)
     {
         auto text_ptr = text.data();
         auto text_len = text.size();
@@ -2839,6 +2841,9 @@ namespace HerosInsight::Utils
         uint32_t i_color = 0;
         uint32_t i_color_change = color_changes.empty() ? -1 : color_changes[0].pos;
 
+        uint32_t i_emoji = 0;
+        uint32_t i_emoji_insert = emojis.empty() ? -1 : emojis[0].pos;
+
         uint32_t i_tooltip = 0;
         uint32_t i_tooltip_update = tooltips.empty() || draw_tooltip == nullptr ? -1 : tooltips[0].start;
         float tooltip_start_x = -1;
@@ -2860,6 +2865,7 @@ namespace HerosInsight::Utils
             do
             {
                 i = std::min(i_end, i_color_change);
+                i = std::min(i, i_emoji_insert);
                 i = std::min(i, i_tooltip_update);
                 i = std::min(i, i_highlight_change);
 
@@ -2903,6 +2909,19 @@ namespace HerosInsight::Utils
                     i_color_change = i_color < color_changes.size() ? color_changes[i_color].pos : -1;
                 }
 
+                if (i == i_emoji_insert)
+                {
+                    auto &emoji = emojis[i_emoji++];
+
+                    if (emoji.draw_packet.CanDraw())
+                    {
+                        emoji.draw_packet.AddToDrawList(draw_list, ss_cursor);
+                    }
+                    ss_cursor.x += emoji.draw_packet.size.x;
+
+                    i_emoji_insert = i_emoji < emojis.size() ? emojis[i_emoji].pos : -1;
+                }
+
                 if (i == i_tooltip_update)
                 {
                     if (tooltip_start_x == -1)
@@ -2935,6 +2954,9 @@ namespace HerosInsight::Utils
             bb.Max.y = ss_cursor.y;
         };
 
+        auto j_emoji = i_emoji;               // Used when determining the width of the current line
+        auto j_emoji_insert = i_emoji_insert; // Used when determining the width of the current line
+
         uint32_t i_line_start = 0;
         uint32_t i_line_end = 0;
         char prev_c = '\0';
@@ -2957,6 +2979,12 @@ namespace HerosInsight::Utils
 
                 auto new_used_width = used_width + word_width;
 
+                while (j_emoji_insert <= new_i_line_end)
+                {
+                    new_used_width += emojis[j_emoji++].draw_packet.size.x;
+                    j_emoji_insert = j_emoji < emojis.size() ? emojis[j_emoji].pos : -1;
+                }
+
                 if (new_used_width > max_width && used_width > 0)
                 {
                     // ... if it doesn't fit, draw the current line...
@@ -2965,9 +2993,7 @@ namespace HerosInsight::Utils
                     i_line_start = i_line_end;
                     i_line_end = new_i_line_end;
 
-                    auto ptr_start = &text_ptr[i_line_start];
-                    auto ptr_end = &text_ptr[i_line_end];
-                    used_width = ImGui::CalcTextSize(ptr_start, ptr_end).x;
+                    used_width = word_width;
                 }
                 else
                 {
