@@ -2749,8 +2749,8 @@ namespace HerosInsight::Utils
             {
                 if (current_tooltip_id == -1)
                 {
-                    auto rep_id = std::stoul(p, nullptr, 10);
-                    current_tooltip_id = rep_id;
+                    auto tooltip_id = std::stoul(p, nullptr, 10);
+                    current_tooltip_id = tooltip_id;
                     tooltip_start_pos = pos;
                 }
             }
