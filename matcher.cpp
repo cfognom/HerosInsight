@@ -296,20 +296,46 @@ namespace HerosInsight
                 }
             }
 
-            uint16_t atom_start = 0;
-            uint16_t atom_end;
+            size_t atom_start = 0;
+            size_t atom_end;
+            size_t atom_end_success = -1;
             for (size_t i = 0; i < n_atoms; ++i)
             {
                 auto &atom = atoms[i];
-                atom_end = (uint16_t)atom_ends[i];
+                atom_end = atom_ends[i];
 
                 if (atom.type < Atom::Type::REPEATING_START)
                 {
-                    auto size = atom_end - atom_start;
+                    size_t size = atom_end - atom_start;
                     if (size > 0)
                     {
-                        matches.push_back(atom_start);
-                        matches.push_back(atom_end);
+                        bool extend_prev = false;
+                        if (atom_end_success != -1)
+                        {
+                            // Check if there is only spaces between last match and current
+                            std::string_view between(text.data() + atom_end_success, atom_start - atom_end_success);
+                            bool success = true;
+                            for (auto c : between)
+                            {
+                                if (!Utils::IsSpace(c))
+                                {
+                                    success = false;
+                                    break;
+                                }
+                            }
+                            extend_prev = success;
+                        }
+                        if (extend_prev)
+                        {
+                            matches.back() = (uint16_t)atom_end;
+                        }
+                        else
+                        {
+                            matches.push_back((uint16_t)atom_start);
+                            matches.push_back((uint16_t)atom_end);
+                        }
+
+                        atom_end_success = atom_end;
                     }
                 }
 
