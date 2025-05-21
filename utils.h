@@ -30,6 +30,7 @@
 #include <async_lazy.h>
 #include <constants.h>
 #include <stack_string.h>
+#include <texture_module.h>
 
 namespace HerosInsight
 {
