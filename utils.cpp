@@ -2830,12 +2830,7 @@ namespace HerosInsight::Utils
         auto ss_cursor = initial_cursor;
         const auto text_height = ImGui::GetTextLineHeight();
 
-        float max_width;
-        if (wrapping_max < 0)
-            max_width = std::numeric_limits<float>::max();
-        else
-            max_width = wrapping_max - wrapping_min;
-
+        float max_width = wrapping_max < 0 ? std::numeric_limits<float>::max() : wrapping_max - wrapping_min;
         float used_width = ImGui::GetCursorPosX() - wrapping_min;
 
         uint32_t i_color = 0;
@@ -2853,14 +2848,25 @@ namespace HerosInsight::Utils
         float highlight_start_x = -1;
 
         // screen space bounding box
-        ImRect bb = ImRect(ss_cursor, ss_cursor);
+        ImRect bb = ImRect(
+            std::numeric_limits<float>::max(), std::numeric_limits<float>::max(),
+            std::numeric_limits<float>::min(), std::numeric_limits<float>::min());
 
         const auto highlight_color = ImGui::GetColorU32(IM_COL32(250, 148, 54, 255));
         const auto highlight_text_color = ImGui::GetColorU32(IM_COL32_BLACK);
 
         auto DrawLine = [&](uint32_t i_start, uint32_t i_end)
         {
-            bb.Min.x = ss_cursor.x;
+            if (i_start == i_end)
+            {
+                ss_cursor.x = window->ContentRegionRect.Min.x + wrapping_min;
+                ss_cursor.y += text_height;
+                ImGui::SetCursorScreenPos(ss_cursor); // For some reason this is needed
+                return;
+            }
+
+            bb.Min.x = std::min(bb.Min.x, ss_cursor.x);
+            bb.Min.y = std::min(bb.Min.y, ss_cursor.y);
             uint32_t i;
             do
             {
@@ -2977,13 +2983,13 @@ namespace HerosInsight::Utils
                 auto ptr_new_end = &text_ptr[new_i_line_end];
                 auto word_width = ImGui::CalcTextSize(ptr_end, ptr_new_end).x;
 
-                auto new_used_width = used_width + word_width;
-
                 while (j_emoji_insert <= new_i_line_end)
                 {
-                    new_used_width += emojis[j_emoji++].draw_packet.size.x;
+                    word_width += emojis[j_emoji++].draw_packet.size.x;
                     j_emoji_insert = j_emoji < emojis.size() ? emojis[j_emoji].pos : -1;
                 }
+
+                auto new_used_width = used_width + word_width;
 
                 if (new_used_width > max_width && used_width > 0)
                 {
@@ -3017,6 +3023,8 @@ namespace HerosInsight::Utils
         {
             DrawLine(i_line_start, i_line_end);
         }
+
+        assert(!bb.IsInverted());
 
         ImGui::ItemSize(bb);
         ImGui::ItemAdd(bb, 0);
