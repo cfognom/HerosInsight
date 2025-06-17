@@ -6,24 +6,52 @@
 #include <stdexcept>
 #include <vector>
 
-template <typename T, size_t N>
-struct FixedStorage
+struct BufferMetrics
 {
+    size_t size = 0;
+    const size_t capacity;
+
+    BufferMetrics(size_t capacity) : capacity(capacity) {}
+};
+
+template <typename T>
+struct Buffer;
+
+template <typename T, size_t N>
+struct SizedBuffer
+{
+    BufferMetrics metrics{N};
     alignas(T) std::byte data[sizeof(T) * N];
-    size_t used = 0;
+
+    operator Buffer<T> *() { return reinterpret_cast<Buffer<T> *>(this); }
+};
+
+template <typename T>
+struct Buffer
+{
+    BufferMetrics metrics;
 
     T *allocate(size_t n)
     {
-        auto new_used = used + n;
-        if (new_used > N)
+        auto new_used = metrics.size + n;
+        if (new_used > metrics.capacity)
+        {
+            assert(false && "bad_alloc");
             throw std::bad_alloc();
-        auto ret = reinterpret_cast<T *>(data) + used;
-        used = new_used;
+        }
+        auto ret = reinterpret_cast<T *>(this + data_offset) + metrics.size;
+        metrics.size = new_used;
         return ret;
     }
+
+    Buffer() = delete;
+
+private:
+    static constexpr size_t data_offset = reinterpret_cast<size_t>(
+        &(reinterpret_cast<const SizedBuffer<T, 1> *>(nullptr)->data));
 };
 
-template <typename T, size_t N>
+template <typename T>
 class FixedAllocator
 {
 public:
@@ -35,20 +63,20 @@ public:
     using size_type = std::size_t;
     using difference_type = std::ptrdiff_t;
 
-    FixedAllocator(FixedStorage<T, N> *buffer)
+    FixedAllocator(Buffer<T> *buffer)
         : buffer(buffer) {}
 
     template <typename U>
-    FixedAllocator(const FixedAllocator<U, N> &other)
+    FixedAllocator(const FixedAllocator<U> &other)
     {
 #ifdef _DEBUG
         if constexpr (std::is_same_v<T, U>)
-            buffer = reinterpret_cast<FixedStorage<T, N> *>(other.buffer);
+            buffer = reinterpret_cast<Buffer<T> *>(other.buffer);
         else
             buffer = nullptr; // Rebound allocator uses heap
 #else
         static_assert(std::is_same_v<T, U>, "Rebound allocator between different types is not supported in release mode");
-        buffer = reinterpret_cast<FixedStorage<T, N> *>(other.buffer);
+        buffer = reinterpret_cast<Buffer<T> *>(other.buffer);
 #endif
     }
 
@@ -73,7 +101,7 @@ public:
     template <typename U>
     struct rebind
     {
-        using other = FixedAllocator<U, N>;
+        using other = FixedAllocator<U>;
     };
 
     bool operator==(const FixedAllocator &other) const noexcept
@@ -87,62 +115,72 @@ public:
     }
 
 private:
-    FixedStorage<T, N> *buffer;
+    Buffer<T> *buffer;
 
-    template <typename U, size_t M>
+    template <typename U>
     friend class FixedAllocator;
 };
 
-template <typename T, size_t N>
-class FixedVector : public std::vector<T, FixedAllocator<T, N>>
+template <typename T, size_t N = 0>
+class FixedVector : public std::vector<T, FixedAllocator<T>>
 {
 public:
-    using allocator_type = FixedAllocator<T, N>;
+    using allocator_type = FixedAllocator<T>;
     using base = std::vector<T, allocator_type>;
 
-    FixedVector() : base(allocator_type(&storage))
+    FixedVector() : base(allocator_type(buffer))
     {
         base::reserve(N);
     }
 
     using base::vector;
 
+    operator FixedVector<T> &() { return *reinterpret_cast<FixedVector<T> *>(this); }
+
 private:
-    FixedStorage<T, N> storage;
+    SizedBuffer<T, N> buffer;
 };
 
-template <size_t N>
-class FixedString : public std::basic_string<char, std::char_traits<char>, FixedAllocator<char, N>>
+template <size_t N = 0>
+class FixedString : public std::basic_string<char, std::char_traits<char>, FixedAllocator<char>>
 {
 public:
-    using allocator_type = FixedAllocator<char, N>;
-    using base = std::basic_string<char, std::char_traits<char>, FixedAllocator<char, N>>;
+    static_assert(N % 16 == 0, "N must be a multiple of 16");
 
-    FixedString() : base(allocator_type(&storage))
+    using allocator_type = FixedAllocator<char>;
+    using base = std::basic_string<char, std::char_traits<char>, allocator_type>;
+
+    FixedString() : base(allocator_type(buffer))
     {
-        base::reserve(N);
+        base::reserve(N - 1); // reserve space for null-terminator
     }
 
     using base::basic_string;
 
+    operator FixedString &() { return *reinterpret_cast<FixedString *>(this); }
+
 private:
-    FixedStorage<char, N> storage;
+    SizedBuffer<char, N> buffer;
 };
 
-template <size_t N>
-class FixedWString : public std::basic_string<wchar_t, std::char_traits<wchar_t>, FixedAllocator<wchar_t, N>>
+template <size_t N = 0>
+class FixedWString : public std::basic_string<wchar_t, std::char_traits<wchar_t>, FixedAllocator<wchar_t>>
 {
 public:
-    using allocator_type = FixedAllocator<wchar_t, N>;
-    using base = std::basic_string<wchar_t, std::char_traits<wchar_t>, FixedAllocator<wchar_t, N>>;
+    static_assert(N % 16 == 0, "N must be a multiple of 16");
 
-    FixedWString() : base(allocator_type(&storage))
+    using allocator_type = FixedAllocator<wchar_t>;
+    using base = std::basic_string<wchar_t, std::char_traits<wchar_t>, allocator_type>;
+
+    FixedWString() : base(allocator_type(buffer))
     {
-        base::reserve(N);
+        base::reserve(N - 1); // reserve space for null-terminator
     }
 
     using base::basic_string;
 
+    operator FixedWString &() { return *reinterpret_cast<FixedWString *>(this); }
+
 private:
-    FixedStorage<wchar_t, N> storage;
+    SizedBuffer<wchar_t, N> buffer;
 };
