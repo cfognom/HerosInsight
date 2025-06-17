@@ -39,7 +39,7 @@ struct Buffer
             assert(false && "bad_alloc");
             throw std::bad_alloc();
         }
-        auto ret = reinterpret_cast<T *>(reinterpret_cast<std::byte *>(this) + data_offset) + metrics.size;
+        auto ret = reinterpret_cast<T *>(reinterpret_cast<std::byte *>(this) + DATA_OFFSET) + metrics.size;
         metrics.size = new_used;
         return ret;
     }
@@ -47,7 +47,7 @@ struct Buffer
     Buffer() = delete;
 
 private:
-    static constexpr size_t data_offset = reinterpret_cast<size_t>(
+    static constexpr size_t DATA_OFFSET = reinterpret_cast<size_t>(
         &(reinterpret_cast<const SizedBuffer<T, 1> *>(nullptr)->data));
 };
 
