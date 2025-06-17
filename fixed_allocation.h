@@ -98,6 +98,11 @@ public:
         // No-op (deallocation doesn't free memory in this allocator)
     }
 
+    size_t max_size() const noexcept
+    {
+        return buffer->metrics.capacity;
+    }
+
     template <typename U>
     struct rebind
     {
@@ -125,15 +130,18 @@ template <typename T, size_t N = 0>
 class FixedVector : public std::vector<T, FixedAllocator<T>>
 {
 public:
-    using allocator_type = FixedAllocator<T>;
-    using base = std::vector<T, allocator_type>;
+    using allocator_t = FixedAllocator<T>;
+    using base = std::vector<T, allocator_t>;
 
-    FixedVector() : base(allocator_type(buffer))
+    FixedVector() : base(allocator_t(buffer))
     {
         base::reserve(N);
     }
 
     using base::vector;
+
+    FixedVector(const FixedVector &) = delete;
+    FixedVector &operator=(const FixedVector &) = delete;
 
     operator FixedVector<T> &() { return *reinterpret_cast<FixedVector<T> *>(this); }
 
@@ -147,15 +155,18 @@ class FixedString : public std::basic_string<char, std::char_traits<char>, Fixed
 public:
     static_assert(N % 16 == 0, "N must be a multiple of 16");
 
-    using allocator_type = FixedAllocator<char>;
-    using base = std::basic_string<char, std::char_traits<char>, allocator_type>;
+    using allocator_t = FixedAllocator<char>;
+    using base = std::basic_string<char, std::char_traits<char>, allocator_t>;
 
-    FixedString() : base(allocator_type(buffer))
+    FixedString() : base(allocator_t(buffer))
     {
         base::reserve(N - 1); // reserve space for null-terminator
     }
 
     using base::basic_string;
+
+    FixedString(const FixedString &) = delete;
+    FixedString &operator=(const FixedString &) = delete;
 
     operator FixedString &() { return *reinterpret_cast<FixedString *>(this); }
 
@@ -169,15 +180,18 @@ class FixedWString : public std::basic_string<wchar_t, std::char_traits<wchar_t>
 public:
     static_assert(N % 16 == 0, "N must be a multiple of 16");
 
-    using allocator_type = FixedAllocator<wchar_t>;
-    using base = std::basic_string<wchar_t, std::char_traits<wchar_t>, allocator_type>;
+    using allocator_t = FixedAllocator<wchar_t>;
+    using base = std::basic_string<wchar_t, std::char_traits<wchar_t>, allocator_t>;
 
-    FixedWString() : base(allocator_type(buffer))
+    FixedWString() : base(allocator_t(buffer))
     {
         base::reserve(N - 1); // reserve space for null-terminator
     }
 
     using base::basic_string;
+
+    FixedWString(const FixedWString &) = delete;
+    FixedWString &operator=(const FixedWString &) = delete;
 
     operator FixedWString &() { return *reinterpret_cast<FixedWString *>(this); }
 
