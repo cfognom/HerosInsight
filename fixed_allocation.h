@@ -39,7 +39,7 @@ struct Buffer
             assert(false && "bad_alloc");
             throw std::bad_alloc();
         }
-        auto ret = reinterpret_cast<T *>(this + data_offset) + metrics.size;
+        auto ret = reinterpret_cast<T *>(reinterpret_cast<std::byte *>(this) + data_offset) + metrics.size;
         metrics.size = new_used;
         return ret;
     }
