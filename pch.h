@@ -18,7 +18,7 @@
 #error Unsupported compiler
 #endif
 
-#include "build/_deps/gwca-src/Source/stdafx.h"
+#include "GWCA_BACKUP/gwca-src/Source/stdafx.h"
 #include <cassert>
 #include <cstdint>
 #include <fixed_array.h>
