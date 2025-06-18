@@ -90,7 +90,8 @@
         "variant": "cpp",
         "cassert": "cpp",
         "stack": "cpp",
-        "cstdarg": "cpp"
+        "cstdarg": "cpp",
+        "utf8": "cpp"
     },
     "dotnet.defaultSolution": "disable",
     // "cmake.configureArgs": [
@@ -99,6 +100,13 @@
     // ],
     "cmake.generator": "Visual Studio 17 2022",
     "cmake.configureOnOpen": true,
-    "C_Cpp.errorSquiggles": "disabled",
-    "editor.formatOnPaste": false
+    "editor.formatOnPaste": false,
+    "C_Cpp.files.exclude": {
+        "[Oo]ut/**": true,
+        "[Bb]uild/**": true,
+        "**/gwca-src/Examples/**": true,
+        "**/.vscode": true,
+        "**/.vs": true
+    },
+    "C_Cpp.errorSquiggles": "disabled"
 }
