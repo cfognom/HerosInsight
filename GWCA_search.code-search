@@ -1,11 +1,200 @@
-# Query: TooltipType
-# Including: build\_deps\gwca-src
-# Excluding: build/_deps/gwca-src/Dependencies
+# Query: FindAssertion
+# Flags: IgnoreExcludeSettings
+# Including: GWCA_BACKUP/gwca-src
+# Excluding: GWCA_BACKUP/gwca-src/Dependencies
 # ContextLines: 1
 
-1 result - 1 file
+47 results - 16 files
 
-build\_deps\gwca-src\Include\GWCA\Managers\UIMgr.h:
-  945  
-  946:         enum class TooltipType : uint32_t {
-  947              None = 0x0,
+GWCA_BACKUP\gwca-src\Include\GWCA\Utilities\FileScanner.h:
+  18      void GetSectionAddressRange(GW::ScannerSection section, uintptr_t* start, uintptr_t* end);
+  19:     uintptr_t FindAssertion(const char* assertion_file, const char* assertion_msg, uint32_t line_number, int offset);
+  20      uintptr_t FindInRange(const char* pattern, const char* mask, int offset, uint32_t start, uint32_t end);
+
+GWCA_BACKUP\gwca-src\Include\GWCA\Utilities\Scanner.h:
+  24          // Find reference in GW memory to a specific assertion message
+  25:         uintptr_t FindAssertion(const char* assertion_file, const char* assertion_msg, uint32_t line_number, int offset);
+  26  
+
+GWCA_BACKUP\gwca-src\Source\AgentMgr.cpp:
+  141  
+  142:         ChangeTarget_Func = (ChangeTarget_pt)GW::Scanner::ToFunctionStart(Scanner::FindAssertion("AvSelect.cpp", "!(autoAgentId && !ManagerFindAgent(autoAgentId))",0,0));
+  143  
+
+  161  
+  162:         DoWorldActon_Func = (DoWorldActon_pt)GW::Scanner::ToFunctionStart(Scanner::FindAssertion("GmCoreAction.cpp", "action < WORLD_ACTIONS",0,0)); // This hits twice, but we want the first function
+  163  
+
+GWCA_BACKUP\gwca-src\Source\CameraMgr.cpp:
+  26  
+  27:         uintptr_t address = Scanner::FindAssertion("GmCam.cpp", "fov", 0, 0xf);
+  28          if (address)
+
+GWCA_BACKUP\gwca-src\Source\ChatMgr.cpp:
+  327  
+  328:         address = Scanner::FindAssertion("\\Code\\Engine\\Controls\\CtlEdit.cpp","charCount >= 1",0,0);
+  329          if (address)
+
+  338  
+  339:         address = GW::Scanner::FindAssertion("\\Code\\Gw\\Ui\\Game\\GmChatLog.cpp", "m_itemCount <= CHAT_LOG_SIZE", 0, 0x38);
+  340          if (address && Scanner::IsValidPtr(*(uintptr_t*)address, ScannerSection::Section_TEXT)) {
+
+  347  
+  348:         PrintChatMessage_Func = (PrintChatMessage_pt)GW::Scanner::ToFunctionStart(Scanner::FindAssertion("\\Code\\Gw\\Ui\\Game\\GmChatLog.cpp", "m_itemCount <= CHAT_LOG_SIZE", 0,0));
+  349  
+
+GWCA_BACKUP\gwca-src\Source\FileScanner.cpp:
+  209  
+  210: uintptr_t FileScanner::FindAssertion(const char* assertion_file, const char* assertion_msg, uint32_t line_number, int offset)
+  211  {
+
+GWCA_BACKUP\gwca-src\Source\FriendListMgr.cpp:
+  117  
+  118:         address = Scanner::FindAssertion("FriendApi.cpp", "friendName && *friendName",0,0);
+  119          if (address)
+
+GWCA_BACKUP\gwca-src\Source\GWCA.cpp:
+   96  
+   97:         address = Scanner::FindAssertion("\\Code\\Gw\\Ui\\Game\\GmContext.cpp", "!s_context",0, -0x9);
+   98          if (address && Scanner::IsValidPtr(*(uintptr_t*)address, ScannerSection::Section_DATA))
+
+  101  
+  102:         address = Scanner::FindAssertion("UiPregame.cpp", "!s_scene", 0,0x34);
+  103          if (address && Scanner::IsValidPtr(*(uintptr_t*)address, ScannerSection::Section_DATA))
+
+GWCA_BACKUP\gwca-src\Source\ItemMgr.cpp:
+  243          // @Cleanup: All of these functions could be done via UI messages
+  244:         address = Scanner::FindAssertion("\\Code\\Gw\\Ui\\Game\\GmView.cpp", "param.notifyData",0,0);
+  245          if (Scanner::IsValidPtr(address, ScannerSection::Section_TEXT)) {
+
+  250  
+  251:         OnSalvagePopup_UICallback_Func = (UI::UIInteractionCallback)Scanner::ToFunctionStart(Scanner::FindAssertion("InvSalvage.cpp","m_toolId",0,0),0x200);
+  252:         InventorySlot_UICallback_Func = (UI::UIInteractionCallback)Scanner::ToFunctionStart(Scanner::FindAssertion("InvSlot.cpp", "!m_dragOverlayTexture", 0, 0), 0xfff);
+  253  
+
+  268  
+  269:         address = Scanner::FindAssertion("\\Code\\Gw\\Ui\\Game\\GmWeaponBar.cpp", "slotIndex < ITEM_PLAYER_EQUIP_SETS", 0,0x128);
+  270          PingWeaponSet_Func = (PingWeaponSet_pt)Scanner::FunctionFromNearCall(address);
+  271  
+  272:         address = GW::Scanner::FindAssertion("\\Code\\Gw\\Const\\ConstItemPvp.cpp", "unlockIndex < ITEM_PVP_UNLOCK_COUNT",0,0);
+  273          if (address) {
+
+  277  
+  278:         address = GW::Scanner::FindAssertion("\\Code\\Gw\\Const\\ConstItemPvp.cpp", "index < ITEM_PVP_ITEM_COUNT",0,0);
+  279          if (address) {
+
+  283  
+  284:         address = GW::Scanner::FindAssertion("\\Code\\Gw\\Composite\\Data\\CpsData.cpp", "id < s_items.Count()",0,-0xb);
+  285          if (address) {
+
+  294  
+  295:         address = GW::Scanner::FindAssertion("\\Code\\Gw\\Const\\ConstItem.cpp", "formula < ITEM_FORMULAS",0,0);
+  296          if (address) {
+
+GWCA_BACKUP\gwca-src\Source\MemoryMgr.cpp:
+  37  
+  38:     address = Scanner::FindAssertion("\\Code\\Gw\\Download\\DnArchive.cpp", "dlg", 0, 0xf);
+  39      address = Scanner::FunctionFromNearCall(address);
+
+  49  
+  50:     address = Scanner::FindAssertion("\\Code\\Base\\Os\\Win32\\OsAnsi.cpp", "chars>=MAX_PATH", 0, -0x24);
+  51      if (Scanner::IsValidPtr(address, ScannerSection::Section_TEXT))
+
+  53  
+  54:     address = Scanner::FindAssertion("\\Code\\Engine\\Event\\EvtRec.cpp", "filename", 0,0x4b);
+  55      GetGWVersion_Func = (GetGWVersion_pt)Scanner::FunctionFromNearCall(address);
+
+  63      // of Base::ExeAPI::s_api
+  64:     address = Scanner::FindAssertion("\\Code\\Base\\Os\\Win32\\Exe\\ExeIo.cpp", "!s_api.initialize", 0, 0x14);
+  65      address = Scanner::FunctionFromNearCall(address);
+
+GWCA_BACKUP\gwca-src\Source\PartyMgr.cpp:
+  110          // Party Search Window Button Callback functions
+  111:         PartySearchButtonCallback_Func = (PartySearchButtonCallback_pt)Scanner::ToFunctionStart(Scanner::FindAssertion("\\Code\\Gw\\Ui\\Game\\Party\\PtSearch.cpp", "m_activeList == LIST_HEROES",0,0));
+  112  
+  113          // Party Window Button Callback functions
+  114:         PartyWindowButtonCallback_Func = (PartySearchButtonCallback_pt)Scanner::ToFunctionStart(Scanner::FindAssertion("\\Code\\Gw\\Ui\\Game\\Party\\PtButtons.cpp", "m_selection.agentId",0,0));
+  115  
+  116:         address = Scanner::FindAssertion("\\Code\\Gw\\Ui\\Game\\Party\\PtPlayer.cpp", "No valid case for switch variable '\"\"'", 0, 0x27);
+  117          SetReadyStatus_Func = (DoAction_pt)Scanner::FunctionFromNearCall(address);
+
+  133  
+  134:         GetSelectedParty_Func = (GetSelectedParty_pt)Scanner::ToFunctionStart(Scanner::FindAssertion("PtJoin.cpp", "selection.memberType == MEMBER_TYPE_INVITE_IN", 0, 0));
+  135  
+
+GWCA_BACKUP\gwca-src\Source\PlayerMgr.cpp:
+  38  
+  39:         address = Scanner::ToFunctionStart(Scanner::FindAssertion("AttribTitles.cpp", "!*hdr.param",0,0)); // UI::UIInteractionCallback for title row
+  40          if (address)
+
+  52  
+  53:         address = Scanner::FindAssertion("\\Code\\Gw\\Const\\ConstTitle.cpp", "index < arrsize(s_titleClientData)", 0, 0x12);
+  54          if (address && Scanner::IsValidPtr(*(uintptr_t*)address, ScannerSection::Section_RDATA))
+
+GWCA_BACKUP\gwca-src\Source\RenderMgr.cpp:
+  113  
+  114:         ScreenCapture_Func = (GwEndScene_pt)Scanner::ToFunctionStart(Scanner::FindAssertion("Dx9Dev.cpp","No valid case for switch variable 'mode.Format'",0,0), 0xfff);
+  115  
+
+GWCA_BACKUP\gwca-src\Source\Scanner.cpp:
+  37  }
+  38: uintptr_t GW::Scanner::FindAssertion(const char* assertion_file, const char* assertion_msg, uint32_t line_number, int offset) {
+  39:     const auto found = fileScanner.FindAssertion(assertion_file, assertion_msg, line_number, offset);
+  40      return found ? found - section_offset_from_disk : found;
+
+GWCA_BACKUP\gwca-src\Source\SkillbarMgr.cpp:
+  153  
+  154:         address = Scanner::FindAssertion("TemplatesHelpers.cpp", "targetPrimaryProf == templateData.profPrimary",0,0);
+  155          if (address) {
+
+GWCA_BACKUP\gwca-src\Source\UIMgr.cpp:
+  312  
+  313:         address = Scanner::FindAssertion("\\Code\\Engine\\Frame\\FrMsg.cpp", "frame", 0, -0x14);
+  314          if (address)
+
+  337          // @TODO: Grab the relationship array from memory, write this ourselves!
+  338:         address = Scanner::FindAssertion("\\Code\\Engine\\Controls\\CtlView.cpp", "pageId", 0, 0x19);
+  339          GetChildFrameId_Func = (GetChildFrameId_pt)GW::Scanner::FunctionFromNearCall(address);
+
+  350  
+  351:         address = Scanner::FindAssertion("\\Code\\Gw\\Ui\\UiRoot.cpp", "!s_count++", 0, -0xD);
+  352          if (Verify(address))
+
+  362  
+  363:         address = Scanner::FindAssertion("\\Code\\Gw\\Pref\\PrApi.cpp", "location < arrsize(s_flushDelay)", 0, -0x12);
+  364          if (address && Scanner::IsValidPtr(*(uintptr_t*)address))
+
+  381          
+  382:         address = Scanner::ToFunctionStart(GW::Scanner::FindAssertion("\\Code\\Gw\\Param\\Param.cpp","value - PARAM_VALUE_FIRST < (sizeof(s_values) / sizeof((s_values)[0]))",0, 0));
+  383          if (address) {
+
+  389  
+  390:         SetInGameShadowQuality_Func = (SetInGameShadowQuality_pt)Scanner::ToFunctionStart(Scanner::FindAssertion("AvShadow.cpp","No valid case for switch variable 'value'",0,0));
+  391          
+
+  397  
+  398:         address = GW::Scanner::FindAssertion("\\Code\\Gw\\Ui\\Game\\CharCreate\\CharCreate.cpp", "msg.summaryBytes <= NET_CHARACTER_SUMMARY_MAX",0, -0x62);
+  399          SetStringPreference_Func = (SetStringPreference_pt)GW::Scanner::FunctionFromNearCall(address);
+
+  401  
+  402:         address = GW::Scanner::FindAssertion("\\Code\\Gw\\Ui\\Dialog\\DlgOptGr.cpp", "No valid case for switch variable 'quality'",0,0);
+  403          if (address) {
+
+  412  
+  413:         address = GW::Scanner::FindAssertion("\\Code\\Gw\\Pref\\PrConst.cpp", "pref < arrsize(s_enumInfo)", 0, 0x15);
+  414          if (address && GW::Scanner::IsValidPtr(address, GW::ScannerSection::Section_TEXT))
+  415              EnumPreferenceOptions_Addr = *(EnumPreferenceInfo**)address;
+  416:         address = GW::Scanner::FindAssertion("\\Code\\Gw\\Pref\\PrConst.cpp", "pref < arrsize(s_valueInfo)", 0, 0x15);
+  417          if (address && GW::Scanner::IsValidPtr(address, GW::ScannerSection::Section_TEXT))
+
+  420  
+  421:         SetTooltip_Func = (SetTooltip_pt)Scanner::ToFunctionStart(GW::Scanner::FindAssertion("\\Code\\Engine\\Frame\\FrTip.cpp", "CMsg::Validate(id)",0,0));
+  422          if (SetTooltip_Func) {
+
+  453          SetMasterVolume_Func = (SetMasterVolume_pt)Scanner::ToFunctionStart(Scanner::Find("\xd9\x45\x08\x83\xc6\x1c\x83\xef\x01\x75\xea\x5f\xdd\xd8\x5e\x5d", "xxxxxxxxxxxxxxxx"));
+  454:         DrawOnCompass_Func = (DrawOnCompass_pt)Scanner::ToFunctionStart(Scanner::FindAssertion("\\Code\\Gw\\Char\\CharMsg.cpp", "knotCount <= arrsize(message.knotData)",0,0));
+  455  
+
+  465  
+  466:         address = GW::Scanner::FindAssertion("\\Code\\Gw\\Ui\\Dialog\\DlgOptGr.cpp", "multiSampleIndex != CTL_DROPLIST_INDEX_NULL", 0, -0x46);
+  467          SetGameRendererMode_Func = (SetGameRendererMode_pt)GW::Scanner::FunctionFromNearCall(address);
