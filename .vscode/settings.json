@@ -108,5 +108,13 @@
         "**/.vscode": true,
         "**/.vs": true
     },
-    "C_Cpp.errorSquiggles": "disabled"
+    "C_Cpp.errorSquiggles": "disabled",
+    "files.exclude": {
+        "[Bb]uild/**": true,
+        "[Oo]ut/**": true
+    },
+    "files.watcherExclude": {
+        "[Bb]uild/**": true,
+        "[Oo]ut/**": true
+    }
 }
