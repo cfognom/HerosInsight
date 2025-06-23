@@ -270,7 +270,8 @@ namespace HerosInsight::WorldSpaceUI
             return;
 
         IDirect3DStateBlock9 *saved_state;
-        device->CreateStateBlock(D3DSBT_ALL, &saved_state);
+        if (device->CreateStateBlock(D3DSBT_ALL, &saved_state) < 0)
+            return;
 
         // Disable lighting (so it doesn't interfere with color)
         device->SetRenderState(D3DRS_LIGHTING, FALSE);
@@ -424,7 +425,7 @@ namespace HerosInsight::WorldSpaceUI
 
             if (!target_is_infront ||
                 distance_to_agent_feet > distance_max ||
-                (is_occluded[agent_index] && !it->timestamp_finished))
+                ((agent_index >= is_occluded.size() || is_occluded[agent_index]) && !it->timestamp_finished))
             {
                 it++;
                 continue;
