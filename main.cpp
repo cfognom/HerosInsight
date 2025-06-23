@@ -332,8 +332,9 @@ IDirect3DStateBlock9 *TryPrepareStencil(IDirect3DDevice9 *device)
     return HerosInsight::Utils::PrepareStencilHoles(device, holes);
 }
 
-static void OnRender(IDirect3DDevice9 *device)
+static void OnRender(GW::Render::Helper helper)
 {
+    auto device = helper.device;
     // This is call from within the game thread and all operation should be done here.
     // You can't freeze this thread, so no blocking operation or at your own risk.
     static bool initialized = false;
@@ -412,7 +413,7 @@ static DWORD WINAPI ThreadProc(LPVOID lpModule)
 
     GW::Render::SetRenderCallback(OnRender);
     GW::Render::SetResetCallback(
-        [](IDirect3DDevice9 *device)
+        [](GW::Render::Helper helper)
         {
             ImGui_ImplDX9_InvalidateDeviceObjects();
         });
