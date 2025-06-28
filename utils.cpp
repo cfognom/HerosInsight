@@ -2572,6 +2572,7 @@ namespace HerosInsight::Utils
 
         buffer += wcslen(buffer);
 
+        int written_len;
 #define SWPRINTF_OR_RETURN(buffer, buffer_end, ...)                   \
     written_len = swprintf(buffer, buffer_end - buffer, __VA_ARGS__); \
     if (written_len == -1)                                            \
@@ -2582,7 +2583,6 @@ namespace HerosInsight::Utils
 
         constexpr uint32_t MAX_VALUE = 0x8000 - 0x100 - 1;
 
-        int written_len;
         auto Write = [&](uint32_t i, uint32_t value0, uint32_t value15) -> bool
         {
             constexpr auto enc_params = L"\x10A\x10B\x10C";
