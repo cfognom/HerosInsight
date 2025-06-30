@@ -617,14 +617,23 @@ namespace HerosInsight::Utils
         return uresult;
     }
 
-    uint8_t ReverseLinearAttributeScale(uint32_t value0, uint32_t value15, uint32_t value)
+    // Returns a pair of the minimum and maximum attribute level that produces this value
+    // If it is not possible to produce this value, returns std::nullopt
+    std::optional<std::pair<uint8_t, uint8_t>> ReverseLinearAttributeScale(uint32_t value0, uint32_t value15, uint32_t value)
     {
         // Currently computes the highest attribute that could produce this value.
         int32_t diffX_0 = (int32_t)value - (int32_t)value0;
         int32_t diff15_0 = (int32_t)value15 - (int32_t)value0;
         int32_t rounder = diffX_0 < 0 ? -15 : 15;
-        auto attribute_level = std::clamp((diffX_0 * 30 + rounder) / (2 * diff15_0), 0, 20);
-        return attribute_level;
+        auto hyp_attr_lvl_max = (diffX_0 * 30 + rounder) / (2 * diff15_0);
+        auto hyp_attr_lvl_min = (diffX_0 * 30 - rounder) / (2 * diff15_0) + 1;
+        if (hyp_attr_lvl_max < 0 || hyp_attr_lvl_min > 21)
+            return std::nullopt; // Its not possible to produce this value
+
+        auto attr_lvl_max = std::min(hyp_attr_lvl_max, 21);
+        auto attr_lvl_min = std::max(hyp_attr_lvl_min, 0);
+
+        return std::make_pair((uint8_t)attr_lvl_min, (uint8_t)attr_lvl_max);
     }
 
     std::span<GW::Attribute> GetAgentAttributeSpan(uint32_t agent_id)
