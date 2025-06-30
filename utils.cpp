@@ -621,9 +621,14 @@ namespace HerosInsight::Utils
     // If it is not possible to produce this value, returns std::nullopt
     std::optional<std::pair<uint8_t, uint8_t>> ReverseLinearAttributeScale(uint32_t value0, uint32_t value15, uint32_t value)
     {
-        // Currently computes the highest attribute that could produce this value.
         int32_t diffX_0 = (int32_t)value - (int32_t)value0;
         int32_t diff15_0 = (int32_t)value15 - (int32_t)value0;
+        if (diff15_0 == 0)
+        {
+            if (value15 == value)
+                return std::make_pair((uint8_t)0, (uint8_t)21);
+            return std::nullopt;
+        }
         int32_t rounder = diffX_0 < 0 ? -15 : 15;
         auto hyp_attr_lvl_max = (diffX_0 * 30 + rounder) / (2 * diff15_0);
         auto hyp_attr_lvl_min = (diffX_0 * 30 - rounder) / (2 * diff15_0) + 1;
