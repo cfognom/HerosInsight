@@ -4,7 +4,7 @@ namespace HerosInsight
 {
     // FixedSet is a set with a fixed number of elements (N)
     // It uses linear probing to resolve collisions
-    // The set is implemented as a buffer of size N
+    // The set is implemented as a buffer of size N * sizeof(T)
     // The buffer is initialized with zeros
     template <typename T, size_t N>
     class FixedSet
