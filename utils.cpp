@@ -218,6 +218,20 @@ namespace HerosInsight::Utils
         return std::string_view(word_start, p - word_start);
     }
 
+    // Returns true if str starts with prefix, prefix must be null-terminated
+    bool StartsWith(const wchar_t *str, const wchar_t *prefix)
+    {
+        while (true)
+        {
+            if (!*prefix)
+                return true;
+            if (*str != *prefix)
+                return false;
+            ++str;
+            ++prefix;
+        }
+    }
+
     bool TryReadSpaces(char *&p, char *end)
     {
         if (p < end && Utils::IsSpace(*p))
@@ -314,6 +328,16 @@ namespace HerosInsight::Utils
         }
         p = p_init;
         return false;
+    }
+
+    // Returns true if skipped
+    bool SkipWhitespace(char *&p, const char *end)
+    {
+        auto start = p;
+        while (p < end && *p == ' ')
+            p++;
+
+        return p != start;
     }
 
     std::string UInt32ToBinaryStr(uint32_t value)

@@ -153,6 +153,7 @@ namespace HerosInsight::Utils
     uint32_t StrCountEqual(std::string_view a, std::string_view b);
     bool StrFind(const char *&cursor, const char *end, std::string_view substr);
     std::string_view PopWord(std::string_view &str);
+    bool StartsWith(const wchar_t *str, const wchar_t *prefix);
     bool TryReadSpaces(char *&p, char *end);
     bool TryRead(const char c, char *&p, char *end);
     bool TryRead(const std::string_view str, char *&p, char *end);
@@ -160,6 +161,7 @@ namespace HerosInsight::Utils
     uint32_t TryReadPartial(const std::string_view str, char *&p, char *end);
     bool TryReadBefore(std::string_view str, char *start, char *&p);
     bool TryReadAfter(std::string_view str, char *&p, char *end);
+    bool SkipWhitespace(char *&p, const char *end);
 
     std::string UInt32ToBinaryStr(uint32_t value);
     std::wstring StrToWStr(std::string_view str);
