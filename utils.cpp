@@ -175,10 +175,23 @@ namespace HerosInsight::Utils
 
     // Returns the number of characters that are equal between the two strings.
     // The comparison is case-insensitive if a is uppercase OR b is lowercase.
-    uint32_t StrCountEqual(std::string_view a, std::string_view b)
+    size_t StrCountEqual(std::string_view a, std::string_view b)
     {
-        uint32_t max_len = std::min(a.size(), b.size());
-        uint32_t i = 0;
+        size_t max_len = std::min(a.size(), b.size());
+        size_t i = 0;
+        while (i < max_len && (a[i] == b[i] || std::tolower(a[i]) == b[i]))
+        {
+            i++;
+        }
+        return i;
+    }
+
+    // Returns the number of characters that are equal between the two strings.
+    // The comparison is case-insensitive if a is uppercase OR b is lowercase.
+    size_t StrCountEqual(std::wstring_view a, std::wstring_view b)
+    {
+        size_t max_len = std::min(a.size(), b.size());
+        size_t i = 0;
         while (i < max_len && (a[i] == b[i] || std::tolower(a[i]) == b[i]))
         {
             i++;
@@ -257,6 +270,16 @@ namespace HerosInsight::Utils
     {
         const auto len = str.size();
         if (StrCountEqual(str, std::string_view(p, end - p)) == len)
+        {
+            p += len;
+            return true;
+        }
+        return false;
+    }
+    bool TryRead(const std::wstring_view str, wchar_t *&p, wchar_t *end)
+    {
+        const auto len = str.size();
+        if (StrCountEqual(str, std::wstring_view(p, end - p)) == len)
         {
             p += len;
             return true;

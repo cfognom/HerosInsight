@@ -150,13 +150,15 @@ namespace HerosInsight::Utils
     bool IsAlpha(char c);
     bool IsDigit(char c);
     bool IsAlphaNum(char c);
-    uint32_t StrCountEqual(std::string_view a, std::string_view b);
+    size_t StrCountEqual(std::string_view a, std::string_view b);
+    size_t StrCountEqual(std::wstring_view a, std::wstring_view b);
     bool StrFind(const char *&cursor, const char *end, std::string_view substr);
     std::string_view PopWord(std::string_view &str);
     bool StartsWith(const wchar_t *str, const wchar_t *prefix);
     bool TryReadSpaces(char *&p, char *end);
     bool TryRead(const char c, char *&p, char *end);
     bool TryRead(const std::string_view str, char *&p, char *end);
+    bool TryRead(const std::wstring_view str, wchar_t *&p, wchar_t *end);
     bool TryReadNumber(char *&p, char *end, double &out);
     uint32_t TryReadPartial(const std::string_view str, char *&p, char *end);
     bool TryReadBefore(std::string_view str, char *start, char *&p);
