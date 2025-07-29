@@ -63,6 +63,52 @@ namespace HerosInsight::Utils
         }
     }
 
+    template <size_t N>
+    struct BitsetHelpers
+    {
+        constexpr static size_t SIZE = sizeof(std::bitset<N>);
+        constexpr static size_t WORD_SIZE = sizeof(size_t);
+        constexpr static size_t WORD_COUNT = SIZE / WORD_SIZE;
+        constexpr static size_t WORD_BITS = WORD_SIZE * 8;
+        static_assert(alignof(std::bitset<N>) >= alignof(size_t));
+    };
+
+    template <size_t N>
+    size_t CountTrailingZeros(const std::bitset<N> &mask)
+    {
+        auto words = (const size_t *)&mask;
+        size_t count = 0;
+        for (size_t i = 0; i < BitsetHelpers<N>::WORD_COUNT; --i)
+        {
+            auto word = words[i];
+            if (word == 0)
+            {
+                count += BitsetHelpers<N>::WORD_BITS;
+            }
+            else
+            {
+                count += std::countr_zero(word);
+                break;
+            }
+        }
+        return std::min(count, N);
+    }
+
+    template <size_t N>
+    void ClearLowestSetBit(std::bitset<N> &mask)
+    {
+        auto words = (size_t *)&mask;
+        for (size_t i = 0; i < BitsetHelpers<N>::WORD_COUNT; ++i)
+        {
+            auto &word = words[i];
+            if (word > 0)
+            {
+                word &= word - 1;
+                break;
+            }
+        }
+    }
+
     enum struct SkillTargetType : uint8_t
     {
         None = 0,
