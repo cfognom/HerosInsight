@@ -266,6 +266,15 @@ namespace HerosInsight::Utils
         }
         return false;
     }
+    bool TryRead(const wchar_t c, wchar_t *&p, wchar_t *end)
+    {
+        if (p < end && c == *p || std::tolower(c) == *p)
+        {
+            p++;
+            return true;
+        }
+        return false;
+    }
     bool TryRead(const std::string_view str, char *&p, char *end)
     {
         const auto len = str.size();
@@ -293,14 +302,30 @@ namespace HerosInsight::Utils
         auto result = std::from_chars(p, end, out);
         switch (result.ec)
         {
-            case std::errc::invalid_argument:
-                break;
-
             case std::errc::result_out_of_range:
                 out = p[0] == '-' ? std::numeric_limits<double>::lowest() : std::numeric_limits<double>::max();
             case std::errc(): // success
             {
                 p = (char *)result.ptr;
+                if (p[-1] == '.')
+                    --p;
+                return true;
+            }
+        }
+        return false;
+    }
+    bool TryReadNumber(wchar_t *&p, wchar_t *end, double &out)
+    {
+        if (p[0] == '+')
+            ++p;
+        auto result = std::from_chars(p, end, out);
+        switch (result.ec)
+        {
+            case std::errc::result_out_of_range:
+                out = p[0] == '-' ? std::numeric_limits<double>::lowest() : std::numeric_limits<double>::max();
+            case std::errc(): // success
+            {
+                p = (wchar_t *)result.ptr;
                 if (p[-1] == '.')
                     --p;
                 return true;

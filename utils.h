@@ -203,9 +203,11 @@ namespace HerosInsight::Utils
     bool StartsWith(const wchar_t *str, const wchar_t *prefix);
     bool TryReadSpaces(char *&p, char *end);
     bool TryRead(const char c, char *&p, char *end);
+    bool TryRead(const wchar_t c, wchar_t *&p, wchar_t *end);
     bool TryRead(const std::string_view str, char *&p, char *end);
     bool TryRead(const std::wstring_view str, wchar_t *&p, wchar_t *end);
     bool TryReadNumber(char *&p, char *end, double &out);
+    bool TryReadNumber(wchar_t *&p, wchar_t *end, double &out);
     uint32_t TryReadPartial(const std::string_view str, char *&p, char *end);
     bool TryReadBefore(std::string_view str, char *start, char *&p);
     bool TryReadAfter(std::string_view str, char *&p, char *end);
