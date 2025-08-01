@@ -316,22 +316,21 @@ namespace HerosInsight::Utils
     }
     bool TryReadNumber(wchar_t *&p, wchar_t *end, double &out)
     {
-        if (p[0] == '+')
-            ++p;
-        auto result = std::from_chars(p, end, out);
-        switch (result.ec)
-        {
-            case std::errc::result_out_of_range:
-                out = p[0] == '-' ? std::numeric_limits<double>::lowest() : std::numeric_limits<double>::max();
-            case std::errc(): // success
-            {
-                p = (wchar_t *)result.ptr;
-                if (p[-1] == '.')
-                    --p;
-                return true;
-            }
-        }
-        return false;
+        std::wstring_view view{p, static_cast<size_t>(end - p)};
+        auto len = view.find_first_not_of(L"-+0123456789.");
+        if (len == 0)
+            return false;
+        char tmp[32];
+        if (len == view.npos)
+            len = view.size();
+        assert(len <= sizeof(tmp));
+        char *p_tmp = tmp;
+        for (int i = 0; i < len; ++i)
+            p_tmp[i] = p[i] <= 0x7F ? static_cast<char>(p[i]) : '?';
+        bool success = TryReadNumber(p_tmp, p_tmp + len, out);
+        if (success)
+            p += (p_tmp - tmp);
+        return success;
     }
     uint32_t TryReadPartial(const std::string_view str, char *&p, char *end)
     {
