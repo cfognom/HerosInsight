@@ -109,6 +109,48 @@ namespace HerosInsight::Utils
         }
     }
 
+    template <typename T>
+    consteval std::bitset<sizeof(T)> GetPaddingBytes()
+    {
+        constexpr std::array<unsigned char, 3> patterns = {0x77, 0xF1, 0xC3};
+
+        std::bitset<sizeof(T)> is_padding;
+        is_padding.set(); // all bits = 1 (true)
+
+        for (unsigned char pattern : patterns)
+        {
+            std::array<unsigned char, sizeof(T)> bytes;
+            bytes.fill(pattern);
+
+            T *obj = std::bit_cast<T *>(bytes.data());
+            new (obj) T();
+
+            for (size_t i = 0; i < sizeof(T); ++i)
+            {
+                if (bytes[i] != pattern)
+                    is_padding.reset(i); // mark as not padding
+            }
+        }
+
+        return is_padding;
+    }
+
+    template <typename T>
+    consteval bool HasPadding()
+    {
+        return GetPaddingBytes<T>().any();
+    }
+
+    template <typename T>
+    void ZeroPadding(T &object)
+    {
+        for (auto padding = GetPaddingBytes<T>(); padding.any(); Utils::ClearLowestSetBit(padding))
+        {
+            auto i = Utils::CountTrailingZeros(padding);
+            reinterpret_cast<uint8_t *>(&object)[i] = 0;
+        }
+    }
+
     enum struct SkillTargetType : uint8_t
     {
         None = 0,
