@@ -420,8 +420,6 @@ namespace HerosInsight::Utils
     float Remap(float input_min, float input_max, float output_min, float output_max, float value);
     float ParabolicRemap(float input_min, float input_max, float output_min, float output_max, float value);
 
-    bool SkillDescriptionToEncStr(wchar_t *buffer, size_t buffer_size, const GW::Skill &skill, bool concise = false, int32_t attribute_level = -1);
-
     struct ColorChange
     {
         size_t pos;

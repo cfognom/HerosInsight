@@ -42,6 +42,7 @@ add_library(HerosInsight SHARED
     autovec.h
     packet_stepper.cpp
     matcher.cpp
+    skill_text_provider.cpp
     )
 
 include_directories(HerosInsight PRIVATE ${CMAKE_SOURCE_DIR})
