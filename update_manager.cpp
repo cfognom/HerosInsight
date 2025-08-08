@@ -127,10 +127,6 @@ namespace HerosInsight
         {
             GW::RegisterLogHandler(&LogHandler, &log_context);
         }
-
-        uintptr_t address = GW::Scanner::FindAssertion("\\Code\\Engine\\Frame\\FrMsg.cpp", "frame", 0, -0x14);
-        assert(address);
-        s_FrameArray = *(GW::Array<GW::UI::Frame *> **)address;
     }
 
     void UpdateManager::Terminate()
@@ -300,7 +296,7 @@ namespace HerosInsight
         if (game_state != GameState::InOutpost)
             return false;
 
-        if (!s_FrameArray ||
+        if (!GW::UI::GetFrameArray() ||
             is_dragging_skill ||
             !(GW::Constants::SkillID::No_Skill < skill_id && skill_id < GW::Constants::SkillID::Count) ||
             drag_skill_id_request != GW::Constants::SkillID::No_Skill)
@@ -338,7 +334,7 @@ namespace HerosInsight
             return; // Skill not learnt
         }
 
-        auto result = Utils::GetSkillFrame(drag_skill_id_request, UpdateManager::s_FrameArray);
+        auto result = Utils::GetSkillFrame(drag_skill_id_request);
 
         switch (result.error) // Handle recoverable errors
         {

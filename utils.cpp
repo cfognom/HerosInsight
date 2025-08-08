@@ -3368,8 +3368,9 @@ namespace HerosInsight::Utils
         return ImGui::IsMouseHoveringRect(rect.Min, rect.Max, false);
     }
 
-    void ForEachChildFrame(GW::Array<GW::UI::Frame *> *all_frames, const GW::UI::Frame &parent_frame, std::function<void(GW::UI::Frame &)> func)
+    void ForEachChildFrame(const GW::UI::Frame &parent_frame, std::function<void(GW::UI::Frame &)> func)
     {
+        auto all_frames = GW::UI::GetFrameArray();
         assert(all_frames != nullptr);
         for (auto pot_child : *all_frames)
         {
@@ -3400,8 +3401,9 @@ namespace HerosInsight::Utils
     }
 
     // Get the corresponding frame for a skill in the "Skills and Attributes" window
-    GetSkillFrameResult GetSkillFrame(GW::Constants::SkillID skill_id, GW::Array<GW::UI::Frame *> *all_frames)
+    GetSkillFrameResult GetSkillFrame(GW::Constants::SkillID skill_id)
     {
+        auto all_frames = GW::UI::GetFrameArray();
         assert(all_frames != nullptr);
 
         auto skills_and_attributes_frame = GW::UI::GetFrameByLabel(L"DeckBuilder");

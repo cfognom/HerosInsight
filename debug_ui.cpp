@@ -130,7 +130,7 @@ namespace HerosInsight::DebugUI
 
     void Draw(IDirect3DDevice9 *device)
     {
-        auto all_frames = UpdateManager::s_FrameArray;
+        auto all_frames = GW::UI::GetFrameArray();
 
         float hovered_area = std::numeric_limits<float>::max();
         GW::UI::Frame *hovered_frame = nullptr;
@@ -165,7 +165,7 @@ namespace HerosInsight::DebugUI
             }
         }
 
-        FixedArray<char, 64> label_salloc;
+        FixedArray<char, 128> label_salloc;
         auto label = label_salloc.ref();
 
         if (hovered_frame)
@@ -180,11 +180,11 @@ namespace HerosInsight::DebugUI
             }
 
             label.clear();
-            label.PushFormat("ID: %u, (child %i of parent)", hovered_frame->frame_id, hovered_frame->child_offset_id);
+            label.PushFormat("ID: %u, (child %i of parent), left=%f, right=%f", hovered_frame->frame_id, hovered_frame->child_offset_id, hovered_frame->position.content_left, hovered_frame->position.content_right);
             auto cyan = ImColor(0, 255, 255);
             Utils::DrawOutlineOnFrame(*hovered_frame, cyan, label, ImVec2(0.5f, 0.5f));
 
-            Utils::ForEachChildFrame(UpdateManager::s_FrameArray, *hovered_frame,
+            Utils::ForEachChildFrame(*hovered_frame,
                 [&](const GW::UI::Frame &frame)
                 {
                     label.clear();

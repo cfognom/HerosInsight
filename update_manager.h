@@ -34,9 +34,6 @@ namespace HerosInsight
         static bool open_damage;
         static bool open_skill_book;
 
-        // Global array of every frame drawn in the game atm
-        inline static GW::Array<GW::UI::Frame *> *s_FrameArray = nullptr;
-
         inline static std::tuple<bool *, char, char> key_bindings[] = {
             {&open_skill_book, VK_CONTROL, 'K'},
         };

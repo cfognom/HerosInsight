@@ -4,6 +4,7 @@
 #include <format>
 #include <optional>
 #include <span>
+#include <variant>
 
 #include <GWCA/GWCA.h>
 #include <GWCA/Utilities/Hook.h>
@@ -627,7 +628,7 @@ namespace HerosInsight::Utils
 
     ImRect GetFrameRect(const GW::UI::Frame &frame);
     bool IsHoveringFrame(const GW::UI::Frame &frame);
-    void ForEachChildFrame(GW::Array<GW::UI::Frame *> *all_frames, const GW::UI::Frame &parent_frame, std::function<void(GW::UI::Frame &)> func);
+    void ForEachChildFrame(const GW::UI::Frame &parent_frame, std::function<void(GW::UI::Frame &)> func);
     void DrawOutlineOnFrame(const GW::UI::Frame &frame, ImColor color = IM_COL32(255, 0, 0, 255), std::string_view label = "", ImVec2 rel_label_pos = ImVec2(0.0f, 0.0f));
 
     struct GetSkillFrameResult
@@ -642,7 +643,7 @@ namespace HerosInsight::Utils
         GW::UI::Frame *frame = nullptr;
     };
 
-    GetSkillFrameResult GetSkillFrame(GW::Constants::SkillID skill_id, GW::Array<GW::UI::Frame *> *frames);
+    GetSkillFrameResult GetSkillFrame(GW::Constants::SkillID skill_id);
 
     const std::wstring UIMessageToWString(GW::UI::UIMessage msg);
 
