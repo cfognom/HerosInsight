@@ -1,11 +1,11 @@
 #pragma once
 
 #include <array>
+#include <cstdio> // Include for snprintf
+#include <initializer_list>
+#include <iterator> // Include for iterator support
 #include <span>
 #include <stdexcept>
-#include <initializer_list>
-#include <cstdio>   // Include for snprintf
-#include <iterator> // Include for iterator support
 
 // AI GENERATED CODE (some of it)
 
@@ -15,9 +15,8 @@ namespace HerosInsight
     struct FixedArrayRef
     {
         std::span<T> buffer;
-        std::size_t *len_ptr;
+        std::size_t *len_ptr; // TODO: Store len directly and rename struct to BufferWriter
 
-        FixedArrayRef() = default;
         FixedArrayRef(std::span<T> buf, std::size_t &len)
             : buffer(buf), len_ptr(&len) {}
 
@@ -29,6 +28,32 @@ namespace HerosInsight
             }
             buffer[(*len_ptr)++] = std::move(value);
             return true;
+        }
+
+        void push_back(const T &value)
+        {
+            assert(size() < capacity());
+            buffer[(*len_ptr)++] = std::move(value);
+        }
+
+        T &emplace_back()
+        {
+            assert(size() < capacity());
+            return buffer[(*len_ptr)++];
+        }
+
+        std::span<T> AquireWritable() const
+        {
+            return std::span<T>(buffer.data() + size(), capacity() - size());
+        }
+
+        template <class Op>
+            requires std::invocable<Op, std::span<T> &>
+        void AppendWith(Op &&op)
+        {
+            auto span = AquireWritable();
+            op(span);
+            AddSize(span.size());
         }
 
         T pop()
@@ -130,11 +155,6 @@ namespace HerosInsight
             return n;
         }
 
-        bool is_valid() const
-        {
-            return len_ptr != nullptr;
-        }
-
         // Method to get the capacity
         std::size_t capacity() const
         {
@@ -143,18 +163,23 @@ namespace HerosInsight
 
         std::size_t size() const
         {
-            assert(is_valid());
             return *len_ptr;
+        }
+
+        bool empty() const
+        {
+            return size() == 0;
         }
 
         void set_size(std::size_t new_size)
         {
-            assert(is_valid());
-            if (new_size > capacity())
-            {
-                throw std::out_of_range("New size is larger than capacity");
-            }
+            assert(new_size <= capacity());
             *len_ptr = new_size;
+        }
+
+        void AddSize(std::size_t add_size)
+        {
+            set_size(size() + add_size);
         }
 
         T *data()
@@ -172,6 +197,12 @@ namespace HerosInsight
         const T *data_end() const
         {
             return buffer.data() + size();
+        }
+
+        T &back()
+        {
+            assert(size() > 0);
+            return buffer[size() - 1];
         }
 
         // Method to clear the buffer
