@@ -3896,7 +3896,7 @@ namespace HerosInsight::Utils
         return std::format(L"Unknown ({})", raw);
     }
 
-    void DebugFrame(GW::Array<GW::UI::Frame *> *all_frames, GW::UI::Frame &frame, size_t depth)
+    void DebugFrame(GW::UI::Frame &frame, size_t depth)
     {
         FixedArray<wchar_t, 256> buffer_salloc;
         auto buffer = buffer_salloc.ref();
@@ -3908,10 +3908,10 @@ namespace HerosInsight::Utils
 
         Utils::FormatToChat(L"{}", (std::wstring_view)buffer);
 
-        ForEachChildFrame(all_frames, frame,
+        ForEachChildFrame(frame,
             [=](GW::UI::Frame &frame)
             {
-                DebugFrame(all_frames, frame, depth + 1);
+                DebugFrame(frame, depth + 1);
             });
     }
 
