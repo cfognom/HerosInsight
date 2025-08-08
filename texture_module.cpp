@@ -764,4 +764,48 @@ namespace TextureModule
         ImGui::ItemSize(item_rect);
         ImGui::ItemAdd(item_rect, 0);
     }
+
+    bool DrawPacket::DrawOnWindow()
+    {
+        if (!CanDraw())
+            return false;
+        ImGui::Image(*tex, size, uv0, uv1, tint_col, border_col);
+        return true;
+    }
+
+    bool DrawPacket::AddToDrawList(ImDrawList *draw_list, ImVec2 position, float rot_rads)
+    {
+        if (!CanDraw())
+            return false;
+        ImVec2 min = position;
+        ImVec2 max = min + size;
+        const auto tint = ImGui::GetColorU32(tint_col);
+        if (rot_rads)
+        {
+            ImVec2 lr = size / 2;
+            ImVec2 center = min + lr;
+            ImVec2 ur(lr.x, -lr.y);
+            float sin = sinf(rot_rads);
+            float cos = cosf(rot_rads);
+            lr = ImRotate(lr, cos, sin);
+            ur = ImRotate(ur, cos, sin);
+            ImVec2 ll(-ur.x, -ur.y);
+            ImVec2 ul(-lr.x, -lr.y);
+            lr += center;
+            ur += center;
+            ll += center;
+            ul += center;
+            ImVec2 ul_uv = uv0;
+            ImVec2 lr_uv = uv1;
+            ImVec2 ur_uv = ImVec2(uv1.x, uv0.y);
+            ImVec2 ll_uv = ImVec2(uv0.x, uv1.y);
+
+            draw_list->AddImageQuad(*tex, ul, ur, lr, ll, ul_uv, ur_uv, lr_uv, ll_uv, tint);
+        }
+        else
+        {
+            draw_list->AddImage(*tex, min, max, uv0, uv1, tint);
+        }
+        return true;
+    }
 }
