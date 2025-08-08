@@ -54,7 +54,6 @@
 #include <party_data.h>
 #include <update_manager.h>
 #include <utils.h>
-#include <window_alpha_scope.h>
 
 namespace HerosInsight::DamageDisplay
 {
@@ -62,7 +61,7 @@ namespace HerosInsight::DamageDisplay
     {
         ImGui::SetNextWindowPos(ImVec2(600, 400), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(200, 200), ImGuiCond_FirstUseEver);
-        if (auto _ = WINDOW_ALPHA_SCOPE(); ImGui::Begin("Damage Display", &UpdateManager::open_damage, UpdateManager::GetWindowFlags()))
+        if (ImGui::Begin("Damage Display", &UpdateManager::open_damage, UpdateManager::GetWindowFlags()))
         {
             const int max_heroes = 9;
             const int bar_spacing = 10;

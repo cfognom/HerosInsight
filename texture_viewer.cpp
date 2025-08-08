@@ -91,7 +91,6 @@
 #include <texture_module.h>
 #include <update_manager.h>
 #include <variable_size_clipper.h>
-#include <window_alpha_scope.h>
 
 #include "utils.h"
 
@@ -113,7 +112,7 @@ namespace HerosInsight::TextureViewer
         ImGui::SetNextWindowSize(ImVec2(400, 600), ImGuiCond_FirstUseEver);
 
         static VariableSizeClipper clipper;
-        if (auto _ = WINDOW_ALPHA_SCOPE(); ImGui::Begin("Texture Viewer", &UpdateManager::open_texture_viewer, UpdateManager::GetWindowFlags()))
+        if (ImGui::Begin("Texture Viewer", &UpdateManager::open_texture_viewer, UpdateManager::GetWindowFlags()))
         {
             if (ImGui::InputInt("Start Offset", &start_offset))
             {

@@ -61,7 +61,6 @@
 #include <texture_module.h>
 #include <update_manager.h>
 #include <utils.h>
-#include <window_alpha_scope.h>
 
 #include "debug_display.h"
 
@@ -130,7 +129,7 @@ namespace HerosInsight::DebugDisplay
     {
         ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(300, 600), ImGuiCond_FirstUseEver);
-        if (auto _ = WINDOW_ALPHA_SCOPE(); ImGui::Begin("Debug Display", &UpdateManager::open_debug, UpdateManager::GetWindowFlags()))
+        if (ImGui::Begin("Debug Display", &UpdateManager::open_debug, UpdateManager::GetWindowFlags()))
         {
             ImGui::InputText("Filter", filter, IM_ARRAYSIZE(filter)); // Filter input
 

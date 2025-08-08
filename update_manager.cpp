@@ -20,7 +20,6 @@
 #include <skill_book.h>
 #include <texture_module.h>
 #include <texture_viewer.h>
-#include <window_alpha_scope.h>
 #include <worldspaceUI.h>
 
 #include "update_manager.h"
@@ -240,7 +239,6 @@ namespace HerosInsight
         const auto window_menu_button_position = style.WindowMenuButtonPosition;
         style.WindowMenuButtonPosition = ImGuiDir_None;
         {
-            auto _ = WINDOW_ALPHA_SCOPE();
             bool visible_content = ImGui::Begin("Main Menu", &UpdateManager::open_main_menu, flags);
             style.WindowMenuButtonPosition = window_menu_button_position;
 
