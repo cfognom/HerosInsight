@@ -94,7 +94,7 @@ namespace HerosInsight
 
         void ParseQuery(std::string_view source, std::span<std::string_view> prop_bundles, Query &query);
 
-        void GetFeedback(Query &query, std::span<std::string_view> &prop_bundle_names, Utils::RichString &out);
+        void GetFeedback(Query &query, std::span<std::string_view> &prop_bundle_names, std::string &out);
     }
 
     template <typename T_prop_id, size_t N_entries>
