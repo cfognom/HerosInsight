@@ -480,12 +480,56 @@ namespace HerosInsight::Utils
 
     struct TextTooltip
     {
-        uint32_t start;
-        uint32_t end;
+
+    struct ColorTag
+    {
+        ImU32 color = 0;
+    };
+
+    struct TooltipTag
+    {
+        int32_t id = -1; // -1 = close tooltip
+    };
+
+    struct ImageTag
+    {
         uint32_t id;
     };
 
-    void UnrichText(std::string &rich_text, std::vector<ColorChange> &color_changes, std::vector<TextTooltip> &tooltips, std::span<std::string_view> replacements = {});
+    using TextTag = std::variant<ColorTag, TooltipTag, ImageTag>;
+    bool TryReadTextTag(std::string_view &remaining, TextTag &out);
+    std::string_view FindTextTag(std::string_view text, TextTag &out);
+
+    struct ImageDrawerFns
+    {
+        std::function<void(ImVec2, uint32_t)> draw;
+        std::function<float(uint32_t)> get_width;
+    };
+
+    struct TextSegment
+    {
+        std::variant<std::string_view, size_t> text_or_image_id;
+        float width;
+        std::optional<ImU32> color = std::nullopt;
+        std::optional<uint16_t> tooltip_id = std::nullopt;
+        bool is_highlighted = false;
+        bool can_wrap_after = false;
+    };
+
+    void MakeTextSegments(std::string_view text, std::span<uint16_t> highlighting, ImageDrawerFns &image_impl, std::span<TextSegment> &result);
+    void DrawTextSegments(
+        std::span<TextSegment> segments,
+        float wrapping_min, float wrapping_max,
+        std::function<void(uint32_t)> &tooltip_impl,
+        ImageDrawerFns &image_impl);
+    void DrawRichText(
+        std::string_view text,
+        float wrapping_min, float wrapping_max,
+        std::span<uint16_t> highlighting,
+        std::function<void(uint32_t)> tooltip_impl,
+        ImageDrawerFns &image_impl);
+
+    // void UnrichText(std::string_view rich_text, std::vector<char> &out_chars, std::vector<ColorChange> &color_changes, std::vector<TextTooltip> &tooltips);
     void DrawMultiColoredText(
         std::string_view text,
         float wrapping_min, float wrapping_max,
