@@ -44,6 +44,7 @@ add_library(HerosInsight SHARED
     matcher.cpp
     skill_text_provider.cpp
     catalog.cpp
+    text_image_provider.cpp
     )
 
 include_directories(HerosInsight PRIVATE ${CMAKE_SOURCE_DIR})
