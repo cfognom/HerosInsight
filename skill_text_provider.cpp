@@ -136,14 +136,12 @@ namespace HerosInsight
             {
                 {
                     double param_id;
-                    auto p_tmp = p;
-                    if (Utils::TryRead(L"<param=", p_tmp, end) &&
-                        Utils::TryReadNumber(p_tmp, end, param_id) &&
-                        Utils::TryRead(L'>', p_tmp, end))
+                    std::wstring_view rem{p, (size_t)(end - p)};
+                    if (Utils::TryRead(L"<param=", rem) &&
+                        Utils::TryReadNumber(rem, param_id) &&
+                        Utils::TryRead(L'>', rem))
                     {
-                        while (p_tmp < end && *p_tmp != L'<')
-                            ++p_tmp;
-                        if (Utils::TryRead(L"</param>", p_tmp, end))
+                        if (Utils::TryReadAhead(L"</param>", rem))
                         {
                             if (is_generic)
                             {
@@ -160,7 +158,7 @@ namespace HerosInsight
                                 decode.param_spans.emplace_back(param_str_pos, param_str_size, (uint8_t)param_id);
                             }
 
-                            p = p_tmp;
+                            p = (wchar_t *)rem.data();
                             continue;
                         }
                     }
@@ -398,6 +396,12 @@ namespace HerosInsight
         return this->names.GetIndexed(static_cast<size_t>(skill_id));
     }
 
+    IndexedStringArena<char> &SkillTextProvider::GetNames()
+    {
+        assert(this->IsReady());
+        return this->names;
+    }
+
     std::string_view SkillTextProvider::GetGenericDescription(GW::Constants::SkillID skill_id, bool is_concise)
     {
         assert(this->IsReady());
@@ -536,9 +540,14 @@ From GWCA/TB++ discord
         size_t written_len = 0;
         FixedArrayRef<wchar_t> buffer{dst, written_len};
         auto str_id = concise ? skill.concise : skill.description;
-        bool success = GW::UI::UInt32ToEncStr(str_id, buffer.data(), buffer.capacity());
-        assert(success);
-        written_len = wcslen(buffer.data());
+        buffer.AppendWith(
+            [=](auto &dst)
+            {
+                bool success = GW::UI::UInt32ToEncStr(str_id, dst.data(), dst.size());
+                assert(success);
+                auto len = wcslen(dst.data());
+                dst = dst.subspan(0, len);
+            });
 
         bool has_attribute = attr_lvl != -1;
         constexpr uint32_t MAX_VALUE = 0x8000 - 0x100 - 1;

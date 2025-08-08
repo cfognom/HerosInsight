@@ -4,67 +4,78 @@
 
 namespace HerosInsight
 {
-    Matcher::Matcher(std::string_view source)
+    Matcher::Matcher(std::string_view source, bool start_insensitive)
     {
         using Type = Matcher::Atom::Type;
 
-        auto p = (char *)source.data();
-        auto start = p;
-        auto end = p + source.size();
-        while (p < end)
+        if (start_insensitive)
         {
-            auto p_tmp = p;
-            if ((p_tmp == start || Utils::TryReadSpaces(p_tmp, end)))
+            this->atoms.push_back({Type::ZeroOrMoreExcept, {}});
+            this->atoms.push_back({Type::GapBefore, {}});
+        }
+
+        auto rem = source;
+        while (rem.size())
+        {
+            auto rem_tmp = rem;
+            if ((rem_tmp.data() == source.data() || Utils::TryReadSpaces(rem_tmp)))
             {
                 bool success = true;
                 Matcher::Atom atom;
-                if (Utils::TryRead("....", p_tmp, end))
+                if (Utils::TryRead("....", rem_tmp))
                     atom = {Type::ZeroOrMoreExcept, {}};
-                else if (Utils::TryRead("...", p_tmp, end))
+                else if (Utils::TryRead("...", rem_tmp))
                     atom = {Type::ZeroOrMoreExcept, ".:"};
-                else if (Utils::TryRead("..", p_tmp, end))
+                else if (Utils::TryRead("..", rem_tmp))
                     atom = {Type::ZeroOrMoreExcept, ".,:;"};
                 else
                     success = false;
 
-                if (success && (p_tmp == end || Utils::TryReadSpaces(p_tmp, end)))
+                if (success && (rem_tmp.empty() || Utils::TryReadSpaces(rem_tmp)))
                 {
                     this->atoms.push_back(atom);
-                    p = p_tmp;
+                    rem = rem_tmp;
                     continue;
                 }
             }
 
-            if (Utils::TryReadSpaces(p, end))
+            if (Utils::TryReadSpaces(rem))
             {
                 this->atoms.push_back({Type::OneOrMoreSpaces, {}});
                 continue;
             }
 
-            if (Utils::TryRead('#', p, end))
+            if (Utils::TryRead('#', rem))
             {
                 this->atoms.push_back({Type::Number, {}});
                 continue;
             }
 
-            if ((p + 3 >= end || p[3] != '.') &&
-                Utils::TryRead("...", p, end))
+            // if (Utils::TryRead(':', rem))
+            // {
+            //     this->atoms.push_back({Type::ExactString, ":"});
+            //     this->atoms.push_back({Type::ZeroOrMoreExcept, {}});
+            //     continue;
+            // }
+
+            if ((rem.size() <= 3 || rem[3] != '.') &&
+                Utils::TryRead("...", rem))
             {
                 this->atoms.push_back({Type::ZeroOrMoreNonSpace, {}});
                 continue;
             }
 
-            if ((p + 2 >= end || p[2] != '.') &&
-                Utils::TryRead("..", p, end))
+            if ((rem.size() <= 2 || rem[2] != '.') &&
+                Utils::TryRead("..", rem))
             {
                 this->atoms.push_back({Type::ZeroOrMoreAlpha, {}});
                 continue;
             }
 
-            if (Utils::IsDigit(p[0]) || p[0] == '-' || p[0] == '+')
+            if (Utils::IsDigit(rem[0]) || rem[0] == '-' || rem[0] == '+')
             {
                 double value;
-                if (Utils::TryReadNumber(p, end, value))
+                if (Utils::TryReadNumber(rem, value))
                 {
                     this->atoms.push_back({Type::NumberEqual, value});
                     continue;
@@ -72,19 +83,19 @@ namespace HerosInsight
             }
 
             Type type = Type::NumberLessThan;
-            switch (p[0])
+            switch (rem[0])
             {
                 case '>':
                     type = Type::NumberGreaterThan;
                 case '<':
                 {
-                    ++p;
-                    if (Utils::TryRead('=', p, end))
+                    rem = rem.substr(1);
+                    if (Utils::TryRead('=', rem))
                     {
                         ++(*(uint8_t *)&type);
                     }
                     double value;
-                    if (Utils::TryReadNumber(p, end, value))
+                    if (Utils::TryReadNumber(rem, value))
                     {
                         this->atoms.push_back({type, value});
                         continue;
@@ -92,36 +103,41 @@ namespace HerosInsight
                 }
             }
 
-            if (Utils::TryRead('"', p, end))
+            if (Utils::TryRead('"', rem))
             {
-                auto start = p;
-                while (p < end && *p != '"')
-                    ++p;
-                this->atoms.push_back({Type::ExactString, std::string_view(start, p - start)});
-                ++p;
+                size_t i = 0;
+                while (i < rem.size() && rem[0] != '"')
+                    ++i;
+                auto str = rem.substr(0, i);
+                if (!str.empty())
+                    this->atoms.push_back({Type::ExactString, str});
+                rem = rem.substr(i + 1); // +1 to skip "
                 continue;
             }
 
-            if (Utils::IsAlpha(*p))
+            if (Utils::IsAlpha(rem[0]))
             {
-                auto start = p;
+                size_t i = 0;
                 do
                 {
-                    ++p;
-                } while (p < end && Utils::IsAlpha(*p));
-                this->atoms.push_back({Type::String, std::string_view(start, p - start)});
-                this->atoms.push_back({Type::ZeroOrMoreNonSpace, {}});
+                    ++i;
+                } while (i < rem.size() && Utils::IsAlpha(rem[i]));
+                auto str = rem.substr(0, i);
+                this->atoms.push_back({Type::String, str});
+                // this->atoms.push_back({Type::ZeroOrMoreNonSpace, {}});
+                this->atoms.push_back({Type::ZeroOrMoreExcept, ".:"});
                 continue;
             }
 
-            if (!Utils::IsSpace(*p))
+            if (!Utils::IsSpace(rem[0]))
             {
-                auto start = p;
+                size_t i = 0;
                 do
                 {
-                    ++p;
-                } while (p < end && !Utils::IsSpace(*p) && !Utils::IsAlpha(*p));
-                this->atoms.push_back({Type::ExactString, std::string_view(start, p - start)});
+                    ++i;
+                } while (i < rem.size() && !Utils::IsSpace(rem[i]) && !Utils::IsAlpha(rem[i]));
+                auto str = rem.substr(0, i);
+                this->atoms.push_back({Type::ExactString, str});
                 continue;
             }
         }
@@ -153,10 +169,8 @@ namespace HerosInsight
         if (except[0] == '.')
         {
             // Special case that ignores "..." when we shouldn't read '.'s
-            auto p = (char *)text.data();
-            auto end = p + text.size();
-            p += offset;
-            if (Utils::TryRead("...", p, end))
+            auto rem = text.substr(offset);
+            if (Utils::TryRead("...", rem))
             {
                 offset += 3;
                 return true;
@@ -186,7 +200,7 @@ namespace HerosInsight
         return success;
     }
 
-    bool Matcher::Matches(std::string_view text, std::vector<uint16_t> &matches)
+    bool Matcher::Matches(std::string_view text, std::vector<uint16_t> *matches)
     {
         if (this->is_degenerate)
             return true;
@@ -247,12 +261,14 @@ namespace HerosInsight
         }
 
         const size_t alloc_size = n_atoms * sizeof(size_t);
+#ifdef _DEBUG
         assert(alloc_size <= 6000 && "Too big stack allocation");
-
+#endif
         size_t *atom_ends = (size_t *)alloca(alloc_size);
+
         size_t size = text.size();
         offset = 0;
-        bool success = false;
+        bool did_match = false;
         while (offset < size)
         {
             std::memset(atom_ends, 0xFF, alloc_size);
@@ -266,12 +282,12 @@ namespace HerosInsight
                 else // Backtrack
                 {
                     if (offset == size)
-                        return success;
+                        return did_match;
 
                     while (true)
                     {
                         if (i == 0)
-                            return success;
+                            return did_match;
 
                         --i;
 
@@ -296,55 +312,59 @@ namespace HerosInsight
                 }
             }
 
-            size_t atom_start = 0;
-            size_t atom_end;
-            size_t atom_end_success = -1;
-            for (size_t i = 0; i < n_atoms; ++i)
+            did_match = true;
+
+            if (matches)
             {
-                auto &atom = atoms[i];
-                atom_end = atom_ends[i];
-
-                if (atom.type < Atom::Type::REPEATING_START)
+                size_t atom_start = 0;
+                size_t atom_end;
+                size_t atom_end_success = -1;
+                for (size_t i = 0; i < n_atoms; ++i)
                 {
-                    size_t size = atom_end - atom_start;
-                    if (size > 0)
+                    auto &atom = atoms[i];
+                    atom_end = atom_ends[i];
+
+                    if (atom.type < Atom::Type::REPEATING_START)
                     {
-                        bool extend_prev = false;
-                        if (atom_end_success != -1)
+                        size_t size = atom_end - atom_start;
+                        if (size > 0)
                         {
-                            // Check if there is only spaces between last match and current
-                            std::string_view between(text.data() + atom_end_success, atom_start - atom_end_success);
-                            bool success = true;
-                            for (auto c : between)
+                            bool extend_prev = false;
+                            if (atom_end_success != -1)
                             {
-                                if (!Utils::IsSpace(c))
+                                // Check if there is only spaces between last match and current
+                                std::string_view between(text.data() + atom_end_success, atom_start - atom_end_success);
+                                bool success = true;
+                                for (auto c : between)
                                 {
-                                    success = false;
-                                    break;
+                                    if (!Utils::IsSpace(c))
+                                    {
+                                        success = false;
+                                        break;
+                                    }
                                 }
+                                extend_prev = success;
                             }
-                            extend_prev = success;
-                        }
-                        if (extend_prev)
-                        {
-                            matches.back() = (uint16_t)atom_end;
-                        }
-                        else
-                        {
-                            matches.push_back((uint16_t)atom_start);
-                            matches.push_back((uint16_t)atom_end);
-                        }
+                            if (extend_prev)
+                            {
+                                matches->back() = (uint16_t)atom_end;
+                            }
+                            else
+                            {
+                                matches->push_back((uint16_t)atom_start);
+                                matches->push_back((uint16_t)atom_end);
+                            }
 
-                        atom_end_success = atom_end;
+                            atom_end_success = atom_end;
+                        }
                     }
-                }
 
-                atom_start = atom_end;
+                    atom_start = atom_end;
+                }
             }
-            success = true;
         }
 
-        return success;
+        return did_match;
     }
 
     FORCE_INLINE bool Matcher::Atom::TryReadMinimum(std::string_view text, size_t &offset)
@@ -353,6 +373,15 @@ namespace HerosInsight
         bool case_insensitive = false;
         switch (type)
         {
+            case Atom::Type::GapBefore:
+            {
+                if (offset == 0)
+                    return true;
+                if (Utils::IsSpace(text[offset - 1]))
+                    return true;
+                return false;
+            }
+
                 // clang-format off
             case Atom::Type::OneOrMoreExcept:
             {
@@ -406,39 +435,40 @@ namespace HerosInsight
             {
                 if (offset >= size)
                     return false;
-                auto text_ptr = (char *)text.data();
-                auto off_ptr = text_ptr + offset;
-                auto before_ptr = off_ptr - 1;
-                if (offset > 0 && (Utils::IsDigit(*before_ptr) || *before_ptr == '-' || *before_ptr == '+'))
-                    return false;
-                auto end_ptr = text_ptr + size;
+                if (offset > 0)
+                {
+                    char before_char = text[offset - 1];
+                    if ((Utils::IsDigit(before_char) || before_char == '-' || before_char == '+'))
+                        return false;
+                }
+                auto rem = text.substr(offset);
                 double value, value2;
                 bool is_negative = false;
                 bool is_dual = false;
-                if (Utils::TryRead('-', off_ptr, end_ptr))
+                if (Utils::TryRead('-', rem))
                 {
                     is_negative = true;
                 }
                 else
                 {
-                    Utils::TryRead('+', off_ptr, end_ptr);
+                    Utils::TryRead('+', rem);
                 }
-                if (Utils::TryRead('(', off_ptr, end_ptr))
+                if (Utils::TryRead('(', rem))
                 {
                     is_dual = true;
                 }
-                if (!Utils::TryReadNumber(off_ptr, end_ptr, value))
+                if (!Utils::TryReadNumber(rem, value))
                     return false;
                 bool success;
                 if (is_dual)
                 {
-                    success = Utils::TryRead("...", off_ptr, end_ptr) &&
-                              Utils::TryReadNumber(off_ptr, end_ptr, value2) &&
-                              Utils::TryRead(')', off_ptr, end_ptr);
+                    success = Utils::TryRead("...", rem) &&
+                              Utils::TryReadNumber(rem, value2) &&
+                              Utils::TryRead(')', rem);
                 }
                 else
                 {
-                    success = !Utils::IsAlpha(*off_ptr);
+                    success = rem.empty() || !Utils::IsAlpha(rem[0]);
                 }
                 if (!success)
                     return false;
@@ -465,7 +495,7 @@ namespace HerosInsight
                     // clang-format on
                 }
                 if (success)
-                    offset = off_ptr - text.data();
+                    offset = rem.data() - text.data();
                 return success;
             }
 
@@ -523,6 +553,8 @@ namespace HerosInsight
             case Atom::Type::Number:
                 return "Number";
 
+            case Atom::Type::GapBefore:
+                return "GapBefore";
             case Atom::Type::ZeroOrMoreExcept:
                 return std::format("ZeroOrMoreExcept: '{}'", std::get<std::string_view>(value));
             case Atom::Type::ZeroOrMoreNonSpace:

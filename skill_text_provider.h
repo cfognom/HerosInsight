@@ -11,6 +11,7 @@ namespace HerosInsight
 
         bool IsReady() const;
         std::string_view GetName(GW::Constants::SkillID skill_id);
+        IndexedStringArena<char> &GetNames();
         std::string_view GetGenericDescription(GW::Constants::SkillID skill_id, bool is_concise);
         void GetDescriptionCopy(GW::Constants::SkillID skill_id, bool is_concise, int8_t attr_lvl, std::span<char> &dst);
         static void SkillDescriptionToEncStr(const GW::Skill &skill, bool concise, int32_t attr_lvl, std::span<wchar_t> &dst);

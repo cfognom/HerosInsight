@@ -199,23 +199,6 @@ namespace HerosInsight::Utils
         return i;
     }
 
-    bool StrFind(const char *&cursor, const char *end, std::string_view substr)
-    {
-        const auto substr_len = substr.size();
-        if (cursor < end && substr_len == 0)
-            return true;
-
-        const auto search_end = end - substr_len + 1;
-        while (cursor < search_end)
-        {
-            const auto test = std::string_view(cursor, substr_len);
-            if (StrCountEqual(test, substr) == substr_len)
-                return true;
-            cursor++;
-        }
-        return false;
-    }
-
     std::string_view PopWord(std::string_view &str)
     {
         char *p = (char *)str.data();
@@ -245,146 +228,173 @@ namespace HerosInsight::Utils
         }
     }
 
-    bool TryReadSpaces(char *&p, char *end)
+    bool TryReadSpaces(std::string_view &remaining)
     {
-        if (p < end && Utils::IsSpace(*p))
+        size_t count = 0;
+        while (count < remaining.size() && Utils::IsSpace(remaining[count]))
         {
-            do
+            ++count;
+        }
+        if (count > 0)
             {
-                ++p;
-            } while (p < end && Utils::IsSpace(*p));
+            remaining = remaining.substr(count);
             return true;
         }
         return false;
     }
-    bool TryRead(const char c, char *&p, char *end)
+    bool TryRead(const char c, std::string_view &remaining)
     {
-        if (p < end && c == *p || std::tolower(c) == *p)
+        if (remaining.size() && (c == remaining[0] || std::tolower(c) == remaining[0]))
         {
-            p++;
+            remaining = remaining.substr(1);
             return true;
         }
         return false;
     }
-    bool TryRead(const wchar_t c, wchar_t *&p, wchar_t *end)
+    bool TryRead(const wchar_t c, std::string_view &remaining)
     {
-        if (p < end && c == *p || std::tolower(c) == *p)
+        if (remaining.size() && (c == remaining[0] || std::tolower(c) == remaining[0]))
         {
-            p++;
+            remaining = remaining.substr(1);
             return true;
         }
         return false;
     }
-    bool TryRead(const std::string_view str, char *&p, char *end)
+    bool TryRead(const std::string_view str, std::string_view &remaining)
     {
         const auto len = str.size();
-        if (StrCountEqual(str, std::string_view(p, end - p)) == len)
+        if (StrCountEqual(str, remaining) == len)
         {
-            p += len;
+            remaining = remaining.substr(len);
             return true;
         }
         return false;
     }
-    bool TryRead(const std::wstring_view str, wchar_t *&p, wchar_t *end)
+    bool TryRead(const std::wstring_view str, std::wstring_view &remaining)
     {
         const auto len = str.size();
-        if (StrCountEqual(str, std::wstring_view(p, end - p)) == len)
+        if (StrCountEqual(str, remaining) == len)
         {
-            p += len;
+            remaining = remaining.substr(len);
             return true;
         }
         return false;
     }
-    bool TryReadNumber(char *&p, char *end, double &out)
+    bool TryReadInt(std::string_view &remaining, int32_t &out)
     {
-        if (p[0] == '+')
-            ++p;
-        auto result = std::from_chars(p, end, out);
+        auto rem = remaining;
+        Utils::TryRead('+', rem);
+        auto result = std::from_chars(rem.data(), rem.data() + rem.size(), out, 10);
+        if (result.ec == std::errc()) // No error
+        {
+            size_t len = result.ptr - rem.data();
+            remaining = rem.substr(len);
+            return true;
+        }
+        return false;
+    }
+    bool TryReadNumber(std::string_view &remaining, double &out)
+    {
+        auto rem = remaining;
+        Utils::TryRead('+', rem);
+        auto result = std::from_chars(rem.data(), rem.data() + rem.size(), out);
         switch (result.ec)
         {
             case std::errc::result_out_of_range:
-                out = p[0] == '-' ? std::numeric_limits<double>::lowest() : std::numeric_limits<double>::max();
+                out = rem[0] == '-' ? std::numeric_limits<double>::lowest() : std::numeric_limits<double>::max();
             case std::errc(): // success
             {
-                p = (char *)result.ptr;
-                if (p[-1] == '.')
-                    --p;
+                size_t len = result.ptr - rem.data();
+                if (rem[len - 1] == '.') // We dont count a trailing dot as part of the number
+                    --len;
+                remaining = rem.substr(len);
                 return true;
             }
         }
         return false;
     }
-    bool TryReadNumber(wchar_t *&p, wchar_t *end, double &out)
+    bool TryReadNumber(std::wstring_view &remaining, double &out)
     {
-        std::wstring_view view{p, static_cast<size_t>(end - p)};
-        auto len = view.find_first_not_of(L"-+0123456789.");
+        auto len = remaining.find_first_not_of(L"-+0123456789.");
         if (len == 0)
             return false;
         char tmp[32];
-        if (len == view.npos)
-            len = view.size();
+        if (len == remaining.npos)
+            len = remaining.size();
         assert(len <= sizeof(tmp));
-        char *p_tmp = tmp;
-        for (int i = 0; i < len; ++i)
-            p_tmp[i] = p[i] <= 0x7F ? static_cast<char>(p[i]) : '?';
-        bool success = TryReadNumber(p_tmp, p_tmp + len, out);
-        if (success)
-            p += (p_tmp - tmp);
-        return success;
+        std::string_view tmp_view{tmp, len};
+        for (size_t i = 0; i < len; ++i)
+            tmp[i] = remaining[i] <= 0x7F ? static_cast<char>(remaining[i]) : '?';
+        if (TryReadNumber(tmp_view, out))
+        {
+            auto len = tmp - tmp_view.data();
+            remaining = remaining.substr(len);
+            return true;
     }
-    uint32_t TryReadPartial(const std::string_view str, char *&p, char *end)
+        return false;
+    }
+    size_t TryReadPartial(const std::string_view str, std::string_view &remaining)
     {
         auto eq_len = 0;
-        if ((eq_len = StrCountEqual(str, std::string_view(p, end - p))) > 0)
+        if ((eq_len = StrCountEqual(str, remaining)) > 0)
         {
-            p += eq_len;
+            remaining = remaining.substr(eq_len);
             return eq_len;
         }
         return 0;
     }
 
-    bool TryReadBefore(std::string_view str, char *start, char *&p)
+    bool TryReadAhead(std::string_view str, std::string_view &remaining)
     {
-        auto p_init = p;
-        const auto size = str.size();
-        p -= size;
-        while (p >= start)
+        auto rem_copy = remaining;
+        const auto str_size = str.size();
+        while (rem_copy.size() >= str_size)
         {
-            if (Utils::TryRead(str, p, p_init))
+            if (Utils::TryRead(str, rem_copy))
             {
+                remaining = rem_copy;
                 return true;
             }
-            p--;
+            rem_copy = rem_copy.substr(1);
         }
-        p = p_init;
         return false;
     }
 
-    bool TryReadAfter(std::string_view str, char *&p, char *end)
+    bool TryReadAhead(std::wstring_view str, std::wstring_view &remaining)
     {
-        auto p_init = p;
-        const auto size = str.size();
-        auto eff_end = end - size + 1;
-        while (p < eff_end)
+        auto rem_copy = remaining;
+        const auto str_size = str.size();
+        while (rem_copy.size() >= str_size)
         {
-            if (Utils::TryRead(str, p, end))
+            if (Utils::TryRead(str, rem_copy))
             {
+                remaining = rem_copy;
                 return true;
             }
-            p++;
+            rem_copy = rem_copy.substr(1);
         }
-        p = p_init;
         return false;
     }
 
-    // Returns true if skipped
-    bool SkipWhitespace(char *&p, const char *end)
+    bool TryFindAhead(std::string_view str, std::string_view &remaining)
     {
-        auto start = p;
-        while (p < end && *p == ' ')
-            p++;
+        if (Utils::TryReadAhead(str, remaining))
+        {
+            remaining = std::string_view(remaining.data() - str.size(), str.size());
+            return true;
+        }
+        return false;
+    }
 
-        return p != start;
+    // Returns the number of whitespace characters read
+    size_t ReadWhitespace(std::string_view &remaining)
+    {
+        size_t count = 0;
+        while (count < remaining.size() && Utils::IsSpace(remaining[count]))
+            ++count;
+
+        remaining = remaining.substr(count);
+        return count;
     }
 
     std::string UInt32ToBinaryStr(uint32_t value)
