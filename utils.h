@@ -110,55 +110,6 @@ namespace HerosInsight::Utils
         }
     }
 
-    template <typename T>
-    consteval std::bitset<sizeof(T)> GetPaddingBytes()
-    {
-        static_assert(std::is_trivially_copyable_v<T>, "T must be trivially copyable");
-
-        constexpr std::array<unsigned char, 8> patterns = {0x77, 0xF1, 0xC3, 0xA5, 0xBB, 0x1F, 0x2D, 0x99}; // Some random values to check against
-        std::bitset<sizeof(T)> padding_bits;
-        padding_bits.set(); // assume all bytes are padding initially
-
-        for (auto pattern : patterns)
-        {
-            // overlay a byte array on the object
-            union Overlay
-            {
-                T obj;
-                std::array<uint8_t, sizeof(T)> bytes;
-            };
-
-            Overlay u{};
-            u.bytes.fill(pattern); // fill memory with pattern
-            u.obj = T{};           // default-initialize object
-
-            // mark bytes that changed as non-padding
-            for (size_t i = 0; i < sizeof(T); ++i)
-            {
-                if (u.bytes[i] != pattern)
-                    padding_bits.reset(i); // not padding
-            }
-        }
-
-        return padding_bits;
-    }
-
-    template <typename T>
-    consteval bool HasPadding()
-    {
-        return GetPaddingBytes<T>().any();
-    }
-
-    template <typename T>
-    void ClearPaddingBytes(T &object)
-    {
-        for (auto padding = GetPaddingBytes<T>(); padding.any(); Utils::ClearLowestSetBit(padding))
-        {
-            auto i = Utils::CountTrailingZeros(padding);
-            reinterpret_cast<uint8_t *>(&object)[i] = 0;
-        }
-    }
-
     enum struct SkillTargetType : uint8_t
     {
         None = 0,
