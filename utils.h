@@ -113,27 +113,34 @@ namespace HerosInsight::Utils
     template <typename T>
     consteval std::bitset<sizeof(T)> GetPaddingBytes()
     {
-        constexpr std::array<unsigned char, 3> patterns = {0x77, 0xF1, 0xC3};
+        static_assert(std::is_trivially_copyable_v<T>, "T must be trivially copyable");
 
-        std::bitset<sizeof(T)> is_padding;
-        is_padding.set(); // all bits = 1 (true)
+        constexpr std::array<unsigned char, 8> patterns = {0x77, 0xF1, 0xC3, 0xA5, 0xBB, 0x1F, 0x2D, 0x99}; // Some random values to check against
+        std::bitset<sizeof(T)> padding_bits;
+        padding_bits.set(); // assume all bytes are padding initially
 
-        for (unsigned char pattern : patterns)
+        for (auto pattern : patterns)
         {
-            std::array<unsigned char, sizeof(T)> bytes;
-            bytes.fill(pattern);
+            // overlay a byte array on the object
+            union Overlay
+            {
+                T obj;
+                std::array<uint8_t, sizeof(T)> bytes;
+            };
 
-            T *obj = std::bit_cast<T *>(bytes.data());
-            new (obj) T();
+            Overlay u{};
+            u.bytes.fill(pattern); // fill memory with pattern
+            u.obj = T{};           // default-initialize object
 
+            // mark bytes that changed as non-padding
             for (size_t i = 0; i < sizeof(T); ++i)
             {
-                if (bytes[i] != pattern)
-                    is_padding.reset(i); // mark as not padding
+                if (u.bytes[i] != pattern)
+                    padding_bits.reset(i); // not padding
             }
         }
 
-        return is_padding;
+        return padding_bits;
     }
 
     template <typename T>
@@ -143,7 +150,7 @@ namespace HerosInsight::Utils
     }
 
     template <typename T>
-    void ZeroPadding(T &object)
+    void ClearPaddingBytes(T &object)
     {
         for (auto padding = GetPaddingBytes<T>(); padding.any(); Utils::ClearLowestSetBit(padding))
         {
