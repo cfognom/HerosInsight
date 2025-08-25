@@ -251,7 +251,7 @@ namespace HerosInsight::Utils
         }
         return false;
     }
-    bool TryRead(const wchar_t c, std::string_view &remaining)
+    bool TryRead(const wchar_t c, std::wstring_view &remaining)
     {
         if (remaining.size() && (c == remaining[0] || std::tolower(c) == remaining[0]))
         {
@@ -327,7 +327,7 @@ namespace HerosInsight::Utils
             tmp[i] = remaining[i] <= 0x7F ? static_cast<char>(remaining[i]) : '?';
         if (TryReadNumber(tmp_view, out))
         {
-            auto len = tmp - tmp_view.data();
+            auto len = tmp_view.data() - tmp;
             remaining = remaining.substr(len);
             return true;
         }
