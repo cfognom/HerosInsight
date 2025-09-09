@@ -45,7 +45,8 @@ add_library(HerosInsight SHARED
     skill_text_provider.cpp
     catalog.cpp
     rich_text.cpp
-    )
+    capacity_hints.cpp
+)
 
 include_directories(HerosInsight PRIVATE ${CMAKE_SOURCE_DIR})
 target_precompile_headers(HerosInsight PRIVATE pch.h)

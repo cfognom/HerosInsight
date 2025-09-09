@@ -7,6 +7,9 @@
 #include <string>
 #include <unordered_map>
 
+#include <capacity_hints.h>
+#include <utils.h>
+
 #ifdef _DEBUG
 #define SAFETY_CHECKS
 #endif
@@ -16,6 +19,8 @@ namespace HerosInsight
     template <typename T>
     class StringArena : public std::vector<T>
     {
+        static_assert(std::has_unique_object_representations_v<T>, "T must have unique object representations");
+
     protected:
         constexpr static bool is_char = std::is_same_v<T, char>;
 
@@ -36,6 +41,16 @@ namespace HerosInsight
                 assert(offset + size <= vec.size());
 #endif
                 return T_span(vec.data() + offset, size);
+            }
+
+            std::string_view resolve_as_str(std::vector<T> &vec) const
+            {
+#ifdef SAFETY_CHECKS
+                assert(offset + size <= vec.size());
+#endif
+                constexpr size_t element_size = sizeof(T);
+                const size_t bytes = element_size * size;
+                return std::string_view((const char *)(vec.data() + offset), bytes);
             }
         };
 
@@ -59,11 +74,7 @@ namespace HerosInsight
                 }
                 else
                 {
-                    if (a.size != b.size)
-                        return false;
-                    auto as = a.resolve(vec);
-                    auto bs = b.resolve(vec);
-                    return std::equal(as.begin(), as.end(), bs.begin());
+                    return a.resolve_as_str(vec) == b.resolve_as_str(vec);
                 }
             }
 
@@ -71,7 +82,7 @@ namespace HerosInsight
         };
 
     protected:
-        std::vector<T_span> id_to_span;
+        std::vector<LocalSpan> id_to_span;
 #ifdef SAFETY_CHECKS
         bool is_writing = false;
 #endif
@@ -80,15 +91,34 @@ namespace HerosInsight
         using deduper = std::unordered_map<LocalSpan, T_span_id, Hasher, Eq>;
 
         // The count of strings in the arena
-        size_t Count() const { return id_to_span.size(); }
+        size_t SpanCount() const { return id_to_span.size(); }
 
-        void clear()
+        void Reserve(size_t n_spans, size_t n_elements)
+        {
+            id_to_span.reserve(n_spans);
+            this->reserve(n_elements);
+        }
+
+        void ReserveFromHint(const std::string &id)
+        {
+            auto n_spans = g_capacityHints.get(id + "_spans");
+            auto n_elements = g_capacityHints.get(id + "_elements");
+            Reserve(n_spans, n_elements);
+        }
+
+        void StoreCapacityHint(const std::string &id)
+        {
+            g_capacityHints.update(id + "_spans", id_to_span.size());
+            g_capacityHints.update(id + "_elements", this->size());
+        }
+
+        float CalcAvgSpanSize() const { return id_to_span.empty() ? 0.f : (float)this->size() / (float)id_to_span.size(); }
+
+        void Reset()
         {
             std::vector<T>::clear();
             id_to_span.clear();
         }
-
-        std::span<T_span> Spans() const { return id_to_span; }
 
         void Assign(StringArena<T> &other)
         {
@@ -109,21 +139,21 @@ namespace HerosInsight
 #ifdef SAFETY_CHECKS
             assert(!is_writing);
             is_writing = true;
-            assert(span.data() == nullptr);
-            assert(span.size() == 0);
+            assert(span.offset == 0);
+            assert(span.size == 0);
 #endif
             auto offset = this->size();
-            // #ifdef SAFETY_CHECKS
-            //             assert(offset <= std::numeric_limits<decltype(span.offset)>::max());
-            // #endif
-            span = T_span(this->data() + offset, 0);
-            // span.offset = static_cast<decltype(span.offset)>(offset);
+#ifdef SAFETY_CHECKS
+            assert(offset <= std::numeric_limits<decltype(span.offset)>::max());
+#endif
+            span.offset = static_cast<decltype(span.offset)>(offset);
         }
 
         void PopBack()
         {
             auto &back = id_to_span.back();
-            this->resize(back.data() - this->data());
+            auto new_size = this->size() - back.size;
+            this->erase(this->begin() + new_size, this->end());
             id_to_span.pop_back();
 #ifdef SAFETY_CHECKS
             is_writing = false;
@@ -137,40 +167,25 @@ namespace HerosInsight
             is_writing = false;
 #endif
 
-            if (!id_to_span.empty())
-            {
-                auto offset = this->data() - id_to_span[0].data();
-                if (offset != 0)
-                {
-                    // The backing vector was reallocated, we need to patch all stored views.
-                    for (auto &span : id_to_span)
-                    {
-                        span = T_span(span.data() + offset, span.size());
-                    }
-                }
-            }
-
-            auto string_id = id_to_span.size() - 1;
+            auto span_id = id_to_span.size() - 1;
 #ifdef SAFETY_CHECKS
-            assert(string_id <= std::numeric_limits<T_span_id>::max());
+            assert(span_id <= std::numeric_limits<T_span_id>::max());
 #endif
-            T_span_id string_id_cast = static_cast<T_span_id>(string_id);
+            T_span_id span_id_cast = static_cast<T_span_id>(span_id);
 
-            auto &span = id_to_span[string_id];
-            size_t span_size = this->data() + this->size() - span.data();
-            // #ifdef SAFETY_CHECKS
-            //             assert(span_size <= std::numeric_limits<decltype(span.size)>::max());
-            // #endif
-            //             span.size = static_cast<decltype(span.size)>(span_size);
-            span = T_span(span.data(), span_size);
+            auto &span = id_to_span[span_id];
+            size_t span_size = this->size() - span.offset;
+#ifdef SAFETY_CHECKS
+            assert(span_size <= std::numeric_limits<decltype(span.size)>::max());
+#endif
+            span.size = static_cast<decltype(span.size)>(span_size);
 
             if (deduper != nullptr)
             {
-                auto local_span = LocalSpan{static_cast<size_t>(span.data() - this->data()), span_size};
-                auto it = deduper->find(local_span);
+                auto it = deduper->find(span);
                 if (it == deduper->end())
                 {
-                    deduper->emplace(local_span, string_id_cast);
+                    deduper->emplace(span, span_id_cast);
                 }
                 else
                 {
@@ -184,11 +199,11 @@ namespace HerosInsight
                 this->push_back('\0');
             }
 
-            return string_id_cast;
+            return span_id_cast;
         }
 
         // Gets a reference to a string in the arena
-        T_span Get(size_t span_id) const
+        T_span Get(size_t span_id)
         {
 #ifdef SAFETY_CHECKS
             assert(is_writing == false);
@@ -196,8 +211,7 @@ namespace HerosInsight
             if (span_id >= id_to_span.size())
                 return T_span();
 
-            // return id_to_span[span_id].resolve(*this);
-            return id_to_span[span_id];
+            return id_to_span[span_id].resolve(*this);
         }
 
         template <class Op>
@@ -224,7 +238,7 @@ namespace HerosInsight
         using T_span_id = base::T_span_id;
         constexpr static T_span_id NULL_SPAN_ID = std::numeric_limits<T_span_id>::max();
 
-        std::vector<T_span_id> span_ids;
+        std::vector<T_span_id> index_to_id;
 
     private:
         base::deduper deduper = base::CreateDeduper(0);
@@ -233,34 +247,58 @@ namespace HerosInsight
         using value_type = T;
 
         IndexedStringArena() {}
-        IndexedStringArena(size_t init_view_count, size_t init_element_count = 0)
+        IndexedStringArena(size_t n_indices, size_t n_spans, size_t n_elements)
         {
-            this->ReserveViews(init_view_count);
-            this->ReserveElements(init_element_count);
+            this->Reserve(n_indices, n_spans, n_elements);
+
+#ifdef _DEBUG
+            GetDebugInfo(); // To prevent the function from being optimized out
+#endif
         }
 
-        void ReserveElements(size_t count)
+        void ReserveIndices(size_t n_indices)
         {
-            this->reserve(count);
+            if (index_to_id.size() < n_indices)
+                index_to_id.resize(n_indices, NULL_SPAN_ID);
+            deduper.reserve(n_indices);
         }
 
-        void ReserveViews(size_t count)
+        void Reserve(size_t n_indices, size_t n_spans, size_t n_elements)
         {
-            if (span_ids.size() < count)
-                span_ids.resize(count, NULL_SPAN_ID);
-            deduper.reserve(count);
+            ReserveIndices(n_indices);
+            base::Reserve(n_spans, n_elements);
         }
 
-        void Clear()
+        void ReserveFromHint(const std::string &id)
         {
-            base::Clear();
-            span_ids.clear();
+            size_t n_indices = g_capacityHints.get(id + "_indices");
+            ReserveIndices(n_indices);
+            base::ReserveFromHint(id);
+        }
+
+        void StoreCapacityHint(const std::string &id)
+        {
+            g_capacityHints.update(id + "_indices", index_to_id.size());
+            base::StoreCapacityHint(id);
+        }
+
+        float CalcSpansPerIndex() const { return index_to_id.empty() ? 0.f : this->id_to_span.size() / static_cast<float>(index_to_id.size()); }
+
+        void Reset()
+        {
+            base::Reset();
+            index_to_id.clear();
             deduper.clear();
         }
 
-        std::span<T_span_id> SpanIds() { return span_ids; }
+        std::span<T_span_id> SpanIds() { return index_to_id; }
 
-        T_span_id &GetSpanId(size_t index) { return span_ids[index]; }
+        T_span_id GetSpanId(size_t index)
+        {
+            if (index >= index_to_id.size())
+                return NULL_SPAN_ID;
+            return index_to_id[index];
+        }
 
         T_span GetIndexed(size_t index) { return base::Get(GetSpanId(index)); }
 
@@ -272,12 +310,54 @@ namespace HerosInsight
         T_span_id EndWrite(size_t index)
         {
             auto span_id = base::EndWrite(&deduper);
-            if (index >= span_ids.size())
+            if (index >= index_to_id.size())
             {
-                span_ids.resize(index + 1, NULL_SPAN_ID);
+                index_to_id.resize(index + 1, NULL_SPAN_ID);
             }
-            span_ids[index] = span_id;
+            index_to_id[index] = span_id;
             return span_id;
+        }
+
+        std::string GetDebugInfo()
+        {
+            std::string info = "IndexedStringArena:\n";
+            info += "Num Elements: " + std::to_string(this->size()) + "\n";
+            info += "Num Spans: " + std::to_string(this->id_to_span.size()) + "\n";
+            info += "Num Indices: " + std::to_string(index_to_id.size()) + "\n";
+            info += "Avg Span Size: " + std::to_string(this->CalcAvgSpanSize()) + "\n";
+            info += "Spans Per Index: " + std::to_string(this->CalcSpansPerIndex()) + "\n";
+
+            if constexpr (this->is_char)
+            {
+                struct SortData
+                {
+                    T_span_id id;
+                    size_t count;
+                };
+
+                std::vector<SortData> span_counts(this->id_to_span.size(), {0, 0});
+                for (auto id : index_to_id)
+                {
+                    if (id == NULL_SPAN_ID)
+                        continue;
+                    span_counts[id].count++;
+                }
+                for (size_t i = 0; i < span_counts.size(); ++i)
+                {
+                    span_counts[i].id = i;
+                }
+
+                std::sort(span_counts.begin(), span_counts.end(), [](auto &a, auto &b)
+                    { return a.count > b.count; });
+
+                info += "Top 10 most common spans:\n";
+                for (size_t i = 0; i < span_counts.size() && i < 10; i++)
+                {
+                    auto span = this->Get(span_counts[i].id);
+                    info += std::to_string(span_counts[i].count) + " times: " + std::string(span.begin(), span.end()) + "\n";
+                }
+            }
+            return info;
         }
     };
 }
