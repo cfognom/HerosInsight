@@ -214,15 +214,16 @@ namespace HerosInsight
             return id_to_span[span_id].resolve(*this);
         }
 
-        template <class Op>
-            requires std::invocable<Op, std::span<T> &>
-        void AppendBufferAndOverwrite(size_t buf_size, Op &&op)
+        // Writer should modify the span size to the number of elements written
+        template <class Writer>
+            requires std::invocable<Writer, std::span<T> &>
+        void AppendWriteBuffer(size_t buf_size, Writer &&writer)
         {
             const size_t size = this->size();
             this->resize(size + buf_size);
-            auto span = std::span<T>(this->data() + size, buf_size);
-            op(span);
-            this->resize(size + span.size());
+            auto buffer_span = std::span<T>(this->data() + size, buf_size);
+            writer(buffer_span);
+            this->resize(size + buffer_span.size());
         }
     };
 
