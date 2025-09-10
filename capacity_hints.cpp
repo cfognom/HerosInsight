@@ -48,7 +48,14 @@ void SaveHints(const std::string &filename, std::unordered_map<std::string, size
     std::ofstream f(filename, std::ios::trunc);
     if (!f) return;
 
-    for (auto &[id, cap] : hints)
+    std::vector<std::pair<std::string, size_t>> items(hints.begin(), hints.end());
+    std::sort(items.begin(), items.end(),
+        [](auto &a, auto &b)
+        {
+            return a.first < b.first;
+        });
+
+    for (auto &[id, cap] : items)
     {
         f << id << " " << cap << "\n";
     }

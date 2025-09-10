@@ -46,7 +46,7 @@ namespace HerosInsight
         std::string_view id_;
     };
 
-#define CAPACITY_ID __FILE__ ":" + std::to_string(__LINE__)
+#define CAPACITY_ID std::format("{}:{}", __FILE__, __LINE__)
 
 #define GET_VARIABLE_NAME(Variable) (#Variable)
 }
