@@ -657,4 +657,6 @@ namespace HerosInsight::Utils
 
     GW::UI::Frame *GetTooltipFrame();
     GW::UI::Frame *GetDraggedSkillFrame();
+
+    void ImGuiDebugLastItemRect();
 }
