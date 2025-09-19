@@ -1,4 +1,5 @@
-#include "utils.h"
+#include <rich_text.h>
+#include <utils.h>
 
 #include "matcher.h"
 
@@ -11,7 +12,7 @@ namespace HerosInsight
         if (start_insensitive)
         {
             this->atoms.push_back({Type::ZeroOrMoreExcept, {}});
-            this->atoms.push_back({Type::GapBefore, {}});
+            this->atoms.push_back({Type::WordStart, {}});
         }
 
         auto rem = source;
@@ -89,15 +90,16 @@ namespace HerosInsight
                     type = Type::NumberGreaterThan;
                 case '<':
                 {
-                    rem = rem.substr(1);
-                    if (Utils::TryRead('=', rem))
+                    auto rem_tmp = rem.substr(1);
+                    if (Utils::TryRead('=', rem_tmp))
                     {
                         ++(*(uint8_t *)&type);
                     }
                     double value;
-                    if (Utils::TryReadNumber(rem, value))
+                    if (Utils::TryReadNumber(rem_tmp, value))
                     {
                         this->atoms.push_back({type, value});
+                        rem = rem_tmp;
                         continue;
                     }
                 }
@@ -125,7 +127,8 @@ namespace HerosInsight
                 auto str = rem.substr(0, i);
                 this->atoms.push_back({Type::String, str});
                 // this->atoms.push_back({Type::ZeroOrMoreNonSpace, {}});
-                this->atoms.push_back({Type::ZeroOrMoreExcept, ".:"});
+                this->atoms.push_back({Type::ZeroOrMoreExcept, ".,:;"});
+                rem = rem.substr(i);
                 continue;
             }
 
@@ -138,6 +141,7 @@ namespace HerosInsight
                 } while (i < rem.size() && !Utils::IsSpace(rem[i]) && !Utils::IsAlpha(rem[i]));
                 auto str = rem.substr(0, i);
                 this->atoms.push_back({Type::ExactString, str});
+                rem = rem.substr(i);
                 continue;
             }
         }
@@ -158,6 +162,19 @@ namespace HerosInsight
     {
         return a == b || std::tolower(a) == b;
     }
+
+    void SkipTags(std::string_view text, size_t &offset)
+    {
+        while (offset < text.size() && text[offset] == '<')
+        {
+            std::string_view rem(text.data() + offset, text.size() - offset);
+            RichText::TextTag tag;
+            if (RichText::TryReadTextTag(rem, tag))
+            {
+                offset = rem.data() - text.data(); // skip tag
+            }
+        }
+    };
 
     FORCE_INLINE bool TryReadAnyExcept(std::string_view text, size_t &offset, std::string_view except)
     {
@@ -371,13 +388,14 @@ namespace HerosInsight
     {
         size_t size = text.size();
         bool case_insensitive = false;
+        SkipTags(text, offset);
         switch (type)
         {
-            case Atom::Type::GapBefore:
+            case Atom::Type::WordStart:
             {
                 if (offset == 0)
                     return true;
-                if (Utils::IsSpace(text[offset - 1]))
+                if (!Utils::IsAlpha(text[offset - 1]))
                     return true;
                 return false;
             }
@@ -403,7 +421,7 @@ namespace HerosInsight
 
             case Atom::Type::String:
                 case_insensitive = true;
-            case Atom::Type::ExactString: // TODO: Integrate Horspool or Boyer-Moore?
+            case Atom::Type::ExactString:
             {
                 auto req_str = std::get<std::string_view>(this->value);
                 size_t req_size = req_str.size();
@@ -453,22 +471,26 @@ namespace HerosInsight
                 {
                     Utils::TryRead('+', rem);
                 }
+                bool success;
                 if (Utils::TryRead('(', rem))
                 {
                     is_dual = true;
-                }
-                if (!Utils::TryReadNumber(rem, value))
-                    return false;
-                bool success;
-                if (is_dual)
-                {
-                    success = Utils::TryRead("...", rem) &&
+                    success = Utils::TryReadNumber(rem, value) &&
+                              Utils::TryRead("...", rem) &&
                               Utils::TryReadNumber(rem, value2) &&
                               Utils::TryRead(')', rem);
                 }
                 else
                 {
-                    success = rem.empty() || !Utils::IsAlpha(rem[0]);
+                    success = Utils::TryReadNumber(rem, value);
+                    RichText::FracTag frac_tag;
+                    if (RichText::FracTag::TryRead(rem, frac_tag))
+                    {
+                        auto frac = (double)frac_tag.num / (double)frac_tag.den;
+                        value = success ? value + frac : frac;
+                        success = true;
+                    }
+                    success &= rem.empty() || !Utils::IsAlpha(rem[0]);
                 }
                 if (!success)
                     return false;
@@ -511,6 +533,7 @@ namespace HerosInsight
 
     FORCE_INLINE bool Matcher::Atom::TryReadMore(std::string_view text, size_t &offset)
     {
+        SkipTags(text, offset);
         switch (type)
         {
             case Atom::Type::ZeroOrMoreExcept:
@@ -553,8 +576,8 @@ namespace HerosInsight
             case Atom::Type::Number:
                 return "Number";
 
-            case Atom::Type::GapBefore:
-                return "GapBefore";
+            case Atom::Type::WordStart:
+                return "WordStart";
             case Atom::Type::ZeroOrMoreExcept:
                 return std::format("ZeroOrMoreExcept: '{}'", std::get<std::string_view>(value));
             case Atom::Type::ZeroOrMoreNonSpace:

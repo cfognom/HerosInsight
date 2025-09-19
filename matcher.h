@@ -31,7 +31,7 @@ namespace HerosInsight
                 ZeroOrMoreNonSpace,
                 ZeroOrMoreSpaces,
                 ZeroOrMoreAlpha,
-                GapBefore,
+                WordStart,
 
                 ZEROORMORE_END,
 
