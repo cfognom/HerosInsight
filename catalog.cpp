@@ -51,16 +51,16 @@ namespace HerosInsight
         }
 
         // Returns the index of the "best" match
-        std::optional<size_t> BestMatch(std::string_view subject, std::span<std::string_view> targets)
+        std::optional<size_t> BestMatch(std::string_view subject, StringArena<char> &targets)
         {
             size_t index;
 
             auto matcher = Matcher(subject, true);
 
             size_t best_match_cost = std::numeric_limits<size_t>::max();
-            for (size_t i = 0; i < targets.size(); ++i)
+            for (size_t i = 0; i < targets.SpanCount(); ++i)
             {
-                auto target = targets[i];
+                auto target = targets.Get(i);
                 bool match = matcher.Matches(target, nullptr);
                 if (match)
                 {
@@ -79,7 +79,7 @@ namespace HerosInsight
             return index;
         }
 
-        bool ParseFilter(std::string_view source, std::span<std::string_view> prop_bundles, Filter &filter)
+        bool ParseFilter(std::string_view source, StringArena<char> &prop_bundles, Filter &filter)
         {
             { // Skip leading whitespace
                 size_t i = 0;
@@ -116,7 +116,7 @@ namespace HerosInsight
             return true;
         }
 
-        bool TryReadCommand(std::string_view &remaining, std::span<std::string_view> prop_bundles, Command &command)
+        bool TryReadCommand(std::string_view &remaining, StringArena<char> &prop_bundles, Command &command)
         {
             auto rem = remaining;
 
@@ -153,7 +153,7 @@ namespace HerosInsight
             return true;
         }
 
-        void ParseQuery(std::string_view source, std::span<std::string_view> prop_bundles, Query &query)
+        void ParseQuery(std::string_view source, StringArena<char> &prop_bundles, Query &query)
         {
             char *p = (char *)source.data();
             char *end = p + source.size();
@@ -180,121 +180,107 @@ namespace HerosInsight
                     if (!ParseFilter(stmt, prop_bundles, filter))
                         query.filters.pop_back();
                 }
+                ++p;
             }
         }
 
-        void GetFeedback(Query &query, std::span<std::string_view> &prop_bundle_names, std::string &out)
+        void GetFeedback(Query &query, StringArena<char> &prop_bundle_names, std::string &out)
         {
-            //             out.clear();
-            //             for (auto &filter : query.filters)
-            //             {
-            //                 // if (!filter.IsValid())
-            //                 // {
-            //                 //     out.color_changes.push_back({out.str.size(), Constants::GWColors::skill_dull_gray});
-            //                 // }
+            out.clear();
+            for (auto &filter : query.filters)
+            {
+#ifdef _DEBUG
+                out += filter.matcher.ToString();
+#endif
 
-            // #ifdef _DEBUG
-            //                 out.str += filter.matcher.ToString();
-            // #endif
+                // const auto target_name = filter.target.ToStr();
+                // const auto op_desc = GetOpDescription(filter.target, filter.op).data();
+                // bool is_string = filter.target.IsStringType();
+                // bool is_number = filter.target.IsNumberType();
 
-            //                 // const auto target_name = filter.target.ToStr();
-            //                 // const auto op_desc = GetOpDescription(filter.target, filter.op).data();
-            //                 // bool is_string = filter.target.IsStringType();
-            //                 // bool is_number = filter.target.IsNumberType();
+                // if (filter.join == FilterJoin::Or)
+                // {
+                //     out.str += "OR ";
+                // }
+                // else if (filter.join == FilterJoin::And)
+                // {
+                //     out.str += "AND ";
+                // }
 
-            //                 // if (filter.join == FilterJoin::Or)
-            //                 // {
-            //                 //     out.str += "OR ";
-            //                 // }
-            //                 // else if (filter.join == FilterJoin::And)
-            //                 // {
-            //                 //     out.str += "AND ";
-            //                 // }
+                // if (is_string)
+                // {
+                //     Utils::AppendFormatted(out.str, 64, "%s %s: ", target_name.data(), op_desc);
+                // }
+                // else if (is_number)
+                // {
+                //     Utils::AppendFormatted(out.str, 128, "%s %s ", target_name.data(), op_desc);
+                // }
+                // else
+                // {
+                //     out.str += "...";
+                // }
 
-            //                 // if (is_string)
-            //                 // {
-            //                 //     Utils::AppendFormatted(out.str, 64, "%s %s: ", target_name.data(), op_desc);
-            //                 // }
-            //                 // else if (is_number)
-            //                 // {
-            //                 //     Utils::AppendFormatted(out.str, 128, "%s %s ", target_name.data(), op_desc);
-            //                 // }
-            //                 // else
-            //                 // {
-            //                 //     out.str += "...";
-            //                 // }
+                // auto value_str_len = filter.value_end - filter.value_start;
 
-            //                 // auto value_str_len = filter.value_end - filter.value_start;
+                // const auto n_values = filter.str_values.size();
+                // for (uint32_t i = 0; i < n_values; i++)
+                // {
+                //     auto filt_str = filter.str_values[i];
+                //     if (is_number && filt_str.size() == 0)
+                //         filt_str = "...";
+                //     auto kind = i == 0             ? 0
+                //                 : i < n_values - 1 ? 1
+                //                                    : 2;
+                //     // clang-format off
+                //     if (kind == 1)      out.str += ", ";
+                //     else if (kind == 2) out.str += " or ";
+                //     if (is_string)      out.str += "\'";
+                //                         out.str += filt_str;
+                //     if (is_string)      out.str += "\'";
+                //     // if (kind = 2)       out.str += ".";
+                //     // clang-format on
+                // }
 
-            //                 // const auto n_values = filter.str_values.size();
-            //                 // for (uint32_t i = 0; i < n_values; i++)
-            //                 // {
-            //                 //     auto filt_str = filter.str_values[i];
-            //                 //     if (is_number && filt_str.size() == 0)
-            //                 //         filt_str = "...";
-            //                 //     auto kind = i == 0             ? 0
-            //                 //                 : i < n_values - 1 ? 1
-            //                 //                                    : 2;
-            //                 //     // clang-format off
-            //                 //     if (kind == 1)      out.str += ", ";
-            //                 //     else if (kind == 2) out.str += " or ";
-            //                 //     if (is_string)      out.str += "\'";
-            //                 //                         out.str += filt_str;
-            //                 //     if (is_string)      out.str += "\'";
-            //                 //     // if (kind = 2)       out.str += ".";
-            //                 //     // clang-format on
-            //                 // }
+                // if (n_values == 0 && is_number)
+                // {
+                //     out.str += "...";
+                // }
 
-            //                 // if (n_values == 0 && is_number)
-            //                 // {
-            //                 //     out.str += "...";
-            //                 // }
+                // if (!filter.IsValid())
+                // {
+                //     out.color_changes.push_back({out.str.size(), 0});
+                // }
 
-            //                 // if (!filter.IsValid())
-            //                 // {
-            //                 //     out.color_changes.push_back({out.str.size(), 0});
-            //                 // }
+                out += "\n";
+            }
 
-            //                 out.str += "\n";
-            //             }
+            for (auto &command : query.commands)
+            {
+                if (std::holds_alternative<SortCommand>(command))
+                {
+                    auto &sort_command = std::get<SortCommand>(command);
 
-            //             for (auto &command : query.commands)
-            //             {
-            //                 if (std::holds_alternative<SortCommand>(command))
-            //                 {
-            //                     auto &sort_command = std::get<SortCommand>(command);
+                    const auto n_values = sort_command.args.size();
 
-            //                     const auto n_values = sort_command.args.size();
-            //                     bool is_incomplete = n_values == 0;
-            //                     if (is_incomplete)
-            //                     {
-            //                         out.color_changes.push_back({out.str.size(), Constants::GWColors::skill_dull_gray});
-            //                     }
+                    out += "Sort";
+                    for (uint32_t i = 0; i < n_values; i++)
+                    {
+                        const auto &arg = sort_command.args[i];
+                        auto kind = i == 0             ? 0
+                                    : i < n_values - 1 ? 1
+                                                       : 2;
 
-            //                     out.str += is_incomplete ? "Sort by ..." : "Sort";
-            //                     for (uint32_t i = 0; i < n_values; i++)
-            //                     {
-            //                         const auto &arg = sort_command.args[i];
-            //                         auto kind = i == 0             ? 0
-            //                                     : i < n_values - 1 ? 1
-            //                                                        : 2;
-
-            //                         // clang-format off
-            //                     if (kind == 1)      out.str += ", then";
-            //                     else if (kind == 2) out.str += " and then";
-            //                     if (arg.is_negated) out.str += " descending by ";
-            //                     else                out.str += " ascending by ";
-            //                                         out.str += prop_bundle_names[arg.target_bundle];
-            //                         // clang-format on
-            //                     }
-
-            //                     if (is_incomplete)
-            //                     {
-            //                         out.color_changes.push_back({out.str.size(), 0});
-            //                     }
-            //                 }
-            //                 out.str += "\n";
-            //             }
+                        // clang-format off
+                        if (kind == 1)      out += ", then";
+                        else if (kind == 2) out += " and then";
+                        if (arg.is_negated) out += " descending by ";
+                        else                out += " ascending by ";
+                                            out += prop_bundle_names[arg.target_bundle];
+                        // clang-format on
+                    }
+                }
+                out += "\n";
+            }
         }
     }
 }

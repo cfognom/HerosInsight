@@ -25,7 +25,13 @@ namespace HerosInsight
             std::vector<PropHLData> props;
             std::vector<InstanceHLData> bundles;
 
-            HLData(size_t prop_count, size_t bundle_count) : props(prop_count), bundles(bundle_count) {}
+            HLData(size_t prop_count, size_t bundle_count, size_t instance_count) : props(prop_count), bundles(bundle_count)
+            {
+                for (auto &prop : props)
+                {
+                    prop = PropHLData(instance_count);
+                }
+            }
 
             void Reset()
             {
@@ -54,7 +60,7 @@ namespace HerosInsight
             }
         };
 
-        std::optional<size_t> BestMatch(std::string_view subject, std::span<std::string_view> targets);
+        std::optional<size_t> BestMatch(std::string_view subject, StringArena<char> &targets);
 
         struct Filter
         {
@@ -63,7 +69,7 @@ namespace HerosInsight
             Matcher matcher;
         };
 
-        bool ParseFilter(std::string_view source, std::span<std::string_view> prop_bundles, Filter &filter);
+        bool ParseFilter(std::string_view source, StringArena<char> &prop_bundles, Filter &filter);
 
         struct SortCommand
         {
@@ -92,9 +98,9 @@ namespace HerosInsight
             }
         };
 
-        void ParseQuery(std::string_view source, std::span<std::string_view> prop_bundles, Query &query);
+        void ParseQuery(std::string_view source, StringArena<char> &prop_bundles, Query &query);
 
-        void GetFeedback(Query &query, std::span<std::string_view> &prop_bundle_names, std::string &out);
+        void GetFeedback(Query &query, StringArena<char> &prop_bundle_names, std::string &out);
     }
 
     template <typename T_prop_id, size_t N_entries>
@@ -106,23 +112,33 @@ namespace HerosInsight
         using T_propset = std::bitset<PROP_COUNT + 1>; // + 1 for meta properties
         constexpr static T_propset ALL_PROPS = ~T_propset(0);
 
-        using Property = IndexedStringArena<char> *;
-
-        Property props[PROP_COUNT];
-        std::span<std::string_view> prop_bundle_names;
-        std::span<T_propset> prop_bundles;
-
-        Catalog(std::span<std::string_view> prop_bundle_names, std::span<T_propset> prop_bundles) : prop_bundle_names(prop_bundle_names), prop_bundles(prop_bundles) {}
-
-        Property &GetProperty(T_prop_id prop_id)
+        static T_propset MakePropset(std::initializer_list<T_prop_id> props)
         {
-            return props[static_cast<size_t>(prop_id)];
+            T_propset result;
+            for (auto prop : props)
+            {
+                result.set(static_cast<size_t>(prop));
+            }
+            return result;
         }
 
-        void SwapPropData(T_prop_id prop_id, Property &new_data)
+        IndexedStringArena<char> *props[PROP_COUNT]{};
+        StringArena<char> &prop_bundle_names;
+        std::span<T_propset> prop_bundles;
+
+        Catalog(StringArena<char> &prop_bundle_names, std::span<T_propset> prop_bundles)
+            : prop_bundle_names(prop_bundle_names), prop_bundles(prop_bundles) {}
+
+        IndexedStringArena<char> *GetPropertyPtr(T_prop_id prop_id)
         {
-            auto &current_data = props[static_cast<size_t>(prop_id)];
-            current_data.Swap(new_data);
+            auto ptr = props[static_cast<size_t>(prop_id)];
+            assert(ptr != nullptr);
+            return ptr;
+        }
+
+        void SetPropertyPtr(T_prop_id prop_id, IndexedStringArena<char> *ptr)
+        {
+            props[static_cast<size_t>(prop_id)] = ptr;
         }
 
         void RunFilters(std::span<CatalogUtils::Filter> filters, std::vector<T_index> &indices, CatalogUtils::HLData &hl_data)
@@ -131,22 +147,24 @@ namespace HerosInsight
             T_propset footprint_mask;
             for (auto &filter : filters)
             {
-                collision_mask |= footprint_mask & filter.prop_mask;
-                footprint_mask |= filter.prop_mask;
+                auto prop_mask = filter.bundle_id.has_value() ? prop_bundles[filter.bundle_id.value()] : ALL_PROPS;
+                collision_mask |= footprint_mask & prop_mask;
+                footprint_mask |= prop_mask;
 
                 std::bitset<N_entries> found_by_filter;
 
-                for (auto m = filter.prop_mask; m.any(); Utils::ClearLowestSetBit(m))
+                for (auto m = prop_mask; m.any(); Utils::ClearLowestSetBit(m))
                 {
                     auto i_prop = Utils::CountTrailingZeros(m); // Get index of lowest set bit
 
-                    if (i_prop == PROP_COUNT) // Special case for meta properties
+                    bool is_meta = i_prop == PROP_COUNT;
+                    if (is_meta) // Special case for meta properties
                     {
-                        for (size_t i_bundle = 0; i_bundle < prop_bundles.size(); ++i_bundle)
+                        for (size_t i_bundle = 0; i_bundle < prop_bundle_names.SpanCount(); ++i_bundle)
                         {
-                            auto str = prop_bundle_names[i_bundle];
+                            auto str = prop_bundle_names.Get(i_bundle);
                             auto &hl = hl_data.GetBundleHL(i_bundle);
-                            bool is_match = filter.matcher.Matches(str, hl);
+                            bool is_match = filter.matcher.Matches(str, &hl);
                             if (is_match)
                             {
                                 // Add any entry that has properties in this bundle to the found_by_filter set
@@ -155,8 +173,11 @@ namespace HerosInsight
                                     for (auto m = prop_bundles[i_bundle]; m.any(); Utils::ClearLowestSetBit(m))
                                     {
                                         auto i_prop = Utils::CountTrailingZeros(m);
-                                        auto &prop = props[i_prop];
-                                        if (prop[index].data() != nullptr)
+                                        auto prop_ptr = props[i_prop];
+                                        if (prop_ptr == nullptr)
+                                            continue;
+                                        auto &prop = *prop_ptr;
+                                        if (prop.GetSpanId(index) != prop.NULL_SPAN_ID)
                                         {
                                             found_by_filter.set(index);
                                             break;
@@ -167,10 +188,11 @@ namespace HerosInsight
                         }
                         continue;
                     }
-                    assert(props[i_prop] != nullptr);
-                    auto &prop = *props[i_prop];
-                    if (prop.text.empty()) // TODO: why is this here?
+
+                    auto prop_ptr = props[i_prop];
+                    if (prop_ptr == nullptr)
                         continue;
+                    auto &prop = *prop_ptr;
 
                     std::bitset<N_entries> span_ids; // Worst case size
 
@@ -179,8 +201,8 @@ namespace HerosInsight
                         auto span_id = prop.GetSpanId(index);
                         span_ids[span_id] = true;
                     }
-                    const auto uc = prop.Count();
-                    for (size_t span_id = 0; span_id < uc; ++span_id)
+                    const auto unique_count = prop.SpanCount();
+                    for (size_t span_id = 0; span_id < unique_count; ++span_id)
                     {
                         if (!span_ids[span_id])
                             continue;
@@ -212,29 +234,27 @@ namespace HerosInsight
                 indices.resize(i);
             }
 
-            // Sort highlighting, try to avoid as much work as possible
+            // For cases where when multiple filters ran on same property, the hl spans may not be in order, so we need to sort them.
             for (auto m = collision_mask; m.any(); Utils::ClearLowestSetBit(m))
             {
                 auto i_prop = Utils::CountTrailingZeros(m); // Get index of lowest set bit
-                auto &prop = props[i_prop];
-                if (prop.text.empty())
-                    continue;
+                auto &prop = *props[i_prop];
 
                 std::bitset<N_entries> span_ids; // Worst case size
 
                 for (auto index : indices)
                 {
-                    auto span_id = prop.text.GetSpanId(index);
-                    span_ids.set(span_id);
+                    auto span_id = prop.GetSpanId(index);
+                    span_ids[span_id] = true;
                 }
-                const auto uc = prop.text.UniqueCount();
-                for (size_t span_id = 0; span_id < uc; ++span_id)
+                const auto unique_count = prop.SpanCount();
+                for (size_t span_id = 0; span_id < unique_count; ++span_id)
                 {
-                    if (!span_ids.test(span_id))
+                    if (!span_ids[span_id])
                         continue;
 
-                    auto &hl_vec = prop.hl[span_id];
-                    CatalogUtils::SortHighlighting(hl_vec);
+                    auto &hl = hl_data.GetPropHL(i_prop, span_id);
+                    CatalogUtils::SortHighlighting(hl);
                 }
             }
         }
