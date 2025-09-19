@@ -5,54 +5,105 @@
 
 namespace HerosInsight::RichText
 {
-    using DrawPacketArray = std::array<TextureModule::DrawPacket, DefaultTextImageProvider::Id::COUNT>;
-    DrawPacketArray CreatePackets()
+    TextureModule::DrawPacket GetImagePacket(uint32_t id)
     {
-        namespace FileIDs = TextureModule::KnownFileIDs;
         using Id = DefaultTextImageProvider::Id;
 
-        DrawPacketArray packets;
-        const auto size = ImVec2(16, 16);
-        packets[Id::MonsterSkull] = TextureModule::GetPacket_ImageInAtlas(FileIDs::UI_SkillStatsIcons, size, size, 5);
-        packets[Id::EnergyOrb] = TextureModule::GetPacket_ImageInAtlas(FileIDs::UI_SkillStatsIcons, size, size, 1);
+        std::optional<uint32_t> stats_atlas_index = std::nullopt;
+        // clang-format off
+        switch (id)
+        {
+            case Id::Upkeep:       stats_atlas_index = 0;  break;
+            case Id::EnergyOrb:    stats_atlas_index = 1;  break;
+            case Id::Aftercast:
+            case Id::Activation:   stats_atlas_index = 2;  break;
+            case Id::Recharge:     stats_atlas_index = 3;  break;
+            case Id::Adrenaline:   stats_atlas_index = 4;  break;
+            case Id::MonsterSkull: stats_atlas_index = 5;  break;
+            case Id::Sacrifice:    stats_atlas_index = 7;  break;
+            case Id::Overcast:     stats_atlas_index = 10; break;
+        }
+        // clang-format on
 
-        return packets;
+        if (stats_atlas_index.has_value())
+        {
+            const auto size = ImVec2(16, 16);
+            auto packet = TextureModule::GetPacket_ImageInAtlas(TextureModule::KnownFileIDs::UI_SkillStatsIcons, size, size, stats_atlas_index.value());
+            if (id == Id::Aftercast)
+            {
+                packet.tint_col = ImVec4(0.3f, 0.33f, 0.7f, 1.f);
+            }
+            return packet;
+        }
+
+        assert(false && "Unknown image id");
+        return TextureModule::DrawPacket{};
     }
-    static DrawPacketArray packets = CreatePackets();
 
     DefaultTextImageProvider &DefaultTextImageProvider::Instance()
     {
         static DefaultTextImageProvider instance;
         return instance;
     }
-    void DefaultTextImageProvider::Draw(ImVec2 pos, size_t id)
+    void DefaultTextImageProvider::DrawImage(ImVec2 pos, ImageTag tag)
     {
-        auto &packet = packets[id];
+        auto packet = GetImagePacket(tag.id);
         auto window = ImGui::GetCurrentWindow();
         auto draw_list = window->DrawList;
+        auto y_offset = -packet.size.y * 0.1f;
+        pos = ImFloor(ImVec2(pos.x, pos.y + y_offset));
         packet.AddToDrawList(draw_list, pos);
+
+// #define DEBUG_POS
+#ifdef DEBUG_POS
+        draw_list->AddRect(pos, ImVec2(pos.x + packet.size.x, pos.y + packet.size.y), 0xFF0000FF);
+#endif
     }
-    float DefaultTextImageProvider::GetWidth(size_t id)
+    float DefaultTextImageProvider::CalcWidth(ImageTag tag)
     {
-        auto &packet = packets[id];
+        auto packet = GetImagePacket(tag.id);
         return packet.size.x;
     }
 
-    float TextSegment::GetWidth(TextImageProvider *image_provider) const
+    float TextSegment::CalcWidth(TextImageProvider *image_provider, TextFracProvider *frac_provider) const
     {
-        if (auto image_id = std::get_if<size_t>(&text_or_image_id))
+        if (auto image_tag = std::get_if<ImageTag>(&tag))
         {
             assert(image_provider != nullptr);
-            return image_provider->GetWidth(*image_id);
+            return image_provider->CalcWidth(*image_tag);
         }
-        else if (auto text = std::get_if<std::string_view>(&text_or_image_id))
+        else if (auto frac_tag = std::get_if<FracTag>(&tag))
         {
-            return ImGui::CalcTextSize(text->data(), text->data() + text->size()).x;
+            assert(frac_provider != nullptr);
+            return frac_provider->CalcWidth(*frac_tag);
         }
         else
         {
-            assert(false);
+            return ImGui::CalcTextSize(text.data(), text.data() + text.size()).x;
         }
+
+        assert(false && "Unknown text segment type");
+        return 0;
+    }
+
+    bool FracTag::TryRead(std::string_view &remaining, FracTag &out)
+    {
+        auto rem = remaining;
+        if (Utils::TryRead("<frac=", rem))
+        {
+            int32_t num, denom;
+            if (Utils::TryReadInt(rem, num) &&
+                Utils::TryRead('/', rem) &&
+                Utils::TryReadInt(rem, denom) &&
+                Utils::TryRead('>', rem))
+            {
+                out.num = num;
+                out.den = denom;
+                remaining = rem;
+                return true;
+            }
+        }
+        return false;
     }
 
     bool TryReadTextTag(std::string_view &remaining, TextTag &out)
@@ -137,19 +188,11 @@ namespace HerosInsight::RichText
                 return true;
             }
         }
-        else if (Utils::TryRead("frac=", rem))
+
         {
-            assert(!is_closing);
-            int32_t num, denom;
-            if (Utils::TryReadInt(rem, num) &&
-                Utils::TryRead('/', rem) &&
-                Utils::TryReadInt(rem, denom) &&
-                Utils::TryRead('>', rem))
+            FracTag &tag = out.emplace<FracTag>();
+            if (FracTag::TryRead(remaining, tag))
             {
-                auto &tag = out.emplace<FracTag>();
-                tag.num = num;
-                tag.denom = denom;
-                remaining = rem;
                 return true;
             }
         }
@@ -175,7 +218,11 @@ namespace HerosInsight::RichText
         }
     }
 
-    void MakeTextSegments(std::string_view text, std::span<uint16_t> highlighting, std::span<TextSegment> &result)
+    // TODO: Plan:
+    // Store tags in a separate IndexedStringArena; use a struct with tag_type + offset + union of tag
+    // MakeTextSegments no longer uses TryReadTextTag and instead takes a span of TextTags
+    // After decoding tags are separated out.
+    void Drawer::MakeTextSegments(std::string_view text, std::span<TextSegment> &result, std::span<uint16_t> highlighting, TextSegment::WrapMode first_segment_wrap_mode)
     {
         if (text.empty())
         {
@@ -192,48 +239,109 @@ namespace HerosInsight::RichText
 
         bool is_currently_highlighted = false;
         size_t i_hl = 0;
-        int32_t i_hl_change = highlighting.empty() ? -1 : highlighting[0];
+        size_t i_hl_change = highlighting.empty() ? std::numeric_limits<size_t>::max() : highlighting[0];
 
-        auto AppendTextSegment = [&](size_t i_start, size_t i_end, bool can_wrap_after) -> void
+        auto AddSegment = [&](size_t i_start, size_t i_end, std::optional<TextTag> tag = std::nullopt)
         {
+            auto index = result_builder.size();
             auto &seg = result_builder.emplace_back();
-            auto seg_text = std::string_view(text.data() + i_start, i_end - i_start);
-            seg.text_or_image_id = seg_text;
+
+            seg.text = text.substr(i_start, i_end - i_start);
             if (!color_stack.empty())
                 seg.color = color_stack.back();
             if (!tooltip_stack.empty())
                 seg.tooltip_id = tooltip_stack.back();
             seg.is_highlighted = is_currently_highlighted;
-            seg.can_wrap_after = can_wrap_after;
+
+            if (index == 0)
+            {
+                seg.wrap_mode = first_segment_wrap_mode;
+            }
+            else
+            {
+                if (text[i_start] == '\n')
+                {
+                    seg.wrap_mode = TextSegment::WrapMode::Force;
+                }
+                else
+                {
+                    auto &prev_seg = result[index - 1];
+                    bool prev_is_visible = std::holds_alternative<ImageTag>(prev_seg.tag) ||
+                                           std::holds_alternative<FracTag>(prev_seg.tag) ||
+                                           (prev_seg.text.back() != ' ');
+                    bool is_visible = std::holds_alternative<ImageTag>(seg.tag) ||
+                                      std::holds_alternative<FracTag>(seg.tag) ||
+                                      (seg.text.front() != ' ');
+                    bool can_wrap = !prev_is_visible && is_visible;
+                    seg.wrap_mode = can_wrap ? TextSegment::WrapMode::Allow : TextSegment::WrapMode::Disallow;
+                }
+            }
+
+            if (tag.has_value())
+            {
+                if (auto image_tag = std::get_if<ImageTag>(&tag.value()))
+                {
+                    seg.tag = *image_tag;
+                    seg.width = image_provider->CalcWidth(*image_tag);
+                }
+                else if (auto frac_tag = std::get_if<FracTag>(&tag.value()))
+                {
+                    seg.tag = *frac_tag;
+                    seg.width = frac_provider->CalcWidth(*frac_tag);
+                }
+                else
+                {
+                    assert(false);
+                }
+            }
+            else
+            {
+                seg.tag = std::monostate{};
+                seg.width = Utils::CalcExactTextSize(seg.text.data(), seg.text.data() + seg.text.size()).x;
+                // seg.width = ImGui::CalcTextSize(seg.text.data(), seg.text.data() + seg.text.size()).x;
+            }
         };
 
-        char prev_visible_element = false;
         size_t i_start = 0;
-        size_t i = 0;
-        while (i <= text.size())
+        for (size_t i = 0; i <= text.size();)
         {
-            auto c = i < text.size() ? text[i] : '\0';
-            bool is_end = i == text.size();
-            bool is_hl_change = i >= i_hl_change;
-            bool is_word_start = prev_visible_element && c != ' ';
-
-            auto view = std::string_view(text.data() + i, text.size() - i);
             TextTag tag;
-            if (c == '<' && TryReadTextTag(view, tag))
-            {
-                bool is_image_tag = std::holds_alternative<ImageTag>(tag);
-                if (i != i_start)
-                {
-                    bool can_wrap_after = is_word_start && is_image_tag;
-                    AppendTextSegment(i_start, i, can_wrap_after);
-                }
+            auto rem = text.substr(i);
+            bool has_tag = i < text.size() && text[i] == '<' && TryReadTextTag(rem, tag);
+            bool is_hl_change = i >= i_hl_change;
+            bool is_new_line = i < text.size() && text[i] == '\n';
+            bool is_new_word = i > 0 && i < text.size() && text[i - 1] == ' ' && text[i] != ' ';
 
-                if (auto image_tag = std::get_if<ImageTag>(&tag))
+            bool flush = has_tag || is_hl_change || is_new_line || is_new_word || i == text.size();
+            if (!flush)
+            {
+                ++i;
+                continue;
+            }
+
+            if (i > i_start)
+            {
+                AddSegment(i_start, i);
+                i_start = i;
+            }
+
+            if (is_hl_change)
+            {
+                do
                 {
-                    auto &seg = result_builder.emplace_back();
-                    seg.text_or_image_id = image_tag->id;
-                    seg.is_highlighted = is_currently_highlighted;
-                    seg.can_wrap_after = false;
+                    ++i_hl;
+                    i_hl_change = i_hl < highlighting.size() ? highlighting[i_hl] : std::numeric_limits<size_t>::max();
+                } while (i_hl_change <= i);
+                is_currently_highlighted = (i_hl & 1) == 1;
+            }
+
+            if (has_tag)
+            {
+                i = rem.data() - text.data();
+                if (std::holds_alternative<ImageTag>(tag) ||
+                    std::holds_alternative<FracTag>(tag))
+                {
+                    AddSegment(i_start, i, tag);
                 }
                 else if (auto color_tag = std::get_if<ColorTag>(&tag))
                 {
@@ -253,44 +361,24 @@ namespace HerosInsight::RichText
                 {
                     assert(false);
                 }
-
-                if (is_image_tag)
-                {
-                    prev_visible_element = true;
-                }
-
-                i = view.data() - text.data();
+                i_start = i;
+            }
+            else if (is_new_line)
+            {
+                ++i; // Skip \n
+                AddSegment(i_start, i);
+                i_start = i;
             }
             else
             {
-                if (i != i_start && (is_word_start || is_hl_change || is_end))
-                {
-                    AppendTextSegment(i_start, i, is_word_start);
-                }
-
-                prev_visible_element = c != ' ';
                 ++i;
-            }
-
-            if (is_hl_change)
-            {
-                do
-                {
-                    ++i_hl;
-                    i_hl_change = i_hl < highlighting.size() ? highlighting[i_hl] : -1;
-                } while (i_hl_change <= i);
-                is_currently_highlighted = i_hl & 1;
             }
         }
 
         result = result.subspan(0, result_len);
     }
 
-    void DrawTextSegments(
-        std::span<TextSegment> segments,
-        float wrapping_min, float wrapping_max,
-        TextTooltipProvider *tooltip_provider,
-        TextImageProvider *image_provider)
+    void Drawer::DrawTextSegments(std::span<TextSegment> segments, float wrapping_min, float wrapping_max)
     {
         if (segments.empty())
             return;
@@ -299,8 +387,6 @@ namespace HerosInsight::RichText
         float used_width = ImGui::GetCursorPosX() - wrapping_min;
         auto ss_cursor = ImGui::GetCursorScreenPos();
         const auto text_height = ImGui::GetTextLineHeight();
-
-        bool can_wrap = used_width > 0.f;
 
         auto window = ImGui::GetCurrentWindow();
         auto draw_list = window->DrawList;
@@ -313,60 +399,114 @@ namespace HerosInsight::RichText
             std::numeric_limits<float>::max(), std::numeric_limits<float>::max(),
             std::numeric_limits<float>::min(), std::numeric_limits<float>::min());
 
-        for (auto &seg : segments)
+        size_t i_rem = 0;  // start of remaining segments
+        size_t i_wrap = 0; // i_wrap > i_rem
+        size_t i = -1;
+        while (true)
         {
-            float seg_width = seg.GetWidth(image_provider);
-            used_width += seg_width;
-            if (can_wrap && used_width > max_width)
+            ++i;
+            if (i < segments.size())
             {
-                ss_cursor.x = window->ContentRegionRect.Min.x + wrapping_min;
-                ss_cursor.y += text_height;
-                used_width = seg_width;
-            }
-
-            auto segment_size = ImVec2(seg_width, text_height);
-            auto min = ss_cursor;
-            auto max = min + segment_size;
-
-            bb.Add(ImRect(min, max));
-
-            if (seg.is_highlighted)
-            {
-                draw_list->AddRectFilled(min, max, highlight_color);
-            }
-
-            // Draw segment content
-            if (auto text = std::get_if<std::string_view>(&seg.text_or_image_id))
-            {
-                ImU32 text_color;
-                if (seg.is_highlighted)
-                    text_color = highlight_text_color;
-                else if (seg.color.has_value())
-                    text_color = seg.color.value();
+                auto &seg = segments[i];
+                if (seg.wrap_mode == TextSegment::WrapMode::Force)
+                {
+                    i_wrap = i;
+                    // Flush
+                }
                 else
-                    text_color = ImGui::GetColorU32(ImGuiCol_Text);
+                {
+                    used_width += seg.width;
+                    if (seg.wrap_mode == TextSegment::WrapMode::Allow)
+                    {
+                        i_wrap = i;
+                    }
 
-                draw_list->AddText(min, text_color, text->data(), text->data() + text->size());
-            }
-            else if (auto image_id = std::get_if<size_t>(&seg.text_or_image_id))
-            {
-                image_provider->Draw(min, *image_id);
+                    bool flush = used_width >= max_width;
+                    if (!flush)
+                        continue;
+                    // Flush
+                }
             }
             else
             {
-                assert(false && "Unknown TextSegment type");
+                i_wrap = segments.size();
+                // Flush
             }
 
-            if (seg.tooltip_id.has_value())
+            // Flush
+            for (size_t i = i_rem; i < i_wrap; ++i)
             {
-                if (ImGui::IsWindowHovered() && ImGui::IsMouseHoveringRect(min, max))
+                auto &seg = segments[i];
+                auto segment_size = ImVec2(seg.width, text_height);
+                auto min = ss_cursor;
+                auto max = min + segment_size;
+
+                bb.Add(ImRect(min, max));
+
+                if (seg.color.has_value())
                 {
-                    tooltip_provider->DrawTooltip(seg.tooltip_id.value());
+                    ImGui::PushStyleColor(ImGuiCol_Text, seg.color.value());
                 }
+
+                if (seg.is_highlighted)
+                {
+                    auto min_aligned = ImFloor(min);
+                    auto max_aligned = ImFloor(max);
+                    draw_list->AddRectFilled(min_aligned, max_aligned, highlight_color);
+                    ImGui::PushStyleColor(ImGuiCol_Text, highlight_text_color);
+                }
+
+                // Draw segment content
+                if (std::holds_alternative<std::monostate>(seg.tag))
+                {
+                    ImU32 text_color = ImGui::GetColorU32(ImGuiCol_Text);
+                    draw_list->AddText(min, text_color, seg.text.data(), seg.text.data() + seg.text.size());
+                }
+                else if (auto image_tag = std::get_if<ImageTag>(&seg.tag))
+                {
+                    assert(image_provider != nullptr);
+                    image_provider->DrawImage(min, *image_tag);
+                }
+                else if (auto frac_tag = std::get_if<FracTag>(&seg.tag))
+                {
+                    assert(frac_provider != nullptr);
+                    frac_provider->DrawFraction(min, *frac_tag);
+                }
+                else
+                {
+                    assert(false && "Unknown TextSegment type");
+                }
+
+                if (seg.tooltip_id.has_value())
+                {
+                    assert(tooltip_provider != nullptr);
+                    if (ImGui::IsWindowHovered() && ImGui::IsMouseHoveringRect(min, max))
+                    {
+                        tooltip_provider->DrawTooltip(seg.tooltip_id.value());
+                    }
+                }
+
+                if (seg.is_highlighted)
+                {
+                    ImGui::PopStyleColor();
+                }
+
+                if (seg.color.has_value())
+                {
+                    ImGui::PopStyleColor();
+                }
+
+                ss_cursor.x += seg.width;
             }
 
-            ss_cursor.x += seg_width;
-            can_wrap = seg.can_wrap_after;
+            if (i_wrap == segments.size())
+                break;
+
+            i = i_wrap;
+            i_rem = i_wrap;
+            used_width = 0.f;
+            ss_cursor.x = window->ContentRegionRect.Min.x + wrapping_min;
+            ss_cursor.y += text_height;
         }
 
         assert(!bb.IsInverted());
@@ -375,16 +515,21 @@ namespace HerosInsight::RichText
         ImGui::ItemAdd(bb, 0);
     }
 
-    void DrawRichText(
-        std::string_view text,
-        float wrapping_min, float wrapping_max,
-        std::span<uint16_t> highlighting,
-        TextTooltipProvider *tooltip_provider,
-        TextImageProvider *image_provider)
+    void Drawer::DrawRichText(std::string_view text, float wrapping_min, float wrapping_max, std::span<uint16_t> highlighting)
     {
         TextSegment segments[512];
         std::span<TextSegment> seg_view = segments;
-        MakeTextSegments(text, highlighting, seg_view);
-        DrawTextSegments(seg_view, wrapping_min, wrapping_max, tooltip_provider, image_provider);
+        MakeTextSegments(text, seg_view, highlighting);
+        DrawTextSegments(seg_view, wrapping_min, wrapping_max);
+    }
+
+    float CalcTextSegmentsWidth(std::span<TextSegment> segments)
+    {
+        float width = 0.f;
+        for (auto &seg : segments)
+        {
+            width += seg.width;
+        }
+        return width;
     }
 }
