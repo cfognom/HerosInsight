@@ -32,8 +32,8 @@ namespace HerosInsight
     protected:
         struct LocalSpan
         {
-            size_t offset;
-            size_t size;
+            uint32_t offset;
+            uint32_t size;
 
             auto resolve(std::vector<T> &vec) const
             {
@@ -301,6 +301,15 @@ namespace HerosInsight
             return index_to_id[index];
         }
 
+        void SetSpanId(size_t index, T_span_id span_id)
+        {
+            if (index >= index_to_id.size())
+            {
+                index_to_id.resize(index + 1, NULL_SPAN_ID);
+            }
+            index_to_id[index] = span_id;
+        }
+
         T_span GetIndexed(size_t index) { return base::Get(GetSpanId(index)); }
 
         void BeginWrite()
@@ -311,11 +320,7 @@ namespace HerosInsight
         T_span_id EndWrite(size_t index)
         {
             auto span_id = base::EndWrite(&deduper);
-            if (index >= index_to_id.size())
-            {
-                index_to_id.resize(index + 1, NULL_SPAN_ID);
-            }
-            index_to_id[index] = span_id;
+            SetSpanId(index, span_id);
             return span_id;
         }
 
