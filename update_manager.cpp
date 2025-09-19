@@ -108,25 +108,35 @@ namespace HerosInsight
         }
     }
 
-    void UpdateManager::Initialize()
+    static GW::HookEntry game_loop_callback_entry;
+    bool UpdateManager::TryInitialize()
     {
+        auto &text_provider = HerosInsight::SkillTextProvider::GetInstance(GW::Constants::Language::English); // Init SkillTextProvider
+        if (!text_provider.IsReady())
+        {
+            return false;
+        }
+
 #ifdef _DEBUG
         HerosInsight::Debug::Initialize();
         scanner_tool.Initialize();
 #endif
         TextureModule::Initialize();
-        HerosInsight::SkillBook::Initialize();
         HerosInsight::PacketReader::Initialize();
         HerosInsight::PacketStepper::Initialize();
         HerosInsight::EffectInitiator::Initialize();
         HerosInsight::EnergyDisplay::Initialize();
         HerosInsight::CustomAgentDataModule::Initialize();
-        HerosInsight::CustomSkillDataModule::TryInitialize();
+        HerosInsight::CustomSkillDataModule::Initialize();
+        HerosInsight::SkillBook::Initialize();
 
         if (LOG_GWCA_TO_CHAT)
         {
             GW::RegisterLogHandler(&LogHandler, &log_context);
         }
+        GW::GameThread::RegisterGameThreadCallback(&game_loop_callback_entry, UpdateManager::Update);
+        GW::Chat::WriteChat(GW::Chat::CHANNEL_MODERATOR, L"HerosInsight: Initialized");
+        return true;
     }
 
     void UpdateManager::Terminate()
@@ -140,6 +150,8 @@ namespace HerosInsight
         HerosInsight::PacketStepper::Terminate();
         HerosInsight::EffectInitiator::Terminate();
         HerosInsight::EnergyDisplay::Terminate();
+        GW::GameThread::RemoveGameThreadCallback(&game_loop_callback_entry);
+        GW::Chat::WriteChat(GW::Chat::CHANNEL_MODERATOR, L"HerosInsight: Bye!");
     }
 
     ImGuiWindowFlags UpdateManager::GetWindowFlags()
@@ -437,12 +449,6 @@ namespace HerosInsight
 
     void UpdateManager::Update(GW::HookStatus *)
     {
-        if (!CustomSkillDataModule::is_initialized)
-        {
-            if (!CustomSkillDataModule::TryInitialize())
-                return;
-        }
-
         UpdateManager::frame_id++; // We increment frame_id at the beginning of the frame so that any draw updates that happen after this use the same frame_id
         const auto gw_ms = GW::MemoryMgr::GetSkillTimer();
 

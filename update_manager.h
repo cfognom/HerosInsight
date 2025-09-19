@@ -41,7 +41,7 @@ namespace HerosInsight
         static bool is_dragging_skill;
         static bool unlock_windows;
 
-        static void Initialize();
+        static bool TryInitialize();
         static void Terminate();
         static void Update(GW::HookStatus *);
         static void Draw(IDirect3DDevice9 *device);

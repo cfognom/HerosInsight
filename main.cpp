@@ -63,31 +63,7 @@
 struct IDirect3DDevice9;
 
 static volatile bool running;
-static long OldWndProc;
-
-static bool game_loop_callback_attached = false;
-static GW::HookEntry game_loop_callback_entry;
-
-bool AttachGameLoopCallback()
-{
-    GW::GameThreadModule.enable_hooks();
-    if (!game_loop_callback_attached)
-    {
-        GW::GameThread::RegisterGameThreadCallback(&game_loop_callback_entry, HerosInsight::UpdateManager::Update);
-        game_loop_callback_attached = true;
-    }
-    return game_loop_callback_attached;
-}
-
-bool DetachGameLoopCallback()
-{
-    if (game_loop_callback_attached)
-    {
-        GW::GameThread::RemoveGameThreadCallback(&game_loop_callback_entry);
-        game_loop_callback_attached = false;
-    }
-    return !game_loop_callback_attached;
-}
+static long OldWndProc = 0;
 
 static LRESULT CALLBACK WndProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lParam)
 {
@@ -335,23 +311,21 @@ IDirect3DStateBlock9 *TryPrepareStencil(IDirect3DDevice9 *device)
 static void OnRender(GW::Render::Helper helper)
 {
     auto device = helper.device;
-    // This is call from within the game thread and all operation should be done here.
+    // This is call from within the game thread and all operation should be done here. (Although, Note that: GW::GameThread::IsInGameThread() == false)
     // You can't freeze this thread, so no blocking operation or at your own risk.
-    static bool initialized = false;
-    if (!initialized)
+    if (!OldWndProc)
     {
         HWND hWnd = GW::MemoryMgr::GetGWWindowHandle();
         OldWndProc = SetWindowLongPtr(hWnd, GWL_WNDPROC, reinterpret_cast<long>(SafeWndProc));
-
         ImGui::CreateContext();
         ImGui_ImplDX9_Init(hWnd, device);
-
-        HerosInsight::UpdateManager::Initialize();
-        AttachGameLoopCallback();
-
+    }
+    static bool initialized = false;
+    if (!initialized)
+    {
+        if (!HerosInsight::UpdateManager::TryInitialize())
+            return;
         initialized = true;
-
-        GW::Chat::WriteChat(GW::Chat::CHANNEL_MODERATOR, L"HerosInsight: Initialized");
     }
 
     ImGui_ImplDX9_NewFrame();
@@ -376,7 +350,6 @@ static void OnRender(GW::Render::Helper helper)
 #endif
     )
     {
-        DetachGameLoopCallback();
         HWND hWnd = GW::MemoryMgr::GetGWWindowHandle();
 
         ImGui_ImplDX9_Shutdown();
@@ -384,8 +357,6 @@ static void OnRender(GW::Render::Helper helper)
         SetWindowLongPtr(hWnd, GWL_WNDPROC, OldWndProc);
 
         HerosInsight::UpdateManager::Terminate();
-
-        GW::Chat::WriteChat(GW::Chat::CHANNEL_MODERATOR, L"HerosInsight: Bye!");
         GW::DisableHooks();
         running = false;
     }
