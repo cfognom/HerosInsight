@@ -2137,19 +2137,11 @@ namespace HerosInsight::Utils
         // clang-format on
     }
 
-    float CalcExactTextWidth(ImFont *font, const char *text, const char *end)
+    ImVec2 CalcExactTextSize(const char *text, const char *end)
     {
-        if (!end)
-            end = text + strlen(text);
-
-        float width = 0.0f;
-        for (const char *p = text; p < end; ++p)
-        {
-            char c = *p;
-            width += (c < font->IndexAdvanceX.Size ? font->IndexAdvanceX.Data[c] : font->FallbackAdvanceX);
-        }
-
-        return width;
+        auto font = ImGui::GetFont();
+        auto font_size = ImGui::GetFontSize();
+        return font->CalcTextSizeA(font_size, FLT_MAX, -1.0f, text, end, NULL);
     }
 
     // Returns size of the bounding box
