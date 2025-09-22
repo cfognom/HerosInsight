@@ -447,6 +447,20 @@ namespace HerosInsight::Utils
         return str;
     }
 
+    void WStrToStr(const wchar_t *wstr, std::span<char> &out)
+    {
+        char *dst = out.data();
+        char *dst_max = out.data() + out.size();
+        while (*wstr)
+        {
+            assert(dst < dst_max);
+            auto wc = *wstr++;
+            auto c = wc <= 0x7F ? static_cast<char>(wc) : '?';
+            *dst++ = c;
+        }
+        out = out.substr(0, dst - out.data());
+    }
+
     uint32_t last_message_frame_id = 0;
     DWORD last_message_timestamp = 0;
 
