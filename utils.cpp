@@ -458,7 +458,7 @@ namespace HerosInsight::Utils
             auto c = wc <= 0x7F ? static_cast<char>(wc) : '?';
             *dst++ = c;
         }
-        out = out.substr(0, dst - out.data());
+        out = out.subspan(0, dst - out.data());
     }
 
     uint32_t last_message_frame_id = 0;
