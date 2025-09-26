@@ -268,10 +268,6 @@ namespace HerosInsight::RichText
         only_tags = std::span<TextTag>{only_tags.data(), tag_count};
     }
 
-    // TODO: Plan:
-    // Store tags in a separate IndexedStringArena; use a struct with tag_type + offset + union of tag
-    // MakeTextSegments no longer uses TryReadTextTag and instead takes a span of TextTags
-    // After decoding tags are separated out.
     void Drawer::MakeTextSegments(std::string_view text, std::span<TextSegment> &result, std::span<uint16_t> highlighting, TextSegment::WrapMode first_segment_wrap_mode)
     {
         if (text.empty())
