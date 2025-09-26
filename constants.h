@@ -4,9 +4,9 @@
 #include <imgui.h>
 #include <iostream>
 
-#ifdef _DEBUG
-// #define _TIMING 1
-#endif
+// #ifdef _DEBUG
+#define _TIMING 1
+// #endif
 
 namespace Constants
 {

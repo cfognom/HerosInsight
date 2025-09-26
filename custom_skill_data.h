@@ -3,11 +3,25 @@
 #include <variant>
 
 #include <attribute_or_title.h>
+#include <skill_text_provider.h>
 #include <update_manager.h>
-#include <utils.h>
 
 namespace HerosInsight
 {
+    struct HighlightData
+    {
+        std::vector<uint16_t> offsets;
+        std::span<uint16_t> header_offsets;
+        std::span<uint16_t> value_offsets;
+
+        void clear()
+        {
+            offsets.clear();
+            header_offsets = {};
+            value_offsets = {};
+        }
+    };
+
     struct SkillRegenType
     {
         static const uint32_t None = 0;
@@ -77,40 +91,70 @@ namespace HerosInsight
             return 1 == (attribute_lvl == -1 ? val15 : Resolve(attribute_lvl));
         }
 
+        // Computes the value at a given attribute level
         uint32_t Resolve(uint32_t attribute_lvl) const
         {
             return IsConstant() ? val0 : Utils::LinearAttributeScale(val0, val15, attribute_lvl);
         }
 
-        int Print(FixedArrayRef<char> buffer, int32_t attribute_lvl, bool show_pos_sign = false) const
+        void Print(int32_t attribute_lvl, std::span<char> &out) const
         {
-            if (IsConstant())
+            auto dst = out.data();
+            auto dst_size = out.size();
+            auto dst_end = dst + dst_size;
+            if (IsConstant() || attribute_lvl != -1)
             {
-                return buffer.PushFormat("%u", val0);
-            }
-            else if (attribute_lvl != -1)
-            {
-                return buffer.PushFormat("%u", Utils::LinearAttributeScale(val0, val15, attribute_lvl));
+                uint32_t value = Resolve(attribute_lvl);
+                auto result = std::to_chars(dst, dst_end, value, 10);
+                assert(result.ec == std::errc());
+                out = std::span<char>(dst, result.ptr - dst);
             }
             else
             {
-                return buffer.PushFormat("(%u...%u)", val0, val15);
+                auto result = std::format_to_n(dst, dst_size, "({}...{})", val0, val15);
+                assert(result.out - dst == result.size);
+                out = std::span<char>(dst, result.out - dst);
             }
         }
 
         void ImGuiRender(int32_t attribute_lvl)
         {
-            FixedArray<char, 32> salloc;
-            auto buffer = salloc.ref();
-            auto len = Print(buffer, attribute_lvl);
+            char buffer[32];
+            std::span<char> view = buffer;
+            Print(attribute_lvl, view);
 
             if (!IsConstant())
                 ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dynamic_green);
 
-            ImGui::TextUnformatted(buffer.data(), buffer.data() + len);
+            ImGui::TextUnformatted(view.data(), view.data() + view.size());
 
             if (!IsConstant())
                 ImGui::PopStyleColor();
+        }
+
+        static bool TryRead(std::string_view &remaining, SkillParam &out)
+        {
+            auto rem = remaining;
+            bool is_opening = Utils::TryRead('(', rem);
+            bool is_number = Utils::TryReadInt(rem, *(int32_t *)&out.val0);
+            if (!is_opening)
+            {
+                if (is_number)
+                {
+                    out.val15 = out.val0;
+                    remaining = rem;
+                    return true;
+                }
+                return false;
+            }
+            if (Utils::TryRead("...", rem) &&
+                Utils::TryReadInt(rem, *(int32_t *)&out.val15) &&
+                Utils::TryRead(')', rem))
+            {
+                remaining = rem;
+                return true;
+            }
+            return false;
         }
     };
 
@@ -151,7 +195,6 @@ namespace HerosInsight
             Heal,
             Damage,
             EnergyDiscount,
-            DamageReduction,
 
             ConditionsRemoved,
             HexesRemoved,
@@ -187,7 +230,7 @@ namespace HerosInsight
             Weakness,
 
             CONDITION_END,
-            PERCENT_START,
+            SECONDS_END,
 
             ChanceToBlock,
             ChanceToFail,
@@ -195,26 +238,37 @@ namespace HerosInsight
 
             MAY_BE_NEGATIVE_AFTER, // ------------------
 
-            MovementSpeedMod,
-            DurationMod,
-            AttackTimeMod,
-            RechargeTimeMod,
-            HealMod,
-            DamageMod,
+            FasterMovement,
+            SlowerMovement,
+            LongerDuration,
+            ShorterDuration,
+            FasterAttacks,
+            SlowerAttacks,
+            FasterRecharge,
+            SlowerRecharge,
+            FasterActivation,
+            SlowerActivation,
+            MoreHealing,
+            LessHealing,
 
-            PERCENT_END,
+            AdditionalHealth, // Additional Max Health, there is no "Reduced" Max Health variant
 
-            ActivationTimeAdd,
-            RechargeTimeAdd,
+            DISPLAY_AS_POSITIVE_START,
 
-            SECONDS_END,
-
-            ArmorChange,
-            MaxHealthAdd,
+            MoreDamage,
+            ArmorIncrease,
             HealthRegen,
-            HealthDegen,
             EnergyRegen,
+
+            DISPLAY_AS_POSITIVE_END,
+            DISPLAY_AS_NEGATIVE_START,
+
+            LessDamage,
+            ArmorDecrease,
+            HealthDegen,
             EnergyDegen,
+
+            DISPLAY_AS_NEGATIVE_END,
 
             COUNT,
         };
@@ -222,6 +276,7 @@ namespace HerosInsight
         Type type;
         std::optional<DamageType> damage_type;
         SkillParam param;
+        bool is_percent;
         bool is_negative;
 
         bool IsCondition() const
@@ -232,45 +287,143 @@ namespace HerosInsight
         {
             return type >= Type::ConditionsRemoved && type <= Type::EnchantmentsRemoved;
         }
-        void ImGuiRender(int8_t attr_lvl);
+        void ImGuiRender(int8_t attr_lvl, float width, std::span<uint16_t> hl);
 
         GW::Constants::SkillID GetCondition() const;
         RemovalMask GetRemovalMask() const;
         std::string_view ToStr() const;
     };
 
-    struct CustomSkillData;
-
-    struct DescKey
+    struct SkillPropertyID
     {
-        DescKey()
+        static constexpr uint32_t MAX_TAGS = 16;
+        enum struct Type
         {
-            std::memset(this, 0, sizeof(*this));
+            None,
+            Unknown,
+
+            // String
+            TEXT,
+
+            Name,
+            SkillType,
+            TAGS,
+            TAG_END = TAGS + MAX_TAGS,
+            Description,
+            Concise,
+            Attribute,
+            Profession,
+            Campaign,
+
+            TEXT_END,
+
+            // Number
+            NUMBER,
+
+            Overcast,
+            Adrenaline,
+            Sacrifice,
+            Upkeep,
+            Energy,
+            Activation,
+            Recharge,
+            Aftercast,
+            Range,
+            ID,
+
+            // Raw struct data
+            RAW,
+
+            u8,
+            u16,
+            u32,
+            f32,
+
+            RAW_END,
+
+            PARSED,
+            PARSED_END = PARSED + (uint32_t)ParsedSkillData::Type::COUNT,
+
+            NUMBER_END,
+            MAX,
+        };
+
+        Type type;
+        uint8_t byte_offset;
+
+        bool IsStringType() const
+        {
+            return type >= Type::TEXT && type < Type::TEXT_END;
         }
 
-        bool is_singular0 : 1;
-        bool is_singular1 : 1;
-        bool is_singular2 : 1;
-        bool is_concise : 1;
-        bool is_valid : 1;
-        int8_t attribute_lvl : 8;
-
-        uint16_t value() const
+        bool IsNumberType() const
         {
-            return *(uint16_t *)(this);
+            return type >= Type::NUMBER && type < Type::NUMBER_END;
         }
 
-        uint16_t pre_key() const
+        bool IsRawNumberType() const
         {
-            return value() & 0xF;
+            return type >= Type::RAW && type < Type::RAW_END;
         }
 
-        bool operator==(const DescKey &other) const
+        std::string_view ToStr() const
         {
-            return value() == other.value();
+            if (type >= Type::PARSED && type < Type::PARSED_END)
+            {
+                ParsedSkillData temp = {};
+                temp.type = static_cast<ParsedSkillData::Type>((uint32_t)type - (uint32_t)Type::PARSED);
+                return temp.ToStr();
+            }
+
+            if (IsRawNumberType())
+            {
+                // clang-format off
+                switch (type)
+                {
+                    case Type::u8:  return "Raw u8";
+                    case Type::u16: return "Raw u16";
+                    case Type::u32: return "Raw u32";
+                    case Type::f32: return "Raw f32";
+                    default:        return "...";
+                }
+                // clang-format on
+            }
+
+            // clang-format off
+            switch (type) {
+                case Type::TEXT:         return "Text";
+                case Type::Name:         return "Name";
+                case Type::SkillType:    return "Type";
+                case Type::TAGS:         return "Tag";
+                case Type::Description:  return "Description";
+                case Type::Concise:      return "Concise Description";
+                case Type::Attribute:    return "Attribute";
+                case Type::Profession:   return "Profession";
+                case Type::Campaign:     return "Campaign";
+
+                case Type::Overcast:     return "Overcast";
+                case Type::Adrenaline:   return "Adrenaline";
+                case Type::Sacrifice:    return "Sacrifice";
+                case Type::Upkeep:       return "Upkeep";
+                case Type::Energy:       return "Energy";
+                case Type::Activation:   return "Activation";
+                case Type::Recharge:     return "Recharge";
+                case Type::Aftercast:    return "Aftercast";
+                case Type::Range:        return "Range";
+                case Type::ID:           return "ID";
+
+                default:                 return "...";
+            }
+            // clang-format on
         }
     };
-    static_assert(sizeof(DescKey) == sizeof(uint16_t));
+
+    constexpr SkillPropertyID::Type ParsedToProp(ParsedSkillData::Type type)
+    {
+        return static_cast<SkillPropertyID::Type>((uint32_t)SkillPropertyID::Type::PARSED + (uint32_t)type);
+    }
+
+    struct CustomSkillData;
 
     enum struct DescToken;
 
@@ -313,38 +466,6 @@ namespace HerosInsight
         bool HitBased : 1; // Skills whose effects are applied on hit rather than on activation.
     };
     static_assert(sizeof(SkillTags) <= 8);
-
-    enum struct SkillTag
-    {
-        Archived,
-
-        Equipable,
-        Unlocked,
-        Locked,
-        Temporary,
-        DeveloperSkill,
-        EnvironmentSkill,
-        MonsterSkill,
-        SpiritAttack,
-
-        PvEOnly,
-        PvPOnly,
-        PvEVersion,
-        PvPVersion,
-        Consumable,
-        EffectOnly,
-        Maintained,
-        ConditionSource,
-        ExploitsCorpse,
-        Celestial,
-        Mission,
-        Bundle,
-
-        CONTEXT,
-        CONTEXT_END = CONTEXT + static_cast<uint32_t>(Utils::SkillContext::Count),
-    };
-
-    std::string_view SkillTagToString(SkillTag tag);
 
     enum struct EffectMask
     {
@@ -422,13 +543,45 @@ namespace HerosInsight
 
     SkillParam GetPoisonDuration(GW::Skill &skill);
 
+    struct DescKey
+    {
+        DescKey(const GW::Skill &skill, bool is_concise, int8_t attribute_lvl)
+        {
+            is_singular0 = GetSkillParam(skill, 0).IsSingular(attribute_lvl);
+            is_singular1 = GetSkillParam(skill, 1).IsSingular(attribute_lvl);
+            is_singular2 = GetSkillParam(skill, 2).IsSingular(attribute_lvl);
+            is_concise = is_concise;
+            attribute_lvl = attribute_lvl;
+        }
+
+        bool is_singular0 : 1;
+        bool is_singular1 : 1;
+        bool is_singular2 : 1;
+        bool is_concise : 1;
+        int8_t attribute_lvl : 8;
+
+        uint16_t value() const
+        {
+            return *(uint16_t *)(this);
+        }
+
+        uint16_t pre_key() const
+        {
+            return value() & 0xF;
+        }
+
+        bool operator==(const DescKey &other) const
+        {
+            return value() == other.value();
+        }
+    };
+    static_assert(sizeof(DescKey) == sizeof(uint16_t));
+    static_assert(std::is_trivially_copyable_v<DescKey>);
+
     struct CustomSkillData
     {
         GW::Constants::SkillID skill_id;
         GW::Skill *skill;
-
-        DescKey last_desc_key;
-        DescKey last_concise_key;
 
         SkillTags tags;
         Utils::SkillContext context;
@@ -442,11 +595,6 @@ namespace HerosInsight
 
         void Init();
 
-        std::string *TryGetName();
-        DescKey GetDescKey(bool is_concise, int32_t attribute_lvl) const;
-        std::string *TryGetPredecodedDescription(DescKey key);
-        HerosInsight::Utils::RichString *TryGetDescription(bool is_concise = false, int32_t attribute_lvl = -1);
-
         SkillParam GetSkillParam(uint32_t id) const;
         SkillParam GetParsedSkillParam(std::function<bool(const ParsedSkillData &)> predicate) const;
         void GetParsedSkillParams(ParsedSkillData::Type type, FixedArrayRef<ParsedSkillData> result) const;
@@ -459,9 +607,9 @@ namespace HerosInsight
 
         std::string ToString() const;
         std::string_view GetTypeString();
-        std::string_view GetProfessionString();
-        std::string_view GetCampaignString();
-        std::string_view GetAttributeString();
+        std::string_view GetProfessionStr();
+        std::string_view GetCampaignStr();
+        std::string_view GetAttributeStr();
 
         bool IsFlash() const;
         bool IsAttack() const;
@@ -470,6 +618,7 @@ namespace HerosInsight
         void OnSkillActivation(CustomAgentData &caster, uint32_t target_id);
         void OnProjectileLaunched(CustomAgentData &caster, uint32_t target_id, OwnedProjectile &projectile);
 
+        int8_t GetUpkeep() const;
         uint8_t GetOvercast() const;
         uint32_t GetAdrenaline() const;
         uint32_t GetAdrenalineStrikes() const;
@@ -479,9 +628,8 @@ namespace HerosInsight
         float GetActivation() const;
         float GetAftercast() const;
         Utils::Range GetAoE() const;
-        void GetRanges(FixedArrayRef<Utils::Range> out) const;
+        void GetRanges(std::span<Utils::Range> &out) const;
         uint32_t ResolveBaseDuration(CustomAgentData &custom_ad, std::optional<uint8_t> skill_attr_lvl_override = std::nullopt) const;
-        void GetTags(FixedArrayRef<SkillTag> out) const;
 
     private:
         std::string_view type_str;
@@ -489,18 +637,11 @@ namespace HerosInsight
         std::string_view campaign_str;
         std::string_view attr_str;
         std::string_view avail_str;
-        std::string name;
-        Utils::RichString last_desc;
-        Utils::RichString last_concise;
-        std::string predecoded_descriptions[16];
-        Utils::InitGuard name_guard;
-        Utils::InitGuard desc_guard;
     };
 
     namespace CustomSkillDataModule
     {
-        extern bool is_initialized;
-        bool TryInitialize();
+        void Initialize();
 
         CustomSkillData &GetCustomSkillData(GW::Constants::SkillID skill_id);
     }

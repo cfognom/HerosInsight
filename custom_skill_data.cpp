@@ -90,7 +90,9 @@
 #include <custom_agent_data.h>
 #include <debug_display.h>
 #include <effect_tracking.h>
+#include <fixed_array.h>
 #include <skill_book.h>
+#include <skill_text_provider.h>
 #include <utils.h>
 
 #include "custom_skill_data.h"
@@ -104,7 +106,8 @@ namespace HerosInsight
             GW::Constants::SkillID::Test_Buff,
             GW::Constants::SkillID::Impending_Dhuum,
             GW::Constants::SkillID::Dishonorable,
-            GW::Constants::SkillID::Unreliable);
+            GW::Constants::SkillID::Unreliable
+        );
 
         return skill.icon_file_id == 327614 || // Dev hax icon
                dev_skills.has(skill.skill_id);
@@ -356,9 +359,10 @@ namespace HerosInsight
             }
         }
 
-        std::string_view name = *custom_sd.TryGetName();
-        std::string_view full = *custom_sd.TryGetPredecodedDescription(custom_sd.GetDescKey(false, -1));
-        std::string_view concise = *custom_sd.TryGetPredecodedDescription(custom_sd.GetDescKey(true, -1));
+        auto &text_provider = SkillTextProvider::GetInstance(GW::Constants::Language::English);
+        auto name = text_provider.GetName(custom_sd.skill_id);
+        auto full = text_provider.GetGenericDescription(custom_sd.skill_id, false);
+        auto concise = text_provider.GetGenericDescription(custom_sd.skill_id, true);
 
         if (name == "..." &&
             full == "..." &&
@@ -401,7 +405,8 @@ namespace HerosInsight
             GW::Constants::SkillID::Xinraes_Weapon,
             GW::Constants::SkillID::Vengeful_Weapon,
             GW::Constants::SkillID::Ballad_of_Restoration,
-            GW::Constants::SkillID::Ballad_of_Restoration_PvP);
+            GW::Constants::SkillID::Ballad_of_Restoration_PvP
+        );
 
         return skills.has(skill_id);
     }
@@ -461,7 +466,8 @@ namespace HerosInsight
             GW::Constants::SkillID::Polymock_Piercing_Light_Spear,
             GW::Constants::SkillID::Polymock_Shock_Arrow,
             GW::Constants::SkillID::Polymock_Stone_Daggers,
-            GW::Constants::SkillID::Polymock_Stoning);
+            GW::Constants::SkillID::Polymock_Stoning
+        );
 
         if (skill.type == GW::Constants::SkillType::Attack &&
             skill.weapon_req & 70)
@@ -474,34 +480,31 @@ namespace HerosInsight
 
     bool IsDragonArenaSkill(GW::Constants::SkillID skill_id)
     {
-        return (skill_id >= GW::Constants::SkillID::Spirit_of_the_Festival &&
-                skill_id <= GW::Constants::SkillID::Imperial_Majesty);
+        return (skill_id >= GW::Constants::SkillID::Spirit_of_the_Festival && skill_id <= GW::Constants::SkillID::Imperial_Majesty);
     }
 
     bool IsRollerBeetleSkill(GW::Constants::SkillID skill_id)
     {
-        return (skill_id >= GW::Constants::SkillID::Rollerbeetle_Racer &&
-                skill_id <= GW::Constants::SkillID::Spit_Rocks);
+        return (skill_id >= GW::Constants::SkillID::Rollerbeetle_Racer && skill_id <= GW::Constants::SkillID::Spit_Rocks);
     }
 
     bool IsYuletideSkill(GW::Constants::SkillID skill_id)
     {
         return (skill_id >= GW::Constants::SkillID::Blinding_Snow &&
-                   skill_id <= GW::Constants::SkillID::Flurry_of_Ice) ||
+                skill_id <= GW::Constants::SkillID::Flurry_of_Ice) ||
 
                (skill_id >= GW::Constants::SkillID::Side_Step &&
-                   skill_id <= GW::Constants::SkillID::Rudis_Red_Nose) ||
+                skill_id <= GW::Constants::SkillID::Rudis_Red_Nose) ||
 
                (skill_id >= (GW::Constants::SkillID)2795 && // Advanced Snowball
-                   skill_id <= (GW::Constants::SkillID)2802) ||
+                skill_id <= (GW::Constants::SkillID)2802) ||
 
                skill_id == (GW::Constants::SkillID)2964; // Snowball but with 1s aftercast
     }
 
     bool IsAgentOfTheMadKingSkill(GW::Constants::SkillID skill_id)
     {
-        return (skill_id >= GW::Constants::SkillID::Agent_of_the_Mad_King &&
-                skill_id <= GW::Constants::SkillID::The_Mad_Kings_Influence);
+        return (skill_id >= GW::Constants::SkillID::Agent_of_the_Mad_King && skill_id <= GW::Constants::SkillID::The_Mad_Kings_Influence);
     }
 
     bool IsCandyCornInfantrySkill(GW::Constants::SkillID skill_id)
@@ -523,19 +526,19 @@ namespace HerosInsight
     bool IsBrawlingSkill(GW::Constants::SkillID skill_id)
     {
         return (skill_id >= GW::Constants::SkillID::Brawling &&
-                   skill_id <= GW::Constants::SkillID::STAND_UP) ||
+                skill_id <= GW::Constants::SkillID::STAND_UP) ||
 
                (skill_id >= GW::Constants::SkillID::Falkens_Fire_Fist &&
-                   skill_id <= GW::Constants::SkillID::Falken_Quick);
+                skill_id <= GW::Constants::SkillID::Falken_Quick);
     }
 
     bool IsPolymockSkill(GW::Constants::SkillID skill_id)
     {
         return (skill_id >= GW::Constants::SkillID::Polymock_Power_Drain &&
-                   skill_id <= GW::Constants::SkillID::Polymock_Mind_Wreck) ||
+                skill_id <= GW::Constants::SkillID::Polymock_Mind_Wreck) ||
 
                (skill_id >= GW::Constants::SkillID::Polymock_Deathly_Chill &&
-                   skill_id <= GW::Constants::SkillID::Mursaat_Elementalist_Form);
+                skill_id <= GW::Constants::SkillID::Mursaat_Elementalist_Form);
     }
 
     bool IsCelestialSkill(GW::Constants::SkillID skill_id)
@@ -548,7 +551,8 @@ namespace HerosInsight
             GW::Constants::SkillID::Star_Servant,
             GW::Constants::SkillID::Star_Shine,
             GW::Constants::SkillID::Star_Strike,
-            GW::Constants::SkillID::Storm_of_Swords);
+            GW::Constants::SkillID::Storm_of_Swords
+        );
         return celestial_skills.has(skill_id);
     }
 
@@ -556,13 +560,13 @@ namespace HerosInsight
     {
         return skill_id == GW::Constants::SkillID::Going_Commando ||
                (skill_id >= GW::Constants::SkillID::Stun_Grenade &&
-                   skill_id <= GW::Constants::SkillID::Tango_Down);
+                skill_id <= GW::Constants::SkillID::Tango_Down);
     }
 
     bool IsGolemSkill(GW::Constants::SkillID skill_id)
     {
         return (skill_id >= GW::Constants::SkillID::GOLEM_disguise &&
-                   skill_id <= GW::Constants::SkillID::Annihilator_Toss) ||
+                skill_id <= GW::Constants::SkillID::Annihilator_Toss) ||
 
                skill_id == GW::Constants::SkillID::Sky_Net;
     }
@@ -570,10 +574,10 @@ namespace HerosInsight
     bool IsRavenSkill(GW::Constants::SkillID skill_id)
     {
         return (skill_id >= GW::Constants::SkillID::Raven_Talons &&
-                   skill_id <= GW::Constants::SkillID::Raven_Flight) ||
+                skill_id <= GW::Constants::SkillID::Raven_Flight) ||
 
                (skill_id >= GW::Constants::SkillID::Raven_Blessing_A_Gate_Too_Far &&
-                   skill_id <= GW::Constants::SkillID::Raven_Talons_A_Gate_Too_Far);
+                skill_id <= GW::Constants::SkillID::Raven_Talons_A_Gate_Too_Far);
     }
 
     bool IsUrsanSkill(GW::Constants::SkillID skill_id)
@@ -597,27 +601,24 @@ namespace HerosInsight
     bool IsVolfenSkill(GW::Constants::SkillID skill_id)
     {
         return (skill_id >= GW::Constants::SkillID::Volfen_Claw &&
-                   skill_id <= GW::Constants::SkillID::Volfen_Agility) ||
+                skill_id <= GW::Constants::SkillID::Volfen_Agility) ||
 
                (skill_id >= GW::Constants::SkillID::Volfen_Pounce_Curse_of_the_Nornbear &&
-                   skill_id <= GW::Constants::SkillID::Volfen_Blessing_Curse_of_the_Nornbear);
+                skill_id <= GW::Constants::SkillID::Volfen_Blessing_Curse_of_the_Nornbear);
     }
 
     bool IsNornAspectSkill(GW::Constants::SkillID skill_id)
     {
-        return (IsUrsanSkill(skill_id) ||
-                IsVolfenSkill(skill_id) ||
-                IsRavenSkill(skill_id) ||
-                skill_id == GW::Constants::SkillID::Totem_of_Man);
+        return (IsUrsanSkill(skill_id) || IsVolfenSkill(skill_id) || IsRavenSkill(skill_id) || skill_id == GW::Constants::SkillID::Totem_of_Man);
     }
 
     bool IsKeiranSkill(GW::Constants::SkillID skill_id)
     {
         return (skill_id >= GW::Constants::SkillID::Keiran_Thackeray_disguise &&
-                   skill_id <= GW::Constants::SkillID::Rain_of_Arrows) ||
+                skill_id <= GW::Constants::SkillID::Rain_of_Arrows) ||
 
                (skill_id >= GW::Constants::SkillID::Keirans_Sniper_Shot_Hearts_of_the_North &&
-                   skill_id <= GW::Constants::SkillID::Theres_Nothing_to_Fear_Thackeray);
+                skill_id <= GW::Constants::SkillID::Theres_Nothing_to_Fear_Thackeray);
     }
 
     bool IsGwenSkill(GW::Constants::SkillID skill_id)
@@ -625,10 +626,10 @@ namespace HerosInsight
         return skill_id == GW::Constants::SkillID::Gwen_disguise ||
 
                (skill_id >= GW::Constants::SkillID::Distortion_Gwen &&
-                   skill_id <= GW::Constants::SkillID::Sum_of_All_Fears_Gwen) ||
+                skill_id <= GW::Constants::SkillID::Sum_of_All_Fears_Gwen) ||
 
                (skill_id >= GW::Constants::SkillID::Hide &&
-                   skill_id <= GW::Constants::SkillID::Throw_Rock);
+                skill_id <= GW::Constants::SkillID::Throw_Rock);
     }
 
     bool IsTogoSkill(GW::Constants::SkillID skill_id)
@@ -646,7 +647,8 @@ namespace HerosInsight
             GW::Constants::SkillID::Pain1,
             GW::Constants::SkillID::Pain_attack_Togo,
             GW::Constants::SkillID::Pain_attack_Togo1,
-            GW::Constants::SkillID::Pain_attack_Togo2);
+            GW::Constants::SkillID::Pain_attack_Togo2
+        );
         return togo_skills.has(skill_id);
     }
 
@@ -655,7 +657,7 @@ namespace HerosInsight
         return skill_id == GW::Constants::SkillID::Turai_Ossa_disguise ||
 
                (skill_id >= GW::Constants::SkillID::For_Elona &&
-                   skill_id <= GW::Constants::SkillID::Whirlwind_Attack_Turai_Ossa) ||
+                skill_id <= GW::Constants::SkillID::Whirlwind_Attack_Turai_Ossa) ||
 
                skill_id == GW::Constants::SkillID::Dragon_Slash_Turai_Ossa;
     }
@@ -669,7 +671,8 @@ namespace HerosInsight
             GW::Constants::SkillID::Unnatural_Signet_Saul_DAlessio,
             GW::Constants::SkillID::Spectral_Agony_Saul_DAlessio,
             GW::Constants::SkillID::Banner_of_the_Unseen,
-            GW::Constants::SkillID::Form_Up_and_Advance);
+            GW::Constants::SkillID::Form_Up_and_Advance
+        );
         return saul_skills.has(skill_id);
     }
 
@@ -689,24 +692,23 @@ namespace HerosInsight
     bool IsSpiritFormSkill(GW::Constants::SkillID skill_id)
     {
         return (skill_id >= GW::Constants::SkillID::Dhuums_Rest &&
-                   skill_id <= GW::Constants::SkillID::Ghostly_Fury) ||
+                skill_id <= GW::Constants::SkillID::Ghostly_Fury) ||
 
                skill_id == GW::Constants::SkillID::Spirit_Form_disguise;
     }
 
     bool IsSiegeDevourerSkill(GW::Constants::SkillID skill_id)
     {
-        return (skill_id >= GW::Constants::SkillID::Siege_Devourer &&
-                skill_id <= GW::Constants::SkillID::Dismount_Siege_Devourer);
+        return (skill_id >= GW::Constants::SkillID::Siege_Devourer && skill_id <= GW::Constants::SkillID::Dismount_Siege_Devourer);
     }
 
     bool IsJununduSkill(GW::Constants::SkillID skill_id)
     {
         return (skill_id >= GW::Constants::SkillID::Choking_Breath &&
-                   skill_id <= GW::Constants::SkillID::Junundu_Wail) ||
+                skill_id <= GW::Constants::SkillID::Junundu_Wail) ||
 
                (skill_id >= GW::Constants::SkillID::Desert_Wurm_disguise &&
-                   skill_id <= GW::Constants::SkillID::Leave_Junundu) ||
+                skill_id <= GW::Constants::SkillID::Leave_Junundu) ||
 
                skill_id == GW::Constants::SkillID::Unknown_Junundu_Ability;
     }
@@ -754,7 +756,8 @@ namespace HerosInsight
             GW::Constants::SkillID::Spear_of_Archemorus_Level_5,
             GW::Constants::SkillID::Splinter_Mine_skill,
             GW::Constants::SkillID::Stun_Bomb,
-            GW::Constants::SkillID::Volatile_Charr_Crystal);
+            GW::Constants::SkillID::Volatile_Charr_Crystal
+        );
         return bundle_skills.has(skill_id);
     }
 
@@ -768,7 +771,8 @@ namespace HerosInsight
     bool IsPvPOnlySkill(const GW::Skill &skill)
     {
         constexpr auto pvp_only_skills = MakeFixedSet<GW::Constants::SkillID>(
-            GW::Constants::SkillID::Charm_Animal_Codex);
+            GW::Constants::SkillID::Charm_Animal_Codex
+        );
 
         return pvp_only_skills.has(skill.skill_id);
     }
@@ -822,7 +826,8 @@ namespace HerosInsight
     bool IsEffectOnly(const GW::Skill &skill)
     {
         constexpr auto effect_only_skills = MakeFixedSet<GW::Constants::SkillID>(
-            GW::Constants::SkillID::Phase_Shield_effect);
+            GW::Constants::SkillID::Phase_Shield_effect
+        );
 
         return skill.special & (uint32_t)Utils::SkillSpecialFlags::Effect ||
                skill.type == GW::Constants::SkillType::Bounty ||
@@ -854,7 +859,8 @@ namespace HerosInsight
             GW::Constants::SkillID::Vampirism_attack,
             GW::Constants::SkillID::Disenchantment_attack,
             GW::Constants::SkillID::Wanderlust_attack,
-            GW::Constants::SkillID::Dissonance_attack);
+            GW::Constants::SkillID::Dissonance_attack
+        );
 
         return spirit_attack_skills.has(skill.skill_id);
     }
@@ -942,7 +948,8 @@ namespace HerosInsight
             GW::Constants::SkillID::Poison_Jet,
             GW::Constants::SkillID::Poison_Spout,
             GW::Constants::SkillID::Sarcophagus_Spores,
-            GW::Constants::SkillID::Fire_Dart1);
+            GW::Constants::SkillID::Fire_Dart1
+        );
 
         if (skill.type == GW::Constants::SkillType::Environmental ||
             skill.type == GW::Constants::SkillType::EnvironmentalTrap)
@@ -1126,13 +1133,15 @@ namespace HerosInsight
             GW::Constants::SkillID::Corrupted_Breath,
             GW::Constants::SkillID::Kilroy_Stonekin,
             GW::Constants::SkillID::Janthirs_Gaze,
-            GW::Constants::SkillID::Its_Good_to_Be_King);
+            GW::Constants::SkillID::Its_Good_to_Be_King
+        );
 
         constexpr auto non_monster_skills_with_monster_icon = MakeFixedSet<GW::Constants::SkillID>(
             GW::Constants::SkillID::Spectral_Agony_Saul_DAlessio,
             GW::Constants::SkillID::Burden_Totem,
             GW::Constants::SkillID::Splinter_Mine_skill,
-            GW::Constants::SkillID::Entanglement);
+            GW::Constants::SkillID::Entanglement
+        );
 
         const auto skill_id = skill.skill_id;
 
@@ -1171,57 +1180,6 @@ namespace HerosInsight
 
     CustomSkillData custom_skill_datas[GW::Constants::SkillMax];
 
-    std::string *CustomSkillData::TryGetPredecodedDescription(DescKey key)
-    {
-        auto pre_key = key.pre_key();
-        if (desc_guard.IsInit(pre_key))
-            return &predecoded_descriptions[pre_key];
-
-        if (desc_guard.TryBeginInit(pre_key))
-        {
-            // Start decoding the description
-            const auto size = 256;
-            wchar_t buffer[size];
-            bool success = Utils::SkillDescriptionToEncStr(buffer, size, *skill, key.is_concise, key.attribute_lvl);
-            assert(success);
-
-            auto Callback = [](void *param, const wchar_t *s)
-            {
-                auto param_data = reinterpret_cast<uintptr_t>(param);
-                auto skill_id = param_data & 0xFFFF;
-                auto pre_key = param_data >> 16;
-                auto &entry = custom_skill_datas[skill_id];
-                entry.predecoded_descriptions[pre_key] = Utils::WStrToStr(s);
-                entry.desc_guard.FinishInit(pre_key);
-            };
-
-            assert((uint32_t)skill_id < 0x10000);
-            auto param = reinterpret_cast<void *>((uint32_t)skill_id | pre_key << 16);
-
-            GW::UI::AsyncDecodeStr(buffer, Callback, param); // This is almost always not async
-
-            // Check if the description was decoded instantly
-            if (desc_guard.IsInit(pre_key))
-            {
-                return &predecoded_descriptions[pre_key];
-            }
-        }
-
-        return nullptr;
-    }
-
-    DescKey CustomSkillData::GetDescKey(bool is_concise, int32_t attribute_lvl) const
-    {
-        auto key = DescKey();
-        key.is_singular0 = GetSkillParam(0).IsSingular(attribute_lvl);
-        key.is_singular1 = GetSkillParam(1).IsSingular(attribute_lvl);
-        key.is_singular2 = GetSkillParam(2).IsSingular(attribute_lvl);
-        key.is_concise = is_concise;
-        key.is_valid = true;
-        key.attribute_lvl = attribute_lvl;
-        return key;
-    }
-
     bool IsNumber(char c)
     {
         return c >= '0' && c <= '9';
@@ -1256,36 +1214,6 @@ namespace HerosInsight
             p--;
         while (start < p && p[-1] != ' ')
             p--;
-    }
-
-    bool TryGetProp(CustomSkillData &custom_sd, std::string_view &range, char *&p, std::string_view name, SkillParam &out)
-    {
-        auto start = (char *)range.data();
-        auto end = start + range.size();
-        auto p_at = p;
-        auto p_after = p;
-        if (Utils::TryRead(name, p_after, end))
-        {
-            PrevWord(start, p);
-            if (*p == '+' || *p == '-')
-                p++;
-            char *q;
-            uint32_t literal = strtol(p, &q, 10);
-            if (p < q)
-            {
-                out = {literal, literal};
-            }
-            else if (Utils::TryReadAfter("<rep=", p, p_at))
-            {
-                auto param_id = std::strtol(p, nullptr, 10);
-                out = custom_sd.GetSkillParam(param_id);
-            }
-            p = p_after;
-            range = std::string_view(p, end - p);
-            return true;
-        }
-        p = p_at;
-        return false;
     }
 
     bool IsWordStart(char *str_start, char *p)
@@ -1487,15 +1415,11 @@ namespace HerosInsight
         {
             SkipWhitespace(p, end);
 
-            if (IsNumber(*p))
+            std::string_view rem{p, (size_t)(end - p)};
+            SkillParam param;
+            if (SkillParam::TryRead(rem, param))
             {
-                uint32_t lo = strtol(p, &p, 10);
-                uint32_t hi = lo;
-                if (Utils::TryRead("...", p, end))
-                {
-                    hi = strtol(p, &p, 10);
-                }
-                auto param = SkillParam(lo, hi);
+                p = (char *)rem.data();
                 lits.push_back(param);
                 tokens.push_back(DescToken::Literal);
                 continue;
@@ -1665,7 +1589,6 @@ namespace HerosInsight
                 MATCH_AND_CONTINUE("steal", DescToken::Steal)
                 MATCH_AND_CONTINUE("stance", DescToken::Stance)
                 MATCH_AND_CONTINUE("signet", DescToken::Signet)
-                MATCH_AND_CONTINUE("skills", DescToken::Skills)
                 MATCH_AND_CONTINUE("shadow", DescToken::Shadow)
                 MATCH_AND_CONTINUE("slower", DescToken::Slower)
                 MATCH_AND_CONTINUE("secondary", DescToken::Secondary)
@@ -1739,10 +1662,9 @@ namespace HerosInsight
             return result;
         };
 
-        auto PushParam = [&](ParsedSkillData::Type ty, bool is_negative = false)
+        auto PushParam = [&](ParsedSkillData::Type ty)
         {
             pd.type = ty;
-            pd.is_negative = is_negative;
             pds.push_back(pd);
         };
 
@@ -1761,6 +1683,7 @@ namespace HerosInsight
         bool has_plus = IsMatch(lit_pos - 1, DescToken::Plus);
         bool has_minus = IsMatch(lit_pos - 1, DescToken::Minus);
         bool has_percent = IsMatch(lit_pos + 1, DescToken::Percent);
+        pd.is_percent = has_percent;
         bool is_less = has_minus;
         bool is_more = has_plus;
         bool is_reduced = false;
@@ -1817,7 +1740,7 @@ namespace HerosInsight
                 i--;
                 if (i >= 0 &&
                     (sentence[i] == DescToken::And ||
-                        sentence[i] == DescToken::Comma))
+                     sentence[i] == DescToken::Comma))
                     i--;
             }
             return any_found;
@@ -1838,63 +1761,72 @@ namespace HerosInsight
 
             if (IsMatch(just_after, DescToken::Faster))
             {
-                if (IsMatch(just_before, DescToken::Recharge) ||
-                    IsListMatch(just_before - 1, {DescToken::Recharge, DescToken::Skills}))
-                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::RechargeTimeMod, true)
+                constexpr std::array<DescToken, 5> allowed = {DescToken::Movement, DescToken::Attack, DescToken::Activate, DescToken::Cast, DescToken::Recharge};
+                if (GetPropsBefore(allowed, [&](DescToken prop)
+                                   {
+                            switch (prop)
+                            {
+                                case DescToken::Movement:
+                                    PushParam(ParsedSkillData::Type::FasterMovement);
+                                    break;
 
-                constexpr std::array<DescToken, 2> allowed = {DescToken::Movement, DescToken::Attack};
-                auto Handler = [&](DescToken prop)
-                {
-                    if (prop == DescToken::Movement)
-                        PushParam(ParsedSkillData::Type::MovementSpeedMod);
-                    else if (prop == DescToken::Attack)
-                        PushParam(ParsedSkillData::Type::AttackTimeMod, true);
-                };
-                if (GetPropsBefore(allowed, Handler))
+                                case DescToken::Attack:
+                                    PushParam(ParsedSkillData::Type::FasterAttacks);
+                                    break;
+
+                                case DescToken::Activate:
+                                case DescToken::Cast:
+                                    PushParam(ParsedSkillData::Type::FasterActivation);
+                                    break;
+
+                                case DescToken::Recharge:
+                                    PushParam(ParsedSkillData::Type::FasterRecharge);
+                                    break;
+                            } }))
                     return;
 
                 if (IsMatch(just_before, DescToken::Expire))
-                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::DurationMod, true)
+                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::ShorterDuration)
             }
 
             if (IsMatch(just_after, DescToken::Slower))
             {
                 if (IsMatch(just_before, DescToken::Recharge) ||
                     IsListMatch(just_before - 1, {DescToken::Recharge, DescToken::Skills}))
-                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::RechargeTimeMod)
+                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::SlowerRecharge)
 
                 if (IsMatch(just_before, DescToken::Movement) ||
                     IsMatch(just_after + 1, DescToken::Movement))
-                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::MovementSpeedMod, true)
+                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::SlowerMovement)
 
                 if (IsMatch(just_before, DescToken::Attack))
-                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::AttackTimeMod)
+                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::SlowerAttacks)
             }
 
             if (IsMatch(just_after, DescToken::Longer))
             {
                 if (IsMatch(just_before, DescToken::Last))
-                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::DurationMod)
+                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::LongerDuration)
             }
 
             if (IsMatch(just_after, DescToken::Damage))
             {
                 if (is_less)
-                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::DamageMod, true)
+                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::LessDamage)
                 else if (is_more)
-                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::DamageMod)
+                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::MoreDamage)
             }
 
             if (IsMatch(just_after, DescToken::Heal))
             {
                 if (is_less)
-                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::HealMod, true)
+                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::LessHealing)
             }
             if (is_reduced)
             {
                 for (int32_t i = just_before; i >= 0; i--)
                 {
-                    IF_MATCH_PUSH_PARAM_AND_RETURN(i, DescToken::Heal, ParsedSkillData::Type::HealMod, true)
+                    IF_MATCH_PUSH_PARAM_AND_RETURN(i, DescToken::Heal, ParsedSkillData::Type::LessHealing)
                 }
             }
         }
@@ -1908,7 +1840,7 @@ namespace HerosInsight
                     IsMatch(just_after, DescToken::Damage))
                 {
                     if (IsMatch(just_after + 1, DescToken::Reduce))
-                        PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::DamageReduction)
+                        PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::LessDamage)
 
                     PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::Damage)
                 }
@@ -1933,19 +1865,15 @@ namespace HerosInsight
 
                 if ((IsMatch(just_before, DescToken::Recharge) && IsMatch(just_after + 1, DescToken::Faster)))
                 {
-                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::RechargeTimeAdd, true)
+                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::FasterRecharge);
                 }
 
                 if (is_more && IsMatch(just_after + 1, DescToken::Recharge))
                 {
-                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::RechargeTimeAdd)
+                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::SlowerRecharge);
                 }
 
-                if ((IsMatch(just_before, DescToken::Activate) && IsMatch(just_after + 1, DescToken::Faster)))
-                {
-                    IF_MATCH_PUSH_PARAM_AND_RETURN(just_before, DescToken::Cast, ParsedSkillData::Type::ActivationTimeAdd, true)
-                }
-                else if (!IsMatch(just_before, DescToken::Max))
+                if (!IsMatch(just_before, DescToken::Max))
                 {
                     FixedArray<ParsedSkillData::Type, 8> salloc;
                     auto buffer = salloc.ref();
@@ -1983,18 +1911,15 @@ namespace HerosInsight
             if (IsMatch(just_after, DescToken::Armor))
             {
                 if (is_less)
-                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::ArmorChange, true)
+                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::ArmorDecrease)
                 else
-                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::ArmorChange)
+                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::ArmorIncrease)
             }
 
             if (IsListMatch(just_after, {DescToken::Max, DescToken::Health}) ||
                 IsListMatch(0, {DescToken::Max, DescToken::Health}))
             {
-                if (is_less || is_reduced)
-                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::MaxHealthAdd, true)
-                else
-                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::MaxHealthAdd)
+                PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::AdditionalHealth)
             }
 
             if (IsMatch(just_after, DescToken::Health))
@@ -2046,11 +1971,11 @@ namespace HerosInsight
                 if (IsMatch(i, DescToken::Damage))
                 {
                     if (is_less || IsMatch(i + 1, DescToken::Reduce))
-                        PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::DamageReduction)
+                        PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::LessDamage)
 
                     for (int32_t j = just_before; j >= 0; j--)
                     {
-                        IF_MATCH_PUSH_PARAM_AND_RETURN(j, DescToken::Absorb, ParsedSkillData::Type::DamageReduction)
+                        IF_MATCH_PUSH_PARAM_AND_RETURN(j, DescToken::Absorb, ParsedSkillData::Type::LessDamage)
                     }
 
                     PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::Damage)
@@ -2063,8 +1988,8 @@ namespace HerosInsight
                     continue;
 
                 if ((IsMatch(i, DescToken::Transfer) ||
-                        IsMatch(i, DescToken::Remove) ||
-                        IsMatch(i, DescToken::Lose)) &&
+                     IsMatch(i, DescToken::Remove) ||
+                     IsMatch(i, DescToken::Lose)) &&
                     !IsMatch(i - 1, DescToken::Whenever))
                 {
                     if (IsMatch(just_after, DescToken::ConditionAndHex) ||
@@ -2081,6 +2006,20 @@ namespace HerosInsight
             }
         }
 
+        if (IsMatch(just_before, DescToken::Activate) ||
+            IsMatch(just_before, DescToken::Cast) ||
+            IsListMatch(just_before - 2, {DescToken::Activate, DescToken::And, DescToken::Recharge}))
+        {
+            if (IsListMatch(just_after, {DescToken::Seconds, DescToken::Faster}))
+            {
+                PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::FasterActivation);
+            }
+            else if (IsListMatch(just_after, {DescToken::Percent, DescToken::Faster}))
+            {
+                PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::FasterActivation);
+            }
+        }
+
         if (is_reduced)
         {
             for (int32_t i = just_before; i > 0; i--)
@@ -2090,10 +2029,7 @@ namespace HerosInsight
 
                 if (IsMatch(i, DescToken::Damage))
                 {
-                    if (has_percent)
-                        PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::DamageMod, true)
-                    else
-                        PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::DamageReduction)
+                    PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::LessDamage)
                 }
             }
         }
@@ -2186,9 +2122,7 @@ namespace HerosInsight
             }
         }
 
-        auto rich_desc = cskill.TryGetDescription(true, -1);
-        assert(rich_desc);
-        auto &desc = rich_desc->str;
+        auto desc = SkillTextProvider::GetInstance(GW::Constants::Language::English).GetGenericDescription(cskill.skill_id, false);
         auto tokenized_desc = TokenizedDesc(desc);
 
         auto tokens = tokenized_desc.tokens;
@@ -2298,10 +2232,11 @@ namespace HerosInsight
         // clang-format on
     }
 
-    void ParsedSkillData::ImGuiRender(int8_t attr_lvl)
+    void ParsedSkillData::ImGuiRender(int8_t attr_lvl, float width, std::span<uint16_t> hl)
     {
         auto str = this->ToStr();
-        ImGui::TextUnformatted(str.data(), str.data() + str.size());
+        // ImGui::TextUnformatted(str.data(), str.data() + str.size());
+        Utils::DrawMultiColoredText(str, 0, width, {}, hl);
         if (damage_type)
         {
             ImGui::SameLine();
@@ -2315,28 +2250,30 @@ namespace HerosInsight
         ImGui::SameLine();
         ImGui::TextUnformatted(": ");
 
-        if (type > ParsedSkillData::Type::MAY_BE_NEGATIVE_AFTER)
+        if (type > ParsedSkillData::Type::DISPLAY_AS_NEGATIVE_START &&
+            type < ParsedSkillData::Type::DISPLAY_AS_NEGATIVE_END)
         {
             ImGui::SameLine();
-            if (is_negative)
-            {
-                ImGui::TextUnformatted("-");
-            }
-            else
-            {
-                ImGui::TextUnformatted("+");
-            }
+            ImGui::TextUnformatted("-");
+        }
+
+        if (type > ParsedSkillData::Type::DISPLAY_AS_POSITIVE_START &&
+            type < ParsedSkillData::Type::DISPLAY_AS_POSITIVE_END)
+        {
+            ImGui::SameLine();
+            ImGui::TextUnformatted("+");
         }
 
         ImGui::SameLine();
         param.ImGuiRender(attr_lvl);
 
-        if (type > ParsedSkillData::Type::PERCENT_START && type < ParsedSkillData::Type::PERCENT_END)
+        if (is_percent)
         {
             ImGui::SameLine();
             ImGui::Text("%%");
         }
-        else if (type > ParsedSkillData::Type::SECONDS_START && type < ParsedSkillData::Type::SECONDS_END)
+        else if (type > ParsedSkillData::Type::SECONDS_START &&
+                 type < ParsedSkillData::Type::SECONDS_END)
         {
             ImGui::SameLine();
             ImGui::Text(" seconds");
@@ -2380,33 +2317,39 @@ namespace HerosInsight
     {
         // clang-format off
         switch (type) {
-            case Type::Duration:          return "Duration (s)";
+            case Type::Duration:          return "Duration";
             case Type::Level:             return "Level";
-            case Type::Disable:           return "Disable (s)";
-            case Type::ArmorChange:       return "Armor";
-            case Type::MovementSpeedMod:  return "Movement speed modifier (%)";
-            case Type::AttackTimeMod:     return "Attack time modifier (%)";
-            case Type::RechargeTimeMod:   return "Recharge time modifier (%)";
-            case Type::RechargeTimeAdd:   return "Recharge time added (s)";
-            case Type::ActivationTimeAdd: return "Activation time added (s)";
-            case Type::DurationMod:       return "Duration modifier (%)";
+            case Type::Disable:           return "Disable";
+            case Type::ArmorIncrease:     return "Armor bonus";
+            case Type::ArmorDecrease:     return "Armor penalty";
+            case Type::FasterMovement:    return "Faster movement";
+            case Type::SlowerMovement:    return "Slower movement";
+            case Type::FasterAttacks:     return "Faster attacks";
+            case Type::SlowerAttacks:     return "Slower attacks";
+            case Type::FasterRecharge:    return "Faster recharge";
+            case Type::SlowerRecharge:    return "Slower recharge";
+            case Type::FasterActivation:  return "Faster activation";
+            case Type::SlowerActivation:  return "Slower activation";
+            case Type::LongerDuration:    return "Longer duration";
+            case Type::ShorterDuration:   return "Shorter duration";
 
             case Type::ConditionsRemoved:   return "Conditions removed";
             case Type::HexesRemoved:        return "Hexes removed";
             case Type::EnchantmentsRemoved: return "Enchantments removed";
 
             case Type::Heal:             return "Healing";
-            case Type::HealMod:          return "Healing modifier (%)";
+            case Type::MoreHealing:      return "More healing";
+            case Type::LessHealing:      return "Less healing";
 
             case Type::Damage:           return "Damage";
-            case Type::DamageReduction:  return "Damage reduction";
-            case Type::DamageMod:        return "Damage modifier (%)";
+            case Type::MoreDamage:       return "More damage";
+            case Type::LessDamage:       return "Less damage";
 
-            case Type::ChanceToBlock:    return "Block chance (%)";
-            case Type::ChanceToFail:     return "Failure chance (%)";
-            case Type::ChanceToMiss:     return "Miss chance (%)";
+            case Type::ChanceToBlock:    return "Block chance";
+            case Type::ChanceToFail:     return "Failure chance";
+            case Type::ChanceToMiss:     return "Miss chance";
 
-            case Type::MaxHealthAdd:     return "Max health";
+            case Type::AdditionalHealth: return "Additional health";
             case Type::HealthRegen:      return "Health regeneration";
             case Type::HealthDegen:      return "Health degeneration";
             case Type::HealthGain:       return "Health gain";
@@ -2442,42 +2385,19 @@ namespace HerosInsight
 
     namespace CustomSkillDataModule
     {
-        bool CustomSkillDataModule::is_initialized = false;
-        bool TryInitialize()
+        void Initialize()
         {
             auto skills = Utils::GetSkillSpan();
             assert(!skills.empty());
 
-            // Ensure the descriptions and names are decoded
-            bool fail = false;
             for (auto &skill : skills)
             {
                 const auto skill_id = skill.skill_id;
-                auto &custom_sd = custom_skill_datas[(uint32_t)skill_id];
+                auto &custom_sd = custom_skill_datas[(size_t)skill_id];
                 custom_sd.skill_id = skill_id;
                 custom_sd.skill = &skill;
-
-                bool ok = custom_sd.TryGetDescription(true, -1) &&
-                          custom_sd.TryGetDescription(false, -1) &&
-                          custom_sd.TryGetName();
-
-                if (!ok)
-                {
-                    fail = true;
-                    continue;
-                }
-            }
-
-            if (fail)
-                return false;
-
-            for (auto &custom_sd : custom_skill_datas)
-            {
                 custom_sd.Init();
             }
-
-            CustomSkillDataModule::is_initialized = true;
-            return true;
         }
 
         CustomSkillData &GetCustomSkillData(GW::Constants::SkillID skill_id)
@@ -2510,8 +2430,8 @@ namespace HerosInsight
                 if (!base_duration.IsNull() &&
                     cskill.skill->type == GW::Constants::SkillType::Attack)
                 {
-                    auto desc = cskill.TryGetPredecodedDescription(cskill.GetDescKey(true, -1));
-                    if (desc->contains("nock"))
+                    auto desc = SkillTextProvider::GetInstance(GW::Constants::Language::English).GetGenericDescription(cskill.skill_id, true);
+                    if (desc.contains("nock"))
                     {
                         return {0, 0};
                     }
@@ -3176,12 +3096,11 @@ namespace HerosInsight
 
                         case GW::Constants::SkillType::Chant:
                         {
-                            auto desc = cskill.TryGetPredecodedDescription(cskill.GetDescKey(true, -1));
-                            assert(desc);
+                            auto desc = SkillTextProvider::GetInstance(GW::Constants::Language::English).GetGenericDescription(skill_id, true);
 
                             effect.location = EffectLocation::Caster;
                             effect.radius = Utils::Range::Earshot;
-                            if (desc->contains("arty members"))
+                            if (desc.contains("arty members"))
                                 effect.mask = EffectMask::PartyMembers;
                             else
                                 effect.mask = EffectMask::Allies;
@@ -3492,115 +3411,9 @@ namespace HerosInsight
         return full_span.subspan(init_count, full_span.size() - init_count);
     }
 
-    std::string *CustomSkillData::TryGetName()
-    {
-        if (name_guard.IsInit())
-            return &name;
-
-        if (name_guard.TryBeginInit())
-        {
-            const auto skill_id = this->skill_id;
-            const auto &skill = *GW::SkillbarMgr::GetSkillConstantData(skill_id);
-            const auto size = 32;
-            wchar_t buffer[size];
-            bool success = GW::UI::UInt32ToEncStr(skill.name, buffer, size);
-            assert(success);
-
-            auto Callback = [](void *param, const wchar_t *s)
-            {
-                auto entry = reinterpret_cast<CustomSkillData *>(param);
-                entry->name = Utils::WStrToStr(s);
-                entry->name_guard.FinishInit();
-            };
-
-            GW::UI::AsyncDecodeStr(buffer, Callback, reinterpret_cast<void *>(this));
-
-            if (name_guard.IsInit())
-                return &name;
-        }
-
-        return nullptr;
-    }
-
-    Utils::RichString *CustomSkillData::TryGetDescription(bool is_concise, int32_t attribute_lvl)
-    {
-        // #ifdef _TIMING
-        //         auto start_timestamp = std::chrono::high_resolution_clock::now();
-        // #endif
-
-        const auto key = GetDescKey(is_concise, attribute_lvl);
-        if (key == last_desc_key)
-        {
-            // We already have the exact description
-            return &last_desc;
-        }
-        if (key == last_concise_key)
-        {
-            // We already have the concise description
-            return &last_concise;
-        }
-
-        auto generic_desc = TryGetPredecodedDescription(key);
-        if (generic_desc)
-        {
-            // The description is decoded but not specialized
-            auto &desc = is_concise ? last_concise : last_desc;
-            auto &last_key = is_concise ? last_concise_key : last_desc_key;
-
-            desc.str.assign(*generic_desc);
-            assert(desc.str.data() != generic_desc->data());
-            desc.color_changes.clear();
-            desc.tooltips.clear();
-            std::string_view replacements[3];
-
-            FixedArray<char, 64> salloc;
-            auto buffer = salloc.ref();
-            for (uint32_t i = 0; i < 3; i++)
-            {
-                auto p = buffer.data_end();
-                auto len = GetSkillParam(i).Print(buffer, attribute_lvl);
-                replacements[i] = std::string_view(p, len);
-            }
-            // Specialize the description
-            Utils::UnrichText(desc.str, desc.color_changes, desc.tooltips, replacements);
-            last_key = key;
-
-            return &desc;
-        }
-
-        // #ifdef _TIMING
-        //         auto end_timestamp = std::chrono::high_resolution_clock::now();
-        //         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_timestamp - start_timestamp).count();
-        //         Utils::FormatToChat(L"TryGetDescription took {} micro s", duration);
-        // #endif
-
-        return nullptr;
-    }
-
     std::string CustomSkillData::ToString() const
     {
-        FixedArray<char, 64> salloc1;
-        auto result = salloc1.ref();
-
-        FixedArray<ParsedSkillData, 3> salloc2, salloc3;
-        auto health_regen = salloc2.ref();
-        auto health_degen = salloc3.ref();
-
-        GetParsedSkillParams(ParsedSkillData::Type::HealthRegen, health_regen);
-        GetParsedSkillParams(ParsedSkillData::Type::HealthDegen, health_degen);
-
-        for (const auto &pp : health_regen)
-        {
-            result.PushFormat("Health regeneration: ");
-            pp.param.Print(result, -1, true);
-        }
-        for (const auto &pp : health_degen)
-        {
-            result.PushFormat("Health degeneration: ");
-            pp.param.Print(result, -1, true);
-        }
-
-        return std::string(result.data(), result.size());
+        return std::format("CustomSkillData[{}]", static_cast<uint32_t>(skill_id));
     }
 
     bool CustomSkillData::IsFlash() const
@@ -3643,9 +3456,9 @@ namespace HerosInsight
             case GW::Constants::SkillID::Volley:
             {
                 EffectTracking::RemoveTrackers(caster_id, [](EffectTracking::EffectTracker &effect)
-                    {
-                        return GW::SkillbarMgr::GetSkillConstantData(effect.skill_id)->type == GW::Constants::SkillType::Preparation; //
-                    });
+                                               {
+                                                   return GW::SkillbarMgr::GetSkillConstantData(effect.skill_id)->type == GW::Constants::SkillType::Preparation; //
+                                               });
             }
         }
 
@@ -3762,6 +3575,11 @@ namespace HerosInsight
     {
     }
 
+    int8_t CustomSkillData::GetUpkeep() const
+    {
+        return IsMaintainedSkill(*this->skill) ? -1 : 0;
+    }
+
     uint8_t CustomSkillData::GetOvercast() const
     {
         if (skill->special & (uint32_t)Utils::SkillSpecialFlags::Overcast)
@@ -3812,15 +3630,17 @@ namespace HerosInsight
         return Utils::Range::Null;
     }
 
-    void CustomSkillData::GetRanges(FixedArrayRef<Utils::Range> out) const
+    void CustomSkillData::GetRanges(std::span<Utils::Range> &out) const
     {
-        bool success = true;
+        size_t len = 0;
+        FixedArrayRef<Utils::Range> builder{out, len};
         if (Utils::IsRangeValue(skill->aoe_range))
-            success &= out.try_push((Utils::Range)skill->aoe_range);
+            builder.push_back((Utils::Range)skill->aoe_range);
         if (Utils::IsRangeValue(skill->const_effect))
-            success &= out.try_push((Utils::Range)skill->const_effect);
+            builder.push_back((Utils::Range)skill->const_effect);
         if (skill->bonusScale0 == skill->bonusScale15 && Utils::IsRangeValue(skill->bonusScale0))
-            success &= out.try_push((Utils::Range)skill->bonusScale0);
+            builder.push_back((Utils::Range)skill->bonusScale0);
+        out = out.subspan(0, len);
     }
 
     uint32_t CustomSkillData::ResolveBaseDuration(CustomAgentData &caster, std::optional<uint8_t> skill_attr_lvl_override) const
@@ -3848,11 +3668,8 @@ namespace HerosInsight
                     if (caster_agent)
                     {
                         uint32_t n_allies = 0;
-                        Utils::ForAlliesInCircle(caster_agent->pos, (float)Utils::Range::Earshot, caster_agent->allegiance,
-                            [&](GW::AgentLiving &agent)
-                            {
-                                n_allies++;
-                            });
+                        Utils::ForAlliesInCircle(caster_agent->pos, (float)Utils::Range::Earshot, caster_agent->allegiance, [&](GW::AgentLiving &agent)
+                                                 { n_allies++; });
                         base_duration = std::min(n_allies * base_duration, 20u);
                     }
                 }
@@ -3988,7 +3805,7 @@ namespace HerosInsight
         return type_str;
     }
 
-    std::string_view CustomSkillData::GetProfessionString()
+    std::string_view CustomSkillData::GetProfessionStr()
     {
         if (profession_str.data() == nullptr)
         {
@@ -3998,7 +3815,7 @@ namespace HerosInsight
         return profession_str;
     }
 
-    std::string_view CustomSkillData::GetCampaignString()
+    std::string_view CustomSkillData::GetCampaignStr()
     {
         if (campaign_str.data() == nullptr)
         {
@@ -4008,7 +3825,7 @@ namespace HerosInsight
         return campaign_str;
     }
 
-    std::string_view CustomSkillData::GetAttributeString()
+    std::string_view CustomSkillData::GetAttributeStr()
     {
         if (attr_str.data() == nullptr)
         {
@@ -4016,90 +3833,6 @@ namespace HerosInsight
         }
 
         return attr_str;
-    }
-
-    std::string_view SkillTagToString(SkillTag tag)
-    {
-        if (tag >= SkillTag::CONTEXT && tag < SkillTag::CONTEXT_END)
-        {
-            auto context = (Utils::SkillContext)((uint32_t)tag - (uint32_t)SkillTag::CONTEXT);
-            return Utils::GetSkillContextString(context);
-        }
-
-        // clang-format off
-        switch (tag) {
-            case SkillTag::Archived:          return "Archived";
-            case SkillTag::EffectOnly:        return "Effect-only";
-            case SkillTag::PvEOnly:           return "PvE-only";
-            case SkillTag::PvPOnly:           return "PvP-only";
-            case SkillTag::PvEVersion:        return "PvE Version";
-            case SkillTag::PvPVersion:        return "PvP Version";
-            case SkillTag::Equipable:         return "Equipable";
-            case SkillTag::Unlocked:          return "Unlocked";
-            case SkillTag::Temporary:         return "Temporary";
-            case SkillTag::Locked:            return "Locked";
-            case SkillTag::DeveloperSkill:    return "Developer Skill";
-            case SkillTag::EnvironmentSkill:  return "Environment Skill";
-            case SkillTag::MonsterSkill:      return "Monster Skill";
-            case SkillTag::SpiritAttack:      return "Spirit Attack";
-            case SkillTag::Maintained:        return "Maintained";
-            case SkillTag::ConditionSource:   return "Condition Source";
-            case SkillTag::ExploitsCorpse:    return "Exploits Corpse";
-            case SkillTag::Consumable:        return "Consumable";
-            case SkillTag::Celestial:         return "Celestial";
-            case SkillTag::Mission:           return "Mission";
-            case SkillTag::Bundle:            return "Bundle";
-        }
-        // clang-format on
-
-        SOFT_ASSERT(false, L"Invalid SkillTag: {}", (uint32_t)tag);
-        return "ERROR";
-    }
-
-    void CustomSkillData::GetTags(FixedArrayRef<SkillTag> out) const
-    {
-        bool success = true;
-
-        auto skill_id_to_check = skill->IsPvP() ? skill->skill_id_pvp : skill->skill_id;
-
-        bool is_equipable = GW::SkillbarMgr::GetIsSkillLearnt(skill->skill_id);
-        bool is_unlocked = GW::SkillbarMgr::GetIsSkillUnlocked(skill_id_to_check);
-        bool is_locked = tags.Unlockable && !is_unlocked;
-
-        // clang-format off
-        if (is_equipable)           success &= out.try_push(SkillTag::Equipable);
-        if (is_unlocked)            success &= out.try_push(SkillTag::Unlocked);
-        if (tags.Temporary)         success &= out.try_push(SkillTag::Temporary);
-        if (is_locked)              success &= out.try_push(SkillTag::Locked);
-
-        if (tags.Archived)          success &= out.try_push(SkillTag::Archived);
-        if (tags.EffectOnly)        success &= out.try_push(SkillTag::EffectOnly);
-        if (tags.PvEOnly)           success &= out.try_push(SkillTag::PvEOnly);
-        if (tags.PvPOnly)           success &= out.try_push(SkillTag::PvPOnly);
-        if (tags.PvEVersion)        success &= out.try_push(SkillTag::PvEVersion);
-        if (tags.PvPVersion)        success &= out.try_push(SkillTag::PvPVersion);
-
-        if (tags.DeveloperSkill)    success &= out.try_push(SkillTag::DeveloperSkill);
-        if (tags.EnvironmentSkill)  success &= out.try_push(SkillTag::EnvironmentSkill);
-        if (tags.MonsterSkill)      success &= out.try_push(SkillTag::MonsterSkill);
-        if (tags.SpiritAttack)      success &= out.try_push(SkillTag::SpiritAttack);
-        
-        if (tags.Maintained)        success &= out.try_push(SkillTag::Maintained);
-        if (tags.ConditionSource)   success &= out.try_push(SkillTag::ConditionSource);
-        if (tags.ExploitsCorpse)    success &= out.try_push(SkillTag::ExploitsCorpse);
-        if (tags.Consumable)        success &= out.try_push(SkillTag::Consumable);
-        if (tags.Celestial)         success &= out.try_push(SkillTag::Celestial);
-        if (tags.Mission)           success &= out.try_push(SkillTag::Mission);
-        if (tags.Bundle)            success &= out.try_push(SkillTag::Bundle);
-        // clang-format on
-
-        if (context != Utils::SkillContext::Null)
-        {
-            auto tag = (SkillTag)((uint32_t)SkillTag::CONTEXT + (uint32_t)context);
-            success &= out.try_push(tag);
-        }
-
-        SOFT_ASSERT(success);
     }
 
     bool StaticSkillEffect::IsAffected(uint32_t caster_id, uint32_t target_id, uint32_t candidate_agent_id) const
@@ -4233,7 +3966,8 @@ namespace HerosInsight
                     tracker.attribute_level = attr_lvl;
 
                     EffectTracking::AddTracker(agent.agent_id, tracker);
-                });
+                }
+            );
         }
         else if (auto removal = std::get_if<RemovalMask>(&skill_id_or_removal))
         {
@@ -4243,7 +3977,8 @@ namespace HerosInsight
                 [&](GW::AgentLiving &agent)
                 {
                     EffectTracking::CondiHexEnchRemoval(agent.agent_id, *removal, count);
-                });
+                }
+            );
         }
         else
         {
@@ -4257,7 +3992,8 @@ namespace HerosInsight
 
         FixedArray<char, 64> salloc;
         auto buffer = salloc.ref();
-        duration_or_count.Print(buffer, -1);
+        buffer.AppendWith([=](auto &dst)
+                          { duration_or_count.Print(-1, dst); });
         auto dur_or_count_string = Utils::StrToWStr(buffer);
 
         if (auto skill_id = std::get_if<GW::Constants::SkillID>(&skill_id_or_removal))
