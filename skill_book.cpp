@@ -827,40 +827,7 @@ namespace HerosInsight::SkillBook
 
             auto filter_task = [this]()
             {
-                // std::bitset<GW::Constants::SkillMax> discard;
                 this->catalog.RunQuery(this->query, this->filtered_skills, hl_data);
-                // RunFilters(parsed_filters, skill_properties, filtered_skills);
-                // TestRunFilters(parsed_filters, filtered_skills);
-                // SiftProps(parsed_filters, skill_properties, filtered_skills, discard);
-
-                // size_t i = 0;
-                // for (auto skill_id_16 : filtered_skills)
-                // {
-                //     // if (cancel_state_update.load() == true)
-                //     // {
-                //     //     cancel_state_update.store(false);
-                //     //     return false;
-                //     // }
-
-                //     // const auto skill_id = static_cast<GW::Constants::SkillID>(skill_id_16);
-                //     // auto &custom_sd = CustomSkillDataModule::GetCustomSkillData(skill_id);
-
-                //     // if (CheckPassesFilters(parsed_filters, custom_sd))
-                //     // {
-                //     //     filtered_skills[i++] = skill_id_16;
-                //     // }
-
-                //     if (!discard[skill_id_16])
-                //     {
-                //         filtered_skills[i++] = skill_id_16;
-                //     }
-
-                //     // if (PassesFilters(skill_properties, skill_id_16, parsed_filters))
-                //     // {
-                //     //     filtered_skills[i++] = skill_id_16;
-                //     // }
-                // }
-                // filtered_skills.resize(i);
 
 #ifdef _TIMING
                 auto timestamp_filtering = GW::MemoryMgr::GetSkillTimer();
