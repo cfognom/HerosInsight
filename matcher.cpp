@@ -165,15 +165,15 @@ namespace HerosInsight
 
     void SkipTags(std::string_view text, size_t &offset)
     {
-        while (offset < text.size() && text[offset] == '<')
-        {
-            std::string_view rem(text.data() + offset, text.size() - offset);
-            RichText::TextTag tag;
-            if (RichText::TextTag::TryRead(rem, tag))
-            {
-                offset = rem.data() - text.data(); // skip tag
-            }
-        }
+#ifdef _DEBUG
+        assert(offset < text.size() && text[offset] == '<');
+#endif
+        RichText::TextTag tag;
+        auto rem = text.substr(offset);
+        while (RichText::TextTag::TryRead(rem, tag))
+            ;
+
+        offset = rem.data() - text.data();
     };
 
     FORCE_INLINE bool TryReadAnyExcept(std::string_view text, size_t &offset, std::string_view except)
@@ -387,7 +387,8 @@ namespace HerosInsight
     {
         size_t size = text.size();
         bool case_insensitive = false;
-        SkipTags(text, offset);
+        if (offset < text.size() && text[offset] == '<')
+            SkipTags(text, offset);
         switch (type)
         {
             case Atom::Type::WordStart:
@@ -532,7 +533,8 @@ namespace HerosInsight
 
     FORCE_INLINE bool Matcher::Atom::TryReadMore(std::string_view text, size_t &offset)
     {
-        SkipTags(text, offset);
+        if (offset < text.size() && text[offset] == '<')
+            SkipTags(text, offset);
         switch (type)
         {
             case Atom::Type::ZeroOrMoreExcept:
