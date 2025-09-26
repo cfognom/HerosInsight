@@ -117,7 +117,7 @@ namespace HerosInsight::RichText
         while (!rem.empty())
         {
             TextTag &tag = write_tags ? only_tags[tag_count] : dummy;
-            auto tag_str = FindTextTag(rem, tag);
+            auto tag_str = TextTag::Find(rem, tag);
             bool has_tag = tag_str.data() != nullptr;
 
             size_t copy_count = has_tag ? tag_str.data() - rem.data() : rem.size();
@@ -137,13 +137,13 @@ namespace HerosInsight::RichText
                     tag.offset = write_offset;
                 }
 
-                if (write_text && !tag.IsZeroWidth())
-                {
-                    // Add placeholder char to mark a visible tag
-                    assert(write_offset < only_text.size());
-                    only_text[write_offset] = TextTag::TAG_MARKER_CHAR;
-                    ++write_offset;
-                }
+                // if (write_text && !tag.IsZeroWidth())
+                // {
+                //     // Add placeholder char to mark a visible tag
+                //     assert(write_offset < only_text.size());
+                //     only_text[write_offset] = TextTag::TAG_MARKER_CHAR;
+                //     ++write_offset;
+                // }
             }
 
             rem.remove_prefix(copy_count + tag_str.size());
@@ -243,7 +243,7 @@ namespace HerosInsight::RichText
         {
             TextTag tag;
             auto rem = text.substr(i);
-            bool has_tag = i < text.size() && text[i] == '<' && TryReadTextTag(rem, tag);
+            bool has_tag = i < text.size() && text[i] == '<' && TextTag::TryRead(rem, tag);
             bool is_hl_change = i >= i_hl_change;
             bool is_new_line = i < text.size() && text[i] == '\n';
             bool is_new_word = i > 0 && i < text.size() && text[i - 1] == ' ' && text[i] != ' ';
@@ -629,7 +629,7 @@ namespace HerosInsight::RichText
 
             text = text.substr(potential_tag);
             auto start = text.data();
-            if (TryReadTextTag(text, out))
+            if (TextTag::TryRead(text, out))
             {
                 return std::string_view(start, text.data() - start);
             }

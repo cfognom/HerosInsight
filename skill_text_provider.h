@@ -13,8 +13,8 @@ namespace HerosInsight
         bool IsReady() const;
         std::string_view GetName(GW::Constants::SkillID skill_id);
         IndexedStringArena<char> &GetNames();
-        RichText::RichText GetGenericDescription(GW::Constants::SkillID skill_id, bool is_concise);
-        void MakeDescription(GW::Constants::SkillID skill_id, bool is_concise, int8_t attr_lvl, RichText::RichText &dst);
+        std::string_view GetGenericDescription(GW::Constants::SkillID skill_id, bool is_concise);
+        void MakeDescription(GW::Constants::SkillID skill_id, bool is_concise, int8_t attr_lvl, std::span<char> &dst);
         static void SkillDescriptionToEncStr(const GW::Skill &skill, bool concise, int32_t attr_lvl, std::span<wchar_t> &dst);
 
         SkillTextProvider(GW::Constants::Language language);
@@ -33,8 +33,7 @@ namespace HerosInsight
                 replacement.copy(this->replacement, replacement.size());
 
                 // Zero the remaining bytes (if any)
-                std::memset(this->replacement + replacement_size, 0,
-                    sizeof(this->replacement) - replacement_size);
+                std::memset(this->replacement + replacement_size, 0, sizeof(this->replacement) - replacement_size);
             }
         };
 

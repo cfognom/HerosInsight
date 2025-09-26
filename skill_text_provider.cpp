@@ -98,35 +98,18 @@ namespace HerosInsight
         ConciseCatcher conc_catchers[2];
         bool is_initializing = false;
 
-        static void SpecializeGenericDescription(RichText::RichText generic_desc, std::span<SkillTextProvider::Modification> spec_kit, RichText::RichText &build_site)
+        static void SpecializeGenericDescription(std::string_view generic_desc, std::span<SkillTextProvider::Modification> spec_kit, std::span<char> &dst)
         {
-            // Copy over all tags, we adjust the offsets later
-            assert(generic_desc.tags.size() <= build_site.tags.size());
-            std::memcpy(build_site.tags.data(), generic_desc.tags.data(), generic_desc.tags.size());
-            build_site.tags = std::span<RichText::TextTag>(build_site.tags.data(), generic_desc.tags.size());
-
             size_t i_tag = 0;
             size_t i_src = 0;
             size_t i_dst = 0;
             auto CopyOverUntil = [&](size_t until)
             {
                 size_t copy_size = until - i_src;
-                assert(i_dst + copy_size <= build_site.text.size());
-                std::memcpy(&build_site.text[i_dst], &generic_desc.text[i_src], copy_size);
+                assert(i_dst + copy_size <= dst.size());
+                std::memcpy(&dst[i_dst], &generic_desc[i_src], copy_size);
                 i_src += copy_size;
                 i_dst += copy_size;
-
-                // Adjust tag offsets
-                while (i_tag < build_site.tags.size())
-                {
-                    auto &tag = build_site.tags[i_tag];
-                    if (tag.offset >= until)
-                        break;
-
-                    auto unalignment = i_dst - i_src;
-                    tag.offset += unalignment;
-                    i_tag++;
-                }
             };
             for (auto &mod : spec_kit)
             {
@@ -134,22 +117,21 @@ namespace HerosInsight
                 i_src += mod.size;
                 if (mod.replacement_size > 0)
                 {
-                    std::memcpy(&build_site.text[i_dst], mod.replacement, mod.replacement_size);
+                    std::memcpy(&dst[i_dst], mod.replacement, mod.replacement_size);
                     i_dst += mod.replacement_size;
                 }
             }
-            CopyOverUntil(generic_desc.text.size());
-            build_site.text = std::span<char>(build_site.text.data(), i_dst);
+            CopyOverUntil(generic_desc.size());
+            dst = std::span<char>(dst.data(), i_dst);
         }
 
-        static void ExtractParams(std::span<char> &desc, bool is_generic, IndexedStringArena<ParamSpan> &param_spans, std::span<RichText::TextTag> tags)
+        static void ExtractParams(std::span<char> &desc, bool is_generic, IndexedStringArena<ParamSpan> &param_spans)
         {
             bool is_param = false;
             double param_id;
             uint16_t param_str_pos;
             size_t i_dst = 0;
             size_t i_src = 0;
-            auto tag_it = tags.begin();
             while (i_src < desc.size())
             {
                 auto rem = std::string_view(desc.subspan(i_src));
@@ -181,13 +163,6 @@ namespace HerosInsight
 
                     ++i_dst;
                     ++i_src;
-                }
-
-                if (tag_it != tags.end() && tag_it->offset == i_src)
-                {
-                    // When we extract a param, we need to adjust the tag offsets
-                    tag_it->offset = i_dst;
-                    ++tag_it;
                 }
             }
             desc = std::span<char>(desc.data(), i_dst);
@@ -221,17 +196,16 @@ namespace HerosInsight
                 affected_attr_lvls[attr_index] = true;
             }
 
-            auto text_dst_ptr = is_generic ? &provider.generic_descriptions.text : &decode.build_site;
-            auto tags_dst_ptr = is_generic ? &provider.generic_descriptions.tags : nullptr;
+            auto text_dst_ptr = is_generic ? &provider.generic_descriptions : &decode.build_site;
 
             text_dst_ptr->BeginWrite();
             if (is_generic)
             {
                 decode.param_spans.BeginWrite();
-                tags_dst_ptr->BeginWrite();
             }
 
-            text_dst_ptr->AppendWriteBuffer(1024,
+            text_dst_ptr->AppendWriteBuffer(
+                1024,
                 [&](std::span<char> &text_buf)
                 {
                     if (skill_id_16 == (uint16_t)GW::Constants::SkillID::Power_Block)
@@ -239,28 +213,15 @@ namespace HerosInsight
                         assert(true);
                     }
                     Utils::WStrToStr(wstr, text_buf);
-                    auto ExtractTags = [&](std::span<RichText::TextTag> &tags_buf)
-                    {
-                        RichText::ExtractTags(std::string_view(text_buf), text_buf, tags_buf);
-                        ExtractParams(text_buf, is_generic, decode.param_spans, tags_buf);
-                    };
-                    if (is_generic)
-                    {
-                        tags_dst_ptr->AppendWriteBuffer(64, ExtractTags);
-                    }
-                    else
-                    {
-                        std::span<RichText::TextTag> tags_span{};
-                        ExtractTags(tags_span);
-                    }
-                });
+                    ExtractParams(text_buf, is_generic, decode.param_spans);
+                }
+            );
 
             if (is_generic)
             {
                 auto dst_index = GetGenericIndex(skill_id_16, is_concise);
                 decode.param_spans.EndWrite(dst_index);
                 text_dst_ptr->EndWrite(dst_index);
-                tags_dst_ptr->EndWrite(dst_index);
             }
             else
             {
@@ -425,7 +386,7 @@ namespace HerosInsight
         {
             auto gen_index = GetGenericIndex(skill_id, is_concise);
             auto &skill = *GW::SkillbarMgr::GetSkillConstantData(static_cast<GW::Constants::SkillID>(skill_id));
-            auto generic_str = std::string_view(provider->generic_descriptions.text.GetIndexed(gen_index));
+            auto generic_str = std::string_view(provider->generic_descriptions.GetIndexed(gen_index));
             for (int8_t attr_lvl = 0; attr_lvl <= 21; ++attr_lvl)
             {
                 auto index = GetGenericAttrIndex(skill_id, is_concise, attr_lvl);
@@ -450,7 +411,8 @@ namespace HerosInsight
                             provider->spec_kits.emplace_back(
                                 param_span.position,
                                 param_span.size,
-                                std::string_view(buffer, str.size()));
+                                std::string_view(buffer, str.size())
+                            );
                             i_gen += param_span.size;
                             ++i_param_span;
                             continue;
@@ -545,27 +507,22 @@ namespace HerosInsight
         return this->names;
     }
 
-    RichText::RichText SkillTextProvider::GetGenericDescription(GW::Constants::SkillID skill_id, bool is_concise)
+    std::string_view SkillTextProvider::GetGenericDescription(GW::Constants::SkillID skill_id, bool is_concise)
     {
         assert(this->IsReady());
         auto index = GetGenericIndex(static_cast<size_t>(skill_id), is_concise);
-        return this->generic_descriptions.GetIndexed(index);
+        return std::string_view(this->generic_descriptions.GetIndexed(index));
     }
 
-    void SkillTextProvider::MakeDescription(GW::Constants::SkillID skill_id, bool is_concise, int8_t attr_lvl, RichText::RichText &dst)
+    void SkillTextProvider::MakeDescription(GW::Constants::SkillID skill_id, bool is_concise, int8_t attr_lvl, std::span<char> &dst)
     {
         auto generic_desc = GetGenericDescription(skill_id, is_concise);
         if (attr_lvl == -1)
         {
-            size_t copy_size = generic_desc.text.size();
-            assert(copy_size <= dst.text.size());
-            std::memcpy(dst.text.data(), generic_desc.text.data(), copy_size);
-            dst.text = std::span<char>(dst.text.data(), copy_size);
-
-            copy_size = generic_desc.tags.size();
-            assert(copy_size <= dst.tags.size());
-            std::memcpy(dst.tags.data(), generic_desc.tags.data(), copy_size);
-            dst.tags = std::span<RichText::TextTag>(dst.tags.data(), copy_size);
+            size_t copy_size = generic_desc.size();
+            assert(copy_size <= dst.size());
+            std::memcpy(dst.data(), generic_desc.data(), copy_size);
+            dst = std::span<char>(dst.data(), copy_size);
             return;
         }
 
@@ -696,7 +653,8 @@ From GWCA/TB++ discord
                 assert(success);
                 auto len = wcslen(dst.data());
                 dst = dst.subspan(0, len);
-            });
+            }
+        );
 
         bool has_attribute = attr_lvl != -1;
         constexpr uint32_t MAX_VALUE = 0x8000 - 0x100 - 1;

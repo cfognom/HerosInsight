@@ -169,7 +169,7 @@ namespace HerosInsight
         {
             std::string_view rem(text.data() + offset, text.size() - offset);
             RichText::TextTag tag;
-            if (RichText::TryReadTextTag(rem, tag))
+            if (RichText::TextTag::TryRead(rem, tag))
             {
                 offset = rem.data() - text.data(); // skip tag
             }
@@ -233,8 +233,7 @@ namespace HerosInsight
                 case Atom::Type::String:
                 {
                     auto req_str = std::get<std::string_view>(atom.value);
-                    auto it = search(text.begin() + offset, text.end(), req_str.begin(),
-                        req_str.end(), CharCompare);
+                    auto it = search(text.begin() + offset, text.end(), req_str.begin(), req_str.end(), CharCompare);
 
                     if (it == text.end())
                         return false;

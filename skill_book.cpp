@@ -652,21 +652,19 @@ namespace HerosInsight::SkillBook
                     auto skill_id = static_cast<GW::Constants::SkillID>(i);
                     auto &cskill = CustomSkillDataModule::GetCustomSkillData(skill_id);
                     auto attr_lvl = ResolveAttribute(cskill.attribute);
-                    desc.text.BeginWrite();
-                    desc.tags.BeginWrite();
-                    desc.text.AppendWriteBuffer(512, [&](std::span<char> &text_span)
-                                                { desc.tags.AppendWriteBuffer(64, [&](std::span<RichText::TextTag> &tags_span)
-                                                                              {
-                                    RichText::RichText rt{text_span, tags_span};
-                                    text_provider.MakeDescription(skill_id, is_concise, attr_lvl, rt);
-                                    text_span = rt.text;
-                                    tags_span = rt.tags; }); });
-                    desc.text.EndWrite(i);
-                    desc.tags.EndWrite(i);
+                    desc.BeginWrite();
+                    desc.AppendWriteBuffer(
+                        512,
+                        [&](std::span<char> &buffer)
+                        {
+                            text_provider.MakeDescription(skill_id, is_concise, attr_lvl, buffer);
+                        }
+                    );
+                    desc.EndWrite(i);
                 }
                 desc.StoreCapacityHint(id);
                 auto prop_id = is_concise ? SkillTextPropertyID::Concise : SkillTextPropertyID::Description;
-                catalog.SetPropertyPtr(prop_id, &desc.text);
+                catalog.SetPropertyPtr(prop_id, &desc);
             }
         }
 
@@ -1704,18 +1702,20 @@ namespace HerosInsight::SkillBook
         auto value = static_cast<double>(std::invoke(getter, cskill));      \
         if (value != 0.0)                                                   \
         {                                                                   \
-            dst.text.AppendWriteBuffer(32, DoubleWriter{value});            \
+            dst.AppendWriteBuffer(32, DoubleWriter{value});                 \
             if (icon_id.has_value())                                        \
                 dst.PushImageTag(icon_id.value());                          \
         }                                                                   \
     }                                                                       \
     else                                                                    \
     {                                                                       \
-        dst.text.append_range(std::invoke(getter, cskill));                 \
+        dst.append_range(std::invoke(getter, cskill));                      \
     }
 
-        FetchX(prop_id, [getter, icon_id](RichText::RichTextArena &dst, CustomSkillData &cskill)
-               {
+        FetchX(
+            prop_id,
+            [getter, icon_id](RichText::RichTextArena &dst, CustomSkillData &cskill)
+            {
                 // Try const-qualified call first
                 if constexpr (std::is_invocable_v<MemPtr, const CustomSkillData &>)
                 {
@@ -1727,7 +1727,9 @@ namespace HerosInsight::SkillBook
                     // Non-const member function
                     using Ret = std::invoke_result_t<MemPtr, CustomSkillData &>;
                     ACTUAL_CODE
-                } });
+                }
+            }
+        );
     }
 
     void FetchTags()
@@ -1794,10 +1796,10 @@ namespace HerosInsight::SkillBook
                 if (tags.Bundle)           PushTag("Bundle");
                 // clang-format on
 
-                if (dst.text.GetWrittenSize() > 0)
+                if (dst.GetWrittenSize() > 0)
                 {
                     // Cut off the last ", "
-                    dst.text.resize(dst.text.size() - 2);
+                    dst.resize(dst.size() - 2);
                 }
             }
         );
@@ -1834,17 +1836,12 @@ namespace HerosInsight::SkillBook
             if (frac_tag.has_value())
             {
                 if (value_int > 0.f)
-                    dst.text.AppendWriteBuffer(32, DoubleWriter{value_int});
-                dst.PushTag(
-                    RichText::TextTag{
-                        .type = RichText::TextTag::Type::Frac,
-                        .frac_tag = frac_tag.value(),
-                    }
-                );
+                    dst.AppendWriteBuffer(32, DoubleWriter{value_int});
+                dst.PushTag(RichText::TextTag(frac_tag.value()));
             }
             else
             {
-                dst.text.AppendWriteBuffer(32, DoubleWriter{value});
+                dst.AppendWriteBuffer(32, DoubleWriter{value});
             }
         };
 
@@ -1859,16 +1856,11 @@ namespace HerosInsight::SkillBook
                 uint16_t adrenaline_rem = adrenaline % 25;
                 if (adrenaline_div > 0)
                 {
-                    dst.text.AppendWriteBuffer(32, DoubleWriter{(double)adrenaline_div});
+                    dst.AppendWriteBuffer(32, DoubleWriter{(double)adrenaline_div});
                 }
                 if (adrenaline_rem > 0)
                 {
-                    dst.PushTag(
-                        RichText::TextTag{
-                            .type = RichText::TextTag::Type::Frac,
-                            .frac_tag = {adrenaline_rem, 25},
-                        }
-                    );
+                    dst.PushTag(RichText::TextTag(RichText::FracTag{adrenaline_rem, 25}));
                 }
                 dst.PushImageTag(RichText::DefaultTextImageProvider::Adrenaline); }
         );
@@ -1913,11 +1905,11 @@ namespace HerosInsight::SkillBook
                 cskill.GetRanges(ranges);
                 for (auto range : ranges)
                 {
-                    dst.text.AppendWriteBuffer(32, DoubleWriter{static_cast<double>(range)});
+                    dst.AppendWriteBuffer(32, DoubleWriter{static_cast<double>(range)});
                     auto range_name = Utils::GetRangeStr(range);
                     if (range_name)
                     {
-                        std::format_to(std::back_inserter(dst.text), std::string_view(" ({})"), range_name.value());
+                        std::format_to(std::back_inserter(dst), std::string_view(" ({})"), range_name.value());
                     }
                 }
             }

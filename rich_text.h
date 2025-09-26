@@ -37,8 +37,6 @@ namespace HerosInsight::RichText
 
     struct TextTag
     {
-        constexpr static char TAG_MARKER_CHAR = 0x1a; // Used to mark the positions of non-zero-width tags in the text
-
         enum struct Type : uint8_t
         {
             Color,
@@ -46,6 +44,12 @@ namespace HerosInsight::RichText
             Image,
             Frac,
         };
+
+        TextTag() = default;
+        TextTag(ColorTag color_tag) : type(Type::Color), color_tag(color_tag) {};
+        TextTag(TooltipTag tooltip_tag) : type(Type::Tooltip), tooltip_tag(tooltip_tag) {};
+        TextTag(ImageTag image_tag) : type(Type::Image), image_tag(image_tag) {};
+        TextTag(FracTag frac_tag) : type(Type::Frac), frac_tag(frac_tag) {};
 
         Type type;
         uint8_t _padding{};
@@ -138,132 +142,41 @@ namespace HerosInsight::RichText
         float CalcWidth(TextImageProvider *image_provider, TextFracProvider *frac_provider) const;
     };
 
-    struct RichText
-    {
-        std::span<char> text;
-        std::span<TextTag> tags;
-
-        std::string_view Text() const { return std::string_view(text); }
-    };
-
     void ExtractTags(std::string_view text_with_tags, std::span<char> &only_text, std::span<TextTag> &only_tags);
 
-    struct RichTextArena
+    struct RichTextArena : public IndexedStringArena<char>
     {
-        IndexedStringArena<char> text;
-        IndexedStringArena<TextTag> tags;
-
-        void Reset()
-        {
-            text.Reset();
-            tags.Reset();
-        }
-
-        void ReserveFromHint(const std::string &id)
-        {
-            text.ReserveFromHint(id + "_text");
-            tags.ReserveFromHint(id + "_tags");
-        }
-
-        void StoreCapacityHint(const std::string &id)
-        {
-            text.StoreCapacityHint(id + "_text");
-            tags.StoreCapacityHint(id + "_tags");
-        }
-
-        void BeginWrite()
-        {
-            text.BeginWrite();
-            tags.BeginWrite();
-        }
-
-        void EndWrite(size_t index)
-        {
-            text.EndWrite(index);
-            tags.EndWrite(index);
-        }
-
-        RichText GetIndexed(size_t index)
-        {
-            return {
-                text.GetIndexed(index),
-                tags.GetIndexed(index)
-            };
-        }
-
-        template <class Writer>
-            requires std::invocable<Writer, std::span<char> &, std::span<TextTag> &>
-        void AppendWriteBuffers(Writer &&writer)
-        {
-            this->text.AppendWriteBuffer(
-                1024,
-                [&](std::span<char> &text_span)
-                {
-                    this->tags.AppendWriteBuffer(
-                        64,
-                        [&](std::span<TextTag> &tags_span)
-                        {
-                            writer(text_span, tags_span);
-                        }
-                    );
-                }
-            );
-        }
-
-        void PushRichText(std::string_view text_with_tags)
-        {
-            this->AppendWriteBuffers(
-                [&](std::span<char> &text_span, std::span<TextTag> &tags_span)
-                {
-                    ExtractTags(text_with_tags, text_span, tags_span);
-                }
-            );
-        }
-
         void PushText(std::string_view text)
         {
-            this->text.append_range(text);
+            this->append_range(text);
         }
 
         void PushTag(TextTag tag)
         {
-            tag.offset = this->text.GetWrittenSize();
-            if (!tag.IsZeroWidth())
-            {
-                this->text.push_back(TextTag::TAG_MARKER_CHAR);
-            }
-            this->tags.push_back(tag);
+            this->AppendWriteBuffer(
+                64,
+                [&](std::span<char> &out)
+                {
+                    tag.ToChars(out);
+                }
+            );
         }
 
         void PushColorTag(ImU32 color)
         {
-            this->PushTag(
-                TextTag{
-                    .type = TextTag::Type::Color,
-                    .color_tag = {color}
-                }
-            );
+            this->PushTag(TextTag(ColorTag{color}));
         }
 
         void PushImageTag(uint32_t image_id)
         {
-            PushTag(
-                TextTag{
-                    .type = TextTag::Type::Image,
-                    .image_tag = {image_id}
-                }
-            );
+            PushTag(TextTag(ImageTag{image_id}));
         }
 
         void PushColoredText(ImU32 color, std::string_view text)
         {
-            TextTag tag;
-            tag.type = TextTag::Type::Color;
-            tag.color_tag = {color};
-            this->PushTag(tag);
+            this->PushTag(TextTag(ColorTag{color}));
             this->PushText(text);
-            tag.color_tag = {0};
-            this->PushTag(tag);
+            this->PushTag(TextTag(ColorTag{NULL}));
         }
     };
 

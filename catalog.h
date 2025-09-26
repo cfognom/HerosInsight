@@ -162,7 +162,7 @@ namespace HerosInsight
                     {
                         for (size_t i_bundle = 0; i_bundle < prop_bundle_names.SpanCount(); ++i_bundle)
                         {
-                            auto str = prop_bundle_names.Get(i_bundle);
+                            auto str = std::string_view(prop_bundle_names.Get(i_bundle));
                             auto &hl = hl_data.GetBundleHL(i_bundle);
                             bool is_match = filter.matcher.Matches(str, &hl);
                             if (is_match)
@@ -207,7 +207,7 @@ namespace HerosInsight
                         if (!span_ids[span_id])
                             continue;
 
-                        auto str = prop.Get(span_id);
+                        auto str = std::string_view(prop.Get(span_id));
                         auto &hl = hl_data.GetPropHL(i_prop, span_id);
                         bool is_match = filter.matcher.Matches(str, &hl);
 

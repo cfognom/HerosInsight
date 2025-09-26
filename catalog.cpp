@@ -60,7 +60,7 @@ namespace HerosInsight
             size_t best_match_cost = std::numeric_limits<size_t>::max();
             for (size_t i = 0; i < targets.SpanCount(); ++i)
             {
-                auto target = targets.Get(i);
+                auto target = std::string_view(targets.Get(i));
                 bool match = matcher.Matches(target, nullptr);
                 if (match)
                 {
