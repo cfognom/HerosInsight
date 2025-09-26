@@ -3,17 +3,18 @@
 #include <variant>
 
 #include <imgui.h>
+#include <string_arena.h>
 
 namespace HerosInsight::RichText
 {
     struct ColorTag
     {
-        ImU32 color = 0; // 0 = pop color
+        ImU32 color; // 0 = pop color
     };
 
     struct TooltipTag
     {
-        int32_t id = -1; // -1 = close tooltip
+        int32_t id; // -1 = close tooltip
     };
 
     struct ImageTag
@@ -34,7 +35,38 @@ namespace HerosInsight::RichText
         static bool TryRead(std::string_view &remaining, FracTag &out);
     };
 
-    using TextTag = std::variant<ColorTag, TooltipTag, ImageTag, FracTag>;
+    struct TextTag
+    {
+        constexpr static char TAG_MARKER_CHAR = 0x1a; // Used to mark the positions of non-zero-width tags in the text
+
+        enum struct Type : uint8_t
+        {
+            Color,
+            Tooltip,
+            Image,
+            Frac,
+        };
+
+        Type type;
+        uint8_t _padding{};
+        uint16_t offset;
+
+        union
+        {
+            ColorTag color_tag;
+            TooltipTag tooltip_tag;
+            ImageTag image_tag;
+            FracTag frac_tag;
+        };
+
+        bool IsZeroWidth() const
+        {
+            return type == Type::Color ||
+                   type == Type::Tooltip;
+        }
+    };
+
+    // using TextTag = std::variant<ColorTag, TooltipTag, ImageTag, FracTag>;
     bool TryReadTextTag(std::string_view &remaining, TextTag &out);
     std::string_view FindTextTag(std::string_view text, TextTag &out);
 
@@ -50,7 +82,7 @@ namespace HerosInsight::RichText
     class DefaultTextImageProvider : public TextImageProvider
     {
     public:
-        enum Id : size_t
+        enum Id : uint32_t
         {
             Upkeep,
             EnergyOrb,
@@ -106,8 +138,134 @@ namespace HerosInsight::RichText
         float CalcWidth(TextImageProvider *image_provider, TextFracProvider *frac_provider) const;
     };
 
-    bool TryReadTextTag(std::string_view &remaining, TextTag &out);
-    std::string_view FindTextTag(std::string_view text, TextTag &out);
+    struct RichText
+    {
+        std::span<char> text;
+        std::span<TextTag> tags;
+
+        std::string_view Text() const { return std::string_view(text); }
+    };
+
+    void ExtractTags(std::string_view text_with_tags, std::span<char> &only_text, std::span<TextTag> &only_tags);
+
+    struct RichTextArena
+    {
+        IndexedStringArena<char> text;
+        IndexedStringArena<TextTag> tags;
+
+        void Reset()
+        {
+            text.Reset();
+            tags.Reset();
+        }
+
+        void ReserveFromHint(const std::string &id)
+        {
+            text.ReserveFromHint(id + "_text");
+            tags.ReserveFromHint(id + "_tags");
+        }
+
+        void StoreCapacityHint(const std::string &id)
+        {
+            text.StoreCapacityHint(id + "_text");
+            tags.StoreCapacityHint(id + "_tags");
+        }
+
+        void BeginWrite()
+        {
+            text.BeginWrite();
+            tags.BeginWrite();
+        }
+
+        void EndWrite(size_t index)
+        {
+            text.EndWrite(index);
+            tags.EndWrite(index);
+        }
+
+        RichText GetIndexed(size_t index)
+        {
+            return {
+                text.GetIndexed(index),
+                tags.GetIndexed(index)
+            };
+        }
+
+        template <class Writer>
+            requires std::invocable<Writer, std::span<char> &, std::span<TextTag> &>
+        void AppendWriteBuffers(Writer &&writer)
+        {
+            this->text.AppendWriteBuffer(
+                1024,
+                [&](std::span<char> &text_span)
+                {
+                    this->tags.AppendWriteBuffer(
+                        64,
+                        [&](std::span<TextTag> &tags_span)
+                        {
+                            writer(text_span, tags_span);
+                        }
+                    );
+                }
+            );
+        }
+
+        void PushRichText(std::string_view text_with_tags)
+        {
+            this->AppendWriteBuffers(
+                [&](std::span<char> &text_span, std::span<TextTag> &tags_span)
+                {
+                    ExtractTags(text_with_tags, text_span, tags_span);
+                }
+            );
+        }
+
+        void PushText(std::string_view text)
+        {
+            this->text.append_range(text);
+        }
+
+        void PushTag(TextTag tag)
+        {
+            tag.offset = this->text.GetWrittenSize();
+            if (!tag.IsZeroWidth())
+            {
+                this->text.push_back(TextTag::TAG_MARKER_CHAR);
+            }
+            this->tags.push_back(tag);
+        }
+
+        void PushColorTag(ImU32 color)
+        {
+            this->PushTag(
+                TextTag{
+                    .type = TextTag::Type::Color,
+                    .color_tag = {color}
+                }
+            );
+        }
+
+        void PushImageTag(uint32_t image_id)
+        {
+            PushTag(
+                TextTag{
+                    .type = TextTag::Type::Image,
+                    .image_tag = {image_id}
+                }
+            );
+        }
+
+        void PushColoredText(ImU32 color, std::string_view text)
+        {
+            TextTag tag;
+            tag.type = TextTag::Type::Color;
+            tag.color_tag = {color};
+            this->PushTag(tag);
+            this->PushText(text);
+            tag.color_tag = {0};
+            this->PushTag(tag);
+        }
+    };
 
     struct Drawer
     {

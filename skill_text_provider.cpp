@@ -26,48 +26,61 @@ namespace HerosInsight
         return GW::Constants::SkillMax * (attr_lvl * 2 + is_concise) + skill_id;
     }
 
+    // The text formatting of descriptions changes slightly depending on the skill parameters.
+    // For example "1 strike" or "2 strikes". Note the added 's' at the end.
+    // This function calculates the format ID.
+    // Returns a number in the range [0, 7].
+    uint8_t CalcDescFormatID(size_t skill_id, bool is_concise, int32_t attr_lvl)
+    {
+        auto &skill = *GW::SkillbarMgr::GetSkillConstantData(static_cast<GW::Constants::SkillID>(skill_id));
+        uint8_t format_id = 0;
+        for (size_t i = 0; i < 3; ++i)
+        {
+            auto is_singular = GetSkillParam(skill, i).IsSingular(attr_lvl);
+            format_id |= is_singular << i;
+        }
+        return format_id;
+    }
+
 #ifdef _DEBUG
     // If we are always in gamethread, we dont need any synchronization
-#define CHECK_THREAD assert(GW::GameThread::IsInGameThread())
+#define CHECK_THREAD assert(GW::Render::GetIsInRenderLoop())
 #else
 #define CHECK_THREAD ((void)0)
 #endif
 
     struct SkillTextProvider::DecodeProcess
     {
-        struct PerConc
+        struct ConciseCatcher
         {
-            struct PerSkill
+            struct SkillCatcher
             {
-                struct PerAttr
+                struct FormatCatcher
                 {
-                    int8_t attr_lvl;
-                    int8_t array_index;
+                    uint8_t format_id; // Specific decode processes target these values for their param ptr. From it they can know the format_id, skill_id, and conciseness by walking up the hierarchy.
 
-                    PerAttr(int8_t array_index) : attr_lvl(-2), array_index(array_index) {}
-
-                    PerSkill &GetParent()
+                    SkillCatcher &GetParent()
                     {
-                        auto data_ptr = (uintptr_t)(this - array_index);
-                        return *(PerSkill *)(data_ptr - offsetof(PerSkill, data));
+                        auto format_catchers_ptr = (uintptr_t)(this - format_id);
+                        return *(SkillCatcher *)(format_catchers_ptr - offsetof(SkillCatcher, format_catchers));
                     }
                 };
                 uint16_t skill_id_16;
-                PerAttr data[8]{0, 1, 2, 3, 4, 5, 6, 7};
+                FormatCatcher format_catchers[8];
 
-                PerConc &GetParent()
+                ConciseCatcher &GetParent()
                 {
-                    auto data_ptr = (uintptr_t)(this - skill_id_16);
-                    return *(PerConc *)(data_ptr - offsetof(PerConc, data));
+                    auto skill_catchers_ptr = (uintptr_t)(this - skill_id_16);
+                    return *(ConciseCatcher *)(skill_catchers_ptr - offsetof(ConciseCatcher, skill_catchers));
                 }
             };
             bool is_concise;
-            PerSkill data[GW::Constants::SkillMax];
+            SkillCatcher skill_catchers[GW::Constants::SkillMax];
 
             DecodeProcess &GetParent()
             {
                 auto data_ptr = (uintptr_t)(this - is_concise);
-                return *(DecodeProcess *)(data_ptr - offsetof(DecodeProcess, data));
+                return *(DecodeProcess *)(data_ptr - offsetof(DecodeProcess, conc_catchers));
             }
         };
 
@@ -80,21 +93,40 @@ namespace HerosInsight
 
         SkillTextProvider *provider;
         size_t decoding_count = 0;
-        IndexedStringArena<char> build_site{GW::Constants::SkillMax * 2 * 21};
-        IndexedStringArena<ParamSpan> param_spans{GW::Constants::SkillMax * 2};
-        PerConc data[2]; // Holds ptr destinations for all combinations of is_concise, skill_id, and attr_lvl
+        IndexedStringArena<char> build_site;
+        IndexedStringArena<ParamSpan> param_spans;
+        ConciseCatcher conc_catchers[2];
+        bool is_initializing = false;
 
-        static void SpecializeGenericDescription(std::string_view generic_desc, std::span<SkillTextProvider::Modification> spec_kit, std::span<char> &build_site)
+        static void SpecializeGenericDescription(RichText::RichText generic_desc, std::span<SkillTextProvider::Modification> spec_kit, RichText::RichText &build_site)
         {
+            // Copy over all tags, we adjust the offsets later
+            assert(generic_desc.tags.size() <= build_site.tags.size());
+            std::memcpy(build_site.tags.data(), generic_desc.tags.data(), generic_desc.tags.size());
+            build_site.tags = std::span<RichText::TextTag>(build_site.tags.data(), generic_desc.tags.size());
+
+            size_t i_tag = 0;
             size_t i_src = 0;
             size_t i_dst = 0;
             auto CopyOverUntil = [&](size_t until)
             {
                 size_t copy_size = until - i_src;
-                assert(i_dst + copy_size <= build_site.size());
-                generic_desc.copy(&build_site[i_dst], copy_size, i_src);
+                assert(i_dst + copy_size <= build_site.text.size());
+                std::memcpy(&build_site.text[i_dst], &generic_desc.text[i_src], copy_size);
                 i_src += copy_size;
                 i_dst += copy_size;
+
+                // Adjust tag offsets
+                while (i_tag < build_site.tags.size())
+                {
+                    auto &tag = build_site.tags[i_tag];
+                    if (tag.offset >= until)
+                        break;
+
+                    auto unalignment = i_dst - i_src;
+                    tag.offset += unalignment;
+                    i_tag++;
+                }
             };
             for (auto &mod : spec_kit)
             {
@@ -102,141 +134,193 @@ namespace HerosInsight
                 i_src += mod.size;
                 if (mod.replacement_size > 0)
                 {
-                    std::memcpy(&build_site[i_dst], mod.replacement, mod.replacement_size);
+                    std::memcpy(&build_site.text[i_dst], mod.replacement, mod.replacement_size);
                     i_dst += mod.replacement_size;
                 }
             }
-            CopyOverUntil(generic_desc.size());
-            build_site = build_site.subspan(0, i_dst);
+            CopyOverUntil(generic_desc.text.size());
+            build_site.text = std::span<char>(build_site.text.data(), i_dst);
+        }
+
+        static void ExtractParams(std::span<char> &desc, bool is_generic, IndexedStringArena<ParamSpan> &param_spans, std::span<RichText::TextTag> tags)
+        {
+            bool is_param = false;
+            double param_id;
+            uint16_t param_str_pos;
+            size_t i_dst = 0;
+            size_t i_src = 0;
+            auto tag_it = tags.begin();
+            while (i_src < desc.size())
+            {
+                auto rem = std::string_view(desc.subspan(i_src));
+                if (Utils::TryRead("</param>", rem))
+                {
+                    is_param = false;
+                    i_src = rem.data() - desc.data();
+                    if (is_generic)
+                    {
+                        uint8_t param_str_size = i_dst - param_str_pos;
+                        param_spans.emplace_back(param_str_pos, param_str_size, (uint8_t)param_id);
+                    }
+                }
+                else if (Utils::TryRead("<param=", rem) &&
+                         Utils::TryReadNumber(rem, param_id) &&
+                         Utils::TryRead('>', rem))
+                {
+                    is_param = true;
+                    param_str_pos = i_dst;
+                    i_src = rem.data() - desc.data();
+                }
+                else
+                {
+                    bool skip = !is_generic && is_param;
+                    if (!skip)
+                    {
+                        desc[i_dst] = desc[i_src];
+                    }
+
+                    ++i_dst;
+                    ++i_src;
+                }
+
+                if (tag_it != tags.end() && tag_it->offset == i_src)
+                {
+                    // When we extract a param, we need to adjust the tag offsets
+                    tag_it->offset = i_dst;
+                    ++tag_it;
+                }
+            }
+            desc = std::span<char>(desc.data(), i_dst);
         }
 
         static void OnDescDecoded(void *param, const wchar_t *wstr)
         {
             CHECK_THREAD;
-            auto &per_attr = *reinterpret_cast<PerConc::PerSkill::PerAttr *>(param);
-            auto attr_lvl = per_attr.attr_lvl;
-            auto &per_skill = per_attr.GetParent();
-            auto skill_id_16 = per_skill.skill_id_16;
-            auto &per_conc = per_skill.GetParent();
-            bool is_concise = per_conc.is_concise;
-            auto &decode = per_conc.GetParent();
-            auto &manager = *decode.provider;
-            bool is_generic = attr_lvl == -1;
-            auto dst_ptr = is_generic ? &manager.generic_descriptions : &decode.build_site;
-            auto &dst = *dst_ptr;
-            auto dst_index = is_generic ? GetGenericIndex(skill_id_16, is_concise) : GetGenericAttrIndex(skill_id_16, is_concise, attr_lvl);
-            dst.BeginWrite();
-            if (is_generic)
-                decode.param_spans.BeginWrite();
-            auto init_size = dst.size();
-            auto len = wcslen(wstr);
-            auto p = (wchar_t *)wstr;
-            auto end = p + len;
-            while (p < end)
-            {
-                {
-                    double param_id;
-                    std::wstring_view rem{p, (size_t)(end - p)};
-                    if (Utils::TryRead(L"<param=", rem) &&
-                        Utils::TryReadNumber(rem, param_id) &&
-                        Utils::TryRead(L'>', rem))
-                    {
-                        if (Utils::TryReadAhead(L"</param>", rem))
-                        {
-                            if (is_generic)
-                            {
-                                auto &skill = *GW::SkillbarMgr::GetSkillConstantData(static_cast<GW::Constants::SkillID>(skill_id_16));
-                                auto param = GetSkillParam(skill, (uint32_t)param_id);
-                                auto param_str_pos = dst.size() - init_size;
-                                uint8_t param_str_size;
-                                dst.AppendBufferAndOverwrite(16,
-                                    [param, &param_str_size](std::span<char> &dst)
-                                    {
-                                        param.Print(-1, dst);
-                                        param_str_size = dst.size();
-                                    });
-                                decode.param_spans.emplace_back(param_str_pos, param_str_size, (uint8_t)param_id);
-                            }
+            auto &format_catcher = *reinterpret_cast<ConciseCatcher::SkillCatcher::FormatCatcher *>(param);
+            auto &skill_catcher = format_catcher.GetParent();
+            auto skill_id_16 = skill_catcher.skill_id_16;
+            auto &concise_catcher = skill_catcher.GetParent();
+            bool is_concise = concise_catcher.is_concise;
+            auto &decode = concise_catcher.GetParent();
+            auto &provider = *decode.provider;
 
-                            p = (wchar_t *)rem.data();
-                            continue;
-                        }
+            bool is_generic = false;
+
+            std::optional<size_t> span_id = std::nullopt;
+
+            std::bitset<23> affected_attr_lvls;
+            for (size_t attr_index = 0; attr_index <= 22; ++attr_index)
+            {
+                auto attr_lvl = static_cast<int8_t>(attr_index) - 1;
+                auto format_id = CalcDescFormatID(skill_id_16, is_concise, attr_lvl);
+
+                if (format_id != format_catcher.format_id)
+                    continue;
+
+                is_generic |= attr_lvl == -1;
+                affected_attr_lvls[attr_index] = true;
+            }
+
+            auto text_dst_ptr = is_generic ? &provider.generic_descriptions.text : &decode.build_site;
+            auto tags_dst_ptr = is_generic ? &provider.generic_descriptions.tags : nullptr;
+
+            text_dst_ptr->BeginWrite();
+            if (is_generic)
+            {
+                decode.param_spans.BeginWrite();
+                tags_dst_ptr->BeginWrite();
+            }
+
+            text_dst_ptr->AppendWriteBuffer(1024,
+                [&](std::span<char> &text_buf)
+                {
+                    if (skill_id_16 == (uint16_t)GW::Constants::SkillID::Power_Block)
+                    {
+                        assert(true);
+                    }
+                    Utils::WStrToStr(wstr, text_buf);
+                    auto ExtractTags = [&](std::span<RichText::TextTag> &tags_buf)
+                    {
+                        RichText::ExtractTags(std::string_view(text_buf), text_buf, tags_buf);
+                        ExtractParams(text_buf, is_generic, decode.param_spans, tags_buf);
+                    };
+                    if (is_generic)
+                    {
+                        tags_dst_ptr->AppendWriteBuffer(64, ExtractTags);
+                    }
+                    else
+                    {
+                        std::span<RichText::TextTag> tags_span{};
+                        ExtractTags(tags_span);
+                    }
+                });
+
+            if (is_generic)
+            {
+                auto dst_index = GetGenericIndex(skill_id_16, is_concise);
+                decode.param_spans.EndWrite(dst_index);
+                text_dst_ptr->EndWrite(dst_index);
+                tags_dst_ptr->EndWrite(dst_index);
+            }
+            else
+            {
+                std::optional<size_t> span_id = std::nullopt;
+                for (auto m = affected_attr_lvls; m.any(); Utils::ClearLowestSetBit(m))
+                {
+                    auto attr_index = Utils::CountTrailingZeros(m);
+                    auto attr_lvl = attr_index - 1;
+                    auto dst_index = GetGenericAttrIndex(skill_id_16, is_concise, attr_lvl);
+                    if (!span_id.has_value())
+                    {
+                        span_id = text_dst_ptr->EndWrite(dst_index);
+                    }
+                    else
+                    {
+                        text_dst_ptr->SetSpanId(dst_index, span_id.value());
                     }
                 }
-
-                auto wc = *p++;
-                auto c = wc <= 0x7F ? static_cast<char>(wc) : '?';
-                dst.push_back(c);
             }
-            dst.EndWrite(dst_index);
-            if (is_generic)
-                decode.param_spans.EndWrite(dst_index);
 
             decode.DecrementDecodingCount();
         };
 
+        static constexpr auto N_DESCRIPTIONS = GW::Constants::SkillMax * 2;
         void StartDecodingDescriptions()
         {
-            for (bool is_concise : {false, true})
-            {
-                auto &per_conc = data[is_concise];
-                per_conc.is_concise = is_concise;
-                for (size_t skill_id = 0; skill_id < GW::Constants::SkillMax; ++skill_id)
-                {
-                    auto &per_skill = per_conc.data[skill_id];
-                    per_skill.skill_id_16 = static_cast<uint16_t>(skill_id);
+            auto provider = this->provider;
 
-                    auto &skill = *GW::SkillbarMgr::GetSkillConstantData(static_cast<GW::Constants::SkillID>(skill_id));
-                    std::bitset<8> visited;
-                    for (size_t attr_index = 0; attr_index < 22; ++attr_index)
-                    {
-                        int8_t attr_lvl = static_cast<int8_t>(attr_index) - 1;
-                        size_t combination = 0;
-                        for (size_t i = 0; i < 3; ++i)
-                        {
-                            auto is_singular = GetSkillParam(skill, i).IsSingular(attr_lvl);
-                            combination |= is_singular << i;
-                        }
-                        if (!visited[combination])
-                        {
-                            visited[combination] = true;
-                            per_skill.data[combination].attr_lvl = attr_lvl;
-                        }
-                    }
-                    this->decoding_count += visited.count();
-                }
-            }
-
-            static constexpr auto N_DESCRIPTIONS = GW::Constants::SkillMax * 2;
-            assert(this->decoding_count >= N_DESCRIPTIONS);
-            static constexpr auto avg_chars_per_desc = 300;
-            auto result_decode_count = N_DESCRIPTIONS;
-            auto build_site_decode_count = this->decoding_count - result_decode_count;
-
-            provider->generic_descriptions.ReserveElements(result_decode_count * avg_chars_per_desc);
-            this->build_site.ReserveElements(build_site_decode_count * avg_chars_per_desc);
-            static constexpr auto avg_params_per_desc = 2;
-            this->param_spans.ReserveElements(N_DESCRIPTIONS * avg_params_per_desc);
+            provider->generic_descriptions.ReserveFromHint("generic_descriptions");
+            this->build_site.ReserveFromHint("build_site");
+            this->param_spans.ReserveFromHint("param_spans");
 
             wchar_t enc_str[256];
             for (bool is_concise : {false, true})
             {
-                auto &per_conc = data[is_concise];
+                auto &conc_catcher = conc_catchers[is_concise];
+                conc_catcher.is_concise = is_concise;
                 for (size_t skill_id = 0; skill_id < GW::Constants::SkillMax; ++skill_id)
                 {
-                    auto &per_skill = per_conc.data[skill_id];
+                    auto &skill_catcher = conc_catcher.skill_catchers[skill_id];
+                    skill_catcher.skill_id_16 = static_cast<uint16_t>(skill_id);
+
                     auto &skill = *GW::SkillbarMgr::GetSkillConstantData(static_cast<GW::Constants::SkillID>(skill_id));
-
-                    for (size_t attr_index = 0; attr_index < 8; ++attr_index)
+                    std::bitset<8> visited;
+                    for (size_t attr_index = 0; attr_index <= 22; ++attr_index)
                     {
-                        auto attr_lvl = per_skill.data[attr_index].attr_lvl;
-                        if (attr_lvl == -2)
-                            continue;
-                        assert(attr_lvl >= -1 && attr_lvl <= 20);
+                        int8_t attr_lvl = static_cast<int8_t>(attr_index) - 1;
+                        auto format_id = CalcDescFormatID(skill_id, is_concise, attr_lvl);
+                        if (!visited[format_id])
+                        {
+                            visited[format_id] = true;
 
-                        std::span<wchar_t> enc_str_span = enc_str;
-                        SkillDescriptionToEncStr(skill, is_concise, attr_lvl, enc_str_span);
-                        GW::UI::AsyncDecodeStr(enc_str, OnDescDecoded, (void *)&per_skill.data[attr_index], provider->language);
+                            auto &format_catcher = skill_catcher.format_catchers[format_id];
+                            format_catcher.format_id = format_id;
+
+                            std::span<wchar_t> enc_str_span = enc_str;
+                            SkillDescriptionToEncStr(skill, is_concise, attr_lvl, enc_str_span);
+                            ++this->decoding_count;
+                            GW::UI::AsyncDecodeStr(enc_str, OnDescDecoded, (void *)&format_catcher, provider->language);
+                        }
                     }
                 }
             }
@@ -245,9 +329,9 @@ namespace HerosInsight
         static void OnNameDecoded(void *param, const wchar_t *wstr)
         {
             CHECK_THREAD;
-            auto &per_skill = *reinterpret_cast<PerConc::PerSkill *>(param);
-            auto skill_id = per_skill.skill_id_16;
-            auto &decode_proc = per_skill.GetParent().GetParent();
+            auto &skill_catcher = *reinterpret_cast<ConciseCatcher::SkillCatcher *>(param);
+            auto skill_id = skill_catcher.skill_id_16;
+            auto &decode_proc = skill_catcher.GetParent().GetParent();
             auto &provider = *decode_proc.provider;
             provider.names.BeginWrite();
             for (const wchar_t *pwc = wstr; *pwc; ++pwc)
@@ -263,9 +347,8 @@ namespace HerosInsight
 
         void StartDecodingNames()
         {
-            static constexpr auto N_NAMES = GW::Constants::SkillMax;
-            static constexpr auto avg_chars_per_name = 16;
-            provider->names.ReserveElements(N_NAMES * avg_chars_per_name);
+            provider->names.ReserveFromHint("names");
+            this->decoding_count += GW::Constants::SkillMax;
 
             wchar_t enc_str[32];
             for (size_t skill_id = 0; skill_id < GW::Constants::SkillMax; ++skill_id)
@@ -273,50 +356,103 @@ namespace HerosInsight
                 auto &skill = *GW::SkillbarMgr::GetSkillConstantData(static_cast<GW::Constants::SkillID>(skill_id));
                 bool success = GW::UI::UInt32ToEncStr(skill.name, enc_str, std::size(enc_str));
                 assert(success);
-                GW::UI::AsyncDecodeStr(enc_str, OnNameDecoded, &data[0].data[skill_id], provider->language);
+                GW::UI::AsyncDecodeStr(enc_str, OnNameDecoded, &conc_catchers[0].skill_catchers[skill_id], provider->language);
             }
         }
 
-        DecodeProcess(SkillTextProvider *manager)
-            : provider(manager)
+        DecodeProcess(SkillTextProvider *provider)
+            : provider(provider)
         {
+            CHECK_THREAD;
+            this->is_initializing = true;
+            assert(this->decoding_count == 0);
             StartDecodingDescriptions();
             StartDecodingNames();
+            this->is_initializing = false;
+
+            if (this->decoding_count == 0)
+            {
+                FinishDecodeProcess();
+            }
+        }
+
+        // Expects first chars to mismatch
+        std::pair<size_t, size_t> MinPrefixDiffLength(std::string_view a, std::string_view b)
+        {
+            size_t iend = std::max(a.size(), b.size());
+            for (size_t imax = 1; imax < iend; ++imax)
+            {
+                size_t len_a = std::numeric_limits<size_t>::max();
+                size_t len_b = std::numeric_limits<size_t>::max();
+                if (imax < a.size())
+                {
+                    size_t iend = std::min(b.size(), imax + 1);
+                    for (size_t i = 0; i < iend; ++i)
+                    {
+                        if (b[i] == a[imax])
+                        {
+                            len_b = i;
+                            break;
+                        }
+                    }
+                }
+                if (imax < b.size())
+                {
+                    size_t iend = std::min(a.size(), imax + 1);
+                    for (size_t i = 0; i < iend; ++i)
+                    {
+                        if (a[i] == b[imax])
+                        {
+                            len_a = i;
+                            break;
+                        }
+                    }
+                }
+                if (len_b < len_a)
+                {
+                    return {imax, len_b};
+                }
+                else if (len_a < len_b ||
+                         len_a != std::numeric_limits<size_t>::max())
+                {
+                    return {len_a, imax};
+                }
+            }
+            return {a.size(), b.size()};
         }
 
         void FinalizeDescription(size_t skill_id, bool is_concise)
         {
             auto gen_index = GetGenericIndex(skill_id, is_concise);
             auto &skill = *GW::SkillbarMgr::GetSkillConstantData(static_cast<GW::Constants::SkillID>(skill_id));
-            auto generic_str = provider->generic_descriptions.GetIndexed(gen_index);
-            std::string_view specific_str{};
-            for (int8_t attr_lvl = 0; attr_lvl <= 20; ++attr_lvl)
+            auto generic_str = std::string_view(provider->generic_descriptions.text.GetIndexed(gen_index));
+            for (int8_t attr_lvl = 0; attr_lvl <= 21; ++attr_lvl)
             {
-                auto new_specific_str = this->build_site.GetIndexed(attr_lvl);
-                if (new_specific_str.data() != nullptr)
-                    specific_str = new_specific_str;
+                auto index = GetGenericAttrIndex(skill_id, is_concise, attr_lvl);
+                auto specific_str = std::string_view(this->build_site.GetIndexed(index));
 
                 provider->spec_kits.BeginWrite();
-                size_t i_gen = 0;
+                uint16_t i_gen = 0;
                 size_t i_spe = 0;
-                size_t i_param = 0;
+                size_t i_param_span = 0;
+                auto gen_param_spans = this->param_spans.GetIndexed(gen_index);
                 while (i_gen < generic_str.size())
                 {
-                    if (i_param < param_spans.size())
+                    if (i_param_span < gen_param_spans.size())
                     {
-                        auto &param_span = param_spans[i_param];
+                        auto &param_span = gen_param_spans[i_param_span];
                         if (i_gen == param_span.position)
                         {
                             auto param = GetSkillParam(skill, param_span.param_id);
+                            char buffer[4];
+                            std::span<char> str{buffer, sizeof(buffer)};
+                            param.Print(attr_lvl, str);
                             provider->spec_kits.emplace_back(
                                 param_span.position,
                                 param_span.size,
-                                [param, attr_lvl](auto &dst)
-                                {
-                                    param.Print(attr_lvl, dst);
-                                });
+                                std::string_view(buffer, str.size()));
                             i_gen += param_span.size;
-                            ++i_param;
+                            ++i_param_span;
                             continue;
                         }
                     }
@@ -324,22 +460,11 @@ namespace HerosInsight
                     {
                         if (generic_str[i_gen] != specific_str[i_spe])
                         {
-                            if (generic_str[i_gen] == 's')
-                            {
-                                provider->spec_kits.emplace_back(i_gen, 1, "");
-                                ++i_gen;
-                                continue;
-                            }
-                            else if (specific_str[i_spe] == 's')
-                            {
-                                provider->spec_kits.emplace_back(i_gen, 0, "s");
-                                ++i_spe;
-                                continue;
-                            }
-                            else
-                            {
-                                assert(false);
-                            }
+                            auto [gen_len, spe_len] = MinPrefixDiffLength(generic_str.substr(i_gen), specific_str.substr(i_spe));
+                            auto replacement = specific_str.substr(i_spe, spe_len);
+                            provider->spec_kits.emplace_back(i_gen, gen_len, replacement);
+                            i_gen += gen_len;
+                            i_spe += spe_len;
                         }
                         ++i_spe;
                     }
@@ -352,12 +477,9 @@ namespace HerosInsight
             }
         }
 
-        void DecrementDecodingCount()
+        void FinishDecodeProcess()
         {
-            --this->decoding_count;
-            if (this->decoding_count != 0)
-                return;
-
+            provider->spec_kits.ReserveFromHint("spec_kits");
             for (auto is_concise : {false, true})
             {
                 for (uint16_t skill_id_16 = 0; skill_id_16 < GW::Constants::SkillMax; ++skill_id_16)
@@ -365,35 +487,56 @@ namespace HerosInsight
                     this->FinalizeDescription(skill_id_16, is_concise);
                 }
             }
-            this->provider->decode_proc = nullptr;
+            provider->spec_kits.StoreCapacityHint("spec_kits");
+
+            provider->generic_descriptions.StoreCapacityHint("generic_descriptions");
+            provider->names.StoreCapacityHint("names");
+            this->build_site.StoreCapacityHint("build_site");
+            this->param_spans.StoreCapacityHint("param_spans");
+
+            this->provider->ready.store(true);
             delete this;
+        }
+
+        void DecrementDecodingCount()
+        {
+            assert(this->decoding_count > 0);
+            --this->decoding_count;
+            if (this->decoding_count == 0 && !this->is_initializing)
+            {
+                FinishDecodeProcess();
+            }
         }
     };
     // static constexpr size_t DecodeProcessSize = sizeof(SkillTextProvider::DecodeProcess);
 
     SkillTextProvider::SkillTextProvider(GW::Constants::Language language)
-        : language(language), decode_proc(new DecodeProcess(this)) {}
+        : language(language)
+    {
+        new DecodeProcess(this);
+    }
 
     SkillTextProvider &SkillTextProvider::GetInstance(GW::Constants::Language language)
     {
-        static std::optional<SkillTextProvider> providers[GW::Constants::LangMax];
+        static std::unique_ptr<SkillTextProvider> providers[GW::Constants::LangMax] = {};
 
         auto &provider = providers[static_cast<size_t>(language)];
         if (!provider)
-            provider.emplace(language);
-        return provider.value();
+        {
+            provider = std::make_unique<SkillTextProvider>(language);
+        }
+        return *provider;
     }
 
     bool SkillTextProvider::IsReady() const
     {
-        CHECK_THREAD;
-        return this->decode_proc == nullptr;
+        return this->ready.load();
     }
 
     std::string_view SkillTextProvider::GetName(GW::Constants::SkillID skill_id)
     {
         assert(this->IsReady());
-        return this->names.GetIndexed(static_cast<size_t>(skill_id));
+        return std::string_view(this->names.GetIndexed(static_cast<size_t>(skill_id)));
     }
 
     IndexedStringArena<char> &SkillTextProvider::GetNames()
@@ -402,21 +545,27 @@ namespace HerosInsight
         return this->names;
     }
 
-    std::string_view SkillTextProvider::GetGenericDescription(GW::Constants::SkillID skill_id, bool is_concise)
+    RichText::RichText SkillTextProvider::GetGenericDescription(GW::Constants::SkillID skill_id, bool is_concise)
     {
         assert(this->IsReady());
         auto index = GetGenericIndex(static_cast<size_t>(skill_id), is_concise);
         return this->generic_descriptions.GetIndexed(index);
     }
 
-    void SkillTextProvider::GetDescriptionCopy(GW::Constants::SkillID skill_id, bool is_concise, int8_t attr_lvl, std::span<char> &dst)
+    void SkillTextProvider::MakeDescription(GW::Constants::SkillID skill_id, bool is_concise, int8_t attr_lvl, RichText::RichText &dst)
     {
         auto generic_desc = GetGenericDescription(skill_id, is_concise);
         if (attr_lvl == -1)
         {
-            assert(generic_desc.size() <= dst.size());
-            generic_desc.copy(dst.data(), generic_desc.size());
-            dst = dst.subspan(0, generic_desc.size());
+            size_t copy_size = generic_desc.text.size();
+            assert(copy_size <= dst.text.size());
+            std::memcpy(dst.text.data(), generic_desc.text.data(), copy_size);
+            dst.text = std::span<char>(dst.text.data(), copy_size);
+
+            copy_size = generic_desc.tags.size();
+            assert(copy_size <= dst.tags.size());
+            std::memcpy(dst.tags.data(), generic_desc.tags.data(), copy_size);
+            dst.tags = std::span<RichText::TextTag>(dst.tags.data(), copy_size);
             return;
         }
 

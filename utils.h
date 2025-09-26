@@ -439,54 +439,12 @@ namespace HerosInsight::Utils
 
     struct TextTooltip
     {
+        size_t start;
+        size_t end;
+        size_t id;
 
-    struct ColorTag
-    {
-        ImU32 color = 0;
+        bool operator==(const TextTooltip &other) const { return start == other.start && end == other.end && id == other.id; }
     };
-
-    struct TooltipTag
-    {
-        int32_t id = -1; // -1 = close tooltip
-    };
-
-    struct ImageTag
-    {
-        uint32_t id;
-    };
-
-    using TextTag = std::variant<ColorTag, TooltipTag, ImageTag>;
-    bool TryReadTextTag(std::string_view &remaining, TextTag &out);
-    std::string_view FindTextTag(std::string_view text, TextTag &out);
-
-    struct ImageDrawerFns
-    {
-        std::function<void(ImVec2, uint32_t)> draw;
-        std::function<float(uint32_t)> get_width;
-    };
-
-    struct TextSegment
-    {
-        std::variant<std::string_view, size_t> text_or_image_id;
-        float width;
-        std::optional<ImU32> color = std::nullopt;
-        std::optional<uint16_t> tooltip_id = std::nullopt;
-        bool is_highlighted = false;
-        bool can_wrap_after = false;
-    };
-
-    void MakeTextSegments(std::string_view text, std::span<uint16_t> highlighting, ImageDrawerFns &image_impl, std::span<TextSegment> &result);
-    void DrawTextSegments(
-        std::span<TextSegment> segments,
-        float wrapping_min, float wrapping_max,
-        std::function<void(uint32_t)> &tooltip_impl,
-        ImageDrawerFns &image_impl);
-    void DrawRichText(
-        std::string_view text,
-        float wrapping_min, float wrapping_max,
-        std::span<uint16_t> highlighting,
-        std::function<void(uint32_t)> tooltip_impl,
-        ImageDrawerFns &image_impl);
 
     // void UnrichText(std::string_view rich_text, std::vector<char> &out_chars, std::vector<ColorChange> &color_changes, std::vector<TextTooltip> &tooltips);
     void DrawMultiColoredText(
@@ -552,65 +510,6 @@ namespace HerosInsight::Utils
 
     bool IsControllableAgentOfPlayer(uint32_t agent_id, uint32_t player_number = 0);
     void GetControllableAgentsOfPlayer(FixedArrayRef<uint32_t> out, uint32_t player_number = 0);
-
-    struct RichString
-    {
-        std::string str;
-        std::vector<ColorChange> color_changes;
-        std::vector<TextTooltip> tooltips;
-
-        // ctor
-        RichString() = default;
-
-        RichString(std::string &str)
-        {
-            this->str = str;
-            UnrichText(this->str, this->color_changes, this->tooltips);
-        }
-
-        RichString(std::wstring &str)
-        {
-            auto p = str.data();
-            this->str = WStrToStr(p, p + str.size());
-            UnrichText(this->str, this->color_changes, this->tooltips);
-        }
-
-        void ImGuiRender(float wrapping_min, float wrapping_max, std::span<uint16_t> highlighting = {}, std::function<void(uint32_t)> draw_tooltip = nullptr)
-        {
-            DrawMultiColoredText(str, wrapping_min, wrapping_max, color_changes, highlighting, tooltips, draw_tooltip);
-        }
-    };
-
-    struct PrefixedStringView
-    {
-        std::string_view entire;
-        uint8_t prefix_len;
-
-        std::string_view Get() const
-        {
-            return entire;
-        }
-
-        std::string_view GetPrefix() const
-        {
-            return entire.substr(0, prefix_len);
-        }
-
-        std::string_view GetSuffix() const
-        {
-            return entire.substr(prefix_len);
-        }
-
-        bool IsInit() const
-        {
-            return entire.data() != nullptr;
-        }
-
-        bool operator==(const PrefixedStringView &other) const
-        {
-            return entire == other.entire && prefix_len == other.prefix_len;
-        }
-    };
 
     void OpenWikiPage(std::string_view page);
     void ImGuiCenterAlignCursorX(float size_x);

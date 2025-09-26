@@ -116,7 +116,8 @@ namespace HerosInsight::RichText
 
         if (Utils::TryRead('c', rem))
         {
-            auto &tag = out.emplace<ColorTag>();
+            auto &tag = out.color_tag;
+            out.type = TextTag::Type::Color;
             if (is_closing)
             {
                 if (Utils::TryRead('>', rem))
@@ -157,7 +158,8 @@ namespace HerosInsight::RichText
         }
         else if (Utils::TryRead("tip", rem))
         {
-            auto &tag = out.emplace<TooltipTag>();
+            auto &tag = out.tooltip_tag;
+            out.type = TextTag::Type::Tooltip;
             if (is_closing)
             {
                 if (Utils::TryRead('>', rem))
@@ -182,7 +184,8 @@ namespace HerosInsight::RichText
             if (Utils::TryReadInt(rem, id) &&
                 Utils::TryRead('>', rem))
             {
-                auto &tag = out.emplace<ImageTag>();
+                auto &tag = out.image_tag;
+                out.type = TextTag::Type::Image;
                 tag.id = id;
                 remaining = rem;
                 return true;
@@ -190,7 +193,8 @@ namespace HerosInsight::RichText
         }
 
         {
-            FracTag &tag = out.emplace<FracTag>();
+            auto &tag = out.frac_tag;
+            out.type = TextTag::Type::Frac;
             if (FracTag::TryRead(remaining, tag))
             {
                 return true;
@@ -214,10 +218,60 @@ namespace HerosInsight::RichText
             {
                 return std::string_view(start, text.data() - start);
             }
-            text = text.substr(1);
+            text = text.substr(1); // Skip '<'
         }
     }
 
+    void ExtractTags(std::string_view text_with_tags, std::span<char> &only_text, std::span<TextTag> &only_tags)
+    {
+        size_t tag_count = 0;
+        size_t write_offset = 0;
+        auto rem = text_with_tags;
+        TextTag dummy;
+        bool write_text = only_text.data() != nullptr;
+        bool write_tags = only_tags.data() != nullptr;
+        while (!rem.empty())
+        {
+            TextTag &tag = write_tags ? only_tags[tag_count] : dummy;
+            auto tag_str = FindTextTag(rem, tag);
+            bool has_tag = tag_str.data() != nullptr;
+
+            size_t copy_count = has_tag ? tag_str.data() - rem.data() : rem.size();
+
+            if (write_text)
+            {
+                assert(write_offset + copy_count <= only_text.size());
+                std::memmove(&only_text[write_offset], rem.data(), copy_count); // We use memmove in case text_with_tags and only_text overlap
+                write_offset += copy_count;
+            }
+
+            if (has_tag)
+            {
+                if (write_tags)
+                {
+                    ++tag_count;
+                    tag.offset = write_offset;
+                }
+
+                if (write_text && !tag.IsZeroWidth())
+                {
+                    // Add placeholder char to mark a visible tag
+                    assert(write_offset < only_text.size());
+                    only_text[write_offset] = TextTag::TAG_MARKER_CHAR;
+                    ++write_offset;
+                }
+            }
+
+            rem.remove_prefix(copy_count + tag_str.size());
+        }
+        only_text = std::span<char>{only_text.data(), write_offset};
+        only_tags = std::span<TextTag>{only_tags.data(), tag_count};
+    }
+
+    // TODO: Plan:
+    // Store tags in a separate IndexedStringArena; use a struct with tag_type + offset + union of tag
+    // MakeTextSegments no longer uses TryReadTextTag and instead takes a span of TextTags
+    // After decoding tags are separated out.
     void Drawer::MakeTextSegments(std::string_view text, std::span<TextSegment> &result, std::span<uint16_t> highlighting, TextSegment::WrapMode first_segment_wrap_mode)
     {
         if (text.empty())
@@ -275,19 +329,25 @@ namespace HerosInsight::RichText
 
             if (tag.has_value())
             {
-                if (auto image_tag = std::get_if<ImageTag>(&tag.value()))
+                auto tag_val = tag.value();
+                switch (tag_val.type)
                 {
-                    seg.tag = *image_tag;
-                    seg.width = image_provider->CalcWidth(*image_tag);
-                }
-                else if (auto frac_tag = std::get_if<FracTag>(&tag.value()))
-                {
-                    seg.tag = *frac_tag;
-                    seg.width = frac_provider->CalcWidth(*frac_tag);
-                }
-                else
-                {
-                    assert(false);
+                    case TextTag::Type::Image:
+                    {
+                        seg.tag = tag_val.image_tag;
+                        seg.width = image_provider->CalcWidth(tag_val.image_tag);
+                        break;
+                    }
+                    case TextTag::Type::Frac:
+                    {
+                        seg.tag = tag_val.frac_tag;
+                        seg.width = frac_provider->CalcWidth(tag_val.frac_tag);
+                        break;
+                    }
+                    default:
+                    {
+                        assert(false);
+                    }
                 }
             }
             else
@@ -334,28 +394,36 @@ namespace HerosInsight::RichText
             if (has_tag)
             {
                 i = rem.data() - text.data();
-                if (std::holds_alternative<ImageTag>(tag) ||
-                    std::holds_alternative<FracTag>(tag))
+                switch (tag.type)
                 {
-                    AddSegment(i_start, i, tag);
-                }
-                else if (auto color_tag = std::get_if<ColorTag>(&tag))
-                {
-                    if (color_tag->color == 0)
-                        color_stack.pop();
-                    else
-                        color_stack.push_back(color_tag->color);
-                }
-                else if (auto tooltip_tag = std::get_if<TooltipTag>(&tag))
-                {
-                    if (tooltip_tag->id == -1)
-                        tooltip_stack.pop();
-                    else
-                        tooltip_stack.push_back(tooltip_tag->id);
-                }
-                else
-                {
-                    assert(false);
+                    case TextTag::Type::Image:
+                    case TextTag::Type::Frac:
+                    {
+                        AddSegment(i_start, i, tag);
+                        break;
+                    }
+                    case TextTag::Type::Color:
+                    {
+                        auto &color_tag = tag.color_tag;
+                        if (color_tag.color == 0)
+                            color_stack.pop();
+                        else
+                            color_stack.push_back(color_tag.color);
+                        break;
+                    }
+                    case TextTag::Type::Tooltip:
+                    {
+                        auto &tooltip_tag = tag.tooltip_tag;
+                        if (tooltip_tag.id == -1)
+                            tooltip_stack.pop();
+                        else
+                            tooltip_stack.push_back(tooltip_tag.id);
+                        break;
+                    }
+                    default:
+                    {
+                        assert(false);
+                    }
                 }
                 i_start = i;
             }

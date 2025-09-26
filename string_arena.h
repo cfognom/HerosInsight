@@ -19,13 +19,13 @@ namespace HerosInsight
     template <typename T>
     class StringArena : public std::vector<T>
     {
+        // We use all bytes of T for eq and hashing, so T cannot have any padding etc...
         static_assert(std::has_unique_object_representations_v<T>, "T must have unique object representations");
 
     protected:
         constexpr static bool is_char = std::is_same_v<T, char>;
 
     public:
-        using T_span = std::conditional_t<is_char, std::string_view, std::span<T>>;
         using T_offset = uint32_t;
         using T_span_id = uint16_t;
 
@@ -35,12 +35,12 @@ namespace HerosInsight
             uint32_t offset;
             uint32_t size;
 
-            auto resolve(std::vector<T> &vec) const
+            std::span<T> resolve(std::vector<T> &vec) const
             {
 #ifdef SAFETY_CHECKS
                 assert(offset + size <= vec.size());
 #endif
-                return T_span(vec.data() + offset, size);
+                return std::span<T>(vec.data() + offset, size);
             }
 
             std::string_view resolve_as_str(std::vector<T> &vec) const
@@ -48,8 +48,7 @@ namespace HerosInsight
 #ifdef SAFETY_CHECKS
                 assert(offset + size <= vec.size());
 #endif
-                constexpr size_t element_size = sizeof(T);
-                const size_t bytes = element_size * size;
+                const size_t bytes = sizeof(T) * size;
                 return std::string_view((const char *)(vec.data() + offset), bytes);
             }
         };
@@ -58,7 +57,7 @@ namespace HerosInsight
         {
             size_t operator()(const LocalSpan &span) const
             {
-                return std::hash<std::string_view>{}(std::string_view((const char *)(vec.data() + span.offset), span.size * sizeof(T)));
+                return std::hash<std::string_view>{}(span.resolve_as_str(vec));
             }
 
             std::vector<T> &vec;
@@ -68,14 +67,7 @@ namespace HerosInsight
         {
             bool operator()(const LocalSpan &a, const LocalSpan &b) const
             {
-                if constexpr (is_char)
-                {
-                    return a.resolve(vec) == b.resolve(vec);
-                }
-                else
-                {
-                    return a.resolve_as_str(vec) == b.resolve_as_str(vec);
-                }
+                return a.resolve_as_str(vec) == b.resolve_as_str(vec);
             }
 
             std::vector<T> &vec;
@@ -146,12 +138,20 @@ namespace HerosInsight
         void PopBack()
         {
             auto &back = id_to_span.back();
-            auto new_size = this->size() - back.size;
+            auto new_size = back.offset;
             this->erase(this->begin() + new_size, this->end());
             id_to_span.pop_back();
 #ifdef SAFETY_CHECKS
             is_writing = false;
 #endif
+        }
+
+        size_t GetWrittenSize() const
+        {
+#ifdef SAFETY_CHECKS
+            assert(is_writing);
+#endif
+            return this->size() - id_to_span.back().offset;
         }
 
         T_span_id EndWrite(deduper *deduper = nullptr)
@@ -168,11 +168,11 @@ namespace HerosInsight
             T_span_id span_id_cast = static_cast<T_span_id>(span_id);
 
             auto &span = id_to_span[span_id];
-            size_t span_size = this->size() - span.offset;
+            size_t written_size = this->size() - span.offset;
 #ifdef SAFETY_CHECKS
-            assert(span_size <= std::numeric_limits<decltype(span.size)>::max());
+            assert(written_size <= std::numeric_limits<decltype(span.size)>::max());
 #endif
-            span.size = static_cast<decltype(span.size)>(span_size);
+            span.size = static_cast<decltype(span.size)>(written_size);
 
             if (deduper != nullptr)
             {
@@ -197,13 +197,13 @@ namespace HerosInsight
         }
 
         // Gets a reference to a string in the arena
-        T_span Get(size_t span_id)
+        std::span<T> Get(size_t span_id)
         {
 #ifdef SAFETY_CHECKS
             assert(is_writing == false);
 #endif
             if (span_id >= id_to_span.size())
-                return T_span();
+                return std::span<T>();
 
             return id_to_span[span_id].resolve(*this);
         }
@@ -227,7 +227,6 @@ namespace HerosInsight
     class IndexedStringArena : public StringArena<T>
     {
         using base = StringArena<T>;
-        using T_span = base::T_span;
 
     public:
         using T_span_id = base::T_span_id;
@@ -304,7 +303,7 @@ namespace HerosInsight
             index_to_id[index] = span_id;
         }
 
-        T_span GetIndexed(size_t index) { return base::Get(GetSpanId(index)); }
+        std::span<T> GetIndexed(size_t index) { return base::Get(GetSpanId(index)); }
 
         void BeginWrite()
         {
@@ -348,7 +347,7 @@ namespace HerosInsight
                 }
 
                 std::sort(span_counts.begin(), span_counts.end(), [](auto &a, auto &b)
-                    { return a.count > b.count; });
+                          { return a.count > b.count; });
 
                 info += "Top 10 most common spans:\n";
                 for (size_t i = 0; i < span_counts.size() && i < 10; i++)
