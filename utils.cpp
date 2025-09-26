@@ -884,9 +884,9 @@ namespace HerosInsight::Utils
 
                 if (attribute.id == GW::Constants::Attribute::Expertise &&
                     (skill.type == GW::Constants::SkillType::Attack ||
-                        skill.type == GW::Constants::SkillType::Ritual ||
-                        skill.profession == GW::Constants::ProfessionByte::Ranger ||
-                        skill.IsTouchRange()))
+                     skill.type == GW::Constants::SkillType::Ritual ||
+                     skill.profession == GW::Constants::ProfessionByte::Ranger ||
+                     skill.IsTouchRange()))
                 {
                     const auto multiplier = (float)(100 - 4 * attribute.level) / 100.f;
                     energy_cost *= multiplier;
@@ -2322,9 +2322,14 @@ namespace HerosInsight::Utils
         for (auto &effect : *effects)
         {
             const auto skill_id = (GW::Constants::SkillID)effect.skill_id;
-            auto it = std::find_if(sorted_effects.begin(), sorted_effects.end(),
+            auto it = std::find_if(
+                sorted_effects.begin(),
+                sorted_effects.end(),
                 [skill_id](const GW::Effect *e)
-                { return e->skill_id == skill_id; });
+                {
+                    return e->skill_id == skill_id;
+                }
+            );
 
             if (it != sorted_effects.end()) // We already have an effect with the same skill_id
             {
@@ -2340,9 +2345,15 @@ namespace HerosInsight::Utils
                     continue;
                 }
             }
-            auto insert_pos = std::upper_bound(sorted_effects.begin(), sorted_effects.end(), &effect,
+            auto insert_pos = std::upper_bound(
+                sorted_effects.begin(),
+                sorted_effects.end(),
+                &effect,
                 [](const GW::Effect *a, const GW::Effect *b)
-                { return a->timestamp < b->timestamp; });
+                {
+                    return a->timestamp < b->timestamp;
+                }
+            );
             sorted_effects.insert(insert_pos, &effect);
         }
 
@@ -2570,7 +2581,7 @@ namespace HerosInsight::Utils
     {
         if (remaining.size() < 6 || !TryReadHex(remaining, out))
             return false;
-        // Swap red and blue channels because in written form red is of higher significance
+        // Swap red and blue channels because that's how GW formats them!
         out = ((out & 0xFF00FF00) | ((out & 0xFF) << 16) | ((out & 0xFF0000) >> 16));
         auto alpha = out >> IM_COL32_A_SHIFT;
         if (alpha == 0)
@@ -2724,7 +2735,8 @@ namespace HerosInsight::Utils
         std::span<uint16_t> highlighting,
         std::span<TextTooltip> tooltips,
         std::function<void(uint32_t)> draw_tooltip,
-        std::span<TextEmoji> emojis)
+        std::span<TextEmoji> emojis
+    )
     {
         auto text_ptr = text.data();
         auto text_len = text.size();
@@ -2765,7 +2777,8 @@ namespace HerosInsight::Utils
         // screen space bounding box
         ImRect bb = ImRect(
             std::numeric_limits<float>::max(), std::numeric_limits<float>::max(),
-            std::numeric_limits<float>::min(), std::numeric_limits<float>::min());
+            std::numeric_limits<float>::min(), std::numeric_limits<float>::min()
+        );
 
         const auto highlight_color = ImGui::GetColorU32(IM_COL32(250, 148, 54, 255));
         const auto highlight_text_color = ImGui::GetColorU32(IM_COL32_BLACK);
@@ -3609,11 +3622,13 @@ namespace HerosInsight::Utils
 
         Utils::FormatToChat(L"{}", (std::wstring_view)buffer);
 
-        ForEachChildFrame(frame,
+        ForEachChildFrame(
+            frame,
             [=](GW::UI::Frame &frame)
             {
                 DebugFrame(frame, depth + 1);
-            });
+            }
+        );
     }
 
     uint32_t GetProfessionMask(uint32_t agent_id)
