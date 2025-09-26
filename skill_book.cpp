@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <future>
 #include <iostream>
+#include <optional>
 #include <regex>
 #include <span>
 #include <string>
@@ -84,1730 +85,47 @@
 
 #include <StoC_packets.h>
 #include <attribute_or_title.h>
+#include <capacity_hints.h>
+#include <catalog.h>
 #include <constants.h>
 #include <custom_agent_data.h>
 #include <custom_skill_data.h>
 #include <debug.h>
 #include <debug_display.h>
+#include <matcher.h>
 #include <party_data.h>
+#include <rich_text.h>
+#include <string_arena.h>
 #include <texture_module.h>
 #include <update_manager.h>
 #include <utils.h>
 #include <variable_size_clipper.h>
-#include <window_alpha_scope.h>
 
 #include "skill_book.h"
+
+// #define ASYNC_FILTERING
 
 #ifdef _DEBUG
 // #define _ARTIFICIAL_DELAY 1
 #endif
 
+bool IsInitialCursorPos()
+{
+    auto cr_min = ImGui::GetWindowContentRegionMin();
+    auto cursor = ImGui::GetCursorPos();
+    return cr_min.x == cursor.x && cr_min.y == cursor.y;
+}
+
 // This adds a "skill book" window where the user can search and filter all skills in the game.
 namespace HerosInsight::SkillBook
 {
-    enum struct AttributeMode : uint32_t
-    {
-        Null,
-        Generic,
-        Characters,
-        Manual
-    };
-
-    struct BookState
-    {
-        uint32_t hero_index = 0;
-        std::array<int8_t, AttributeOrTitle::Count> attributes = {};
-        AttributeMode attribute_mode = AttributeMode::Generic;
-        int attr_lvl_slider = 0;
-        std::vector<uint16_t> filtered_skills;                                // skill ids
-        std::unordered_map<uint32_t, std::vector<uint16_t>> highlighting_map; // key: skill id, value: start/stop offsets
-
-        int8_t GetAttribute(AttributeOrTitle attr) const
-        {
-            // clang-format off
-            switch (attribute_mode) {
-                case AttributeMode::Generic: return -1;
-                case AttributeMode::Manual: return attr_lvl_slider;
-                case AttributeMode::Characters:
-                    if (attr.IsNone())
-                        return 0;
-                    return attributes[attr.value];
-
-                default:
-                    SOFT_ASSERT(false, L"Invalid attribute mode");
-                    return -1;
-            }
-            // clang-format on
-        }
-    };
-
-    BookState state;         // The state currently in effect
-    BookState pending_state; // The state that is being edited
-    bool state_dirty = true; // Set this to attempt to apply the pending state
-
     std::vector<uint16_t> base_skills; // skill ids
-    bool prefer_concise_descriptions = false;
-    bool include_pve_only_skills = true;
-    bool include_temporary_skills = false;
-    bool include_npc_skills = false;
-    bool include_archived_skills = false;
-    bool include_disguises = false;
-    char text_input[256];
-
-    GW::HookEntry attribute_update_entry;
-    void AttributeUpdateCallback(GW::HookStatus *, const GW::Packet::StoC::PacketBase *packet)
-    {
-        if (pending_state.attribute_mode == AttributeMode::Characters)
-        {
-            const auto p = reinterpret_cast<const GW::Packet::StoC::AttributeUpdatePacket *>(packet);
-            auto target_agent_id = GW::Agents::GetHeroAgentID(pending_state.hero_index);
-            auto packet_agent_id = p->agent_id;
-            if (packet_agent_id == target_agent_id)
-            {
-                // auto attr = AttributeOrTitle((GW::Constants::AttributeByte)p->attribute);
-                // pending_state.attributes[attr.value] = p->value;
-                state_dirty = true;
-            }
-        }
-    }
-    void TitleUpdateCallback(GW::HookStatus *, const GW::Packet::StoC::UpdateTitle *packet)
-    {
-        if (pending_state.attribute_mode == AttributeMode::Characters)
-        {
-            // auto attr = AttributeOrTitle((GW::Constants::TitleID)packet->title_id);
-            // pending_state.attributes[attr.value] = packet->new_value;
-            state_dirty = true;
-        }
-    }
-
-    void Initialize()
-    {
-        GW::StoC::RegisterPacketCallback(&attribute_update_entry, GAME_SMSG_AGENT_UPDATE_ATTRIBUTE, &AttributeUpdateCallback);
-        GW::StoC::RegisterPacketCallback<GW::Packet::StoC::UpdateTitle>(&attribute_update_entry, &TitleUpdateCallback);
-    }
-
-    void Terminate()
-    {
-        GW::StoC::RemoveCallbacks(&attribute_update_entry);
-    }
-
-    uint8_t GetSelectedHeroIndex()
-    {
-        if (!UpdateManager::s_FrameArray)
-            return 0;
-
-        for (auto frame : *UpdateManager::s_FrameArray)
-        {
-            if (!Utils::IsFrameValid(frame))
-                continue;
-
-            if (!frame->tooltip_info || !frame->tooltip_info->payload)
-                continue;
-
-            auto str = (wchar_t *)frame->tooltip_info->payload;
-            auto str_view = std::wstring_view(str, frame->tooltip_info->payload_len);
-            if (str_view.compare(L"Solos Animus") == 0)
-                Utils::FormatToChat(L"Solos Animus");
-        }
-
-        return 0;
-    }
-
-    const float adrenaline_den5_offset_x = 12.f;
-    const float adrenaline_slash_offset_x = -5.f;
-    bool use_precise_adrenaline = false;
-    void DrawSlash25()
-    {
-        ImGui::PushFont(Constants::Fonts::skill_thick_font_15);
-        const auto text_height15 = ImGui::GetTextLineHeight();
-        const auto str = "½";
-        const auto size = ImGui::CalcTextSize(str);
-        const auto min = ImGui::GetCursorScreenPos();
-        const auto max = min + size;
-        const auto after1_x = 4;
-        const auto after1_y = 7;
-        auto clip_rect = ImRect(ImVec2(min.x, min.y + after1_y), max);
-        ImGui::RenderTextClipped(min, max, str, nullptr, &size, ImVec2(0, 0), &clip_rect);
-        clip_rect = ImRect(ImVec2(min.x + after1_x, min.y), ImVec2(max.x, min.y + after1_y));
-        ImGui::RenderTextClipped(min, max, str, nullptr, &size, ImVec2(0, 0), &clip_rect);
-        ImGui::PushFont(Constants::Fonts::skill_thick_font_9);
-        const auto text_height9 = ImGui::GetTextLineHeight();
-        auto bb = ImRect(min, max);
-        const auto str5 = "5";
-        const auto size5 = ImGui::CalcTextSize(str5);
-        bb.Max.x += size5.x;
-        ImGui::RenderText(min + ImVec2(adrenaline_den5_offset_x, 4), str5);
-        ImGui::PopFont();
-        ImGui::PopFont();
-
-        ImGui::ItemSize(bb);
-        ImGui::ItemAdd(bb, 0);
-    }
-
-    float CalcAdrenalineValueWidth(uint32_t value)
-    {
-        uint32_t wholes = value / 25;
-        uint32_t parts = value % 25;
-
-        float width = 0;
-
-        if (!use_precise_adrenaline && parts > 0)
-        {
-            wholes++;
-            parts = 0;
-        }
-
-        char buffer[16];
-        if (wholes > 0)
-        {
-            sprintf(buffer, "%d", wholes);
-            ImGui::PushFont(Constants::Fonts::skill_thick_font_15);
-            width += ImGui::CalcTextSize(buffer).x;
-            ImGui::PopFont();
-        }
-
-        if (parts > 0)
-        {
-            sprintf(buffer, "%d", parts);
-            ImGui::PushFont(Constants::Fonts::skill_thick_font_9);
-            width += ImGui::CalcTextSize(buffer).x;
-            width += adrenaline_slash_offset_x + adrenaline_den5_offset_x;
-            width += ImGui::CalcTextSize("5").x;
-            ImGui::PopFont();
-        }
-
-        width += 2; // Padding
-
-        return width;
-    }
-
-    void DrawAdrenalineValue(uint32_t value)
-    {
-        ImGui::BeginGroup();
-
-        uint32_t wholes = value / 25;
-        uint32_t parts = value % 25;
-
-        if (!use_precise_adrenaline && parts > 0)
-        {
-            wholes++;
-            parts = 0;
-        }
-
-        if (wholes > 0)
-        {
-            ImGui::Text("%d", wholes);
-        }
-
-        if (wholes > 0 && parts > 0)
-            ImGui::SameLine(0, 0);
-
-        if (parts > 0)
-        {
-            // Render the numerator
-            ImGui::PushFont(Constants::Fonts::skill_thick_font_9);
-            ImGui::Text("%d", parts);
-            ImGui::PopFont();
-
-            // Render the denominator
-            ImGui::SameLine(0, 0); // No spacing between numerator and slash
-            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + adrenaline_slash_offset_x);
-            DrawSlash25();
-        }
-
-        ImGui::EndGroup();
-    }
-
-    void FormatActivation(char *buffer, uint32_t len, float value)
-    {
-        float intpart;
-        float activation_fract = std::modf(value, &intpart);
-        uint32_t activation_int = static_cast<uint32_t>(intpart);
-
-        const auto thresh = 0.001f;
-        uint32_t match_id = 0;
-        if ((match_id++, std::abs(activation_fract - 0.25f)) < thresh ||
-            (match_id++, std::abs(activation_fract - 0.5f)) < thresh ||
-            (match_id++, std::abs(activation_fract - 0.75f)) < thresh)
-        {
-            if (activation_int)
-            {
-                auto written = snprintf(buffer, len, "%d", activation_int);
-                assert(written >= 0 && written < len);
-                buffer += written;
-                len -= written;
-            }
-
-            const char *str = nullptr;
-            // clang-format off
-            switch (match_id) {
-                case 1: str = "¼"; break;
-                case 2: str = "½"; break;
-                case 3: str = "¾"; break;
-            }
-            // clang-format on
-
-            auto result = snprintf(buffer, len, str);
-            assert(result >= 0 && result < len);
-        }
-        else
-        {
-            auto result = snprintf(buffer, len, "%g", value);
-            assert(result >= 0 && result < len);
-        }
-    }
-
-    void DrawSkillStats(const CustomSkillData &custom_sd)
-    {
-        ImGui::PushFont(Constants::Fonts::skill_thick_font_15);
-
-        const float width_per_stat = 45;
-
-        const auto draw_list = ImGui::GetWindowDrawList();
-
-        ImGui::SameLine();
-        float max_pos_x = ImGui::GetWindowContentRegionWidth() - 20;
-        auto cursor_start_pos = ImGui::GetCursorPos();
-        float min_pos_x = cursor_start_pos.x;
-        float base_pos_y = cursor_start_pos.y + 1;
-
-        ImGui::SetCursorPosY(base_pos_y);
-
-        const auto icon = TextureModule::LoadTextureFromFileId(TextureModule::KnownFileIDs::UI_SkillStatsIcons);
-        auto DrawIcon = [&](uint32_t i, float text_width, const uint32_t icon_atlas_index, const ImVec4 tint = ImVec4(1, 1, 1, 1))
-        {
-            ImVec2 icon_size = ImVec2(16, 16);
-
-            float start_x = max_pos_x - i * width_per_stat - icon_size.x - 2 - text_width;
-            float current_x = start_x > min_pos_x ? start_x : min_pos_x;
-            const auto text_cursor = ImVec2(current_x, base_pos_y + 4);
-            current_x += text_width;
-            if (icon && *icon)
-            {
-                current_x -= 1;
-                ImGui::SetCursorPos(ImVec2(current_x, base_pos_y - 2));
-                ImVec2 uv0, uv1;
-                TextureModule::GetImageUVsInAtlas(*icon, icon_size, icon_atlas_index, uv0, uv1);
-                icon_size = ImVec2(23, 23);
-                ImGui::Image(*icon, icon_size, uv0, uv1, tint);
-                current_x += icon_size.x;
-            }
-            current_x += 5;
-            min_pos_x = current_x;
-            ImGui::SetCursorPos(text_cursor);
-        };
-
-        if (auto overcast = custom_sd.GetOvercast())
-        {
-            char str[4];
-            snprintf(str, sizeof(str), "%d", overcast);
-            const auto text_width = ImGui::CalcTextSize(str).x;
-            DrawIcon(4, text_width, 10);
-            ImGui::TextUnformatted(str);
-        }
-
-        if (auto sacrifice = custom_sd.GetSacrifice())
-        {
-            char str[8];
-            snprintf(str, sizeof(str), "%d%%", sacrifice);
-            const auto text_width = ImGui::CalcTextSize(str).x;
-            DrawIcon(4, text_width, 7);
-            ImGui::TextUnformatted(str);
-        }
-
-        if (custom_sd.tags.Maintained)
-        {
-            const auto str = "-1";
-            const auto text_width = ImGui::CalcTextSize(str).x;
-            DrawIcon(4, text_width, 0);
-            ImGui::TextUnformatted(str);
-        }
-
-        if (auto energy = custom_sd.GetEnergy())
-        {
-            char str[4];
-            sprintf(str, "%d", energy);
-            const auto text_width = ImGui::CalcTextSize(str).x;
-            DrawIcon(3, text_width, 1);
-            ImGui::TextUnformatted(str);
-        }
-
-        if (auto adrenaline = custom_sd.GetAdrenaline())
-        {
-            const auto text_width = CalcAdrenalineValueWidth(adrenaline);
-            DrawIcon(3, text_width, 4);
-            // ImGui::TextUnformatted(str);
-            DrawAdrenalineValue(adrenaline);
-        }
-
-        if (auto activation = custom_sd.GetActivation())
-        {
-            char str[16];
-            FormatActivation(str, sizeof(str), activation);
-            const auto text_width = ImGui::CalcTextSize(str).x;
-            DrawIcon(2, text_width, 2);
-            ImGui::TextUnformatted(str);
-        }
-
-        if (auto recharge = custom_sd.GetRecharge())
-        {
-            char str[16];
-            sprintf(str, "%d", recharge);
-            const auto text_width = ImGui::CalcTextSize(str).x;
-            DrawIcon(1, text_width, 3);
-            ImGui::TextUnformatted(str);
-        }
-
-        if (auto aftercast = custom_sd.GetAftercast())
-        {
-            auto activation = custom_sd.GetActivation();
-            const bool is_normal_aftercast = (activation > 0 && aftercast == 0.75f) ||
-                                             (activation == 0 && aftercast == 0);
-            char str[16];
-            FormatActivation(str, sizeof(str), aftercast);
-            if (is_normal_aftercast)
-            {
-                ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.2f);
-            }
-            const auto text_width = ImGui::CalcTextSize(str).x;
-            DrawIcon(0, text_width, 2, ImVec4(0.3f, 0.33f, 0.7f, 1.f));
-            ImGui::TextUnformatted(str);
-            if (is_normal_aftercast)
-            {
-                ImGui::PopStyleVar();
-            }
-        }
-
-        ImGui::PopFont();
-    }
-
-    enum struct FilterJoin
-    {
-        None,
-        And,
-        Or,
-    };
-
-    constexpr uint32_t MAX_TAGS = 16;
-    enum struct SkillPropertyType
-    {
-        None,
-        Unknown,
-
-        // String
-        TEXT,
-
-        Name,
-        SkillType,
-        TAGS,
-        TAG_END = TAGS + MAX_TAGS,
-        Description,
-        Concise,
-        Attribute,
-        Profession,
-        Campaign,
-
-        TEXT_END,
-
-        // Number
-        NUMBER,
-
-        Overcast,
-        Adrenaline,
-        Sacrifice,
-        Energy,
-        Activation,
-        Recharge,
-        Aftercast,
-        Range,
-        ID,
-        PARSED,
-        PARSED_END = PARSED + (uint32_t)ParsedSkillData::Type::COUNT,
-
-        // Raw struct data
-        RAW,
-
-        u8,
-        u16,
-        u32,
-        f32,
-
-        NUMBER_END,
-    };
-
-    struct SkillPropertyID
-    {
-        SkillPropertyType type;
-        uint8_t byte_offset;
-
-        bool IsStringType() const
-        {
-            return type >= SkillPropertyType::TEXT && type < SkillPropertyType::TEXT_END;
-        }
-
-        bool IsNumberType() const
-        {
-            return type >= SkillPropertyType::NUMBER && type < SkillPropertyType::NUMBER_END;
-        }
-
-        bool IsRawNumberType() const
-        {
-            return type >= SkillPropertyType::RAW && type < SkillPropertyType::NUMBER_END;
-        }
-
-        std::string ToString() const
-        {
-            if (type >= SkillPropertyType::PARSED && type < SkillPropertyType::PARSED_END)
-            {
-                ParsedSkillData temp = {};
-                temp.type = static_cast<ParsedSkillData::Type>((uint32_t)type - (uint32_t)SkillPropertyType::PARSED);
-                return std::string(temp.ToStr());
-            }
-
-            if (IsRawNumberType())
-            {
-                std::string_view type_str;
-                // clang-format off
-                switch (type)
-                {
-                    case SkillPropertyType::u8: type_str = "u8"; break;
-                    case SkillPropertyType::u16: type_str = "u16"; break;
-                    case SkillPropertyType::u32: type_str = "u32"; break;
-                    case SkillPropertyType::f32: type_str = "f32"; break;
-                    default: type_str = "..."; break;
-                }
-                // clang-format on
-                return std::format("Data at offset {} as {}", byte_offset, type_str);
-            }
-
-            // clang-format off
-            switch (type) {
-                case SkillPropertyType::TEXT:         return "Text";         break;
-                case SkillPropertyType::Name:         return "Name";         break;
-                case SkillPropertyType::SkillType:    return "Type";         break;
-                case SkillPropertyType::TAGS:         return "Tag";          break;
-                case SkillPropertyType::Description:  return "Description";  break;
-                case SkillPropertyType::Attribute:    return "Attribute";    break;
-                case SkillPropertyType::Profession:   return "Profession";   break;
-                case SkillPropertyType::Campaign:     return "Campaign";     break;
-
-                case SkillPropertyType::Overcast:     return "Overcast";     break;
-                case SkillPropertyType::Adrenaline:   return "Adrenaline";   break;
-                case SkillPropertyType::Sacrifice:    return "Sacrifice";    break;
-                case SkillPropertyType::Energy:       return "Energy";       break;
-                case SkillPropertyType::Activation:   return "Activation";   break;
-                case SkillPropertyType::Recharge:     return "Recharge";     break;
-                case SkillPropertyType::Aftercast:    return "Aftercast";    break;
-                case SkillPropertyType::Range:        return "Range";        break;
-                case SkillPropertyType::ID:           return "ID";           break;
-
-                default:                             return "...";          break;
-            }
-            // clang-format on
-        }
-    };
-
-    enum struct FilterOperator
-    {
-        None,
-        Unknown,
-
-        Contain,
-        NotContain,
-        GreaterThanOrEqual,
-        LessThanOrEqual,
-        NotEqual,
-        Equal,
-        GreaterThan,
-        LessThan,
-    };
-
-    struct Filter
-    {
-        FilterJoin join;
-        SkillPropertyID target;
-        FilterOperator op;
-        std::vector<std::string_view> str_values;
-        std::vector<double> num_values;
-        const char *start;
-        const char *end;
-        const char *value_start;
-        const char *value_end;
-
-        bool IsValid() const
-        {
-            return ((target.IsNumberType() && !num_values.empty()) ||
-                       (target.IsStringType() && !str_values.empty())) &&
-                   op > FilterOperator::Unknown;
-        }
-    };
-
-    struct SortCommandArg
-    {
-        bool is_negated;
-        SkillPropertyID target;
-    };
-
-    struct SortCommand
-    {
-        std::vector<SortCommandArg> args;
-    };
-
-    struct Command
-    {
-        std::variant<SortCommand> data;
-    };
-
-    bool SkipWhitespace(char *&p, char *end)
-    {
-        auto start = p;
-        while (p < end && *p == ' ')
-            p++;
-
-        return p != start;
-    }
-
-    void SkipOneWhitespace(char *&p, char *end)
-    {
-        if (p < end && *p == ' ')
-            p++;
-    }
-
-    void SkipWhitespaceBackwards(char *start, char *&p)
-    {
-        while (p > start && *(p - 1) == ' ')
-            p--;
-    }
-
-    void SkipOneWhitespaceBackwards(const char *start, char *&p)
-    {
-        if (p > start && *(p - 1) == ' ')
-            p--;
-    }
-
-    void SkipUntil(char *&p, char *end, char c)
-    {
-        while (p < end && *p != c)
-            p++;
-    }
-
-    bool IsSeparator(char c)
-    {
-        return c == '|' || c == '&' || c == '#';
-    }
-
-    void SkipUntilStatementEnd(char *&p, char *end)
-    {
-        auto p_start = p;
-        while (p < end)
-        {
-            if (IsSeparator(*p))
-                return;
-            p++;
-        }
-    }
-
-    bool TryParseRawFilterTarget(char *&p, char *end, SkillPropertyID &target)
-    {
-        auto p_copy = p;
-        if (!Utils::TryRead("0x", p_copy, end))
-            return false;
-
-        target.type = SkillPropertyType::RAW;
-        target.byte_offset = 0;
-
-        char *hex_start = p_copy;
-        auto offset_ul = std::strtoul(hex_start, &p_copy, 16);
-        if (offset_ul >= sizeof(GW::Skill))
-            return false;
-        target.byte_offset = static_cast<uint8_t>(offset_ul);
-
-        SkipWhitespace(p_copy, end);
-
-        bool is_float = false;
-        if (Utils::TryRead('U', p_copy, end))
-            ;
-        else if (Utils::TryRead('F', p_copy, end))
-            is_float = true;
-        else
-        {
-            p = p_copy;
-            return true;
-        }
-
-        uint32_t eq_len = 0;
-        if (Utils::TryRead('8', p_copy, end))
-        {
-            if (is_float || target.byte_offset > sizeof(GW::Skill) - sizeof(uint8_t))
-                return false;
-            else
-                target.type = SkillPropertyType::u8;
-        }
-        else if (!eq_len && (eq_len = Utils::TryReadPartial("16", p_copy, end)) == 2)
-        {
-            if (is_float || target.byte_offset > sizeof(GW::Skill) - sizeof(uint16_t))
-                return false;
-            else
-                target.type = SkillPropertyType::u16;
-        }
-        else if (!eq_len && (eq_len = Utils::TryReadPartial("32", p_copy, end)) == 2)
-        {
-            if (target.byte_offset > sizeof(GW::Skill) - sizeof(uint32_t))
-                return false;
-            else
-                target.type = is_float ? SkillPropertyType::f32 : SkillPropertyType::u32;
-        }
-        else
-        {
-            p = p_copy;
-            return true;
-        }
-
-        p = p_copy;
-        return true;
-    }
-
-    constexpr SkillPropertyType FromParam(ParsedSkillData::Type type)
-    {
-        return static_cast<SkillPropertyType>((uint32_t)SkillPropertyType::PARSED + (uint32_t)type);
-    }
-
-    // Must not contain any whitespace
-    static constexpr uint32_t n_text_filter_targets = 8; // Must match the array below
-    static constexpr std::pair<std::string_view, SkillPropertyType> filter_targets[] = {
-        // Text
-
-        {"Text", SkillPropertyType::TEXT},
-        {"Name", SkillPropertyType::Name},
-        {"Type", SkillPropertyType::SkillType},
-        {"Tag", SkillPropertyType::TAGS},
-        {"Description", SkillPropertyType::Description},
-        {"Attribute", SkillPropertyType::Attribute},
-        {"Profession", SkillPropertyType::Profession},
-        {"Campaign", SkillPropertyType::Campaign},
-
-        // Number
-
-        {"Overcast", SkillPropertyType::Overcast},
-        {"Adrenaline", SkillPropertyType::Adrenaline},
-        {"Sacrifice", SkillPropertyType::Sacrifice},
-        {"Energy", SkillPropertyType::Energy},
-        {"Activation", SkillPropertyType::Activation},
-        {"Recharge", SkillPropertyType::Recharge},
-        {"Aftercast", SkillPropertyType::Aftercast},
-        {"Range", SkillPropertyType::Range},
-        {"ID", SkillPropertyType::ID},
-
-        {"Duration", FromParam(ParsedSkillData::Type::Duration)},
-        {"Disable", FromParam(ParsedSkillData::Type::Disable)},
-        {"Level", FromParam(ParsedSkillData::Type::Level)},
-        {"Damage", FromParam(ParsedSkillData::Type::Damage)},
-        {"Healing", FromParam(ParsedSkillData::Type::Heal)},
-        {"Armor", FromParam(ParsedSkillData::Type::ArmorChange)},
-
-        {"ConditionsRemoved", FromParam(ParsedSkillData::Type::ConditionsRemoved)},
-        {"HexesRemoved", FromParam(ParsedSkillData::Type::HexesRemoved)},
-        {"EnchantmentsRemoved", FromParam(ParsedSkillData::Type::EnchantmentsRemoved)},
-
-        {"HealthRegeneration", FromParam(ParsedSkillData::Type::HealthRegen)},
-        {"HealthDegeneration", FromParam(ParsedSkillData::Type::HealthDegen)},
-        {"HealthGain", FromParam(ParsedSkillData::Type::HealthGain)},
-        {"HealthLoss", FromParam(ParsedSkillData::Type::HealthLoss)},
-        {"HealthSteal", FromParam(ParsedSkillData::Type::HealthSteal)},
-        {"MaxHealth", FromParam(ParsedSkillData::Type::MaxHealthAdd)},
-
-        {"EnergyRegeneration", FromParam(ParsedSkillData::Type::EnergyRegen)},
-        {"EnergyDegeneration", FromParam(ParsedSkillData::Type::EnergyDegen)},
-        {"EnergyGain", FromParam(ParsedSkillData::Type::EnergyGain)},
-        {"EnergyLoss", FromParam(ParsedSkillData::Type::EnergyLoss)},
-        {"EnergySteal", FromParam(ParsedSkillData::Type::EnergySteal)},
-        {"EnergyDiscount", FromParam(ParsedSkillData::Type::EnergyDiscount)},
-
-        {"AdrenalineGain", FromParam(ParsedSkillData::Type::AdrenalineGain)},
-        {"AdrenalineLoss", FromParam(ParsedSkillData::Type::AdrenalineLoss)},
-
-        {"Bleeding", FromParam(ParsedSkillData::Type::Bleeding)},
-        {"Blind", FromParam(ParsedSkillData::Type::Blind)},
-        {"Burning", FromParam(ParsedSkillData::Type::Burning)},
-        {"CrackedArmor", FromParam(ParsedSkillData::Type::CrackedArmor)},
-        {"Crippled", FromParam(ParsedSkillData::Type::Crippled)},
-        {"Dazed", FromParam(ParsedSkillData::Type::Dazed)},
-        {"DeepWound", FromParam(ParsedSkillData::Type::DeepWound)},
-        {"Disease", FromParam(ParsedSkillData::Type::Disease)},
-        {"Poison", FromParam(ParsedSkillData::Type::Poison)},
-        {"Weakness", FromParam(ParsedSkillData::Type::Weakness)},
-
-        {"ActivationModifier", FromParam(ParsedSkillData::Type::ActivationTimeAdd)},
-        {"MoveSpeedModifier%", FromParam(ParsedSkillData::Type::MovementSpeedMod)},
-        {"RechargeModifier", FromParam(ParsedSkillData::Type::RechargeTimeAdd)},
-        {"RechargeModifier%", FromParam(ParsedSkillData::Type::RechargeTimeMod)},
-        {"AttackTimeModifier%", FromParam(ParsedSkillData::Type::AttackTimeMod)},
-        {"DamageModifier", FromParam(ParsedSkillData::Type::DamageReduction)},
-        {"DamageModifier%", FromParam(ParsedSkillData::Type::DamageMod)},
-        {"DurationModifier%", FromParam(ParsedSkillData::Type::DurationMod)},
-        {"HealingModifier%", FromParam(ParsedSkillData::Type::HealMod)},
-    };
-
-    static constexpr std::span<const std::pair<std::string_view, SkillPropertyType>> text_filter_targets = {filter_targets, n_text_filter_targets};
-    static constexpr std::span<const std::pair<std::string_view, SkillPropertyType>> number_filter_targets = {filter_targets + n_text_filter_targets, std::size(filter_targets) - n_text_filter_targets};
-
-    uint32_t MatchIdent(std::string_view ident, std::string_view shorthand, uint32_t i, uint32_t s)
-    {
-        if (s >= shorthand.size() || i >= ident.size())
-            return 0;
-
-        auto opt_a = 0;
-        if (tolower(ident[i]) == tolower(shorthand[s]))
-        {
-            opt_a = 1 + MatchIdent(ident, shorthand, i + 1, s + 1);
-        }
-
-        auto next_subword_index = i + 1;
-        while (next_subword_index < ident.size() &&
-               ident[next_subword_index] >= 'a' &&
-               ident[next_subword_index] <= 'z')
-            next_subword_index++;
-
-        bool has_next_subword = next_subword_index < ident.size();
-
-        auto opt_b = 0;
-        if (has_next_subword)
-        {
-            opt_b = MatchIdent(ident, shorthand, next_subword_index, s);
-        }
-
-        return std::max(opt_a, opt_b);
-    }
-
-    SkillPropertyID ParseFilterTarget(char *&p, char *end, bool must_match_whole_word = true)
-    {
-        SkillPropertyID target = {};
-
-        if (TryParseRawFilterTarget(p, end, target))
-        {
-            return target;
-        }
-
-        auto view = std::string_view(p, end - p);
-
-        uint32_t best_match_count = 0;
-        int32_t best_match_index = -1;
-        char *best_match_end = p;
-        for (uint32_t i = 0; i < std::size(filter_targets); i++)
-        {
-            auto &pair = filter_targets[i];
-            auto ident = pair.first;
-            auto &type = pair.second;
-
-            auto match_count = MatchIdent(ident, view, 0, 0);
-            char *match_end = p + match_count;
-            if (must_match_whole_word && (match_end < end && Utils::IsAlpha(*match_end)))
-                continue;
-            if (match_count > best_match_count)
-            {
-                target.type = type;
-                best_match_count = match_count;
-                best_match_index = i;
-                best_match_end = match_end;
-            }
-            // else if (best_match_index != -1 && match_count == best_match_count)
-            // {
-            //     auto old_ident = filter_targets[best_match_index].first;
-            //     if (!ident.contains(old_ident))
-            //     {
-            //         target.type = SkillPropertyType::None;
-            //         best_match_index = -1;
-            //         best_match_end = p;
-            //     }
-            // }
-        }
-
-        p = best_match_end;
-
-        return target;
-    }
-
-    static constexpr std::pair<std::string_view, FilterOperator> filter_operators[] = {
-        {":", FilterOperator::Contain},
-        {"!:", FilterOperator::NotContain},
-        {"=", FilterOperator::Equal},
-        {"!=", FilterOperator::NotEqual},
-        {">=", FilterOperator::GreaterThanOrEqual},
-        {">", FilterOperator::GreaterThan},
-        {"<=", FilterOperator::LessThanOrEqual},
-        {"<", FilterOperator::LessThan},
-    };
-
-    static constexpr std::span<const std::pair<std::string_view, FilterOperator>> text_filter_operators = {filter_operators, 4};
-    static constexpr std::span<const std::pair<std::string_view, FilterOperator>> number_filter_operators = {filter_operators + 2, 6};
-    static constexpr std::span<const std::pair<std::string_view, FilterOperator>> adv_filter_operators = {filter_operators, 2};
-
-    std::string_view GetOpDescription(SkillPropertyID target, FilterOperator op)
-    {
-        // clang-format off
-        switch (op) {
-            case FilterOperator::Contain:            return target.IsRawNumberType() ? "must contain bitflags of" : "must contain";
-            case FilterOperator::NotContain:         return target.IsRawNumberType() ? "must NOT contain bitflags of" : "must NOT contain";
-            case FilterOperator::Equal:              return target.IsStringType() ? "must start with" : "must be equal to";
-            case FilterOperator::NotEqual:           return target.IsStringType() ? "must NOT start with" : "must NOT be equal to";
-            case FilterOperator::GreaterThanOrEqual: return "must be greater than or equal to";
-            case FilterOperator::GreaterThan:        return "must be greater than";
-            case FilterOperator::LessThanOrEqual:    return "must be less than or equal to";
-            case FilterOperator::LessThan:           return "must be less than";
-            default:                                 return "...";
-        }
-        // clang-format on
-    }
-
-    FilterOperator ParseFilterOperator(SkillPropertyID target, char *&p, char *end)
-    {
-        if (p == end)
-            return FilterOperator::None;
-
-        if (Utils::TryRead("==", p, end)) // Special case for programmers habit of using == for equality instead of =
-            return FilterOperator::Equal;
-
-        auto operators = target.IsStringType()
-                             ? text_filter_operators
-                         : target.IsRawNumberType()
-                             ? filter_operators
-                             : number_filter_operators;
-
-        for (const auto &[op, op_enum] : operators)
-        {
-            if (Utils::TryRead(op, p, end))
-                return op_enum;
-        }
-
-        return FilterOperator::None;
-    }
-
-    bool TryParseFilterTargetAndOperator(char *&p, char *end, Filter &filter)
-    {
-        auto p_copy = p;
-
-        SkipWhitespace(p_copy, end);
-
-        filter.target = ParseFilterTarget(p_copy, end);
-        if (filter.target.type == SkillPropertyType::None)
-        {
-            filter.target = {SkillPropertyType::TEXT, 0};
-        }
-
-        SkipWhitespace(p_copy, end);
-
-        filter.op = ParseFilterOperator(filter.target, p_copy, end);
-        if (filter.op == FilterOperator::None)
-        {
-            if (filter.target.IsRawNumberType())
-            {
-                filter.op = FilterOperator::Unknown;
-            }
-            else
-            {
-                filter.target = {SkillPropertyType::TEXT, 0};
-                filter.op = FilterOperator::Contain;
-                return true;
-            }
-        }
-
-        SkipOneWhitespace(p_copy, end);
-
-        p = p_copy;
-        return true;
-    }
-
-    bool TryParseFilter(char *&p, char *end, Filter &filter)
-    {
-        filter.start = p;
-        bool is_invalid = false;
-
-        if (p == end)
-            return false;
-
-        SkipWhitespace(p, end);
-
-        if (Utils::TryRead('|', p, end))
-        {
-            filter.join = FilterJoin::Or;
-        }
-        else if (Utils::TryRead('&', p, end))
-        {
-            filter.join = FilterJoin::And;
-        }
-        else
-        {
-            p = (char *)filter.start;
-            filter.join = FilterJoin::None;
-        }
-
-        if (filter.join != FilterJoin::None)
-            SkipWhitespace(p, end);
-
-        TryParseFilterTargetAndOperator(p, end, filter);
-
-        filter.value_start = p;
-        filter.end = end;
-
-        while (true)
-        {
-            char *str_start;
-            size_t str_len;
-            if (filter.target.IsNumberType())
-            {
-                SkipWhitespace(p, end);
-                str_start = p;
-                double value = strtod(str_start, &p);
-                str_len = p - str_start;
-                bool success = (p == end || *p == ' ' || *p == '/' || IsSeparator(*p));
-                SkipWhitespace(p, end);
-
-                if (str_len > 0)
-                    filter.num_values.push_back(value);
-                else if (filter.num_values.empty())
-                    success = false;
-
-                if (!success)
-                {
-                    break;
-                }
-            }
-            else
-            {
-                str_start = p;
-                SkipUntil(p, end, '/');
-                str_len = p - str_start;
-            }
-
-            filter.str_values.push_back(std::string_view(str_start, str_len));
-
-            if (!Utils::TryRead('/', p, end))
-                break;
-        }
-        filter.value_end = p;
-
-        p = (char *)filter.end;
-
-        if (p == filter.start)
-            return false;
-
-        return true;
-    }
-
-    bool TryParseCommand(char *&p, char *end, Command &command)
-    {
-        auto p_copy = p;
-
-        SkipWhitespace(p_copy, end);
-
-        if (!Utils::TryRead('#', p_copy, end))
-            return false;
-
-        if (Utils::TryRead("SORT", p_copy, end))
-        {
-            SortCommand sort_com = {};
-            while (p_copy < end)
-            {
-                if (!SkipWhitespace(p_copy, end))
-                    break;
-                SortCommandArg sort_arg = {};
-                auto start = p_copy;
-                bool has_excl = Utils::TryRead('!', p_copy, end);
-                sort_arg.target = ParseFilterTarget(p_copy, end);
-                if (sort_arg.target.type == SkillPropertyType::None ||
-                    sort_arg.target.type == SkillPropertyType::TEXT)
-                    break;
-
-                if (sort_arg.target.type == SkillPropertyType::ID)
-                    sort_arg.is_negated = false;
-                else
-                    sort_arg.is_negated = sort_arg.target.IsStringType() ? has_excl : !has_excl; // We sort numbers by default in descending order
-
-                sort_com.args.push_back(sort_arg);
-            }
-            command.data = sort_com;
-        }
-        else
-        {
-            return false;
-        }
-
-        p = p_copy;
-
-        return true;
-    }
-
-    // Example input: "foe | prof= me/p & desc !: icy/ice & range !=4 & activation < 2 #sort re !e"
-    void ParseInput(char *input, size_t filter_len, std::vector<Filter> &parsed_filters, std::vector<Command> &parsed_commands)
-    {
-        char *p = input;
-        char *end = input + filter_len;
-
-        // auto stmt_start = p;
-        while (p < end)
-        {
-            auto stmt_start = p;
-            p++; // Skip the separator
-            SkipUntilStatementEnd(p, end);
-            auto stmt_end = p;
-            if (p != end)
-                SkipOneWhitespaceBackwards(stmt_start, stmt_end);
-
-            if (*stmt_start == '#')
-            {
-                if (Command command = {}; TryParseCommand(stmt_start, stmt_end, command))
-                {
-                    parsed_commands.push_back(command);
-                }
-            }
-            else
-            {
-                if (Filter filter = {}; TryParseFilter(stmt_start, stmt_end, filter))
-                {
-                    parsed_filters.push_back(filter);
-                }
-            }
-        }
-    }
-
-    struct SkillProperty
-    {
-        double GetNumber() const
-        {
-            return std::get<double>(val);
-        }
-
-        std::string_view GetStr() const
-        {
-            return std::get<std::string_view>(val);
-        }
-
-        bool IsString() const
-        {
-            return std::holds_alternative<std::string_view>(val);
-        }
-
-        SkillPropertyType type;
-        std::variant<double, std::string_view> val;
-    };
-
-    uint32_t GetHighlightKey(GW::Constants::SkillID skill_id, SkillPropertyType target)
-    {
-        assert((uint32_t)skill_id < 0x10000);
-        assert((uint32_t)target < 0x10000);
-        return (((uint32_t)skill_id) << 16) | (uint32_t)target;
-    }
-
-    void GetSkillProperty(SkillPropertyID target, CustomSkillData &custom_sd, FixedArrayRef<SkillProperty> out)
-    {
-        auto &skill = *custom_sd.skill;
-        auto attr_lvl = pending_state.GetAttribute(custom_sd.attribute);
-
-        auto success = true;
-
-        if (target.type >= SkillPropertyType::PARSED && target.type < SkillPropertyType::PARSED_END)
-        {
-            auto PushSkillParam = [&](ParsedSkillData::Type type)
-            {
-                FixedArray<ParsedSkillData, 8> salloc;
-                auto pps = salloc.ref();
-                custom_sd.GetParsedSkillParams(type, pps);
-                if (pps.size() == 0)
-                {
-                    success &= out.try_push({target.type, 0.0});
-                    return;
-                }
-                for (const auto &pp : pps)
-                {
-                    double sign = pp.is_negative ? -1.0 : 1.0;
-                    if (attr_lvl == -1)
-                    {
-                        success &= out.try_push({target.type, sign * (double)pp.param.val0});
-                        success &= out.try_push({target.type, sign * (double)pp.param.val15});
-                    }
-                    else
-                    {
-                        success &= out.try_push({target.type, sign * (double)pp.param.Resolve(attr_lvl)});
-                    }
-                }
-            };
-            const auto param_type = static_cast<ParsedSkillData::Type>((uint32_t)target.type - (uint32_t)SkillPropertyType::PARSED);
-            PushSkillParam(param_type);
-            SOFT_ASSERT(success);
-            return;
-        }
-
-        auto PushTags = [&]()
-        {
-            FixedArray<SkillTag, MAX_TAGS> tags_salloc;
-            auto tags = tags_salloc.ref();
-            custom_sd.GetTags(tags);
-            for (uint32_t i = 0; i < tags.size(); i++)
-            {
-                auto type = (SkillPropertyType)((uint32_t)SkillPropertyType::TAGS + i);
-                success &= out.try_push({type, SkillTagToString(tags[i])});
-            }
-        };
-
-        auto PushDesc = [&]()
-        {
-            success &= out.try_push({SkillPropertyType::Description, (std::string_view)custom_sd.TryGetDescription(false, attr_lvl)->str});
-            success &= out.try_push({SkillPropertyType::Concise, (std::string_view)custom_sd.TryGetDescription(true, attr_lvl)->str});
-        };
-
-        const auto ptr = reinterpret_cast<const uint8_t *>(custom_sd.skill);
-
-        // clang-format off
-        switch (target.type) {
-            case SkillPropertyType::TEXT: {
-                success &= out.try_push({SkillPropertyType::Name, (std::string_view)*custom_sd.TryGetName()});
-                success &= out.try_push({SkillPropertyType::SkillType, custom_sd.GetTypeString()});
-                PushTags();
-                PushDesc();
-                success &= out.try_push({SkillPropertyType::Attribute, custom_sd.GetAttributeString()});
-                success &= out.try_push({SkillPropertyType::Profession, custom_sd.GetProfessionString()});
-                success &= out.try_push({SkillPropertyType::Campaign, custom_sd.GetCampaignString()});
-                break;
-            }
-            case SkillPropertyType::Name:         success &= out.try_push({target.type, (std::string_view)*custom_sd.TryGetName()}); break;
-            case SkillPropertyType::SkillType:    success &= out.try_push({target.type, custom_sd.GetTypeString()});                 break;
-            case SkillPropertyType::TAGS:         PushTags();                                                                        break;
-            case SkillPropertyType::Description:  PushDesc();                                                                        break;
-            case SkillPropertyType::Attribute:    success &= out.try_push({target.type, custom_sd.GetAttributeString()});            break;
-            case SkillPropertyType::Profession:   success &= out.try_push({target.type, custom_sd.GetProfessionString()});           break;
-            case SkillPropertyType::Campaign:     success &= out.try_push({target.type, custom_sd.GetCampaignString()});             break;
-
-            case SkillPropertyType::Overcast:     success &= out.try_push({target.type, (double)custom_sd.GetOvercast()});           break;
-            case SkillPropertyType::Adrenaline: {
-                // For adrenaline we push two values, the adrenaline strikes (what the user typically wants) and the raw adrenaline value, which is used when sorting.
-                success &= out.try_push({SkillPropertyType::Adrenaline, (double)custom_sd.GetAdrenalineStrikes()});
-                success &= out.try_push({SkillPropertyType::Adrenaline, (double)custom_sd.GetAdrenaline()});
-                break;
-            }
-            case SkillPropertyType::Sacrifice:    success &= out.try_push({target.type, (double)custom_sd.GetSacrifice()});          break;
-            case SkillPropertyType::Energy:       success &= out.try_push({target.type, (double)custom_sd.GetEnergy()});             break;
-            case SkillPropertyType::Activation:   success &= out.try_push({target.type, custom_sd.GetActivation()});                 break;
-            case SkillPropertyType::Recharge:     success &= out.try_push({target.type, (double)custom_sd.GetRecharge()});           break;
-            case SkillPropertyType::Aftercast:    success &= out.try_push({target.type, custom_sd.GetAftercast()});                  break;
-            case SkillPropertyType::Range: {
-                FixedArray<Utils::Range, 4> ranges_salloc;
-                auto ranges = ranges_salloc.ref();
-                custom_sd.GetRanges(ranges);
-                for (const auto &range : ranges)
-                    success &= out.try_push({SkillPropertyType::Range, (double)range});
-                break;
-            }
-            case SkillPropertyType::ID:           success &= out.try_push({target.type, (double)custom_sd.skill_id});                break;
-
-            case SkillPropertyType::u8:           success &= out.try_push({target.type, (double)*(uint8_t  *)(ptr + target.byte_offset)}); break;
-            case SkillPropertyType::u16:          success &= out.try_push({target.type, (double)*(uint16_t *)(ptr + target.byte_offset)}); break;
-            case SkillPropertyType::u32:          success &= out.try_push({target.type, (double)*(uint32_t *)(ptr + target.byte_offset)}); break;
-            case SkillPropertyType::f32:          success &= out.try_push({target.type, (double)*(float    *)(ptr + target.byte_offset)}); break;
-
-            case SkillPropertyType::RAW:
-            case SkillPropertyType::Unknown:
-                break; // If unknown, it was explicitly requested, perhaps by an in-progress filter. Do nothing.
-
-            default: SOFT_ASSERT(false, L"Unhandled SkillPropertyType {}", (uint32_t)target.type); break;
-        }
-        // clang-format on
-        SOFT_ASSERT(success);
-    }
-
-    void AddHighlightRange(std::vector<uint16_t> &highlighting, uint16_t start, uint16_t end)
-    {
-        const auto count = highlighting.size();
-        if (count == 0)
-        {
-            highlighting.push_back(start);
-            highlighting.push_back(end);
-            return;
-        }
-
-        const auto &prev_start = highlighting[count - 2];
-        if (prev_start <= start) // Common case
-        {
-            auto &prev_end = highlighting[count - 1];
-            if (prev_end < start)
-            {
-                highlighting.push_back(start);
-                highlighting.push_back(end);
-            }
-            else
-            {
-                prev_end = end;
-            }
-            return;
-        }
-
-        // Find the insertion point using std::lower_bound
-        auto it_start = std::lower_bound(highlighting.begin(), highlighting.end(), start, [](uint16_t a, uint16_t b)
-            { return a < b; });
-
-        auto index_start = std::distance(highlighting.begin(), it_start);
-        bool is_intersecting_start = index_start & 1;
-
-        // Find the insertion point using std::lower_bound
-        auto it_end = std::lower_bound(highlighting.begin(), highlighting.end(), end, [](uint16_t a, uint16_t b)
-            { return a < b; });
-
-        auto index_end = std::distance(highlighting.begin(), it_end);
-        bool is_intersecting_end = index_end & 1;
-
-        auto removal_count = index_end - index_start;
-
-        auto eit = highlighting.erase(it_start, it_end);
-
-        if (!is_intersecting_end)
-        {
-            eit = highlighting.insert(eit, end);
-        }
-        if (!is_intersecting_start)
-        {
-            eit = highlighting.insert(eit, start);
-        }
-    }
-
-    bool CheckPassesFilter(const Filter &filter, CustomSkillData &custom_sd)
-    {
-        bool negated = filter.op == FilterOperator::NotEqual ||
-                       filter.op == FilterOperator::NotContain;
-
-        if (filter.target.IsStringType())
-        {
-            bool matches_must_start_at_beginning = filter.op == FilterOperator::Equal ||
-                                                   filter.op == FilterOperator::NotEqual;
-
-            FixedArray<SkillProperty, 16> salloc;
-            auto buffer = salloc.ref();
-            GetSkillProperty(filter.target, custom_sd, buffer);
-
-            bool str_found = false;
-            for (auto prop : buffer)
-            {
-                const auto str = prop.GetStr();
-                auto str_len = str.size();
-                if (str_len == 0)
-                {
-                    // We treat empty strings as not matching any filter
-                    continue;
-                }
-
-                auto &highlighting = pending_state.highlighting_map[GetHighlightKey(custom_sd.skill_id, prop.type)];
-
-                for (auto filter_str : filter.str_values)
-                {
-                    auto filter_str_len = filter_str.size();
-
-                    if (filter_str_len == 0)
-                    {
-                        // But if the filter string is empty, we treat it as a match
-                        str_found = true;
-                        continue;
-                    }
-
-                    if (matches_must_start_at_beginning)
-                    {
-                        if (Utils::StrCountEqual(str, filter_str) == filter_str_len)
-                        {
-                            str_found = true;
-                            if (negated)
-                                break;
-
-                            AddHighlightRange(highlighting, 0, filter_str_len);
-                        }
-                    }
-                    else
-                    {
-                        const auto str_start = str.data();
-                        auto search_ptr = str_start;
-                        const auto search_end = search_ptr + str_len;
-                        std::string_view found;
-                        while (Utils::StrFind(search_ptr, search_end, filter_str))
-                        {
-                            str_found = true;
-                            if (negated)
-                                break;
-
-                            auto start_index = search_ptr - str_start;
-                            auto end_index = start_index + filter_str_len;
-                            AddHighlightRange(highlighting, start_index, end_index);
-                            search_ptr += 1;
-                        }
-                    }
-                }
-            }
-
-            return str_found ^ negated;
-        }
-        else if (filter.target.IsNumberType())
-        {
-            FixedArray<SkillProperty, 8> salloc;
-            auto buffer = salloc.ref();
-            GetSkillProperty(filter.target, custom_sd, buffer);
-
-            bool cond_satisfied = false;
-
-            for (auto prop : buffer)
-            {
-                auto skill_val = prop.GetNumber();
-                for (auto filt_val : filter.num_values)
-                {
-                    // clang-format off
-                    switch (filter.op) {
-                        case FilterOperator::GreaterThan:        cond_satisfied |= skill_val >  filt_val; break;
-                        case FilterOperator::LessThan:           cond_satisfied |= skill_val <  filt_val; break;
-                        case FilterOperator::GreaterThanOrEqual: cond_satisfied |= skill_val >= filt_val; break;
-                        case FilterOperator::LessThanOrEqual:    cond_satisfied |= skill_val <= filt_val; break;
-                        
-                        case FilterOperator::NotContain:
-                        case FilterOperator::Contain:            cond_satisfied |= ((uint32_t)skill_val & (uint32_t)filt_val) == (uint32_t)filt_val; break;
-                        
-                        case FilterOperator::None:
-                        case FilterOperator::NotEqual:
-                        case FilterOperator::Equal:
-                        default:                                 cond_satisfied |= skill_val == filt_val; break;
-                    }
-                    // clang-format on
-                }
-            }
-
-            return cond_satisfied ^ negated;
-        }
-        else
-        {
-            SOFT_ASSERT(false, L"Invalid filter target type");
-            return false;
-        }
-    }
-
-    bool CheckPassesFilters(const std::vector<Filter> &filters, CustomSkillData &custom_sd)
-    {
-        bool passes = true;
-        for (auto &filter : filters)
-        {
-            if (!filter.IsValid())
-                continue;
-
-            auto join = filter.join;
-            if (join == FilterJoin::And ||
-                join == FilterJoin::None)
-            {
-                if (passes == false)
-                    return false;
-                passes &= CheckPassesFilter(filter, custom_sd);
-            }
-            else if (join == FilterJoin::Or)
-            {
-                passes |= CheckPassesFilter(filter, custom_sd);
-            }
-        }
-
-        return passes;
-    }
-
-    union SortProp
-    {
-        char str[16];
-        double num[2];
-
-        SortProp() = default;
-        SortProp(SkillPropertyID id, CustomSkillData &custom_sd)
-        {
-            FixedArray<SkillProperty, 8> salloc;
-            auto props = salloc.ref();
-            GetSkillProperty(id, custom_sd, props);
-
-            if (id.IsStringType())
-            {
-                if (props.size() > 0)
-                {
-                    auto str_view = props[0].GetStr();
-                    std::strncpy(str, str_view.data(), sizeof(str));
-                }
-                else
-                {
-                    std::memset(str, 0, sizeof(str));
-                }
-            }
-            else
-            {
-                num[0] = props.size() > 0 ? props[0].GetNumber() : 0;
-                num[1] = num[0];
-                for (uint32_t i = 1; i < props.size(); i++)
-                {
-                    auto val = props[i].GetNumber();
-                    num[0] = std::min(num[0], val);
-                    num[1] = std::max(num[1], val);
-                }
-            }
-        }
-
-        bool ContainsFullString() const
-        {
-            return str[sizeof(str) - 1] == '\0';
-        }
-
-        int32_t CompareStr(const SortProp &other) const
-        {
-            return std::strncmp(str, other.str, sizeof(str));
-        }
-
-        int32_t CompareNumAscending(SortProp &other) const
-        {
-            if (num[0] != other.num[0])
-                return num[0] < other.num[0] ? -1 : 1;
-            if (num[1] != other.num[1])
-                return num[1] < other.num[1] ? -1 : 1;
-            return 0;
-        }
-
-        int32_t CompareNumDescending(SortProp &other) const
-        {
-            if (num[1] != other.num[1])
-                return num[1] < other.num[1] ? 1 : -1;
-            if (num[0] != other.num[0])
-                return num[0] < other.num[0] ? 1 : -1;
-            return 0;
-        }
-    };
-
-    void ApplyCommand(Command &command, std::span<uint16_t> filtered_skills)
-    {
-        if (std::holds_alternative<SortCommand>(command.data))
-        {
-            // Sorting may be slow on debug builds but should be super fast on release builds
-            // (I experienced 110 ms in debug build and 4 ms in release build for the same sorting operation)
-
-            auto &sort_command = std::get<SortCommand>(command.data);
-            if (sort_command.args.empty())
-                return;
-
-            // Prefetch some data to speed up sorting (this might actually not be needed for release builds)
-            auto prefetched = std::array<SortProp, GW::Constants::SkillMax>{};
-            auto first_target = sort_command.args[0].target;
-            for (auto skill_id : filtered_skills)
-            {
-                auto &custom_sd = CustomSkillDataModule::GetCustomSkillData((GW::Constants::SkillID)skill_id);
-                prefetched[skill_id] = SortProp(first_target, custom_sd);
-            }
-
-            auto Comparer = [&](const uint16_t a, const uint16_t b)
-            {
-                for (uint32_t i = 0; i < sort_command.args.size(); i++)
-                {
-                    auto &arg = sort_command.args[i];
-                    auto target = arg.target;
-                    bool is_negated = arg.is_negated;
-
-                    auto &custom_sd_a = CustomSkillDataModule::GetCustomSkillData((GW::Constants::SkillID)a);
-                    auto &custom_sd_b = CustomSkillDataModule::GetCustomSkillData((GW::Constants::SkillID)b);
-
-                    bool is_string = target.IsStringType();
-                    int32_t cmp = 0;
-                    if (is_string)
-                    {
-                        if (i == 0)
-                        {
-                            // Do a cheap check on first 16 chars first
-                            auto &prop_a = prefetched[a];
-                            auto &prop_b = prefetched[b];
-                            cmp = prop_a.CompareStr(prop_b);
-                            if (cmp != 0)
-                                return is_negated ? cmp > 0 : cmp < 0;
-                            if (prop_a.ContainsFullString() && prop_b.ContainsFullString())
-                                continue;
-                        }
-
-                        constexpr auto buffer_size = 8;
-                        FixedArray<SkillProperty, buffer_size> salloc_a;
-                        FixedArray<SkillProperty, buffer_size> salloc_b;
-                        auto buffer_a = salloc_a.ref();
-                        auto buffer_b = salloc_b.ref();
-                        GetSkillProperty(target, custom_sd_a, buffer_a);
-                        GetSkillProperty(target, custom_sd_b, buffer_b);
-
-                        assert(buffer_a.size() == buffer_b.size());
-                        for (uint32_t i = 0; i < buffer_a.size(); i++)
-                        {
-                            auto str_a = buffer_a[i].GetStr();
-                            auto str_b = buffer_b[i].GetStr();
-
-                            cmp = str_a.compare(str_b);
-                            if (cmp != 0)
-                                return is_negated ? cmp > 0 : cmp < 0;
-                        }
-                    }
-                    else
-                    {
-                        auto prop_a = i == 0 ? prefetched[a] : SortProp(target, custom_sd_a);
-                        auto prop_b = i == 0 ? prefetched[b] : SortProp(target, custom_sd_b);
-                        cmp = is_negated ? prop_a.CompareNumDescending(prop_b)
-                                         : prop_a.CompareNumAscending(prop_b);
-                        if (cmp != 0)
-                            return cmp < 0;
-                    }
-                }
-                return false;
-            };
-            std::stable_sort(filtered_skills.begin(), filtered_skills.end(), Comparer);
-        }
-        else
-        {
-            SOFT_ASSERT(false, L"Invalid command type");
-        }
-    }
-
-    bool show_null_stats = false;
-    bool snap_to_skill = true;
-    void DrawCheckboxes()
-    {
-        // if (ImGui::CollapsingHeader("Options"))
-        {
-            ImGui::Columns(2, nullptr, false);
-
-            state_dirty |= ImGui::Checkbox("Include PvE-only skills", &include_pve_only_skills);
-            state_dirty |= ImGui::Checkbox("Include Temporary skills", &include_temporary_skills);
-            state_dirty |= ImGui::Checkbox("Include NPC skills", &include_npc_skills);
-            state_dirty |= ImGui::Checkbox("Include Archived skills", &include_archived_skills);
-            state_dirty |= ImGui::Checkbox("Include Disguises", &include_disguises);
-
-            ImGui::NextColumn();
-
-            ImGui::Checkbox("Show precise adrenaline", &use_precise_adrenaline);
-            ImGui::Checkbox("Show null stats", &show_null_stats);
-            ImGui::Checkbox("Snap to skill", &snap_to_skill);
-            ImGui::Checkbox("Prefer concise descriptions", &prefer_concise_descriptions);
-
-            ImGui::Columns(1);
-        }
-    }
-
-    Utils::RichString input_feedback;
-    void UpdateFeedback(std::span<Filter> parsed_filters, std::span<Command> parsed_commands)
-    {
-        input_feedback.str.clear();
-        input_feedback.color_changes.clear();
-        for (auto &filter : parsed_filters)
-        {
-            if (!filter.IsValid())
-            {
-                input_feedback.color_changes.push_back({input_feedback.str.size(), Constants::GWColors::skill_dull_gray});
-            }
-
-            const auto target_name = filter.target.ToString();
-            const auto op_desc = GetOpDescription(filter.target, filter.op).data();
-            bool is_string = filter.target.IsStringType();
-            bool is_number = filter.target.IsNumberType();
-
-            if (filter.join == FilterJoin::Or)
-            {
-                input_feedback.str += "OR ";
-            }
-            else if (filter.join == FilterJoin::And)
-            {
-                input_feedback.str += "AND ";
-            }
-
-            if (is_string)
-            {
-                Utils::AppendFormatted(input_feedback.str, 64, "%s %s: ", target_name.data(), op_desc);
-            }
-            else if (is_number)
-            {
-                Utils::AppendFormatted(input_feedback.str, 128, "%s %s ", target_name.data(), op_desc);
-            }
-            else
-            {
-                input_feedback.str += "...";
-            }
-
-            auto value_str_len = filter.value_end - filter.value_start;
-
-            const auto n_values = filter.str_values.size();
-            for (uint32_t i = 0; i < n_values; i++)
-            {
-                auto filt_str = filter.str_values[i];
-                if (is_number && filt_str.size() == 0)
-                    filt_str = "...";
-                auto kind = i == 0             ? 0
-                            : i < n_values - 1 ? 1
-                                               : 2;
-                // clang-format off
-                if (kind == 1)      input_feedback.str += ", ";
-                else if (kind == 2) input_feedback.str += " or ";
-                if (is_string)      input_feedback.str += "\"";
-                                    input_feedback.str += filt_str;
-                if (is_string)      input_feedback.str += "\"";
-                // if (kind = 2)       input_feedback.str += ".";
-                // clang-format on
-            }
-
-            if (n_values == 0 && is_number)
-            {
-                input_feedback.str += "...";
-            }
-
-            if (!filter.IsValid())
-            {
-                input_feedback.color_changes.push_back({input_feedback.str.size(), 0});
-            }
-
-            input_feedback.str += "\n";
-        }
-
-        for (auto &command : parsed_commands)
-        {
-            if (std::holds_alternative<SortCommand>(command.data))
-            {
-                auto &sort_command = std::get<SortCommand>(command.data);
-
-                const auto n_values = sort_command.args.size();
-                bool is_incomplete = n_values == 0;
-                if (is_incomplete)
-                {
-                    input_feedback.color_changes.push_back({input_feedback.str.size(), Constants::GWColors::skill_dull_gray});
-                }
-
-                input_feedback.str += is_incomplete ? "Sort by ..." : "Sort";
-                for (uint32_t i = 0; i < n_values; i++)
-                {
-                    const auto &arg = sort_command.args[i];
-                    auto kind = i == 0             ? 0
-                                : i < n_values - 1 ? 1
-                                                   : 2;
-
-                    // clang-format off
-                    if (kind == 1)      input_feedback.str += ", then";
-                    else if (kind == 2) input_feedback.str += " and then";
-                    if (arg.is_negated) input_feedback.str += " descending by ";
-                    else                input_feedback.str += " ascending by ";
-                                        input_feedback.str += arg.target.ToString();
-                    // clang-format on
-                }
-
-                if (is_incomplete)
-                {
-                    input_feedback.color_changes.push_back({input_feedback.str.size(), 0});
-                }
-            }
-            input_feedback.str += "\n";
-        }
-    }
 
     bool TryInitBaseSkills()
     {
-        if (!CustomSkillDataModule::is_initialized)
-            return false;
-
         bool fail = false;
-        for (uint16_t i = 0; i < GW::Constants::SkillMax; i++)
-        {
-            auto &custom_sd = CustomSkillDataModule::GetCustomSkillData((GW::Constants::SkillID)i);
-            if (!custom_sd.TryGetName())
-                fail = true;
-        }
-        if (fail)
+        auto &text_provider = SkillTextProvider::GetInstance(GW::Constants::Language::English);
+        if (!text_provider.IsReady())
             return false;
 
         for (uint16_t i = 1; i < GW::Constants::SkillMax; i++)
@@ -1815,7 +133,7 @@ namespace HerosInsight::SkillBook
             base_skills.push_back(i);
         }
 
-        auto Comparer = [](uint16_t a, uint16_t b)
+        auto Comparer = [&text_provider](uint16_t a, uint16_t b)
         {
             // auto &skill_a = *GW::SkillbarMgr::GetSkillConstantData((GW::Constants::SkillID)a);
             // auto &skill_b = *GW::SkillbarMgr::GetSkillConstantData((GW::Constants::SkillID)b);
@@ -1849,13 +167,13 @@ namespace HerosInsight::SkillBook
             if (ty_a != ty_b)
                 return ty_a < ty_b;
 
-            auto camp_a = custom_sd_a.GetCampaignString();
-            auto camp_b = custom_sd_b.GetCampaignString();
+            auto camp_a = custom_sd_a.GetCampaignStr();
+            auto camp_b = custom_sd_b.GetCampaignStr();
             if (camp_a != camp_b)
                 return camp_a < camp_b;
 
-            auto n_a = (std::string_view)*custom_sd_a.TryGetName();
-            auto n_b = (std::string_view)*custom_sd_b.TryGetName();
+            auto n_a = text_provider.GetName((GW::Constants::SkillID)a);
+            auto n_b = text_provider.GetName((GW::Constants::SkillID)b);
             auto cmp = n_a.compare(n_b);
             if (cmp != 0)
                 return cmp < 0;
@@ -1867,355 +185,109 @@ namespace HerosInsight::SkillBook
         return true;
     }
 
-    std::vector<Filter> parsed_filters;
-    std::vector<Command> parsed_commands;
-    VariableSizeClipper clipper;
-    bool TryUpdateFilter()
+    enum struct AttributeMode : uint32_t
     {
-#ifdef _TIMING
-        auto start_timestamp = std::chrono::high_resolution_clock::now();
-#endif
+        Null,
+        Generic,
+        Characters,
+        Manual
+    };
 
-        if (base_skills.empty())
+    struct HighlightData
+    {
+        bool did_match_header = false;
+        std::vector<uint16_t> data; // start/stop offsets
+
+        void clear()
         {
-            if (!TryInitBaseSkills())
-                return false;
+            did_match_header = false;
+            data.clear();
         }
+    };
 
-        parsed_filters.clear();
-        parsed_commands.clear();
-        for (auto &[key, value] : pending_state.highlighting_map)
-            value.clear(); // Instead of clearing the map we clear the vectors to avoid reallocations.
-        pending_state.filtered_skills.clear();
+    enum struct SkillTextPropertyID : uint16_t
+    {
+        Name,
+        Type,
+        Tag,
 
-        ParseInput(text_input, strlen(text_input), parsed_filters, parsed_commands);
+        Upkeep,
+        Energy,
+        AdrenalineStrikes,
+        Adrenaline,
+        Overcast,
+        Sacrifice,
+        Activation,
+        Recharge,
+        Aftercast,
 
-        const auto target_agent_id = GW::Agents::GetHeroAgentID(pending_state.hero_index);
+        Description,
+        Concise,
 
-        if (pending_state.attribute_mode == AttributeMode::Characters)
+        FOOTER_FIRST,
+        Attribute = FOOTER_FIRST,
+        Profession,
+        Campaign,
+        Range,
+        Parsed,
+        FOOTER_LAST = Parsed,
+
+        COUNT,
+    };
+
+    constexpr size_t PROP_COUNT = static_cast<size_t>(SkillTextPropertyID::COUNT);
+
+    using SkillCatalog = Catalog<SkillTextPropertyID, GW::Constants::SkillMax>;
+
+    //     void ReserveProperties()
+    //     {
+    // #define RESERVE_PROPERTY(prop, char_count) \
+//     catalog.GetProperty(SkillTextPropertyID::prop).text.Reserve(char_count);
+
+    //         RESERVE_PROPERTY(Name, 65536);
+    //         // RESERVE_PROPERTY(Concise, N * 128);
+    //         RESERVE_PROPERTY(Description, 131072);
+
+    //         RESERVE_PROPERTY(Type, 2048);
+    //         RESERVE_PROPERTY(Attribute, 1024);
+    //         RESERVE_PROPERTY(Profession, 128);
+    //         RESERVE_PROPERTY(Campaign, 128);
+
+    //         RESERVE_PROPERTY(Upkeep, 8);
+    //         RESERVE_PROPERTY(Energy, 32);
+    //         RESERVE_PROPERTY(Adrenaline, 32);
+    //         RESERVE_PROPERTY(Sacrifice, 32);
+    //         RESERVE_PROPERTY(Activation, 128);
+    //         RESERVE_PROPERTY(Recharge, 128);
+    //         RESERVE_PROPERTY(Aftercast, 128);
+
+    //         RESERVE_PROPERTY(Range, 1024);
+    //         RESERVE_PROPERTY(Tag, 4096);
+    //         // RESERVE_PROPERTY(Parsed, N * 24);
+    //     }
+
+    uint32_t focused_agent_id = 0;
+    std::array<int8_t, AttributeOrTitle::Count> attributes = {};
+
+    static constexpr size_t SkillCount = GW::Constants::SkillMax - 1;
+    static constexpr size_t DescriptionCount = SkillCount * 21 * 2;
+
+    size_t GetDescriptionIndex(uint16_t skill_id, int8_t attribute_level, bool is_concise)
+    {
+        auto page = (attribute_level + 1) * 2 + is_concise;
+        return SkillCount * page + skill_id + 1;
+    }
+
+    class SkillTooltipProvider : public RichText::TextTooltipProvider
+    {
+    public:
+        GW::Constants::SkillID skill_id;
+        SkillTooltipProvider(GW::Constants::SkillID skill_id) : skill_id(skill_id) {}
+        void DrawTooltip(uint32_t tooltip_id)
         {
-            auto custom_ad = CustomAgentDataModule::GetCustomAgentData(target_agent_id);
-            for (uint32_t i = 0; i < pending_state.attributes.size(); i++)
-            {
-                auto attr_lvl = custom_ad.GetAttribute((AttributeOrTitle)i).value_or(0);
-                pending_state.attributes[i] = attr_lvl;
-            }
-        }
-
-        bool custom_sds_ready = true;
-#ifdef _ARTIFICIAL_DELAY
-        // Artificially fail 64 times to test long delays
-        custom_sds_ready = false;
-        static uint32_t artificial_fail_counter = 0;
-        if ((++artificial_fail_counter % 64) == 0)
-            custom_sds_ready = true;
-#endif
-
-        for (auto skill_id_short : base_skills)
-        {
-            const auto skill_id = static_cast<GW::Constants::SkillID>(skill_id_short);
             auto &custom_sd = CustomSkillDataModule::GetCustomSkillData(skill_id);
+            const auto attr_str = custom_sd.GetAttributeStr();
 
-            if (!include_pve_only_skills)
-            {
-                if (custom_sd.tags.PvEOnly)
-                    continue;
-            }
-            if (!include_temporary_skills)
-            {
-                if (custom_sd.tags.Temporary)
-                    continue;
-            }
-            if (!include_archived_skills)
-            {
-                if (custom_sd.tags.Archived)
-                    continue;
-            }
-            if (!include_npc_skills)
-            {
-                if (custom_sd.tags.MonsterSkill ||
-                    custom_sd.tags.EnvironmentSkill)
-                    continue;
-            }
-            if (!include_disguises)
-            {
-                if (custom_sd.skill->type == GW::Constants::SkillType::Disguise ||
-                    custom_sd.skill_id == GW::Constants::SkillID::Tonic_Tipsiness)
-                    continue;
-            }
-
-            auto attr_lvl = pending_state.GetAttribute(custom_sd.attribute);
-            bool is_prepared = (custom_sd.TryGetName() != nullptr) &&
-                               (custom_sd.TryGetPredecodedDescription(custom_sd.GetDescKey(false, attr_lvl)) != nullptr) &&
-                               (custom_sd.TryGetPredecodedDescription(custom_sd.GetDescKey(true, attr_lvl)) != nullptr);
-
-            if (!custom_sds_ready || !is_prepared)
-            {
-                custom_sds_ready = false;
-                // Fail, but continue so that we load the strings needed later anyway.
-                // After the loop we can return false.
-                continue;
-            }
-
-            if (!CheckPassesFilters(parsed_filters, custom_sd))
-            {
-                continue;
-            }
-
-            pending_state.filtered_skills.push_back(static_cast<uint16_t>(skill_id));
-        }
-
-        if (!custom_sds_ready)
-            return false;
-
-#ifdef _TIMING
-        auto timestamp_filtering = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(timestamp_filtering - start_timestamp).count();
-        Utils::FormatToChat(L"Filtering took {} ms", duration);
-#endif
-
-        for (auto &command : parsed_commands)
-        {
-            ApplyCommand(command, pending_state.filtered_skills);
-        }
-
-#ifdef _TIMING
-        auto timestamp_commands = std::chrono::high_resolution_clock::now();
-        duration = std::chrono::duration_cast<std::chrono::milliseconds>(timestamp_commands - timestamp_filtering).count();
-        Utils::FormatToChat(L"Applying commands took {} ms", duration);
-#endif
-
-        UpdateFeedback(parsed_filters, parsed_commands);
-
-        if (state.filtered_skills.size() > 0)
-        {
-            uint32_t max_count = std::min(state.filtered_skills.size(), pending_state.filtered_skills.size());
-            max_count = std::min(max_count, clipper.visible_index_start + 1);
-            uint32_t same_count = 0;
-            while (same_count < max_count &&
-                   pending_state.filtered_skills[same_count] == state.filtered_skills[same_count])
-                same_count++;
-
-            if (same_count > 1)
-                clipper.SetScrollToIndex(same_count - 1);
-            else
-                clipper.Reset();
-
-            // auto focused_skill = state.filtered_skills[clipper.visible_index_start];
-            // auto it = std::find(pending_state.filtered_skills.begin(), pending_state.filtered_skills.end(), focused_skill);
-            // if (it != pending_state.filtered_skills.end())
-            // {
-            //     auto index = std::distance(pending_state.filtered_skills.begin(), it);
-            //     clipper.SetScrollToIndex(index);
-            // }
-            // else
-            // {
-            //     clipper.Reset();
-            // }
-        }
-
-        // Recycle the heavy stuff and move in the new state
-        auto old_filtered_skills = std::move(state.filtered_skills);
-        auto old_highlighting_map = std::move(state.highlighting_map);
-        state = std::move(pending_state);
-        pending_state.filtered_skills = std::move(old_filtered_skills);
-        pending_state.highlighting_map = std::move(old_highlighting_map);
-
-        return true;
-    }
-
-    void Update()
-    {
-        GetSelectedHeroIndex();
-
-        if (state_dirty)
-        {
-            if (TryUpdateFilter())
-            {
-                state_dirty = false;
-            }
-        }
-    }
-
-    void DrawAttributeModeSelection()
-    {
-        auto cursor_before = ImGui::GetCursorPos();
-        ImGui::SetCursorPosY(cursor_before.y + 2);
-        ImGui::TextUnformatted("Attributes");
-        ImGui::SameLine();
-        auto cursor_content_x = ImGui::GetCursorPosX();
-        ImGui::SetCursorPosY(cursor_before.y);
-
-        if (ImGui::RadioButton("(0...15)", pending_state.attribute_mode == AttributeMode::Generic))
-        {
-            pending_state.attribute_mode = AttributeMode::Generic;
-            state_dirty = true;
-        }
-
-        ImGui::SameLine();
-        if (ImGui::RadioButton("Character's", pending_state.attribute_mode == AttributeMode::Characters))
-        {
-            pending_state.attribute_mode = AttributeMode::Characters;
-            state_dirty = true;
-        }
-
-        ImGui::SameLine();
-        if (ImGui::RadioButton("Manual", pending_state.attribute_mode == AttributeMode::Manual))
-        {
-            pending_state.attribute_mode = AttributeMode::Manual;
-            state_dirty = true;
-        }
-
-        if (state.attribute_mode == AttributeMode::Manual)
-        {
-            // ImGui::SetCursorPosX(cursor_content_x);
-            if (ImGui::SliderInt("Attribute level", &pending_state.attr_lvl_slider, 0, 21))
-            {
-                state_dirty = true;
-            }
-        }
-    }
-
-    void DrawSkillHeader(CustomSkillData &custom_sd, std::string_view name)
-    {
-        const auto skill_icon_size = 56;
-        auto icon_cursor = ImGui::GetCursorPos();
-        auto icon_cursor_ss = ImGui::GetCursorScreenPos();
-        // bool is_equipable = GW::SkillbarMgr::GetIsSkillLearnt(custom_sd.skill_id);
-        bool is_hovered = ImGui::IsMouseHoveringRect(icon_cursor_ss, icon_cursor_ss + ImVec2(skill_icon_size, skill_icon_size));
-        bool is_effect = custom_sd.tags.EffectOnly;
-        if (TextureModule::DrawSkill(*custom_sd.skill, icon_cursor_ss, skill_icon_size, is_effect, is_hovered) ||
-            TextureModule::DrawSkill(*GW::SkillbarMgr::GetSkillConstantData(GW::Constants::SkillID::No_Skill), icon_cursor_ss, skill_icon_size, is_effect, is_hovered))
-        {
-            icon_cursor.y += skill_icon_size;
-            ImGui::SameLine();
-        }
-
-        auto name_cursor = ImGui::GetCursorPos();
-        auto content_max = ImGui::GetWindowContentRegionMax().x;
-        auto cursor_x = ImGui::GetCursorPosX();
-
-        // Draw skill name
-        {
-            ImGui::PushFont(Constants::Fonts::skill_name_font);
-            auto name_color = custom_sd.tags.Archived ? Constants::GWColors::skill_dull_gray : Constants::GWColors::header_beige;
-            ImGui::PushStyleColor(ImGuiCol_Text, name_color);
-            auto &hightlighting = state.highlighting_map[GetHighlightKey(custom_sd.skill_id, SkillPropertyType::Name)];
-            auto p = name.data();
-            Utils::DrawMultiColoredText(p, p + name.size(), cursor_x, content_max, {}, hightlighting);
-
-            // ImGui::SameLine();
-            // // ImGui::SetWindowFontScale(0.7f);
-            // char id_str[8];
-            // snprintf(id_str, sizeof(id_str), "#%d", skill.skill_id);
-            // // const auto id_str_size = ImGui::CalcTextSize(id_str.c_str());
-            // // ImGui::SetCursorPosX(content_width - id_str_size.x - 4);
-            // ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 0.3f));
-            // ImGui::TextUnformatted(id_str);
-            // ImGui::PopStyleColor();
-            // ImGui::SetWindowFontScale(1.f);
-
-            ImGui::PopStyleColor();
-            ImGui::PopFont();
-            auto size = ImGui::GetItemRectSize();
-
-            if (custom_sd.tags.Archived)
-            {
-                const auto content_min = ImGui::GetCurrentWindow()->ContentRegionRect.Min;
-                ImGui::GetWindowDrawList()->AddLine(content_min + ImVec2(name_cursor.x, name_cursor.y + size.y / 2),
-                    content_min + ImVec2(name_cursor.x + size.x, name_cursor.y + size.y / 2),
-                    Constants::GWColors::skill_dull_gray, 1.0f);
-            }
-
-            name_cursor.y += size.y;
-
-            if (ImGui::GetIO().KeyCtrl)
-            {
-                if (ImGui::IsItemHovered())
-                {
-                    ImGui::BeginTooltip();
-                    ImGui::TextUnformatted("Ctrl + Click to open wiki");
-                    ImGui::EndTooltip();
-                }
-
-                const auto content_min = ImGui::GetCurrentWindow()->ContentRegionRect.Min;
-                ImGui::GetWindowDrawList()->AddLine(content_min + ImVec2(name_cursor.x, name_cursor.y),
-                    content_min + ImVec2(name_cursor.x + size.x, name_cursor.y),
-                    Constants::GWColors::header_beige, 1.0f);
-            }
-        }
-
-        // Draw skill stats
-        DrawSkillStats(custom_sd);
-
-        // Draw skill type
-        {
-            ImGui::SetCursorPos(name_cursor);
-            auto &hightlighting = state.highlighting_map[GetHighlightKey(custom_sd.skill_id, SkillPropertyType::SkillType)];
-            auto str = custom_sd.GetTypeString();
-            auto p = str.data();
-            Utils::DrawMultiColoredText(p, p + str.size(), cursor_x, content_max, {}, hightlighting);
-            name_cursor.y += ImGui::GetItemRectSize().y + 2;
-        }
-
-        // Draw skill tags
-        FixedArray<SkillTag, MAX_TAGS> tags_salloc;
-        auto tags = tags_salloc.ref();
-        custom_sd.GetTags(tags);
-        if (show_null_stats || tags.size() > 0)
-        {
-            ImGui::SetCursorPos(name_cursor);
-            for (uint32_t i = 0; i < tags.size(); i++)
-            {
-                auto &tag = tags[i];
-                auto type = (SkillPropertyType)((uint32_t)SkillPropertyType::TAGS + i);
-                auto &hightlighting = state.highlighting_map[GetHighlightKey(custom_sd.skill_id, type)];
-                if (i > 0)
-                {
-                    ImGui::SameLine(0, 0);
-                    ImGui::TextUnformatted(", ");
-                    ImGui::SameLine(0, 0);
-                }
-                auto str = SkillTagToString(tag);
-                auto p = str.data();
-                // ImGui::TextUnformatted(p);
-
-                auto color = Constants::GWColors::skill_dull_gray;
-                // clang-format off
-                switch (tag) {
-                    case SkillTag::Equipable:    color = ImColor(100, 255, 255); break;
-                    case SkillTag::Unlocked:     color = Constants::GWColors::skill_dynamic_green; break;
-                    case SkillTag::Locked:       color = ImColor(255, 100, 100); break; 
-                }
-                // clang-format on
-
-                ImGui::PushStyleColor(ImGuiCol_Text, color);
-                Utils::DrawMultiColoredText(p, p + str.size(), name_cursor.x, content_max, {}, hightlighting);
-                ImGui::PopStyleColor();
-
-                if (tag == SkillTag::MonsterSkill)
-                {
-                    auto packet = TextureModule::GetPacket_ImageInAtlas(TextureModule::KnownFileIDs::UI_SkillStatsIcons, ImVec2(16, 16), ImVec2(16, 16), 5);
-                    if (packet.CanDraw())
-                    {
-                        ImGui::SameLine(0, 0);
-                        packet.DrawOnWindow();
-                    }
-                }
-            }
-
-            name_cursor.y += ImGui::GetItemRectSize().y + 2;
-        }
-
-        icon_cursor.y = std::max(icon_cursor.y, name_cursor.y) + 3;
-        ImGui::SetCursorPos(icon_cursor);
-    }
-
-    void DrawDescription(CustomSkillData &custom_sd, float content_width)
-    {
-        const auto attr_str = custom_sd.GetAttributeString();
-        auto draw_param_tooltip = [&](uint32_t tooltip_id)
-        {
             const auto buffer_size = 8;
             char buffer1[buffer_size];
             char buffer2[buffer_size];
@@ -2244,7 +316,7 @@ namespace HerosInsight::SkillBook
                 if (i == -1)
                 {
                     text1 = attr_str;
-                    text2 = "Number";
+                    text2 = "Value";
                 }
                 else
                 {
@@ -2299,568 +371,2188 @@ namespace HerosInsight::SkillBook
 
             ImGui::PopFont();
             ImGui::EndTooltip();
-        };
-
-        auto skill_id = custom_sd.skill_id;
-        auto attr_lvl = state.GetAttribute(custom_sd.attribute);
-        constexpr SkillPropertyType type[2] = {SkillPropertyType::Description, SkillPropertyType::Concise};
-        auto &hightlighting = state.highlighting_map[GetHighlightKey(skill_id, type[prefer_concise_descriptions])];
-        auto &hightlighting_other = state.highlighting_map[GetHighlightKey(skill_id, type[!prefer_concise_descriptions])];
-
-        bool draw_full_desc = !prefer_concise_descriptions || !hightlighting.empty();
-
-        // Should not be null because the description was used to filter the skills
-        auto desc = *custom_sd.TryGetDescription(prefer_concise_descriptions, attr_lvl);
-        auto desc_other = *custom_sd.TryGetDescription(!prefer_concise_descriptions, attr_lvl);
-
-        desc.ImGuiRender(0, content_width, hightlighting, draw_param_tooltip);
-
-        bool draw_other = hightlighting_other.size() > hightlighting.size();
-        if (!draw_other)
-        {
-            auto len = std::min(hightlighting.size(), hightlighting_other.size());
-            assert(len % 2 == 0);
-            uint32_t i = 0;
-            while (i < len)
-            {
-                std::string_view hl_a = ((std::string_view)desc.str).substr(hightlighting[i], hightlighting[i + 1] - hightlighting[i]);
-                std::string_view hl_b = ((std::string_view)desc_other.str).substr(hightlighting_other[i], hightlighting_other[i + 1] - hightlighting_other[i]);
-                i += 2;
-                bool eq = (std::tolower(hl_a[0]) == std::tolower(hl_b[0])) &&
-                          (hl_a.substr(1) == hl_b.substr(1));
-                if (!eq)
-                {
-                    draw_other = true;
-                    break;
-                }
-            }
         }
-
-        if (draw_other)
-        {
-            ImGui::Spacing();
-            ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
-            ImGui::TextUnformatted(prefer_concise_descriptions ? "Additional matches in full description: " : "Additional matches in concise description: ");
-            ImGui::PopStyleColor();
-            ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 3);
-            // ImGui::SameLine(0, 0);
-            // auto wrapping_min = ImGui::GetCursorPosX();
-
-            desc_other.ImGuiRender(0, content_width, hightlighting_other, draw_param_tooltip);
-        }
-    }
-
-    void DrawSkillFooter(CustomSkillData &custom_sd, float content_width)
-    {
-        auto &skill = *custom_sd.skill;
-        ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
-        auto content_max = ImGui::GetWindowContentRegionMax().x;
-        auto cursor_x = ImGui::GetCursorPosX();
-
-        if (show_null_stats || !custom_sd.attribute.IsNone())
-        {
-            ImGui::TextUnformatted("Attribute: ");
-            ImGui::SameLine();
-            auto str = custom_sd.GetAttributeString();
-            auto p = str.data();
-            auto &highlighting = state.highlighting_map[GetHighlightKey(skill.skill_id, SkillPropertyType::Attribute)];
-            Utils::DrawMultiColoredText(p, p + str.size(), cursor_x, content_max, {}, highlighting);
-        }
-        // if (show_null_stats || skill.title != 48)
-        // {
-        //     ImGui::TextUnformatted("Title: ");
-        //     ImGui::SameLine();
-        //     auto str = Utils::GetTitleString((GW::Constants::TitleID)skill.title);
-        //     auto p = str.data();
-        //     auto &highlighting = highlighting_map[GetHighlightKey(skill.skill_id, FilterTargetType::Attribute)];
-        //     Utils::DrawMultiColoredText(p, p + str.size(), cursor_x, content_max, {}, highlighting);
-        // }
-        if (show_null_stats || skill.profession != GW::Constants::ProfessionByte::None)
-        {
-            ImGui::TextUnformatted("Profession: ");
-            ImGui::SameLine();
-            auto str = Utils::GetProfessionString(skill.profession);
-            auto p = str.data();
-            auto &highlighting = state.highlighting_map[GetHighlightKey(skill.skill_id, SkillPropertyType::Profession)];
-            Utils::DrawMultiColoredText(p, p + str.size(), cursor_x, content_max, {}, highlighting);
-        }
-        if (show_null_stats || true)
-        {
-            ImGui::TextUnformatted("Campaign: ");
-            ImGui::SameLine();
-            auto str = Utils::GetCampaignString(skill.campaign);
-            auto p = str.data();
-            auto &highlighting = state.highlighting_map[GetHighlightKey(skill.skill_id, SkillPropertyType::Campaign)];
-            Utils::DrawMultiColoredText(p, p + str.size(), cursor_x, content_max, {}, highlighting);
-        }
-
-        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 5);
-
-        FixedArray<Utils::Range, 4> ranges_salloc;
-        auto ranges = ranges_salloc.ref();
-        custom_sd.GetRanges(ranges);
-        if (show_null_stats || ranges.size() > 0)
-        {
-            for (auto range : ranges)
-            {
-                ImGui::Text("Range: %d", (uint32_t)range);
-                auto range_name = Utils::GetRangeStr(range);
-                if (range_name)
-                {
-                    ImGui::SameLine();
-                    ImGui::Text(" (%s)", range_name.value());
-                }
-            }
-        }
-
-        auto attr_lvl = state.GetAttribute(custom_sd.attribute);
-        // auto duration = custom_sd.GetDuration();
-        for (auto &pd : custom_sd.parsed_data)
-        {
-            pd.ImGuiRender(attr_lvl);
-        }
-        // if (show_null_stats || !duration.IsNull())
-        // {
-        //     duration.ImGuiRender("Duration", attr_lvl);
-        // }
-        // if (show_null_stats || !custom_sd.health_regen.IsNull())
-        // {
-        //     custom_sd.health_regen.ImGuiRender("Health regeneration", attr_lvl);
-        // }
-        // if (show_null_stats || !custom_sd.health_degen.IsNull())
-        // {
-        //     custom_sd.health_degen.ImGuiRender("Health degeneration", attr_lvl);
-        // }
-        // if (show_null_stats || !custom_sd.health_gain.IsNull())
-        // {
-        //     custom_sd.health_gain.ImGuiRender("Health gain", attr_lvl);
-        // }
-        // if (show_null_stats || !custom_sd.health_loss.IsNull())
-        // {
-        //     custom_sd.health_loss.ImGuiRender("Health loss", attr_lvl);
-        // }
-        // if (show_null_stats || !custom_sd.energy_regen.IsNull())
-        // {
-        //     custom_sd.energy_regen.ImGuiRender("Energy regeneration", attr_lvl);
-        // }
-        // if (show_null_stats || !custom_sd.energy_degen.IsNull())
-        // {
-        //     custom_sd.energy_degen.ImGuiRender("Energy degeneration", attr_lvl);
-        // }
-        // if (show_null_stats || !custom_sd.energy_gain.IsNull())
-        // {
-        //     custom_sd.energy_gain.ImGuiRender("Energy gain", attr_lvl);
-        // }
-        // if (show_null_stats || !custom_sd.energy_loss.IsNull())
-        // {
-        //     custom_sd.energy_loss.ImGuiRender("Energy loss", attr_lvl);
-        // }
-
-        ImGui::PopStyleVar();
-        ImGui::PopStyleColor();
-
-        { // Draw skill id
-            ImGui::SetWindowFontScale(0.7f);
-            const auto id_str = std::to_string((uint32_t)skill.skill_id);
-            const auto id_str_size = ImGui::CalcTextSize(id_str.c_str());
-            ImGui::SetCursorPosX(content_width - id_str_size.x - 4);
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 0.3f));
-            ImGui::TextUnformatted(id_str.c_str());
-            ImGui::PopStyleColor();
-            ImGui::SetWindowFontScale(1.f);
-        }
-    }
-
-    unsigned int countSetBits(unsigned int n)
-    {
-        unsigned int count = 0;
-        while (n)
-        {
-            n &= (n - 1);
-            count++;
-        }
-        return count;
-    }
-
-    bool CalcIdentMinChars(SkillPropertyType target_type, std::string_view ident, FixedArrayRef<char> char_buffer, FixedArrayRef<uint32_t> boundaries)
-    {
-        FixedArray<std::string_view, 8> words_alloc;
-        auto words = words_alloc.ref();
-        Utils::CamelSplit(ident, words);
-        FixedArray<uint32_t, 8> words_len_alloc;
-        auto word_lengths = words_len_alloc.ref();
-        word_lengths.set_size(words.size());
-
-        auto Check = [&]()
-        {
-            char_buffer.clear();
-            for (uint32_t i = 0; i < words.size(); i++)
-            {
-                auto len = word_lengths[i];
-                char_buffer.PushFormat("%.*s", len, words[i].data());
-            }
-
-            auto p = char_buffer.data();
-            auto target = ParseFilterTarget(p, char_buffer.data_end());
-            return target.type == target_type;
-        };
-
-        std::function<bool(uint32_t, std::span<uint32_t>)> DistChars =
-            [&](uint32_t n_chars, std::span<uint32_t> words_len)
-        {
-            uint32_t n_words = words_len.size();
-            if (n_words > 1)
-            {
-                for (uint32_t i = 0; i <= n_chars; i++)
-                {
-                    auto n_chars_in_first = (i + 1) % (n_chars + 1);
-                    auto n_chars_in_rest = n_chars - n_chars_in_first;
-                    words_len[0] = n_chars_in_first;
-                    auto success = DistChars(n_chars_in_rest, std::span<uint32_t>(words_len.data() + 1, n_words - 1));
-                    if (success)
-                    {
-                        return true;
-                    }
-                }
-                return false;
-            }
-            else
-            {
-                words_len[0] = n_chars;
-                return Check();
-            }
-        };
-
-        uint32_t req_len = 0;
-        while (req_len < ident.size())
-        {
-            req_len++;
-            // Iterate all possible ways to assign 'req_len' chars to the words
-            // and check if any of them match the target type.
-            bool success = DistChars(req_len, word_lengths);
-            if (success)
-            {
-                boundaries.clear();
-                for (uint32_t i = 0; i < words.size(); i++)
-                {
-                    if (word_lengths[i] == 0)
-                        continue;
-
-                    auto start_in_ident = words[i].data() - ident.data();
-                    auto end_in_ident = start_in_ident + word_lengths[i];
-                    boundaries.try_push(start_in_ident);
-                    boundaries.try_push(end_in_ident);
-                }
-                return true;
-            }
-        }
-
-        return false;
     };
 
-    void DrawFilterTooltip()
+    class SkillFracProvider : public RichText::TextFracProvider
     {
-        ImGui::BeginTooltip();
+        // #define DEBUG_FRACS
 
-        auto width = 600;
-        std::string_view text;
+        using FracTag = RichText::FracTag;
 
-        { // General info
+#define BIG_FONT Constants::Fonts::skill_thick_font_15
+#define SMALL_FONT Constants::Fonts::skill_thick_font_9
 
-            text = "Here you can narrow down the results by using a filter.";
-            Utils::DrawMultiColoredText(text.data(), nullptr, 0, width);
+        static constexpr GW::Vec2f SLASH_SIZE{13, 15};
+        static constexpr GW::Vec2f SLASH_NUMERATOR_MAX{5, 7};
+        static constexpr GW::Vec2f SLASH_DENOMINATOR_MIN{7, 5};
 
-            text = "A filter requires a target, an operator and one or more values. "
-                   "If you do not specify target or operator, the target will be 'Text', and the operator will be ':'. "
-                   "This will essentially check if any text of the skill contains the provided string.";
-            Utils::DrawMultiColoredText(text.data(), nullptr, 0, width);
-
-            text = "Multiple values can be specified for a filter by separating them with '/', "
-                   "then ANY of them must be satisfied for that filter to match.";
-            Utils::DrawMultiColoredText(text.data(), nullptr, 0, width);
-
-            text = "You can use '&' (AND) or '|' (OR) to combine multiple filters.";
-            Utils::DrawMultiColoredText(text.data(), nullptr, 0, width);
-
-            text = "Once you are satisified with the filters, you may want to sort the results. "
-                   "This can be achieved by typing the special command \"#sort\" followed by a "
-                   "whitespace-separated list of targets to sort by. The results will be sorted by the first target, "
-                   "then by the second, and so on. To invert the order prepend a '!' character before the target";
-            Utils::DrawMultiColoredText(text.data(), nullptr, 0, width);
-
-            text = "If you are unsure how to proceed, take a look at the examples below.";
-            Utils::DrawMultiColoredText(text.data(), nullptr, 0, width);
-        }
-
-        ImGui::Spacing();
-
-        auto Example = [&](std::string_view filter, std::string_view desc)
+        std::string_view GetSimple(FracTag tag)
         {
-            ImGui::Text(" - \"%s\"", filter.data());
-            ImGui::SameLine();
-            ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
-            ImGui::Text("(%s)", desc.data());
-            ImGui::PopStyleColor();
-        };
-        { // Examples
-
-            ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
-            ImGui::TextUnformatted("Example filters:");
-            ImGui::PopStyleColor();
-            ImGui::TextUnformatted("Try these examples by typing them in the search bar.");
-
-            Example("health regen", "Show health regeneration skills");
-            Example("camp = night & ava = locked/unlocked", "Show Nightfall skills you have yet to learn");
-            Example("prof = mo/d & ty: enc", "Show monk or dervish enchantment spells");
-            Example("adr > 0 & ty = stance #sort !adr nam", "Show adrenal stances, sort by cost and then name");
-        }
-
-        ImGui::Spacing();
-
-        FixedArray<char, 128> char_buffer_alloc;
-        FixedArray<Utils::ColorChange, 8> col_buffer_alloc;
-        FixedArray<uint32_t, 8> boundaries_alloc;
-        auto char_buffer = char_buffer_alloc.ref();
-        auto col_buffer = col_buffer_alloc.ref();
-        auto boundaries = boundaries_alloc.ref();
-        ImU32 req_color = IM_COL32(0, 255, 0, 255);
-
-        { // Target and operator info
-            ImGui::Columns(3, "mycolumns", false);
-
-            auto DrawTargets = [&](std::string_view type, const auto &target_array)
-            {
-                ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
-                ImGui::Text("%s targets:", type);
-                ImGui::PopStyleColor();
-                uint32_t i = 0;
-                for (auto &[ident, target_type] : target_array)
-                {
-                    if (i++ == 25)
-                        ImGui::NextColumn();
-                    bool success = CalcIdentMinChars(target_type, ident, char_buffer, boundaries);
-                    assert(success);
-
-                    assert(boundaries.size() % 2 == 0);
-                    col_buffer.clear();
-                    for (int32_t i = 0; i < boundaries.size(); i += 2)
-                    {
-                        col_buffer.try_push({boundaries[i] + 2, req_color});
-                        col_buffer.try_push({boundaries[i + 1] + 2, 0});
-                    }
-
-                    char_buffer.clear();
-                    char_buffer.PushFormat("- %s", ident.data());
-                    Utils::DrawMultiColoredText(char_buffer.data(), char_buffer.data_end(), 0, width, col_buffer);
-                }
-            };
-
-            auto DrawOperators = [&](std::string_view type, const auto &op_array, SkillPropertyType prop_type)
-            {
-                ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
-                ImGui::Text("%s operators:", type);
-                ImGui::PopStyleColor();
-                for (auto &[ident, op] : op_array)
-                {
-                    const auto desc = GetOpDescription({prop_type, 0}, op);
-                    char_buffer.clear();
-                    char_buffer.PushFormat("- %s %s", ident.data(), desc.data());
-
-                    col_buffer.clear();
-                    col_buffer.try_push({2, req_color});
-                    col_buffer.try_push({2 + ident.size(), 0});
-                    Utils::DrawMultiColoredText(char_buffer.data(), char_buffer.data_end(), 0, width, col_buffer);
-                }
-            };
-
-            DrawTargets("Text", text_filter_targets);
-            ImGui::Spacing();
-            DrawOperators("Text", text_filter_operators, SkillPropertyType::TEXT);
-            ImGui::Spacing();
-            DrawOperators("Number", number_filter_operators, SkillPropertyType::NUMBER);
-
-            ImGui::Spacing();
-            ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
-            text = "The highlighted characters indicate the minimum required to uniquely identify it.";
-            Utils::DrawMultiColoredText(text.data(), nullptr, 0, width / 3);
-            ImGui::PopStyleColor();
-
-            ImGui::NextColumn();
-            DrawTargets("Number", number_filter_targets);
-
-            ImGui::Columns(1);
-        }
-
-        { // Advanced info
-            ImGui::Spacing();
-
-            if (!ImGui::GetIO().KeyCtrl)
-            {
-                ImGui::TextUnformatted("Hold CTRL to show advanced info");
+            // clang-format off
+            switch (tag.GetValue()) {
+                case FracTag{1, 2}.GetValue(): return "½";
+                case FracTag{1, 4}.GetValue(): return "¼";
+                case FracTag{3, 4}.GetValue(): return "¾";
             }
-            else
+            // clang-format on
+            return {};
+        }
+
+        struct Cache
+        {
+            uint16_t val = std::numeric_limits<uint16_t>::max();
+            char text[18];
+            float over_width;
+        };
+
+        Cache caches[2];
+
+        void DrawFraction(ImVec2 pos, FracTag tag) override
+        {
+            auto window = ImGui::GetCurrentWindow();
+            auto draw_list = window->DrawList;
+            auto color = ImGui::GetColorU32(ImGuiCol_Text);
+            auto simple_str = GetSimple(tag);
+            if (simple_str.data() != nullptr)
             {
-                ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
-                ImGui::TextUnformatted("Advanced:");
-                ImGui::PopStyleColor();
+                draw_list->AddText(BIG_FONT, BIG_FONT->FontSize, pos, color, simple_str.data(), simple_str.data() + simple_str.size());
+                return;
+            }
 
-                ImGui::TextUnformatted("For advanced users it's also possible to target specific bytes in the \"raw\" skill data\nstructure. "
-                                       "This can be useful for targeting specific flags or values that are not directly\nexposed.");
+            if (caches[0].val != tag.num || caches[1].val != tag.den)
+                CalcWidth(tag);
 
-                ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
-                ImGui::TextUnformatted("Example raw filter:");
-                ImGui::PopStyleColor();
-                Example("0x10 u32 : 4", "Show skills with the 3rd bit set in the u32 at offset 0x10");
+            const std::string_view base_str = "½";
+            const auto size = ImVec2(SLASH_SIZE.x, SLASH_SIZE.y);
+            ImGui::PushFont(BIG_FONT);
+#ifdef _DEBUG
+            const auto size_check = ImGui::CalcTextSize(base_str.data(), base_str.data() + base_str.size());
+            assert(size_check.x == size.x && size_check.y == size.y);
+#endif
 
-                ImGui::Columns(2, "mycolumns", false);
-                ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
-                ImGui::TextUnformatted("Raw target:");
-                ImGui::PopStyleColor();
+            // We need to draw the ½ char while masking out the 1 and 2 and then fill in with our own numerator and denominator
+            // So we need 3 draw calls with 3 different clip rects
+            // 1▪□  ▪ = clip rect 1
+            // ■■□  □ = clip rect 2
+            // ■■2  ■ = clip rect 3
+            ImVec4 local_clip_rects[]{
+                ImVec4(SLASH_NUMERATOR_MAX.x, 0, SLASH_DENOMINATOR_MIN.x, SLASH_NUMERATOR_MAX.y),
+                ImVec4(SLASH_DENOMINATOR_MIN.x, 0, SLASH_SIZE.x, SLASH_DENOMINATOR_MIN.y),
+                ImVec4(0, SLASH_NUMERATOR_MAX.y, SLASH_DENOMINATOR_MIN.x, SLASH_SIZE.y)
+            };
 
-                ImGui::TextUnformatted("A raw target consists a hex byte offset\nand the type of value to read at that offset.");
-                ImGui::TextUnformatted("- ");
-                ImGui::PushStyleColor(ImGuiCol_Text, req_color);
-                ImGui::SameLine(0, 0);
-                ImGui::TextUnformatted("0x");
-                ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::hp_red);
-                ImGui::SameLine(0, 0);
-                ImGui::TextUnformatted("<HEX_OFFSET> ");
-                ImGui::PopStyleColor(2);
-                ImGui::SameLine(0, 0);
-                ImGui::TextUnformatted("[u8|u16|u32|f32]");
+            ImVec2 slash_min{pos.x + caches[0].over_width, pos.y};
+            ImVec2 slash_max = slash_min + size;
+            for (auto &local_clip_rect : local_clip_rects)
+            {
+                auto clip_rect = local_clip_rect + ImVec4(slash_min.x, slash_min.y, slash_min.x, slash_min.y);
+                draw_list->AddText(BIG_FONT, BIG_FONT->FontSize, slash_min, color, base_str.data(), base_str.data() + base_str.size(), 0.0f, &clip_rect);
+
+#ifdef DEBUG_FRACS
+                draw_list->AddRect(ImVec2(clip_rect.x, clip_rect.y), ImVec2(clip_rect.z, clip_rect.w), 0xFF0000FF, 0.0f, 0);
+#endif
+            }
+
+            ImGui::PopFont();
+
+            ImGui::PushFont(Constants::Fonts::skill_thick_font_9);
+            auto num_pos = pos;
+            auto den_pos = slash_min + ImVec2(SLASH_DENOMINATOR_MIN.x, SLASH_DENOMINATOR_MIN.y - 1);
+            draw_list->AddText(num_pos, color, caches[0].text);
+            draw_list->AddText(den_pos, color, caches[1].text);
+            ImGui::PopFont();
+
+            ImRect bb{pos, slash_max + ImVec2(caches[1].over_width, 0)};
+            ImGui::ItemSize(bb);
+            ImGui::ItemAdd(bb, 0);
+
+#ifdef DEBUG_FRACS
+            draw_list->AddRect(bb.Min, bb.Max, 0xFF0000FF, 0.0f, 0);
+#endif
+        }
+
+        float CalcWidth(FracTag tag) override
+        {
+            float total_width = SLASH_SIZE.x;
+            auto simple_str = GetSimple(tag);
+            if (simple_str.data() != nullptr)
+            {
+#ifdef _DEBUG
+                ImGui::PushFont(BIG_FONT);
+                auto size_check = ImGui::CalcTextSize(simple_str.data(), simple_str.data() + simple_str.size());
+                ImGui::PopFont();
+                assert(size_check.x == SLASH_SIZE.x && size_check.y == SLASH_SIZE.y);
+#endif
+                return total_width;
+            }
+
+            ImGui::PushFont(SMALL_FONT);
+            caches[0].val = tag.num;
+            caches[1].val = tag.den;
+            for (auto &cache : caches)
+            {
+                auto result = std::to_chars(cache.text, cache.text + sizeof(cache.text) - 1, cache.val);
+                assert(result.ec == std::errc());
+                *result.ptr = '\0';
+                cache.over_width = std::max(0.f, ImGui::CalcTextSize(cache.text, result.ptr).x - SLASH_NUMERATOR_MAX.x);
+                total_width += cache.over_width;
+            }
+            ImGui::PopFont();
+            return total_width;
+        }
+    };
+    SkillFracProvider frac_provider;
+    RichText::Drawer text_drawer{nullptr, &RichText::DefaultTextImageProvider::Instance(), &frac_provider};
+
+    StringArena<char> prop_bundle_names;
+    std::vector<SkillCatalog::T_propset> prop_bundles;
+
+    void SetupPropBundles()
+    {
+        auto SetupBundle = [&](std::string_view name, SkillCatalog::T_propset propset)
+        {
+            prop_bundle_names.BeginWrite();
+            prop_bundle_names.append_range(name);
+            prop_bundle_names.EndWrite();
+
+            prop_bundles.push_back(propset);
+        };
+
+        SetupBundle("Any", SkillCatalog::ALL_PROPS);
+        SetupBundle("Name", SkillCatalog::MakePropset({SkillTextPropertyID::Name}));
+        SetupBundle("Type", SkillCatalog::MakePropset({SkillTextPropertyID::Type}));
+        SetupBundle("Tags", SkillCatalog::MakePropset({SkillTextPropertyID::Tag}));
+        SetupBundle("Energy", SkillCatalog::MakePropset({SkillTextPropertyID::Energy}));
+        SetupBundle("Recharge", SkillCatalog::MakePropset({SkillTextPropertyID::Recharge}));
+        SetupBundle("Activation", SkillCatalog::MakePropset({SkillTextPropertyID::Activation}));
+        SetupBundle("Aftercast", SkillCatalog::MakePropset({SkillTextPropertyID::Aftercast}));
+        SetupBundle("Sacrifice", SkillCatalog::MakePropset({SkillTextPropertyID::Sacrifice}));
+        SetupBundle("Overcast", SkillCatalog::MakePropset({SkillTextPropertyID::Overcast}));
+        SetupBundle("Adrenaline", SkillCatalog::MakePropset({SkillTextPropertyID::AdrenalineStrikes}));
+        SetupBundle("Upkeep", SkillCatalog::MakePropset({SkillTextPropertyID::Upkeep}));
+        SetupBundle("Attribute", SkillCatalog::MakePropset({SkillTextPropertyID::Attribute}));
+        SetupBundle("Profession", SkillCatalog::MakePropset({SkillTextPropertyID::Profession}));
+        SetupBundle("Campaign", SkillCatalog::MakePropset({SkillTextPropertyID::Campaign}));
+        SetupBundle("Description", SkillCatalog::MakePropset({SkillTextPropertyID::Description, SkillTextPropertyID::Concise}));
+    }
+
+    struct BookState
+    {
+        BookState()
+        {
+            FetchDescriptions();
+        }
+
+        static constexpr size_t MAX_WINDOWS = 8;
+
+        SkillCatalog catalog{prop_bundle_names, prop_bundles};
+        RichText::RichTextArena descs[2]{};
+        AttributeMode attribute_mode = AttributeMode::Generic;
+        int attr_lvl_slider = 0;
+        std::vector<uint16_t> filtered_skills; // skill ids
+        CatalogUtils::Query query;
+        CatalogUtils::HLData hl_data{SkillCatalog::PROP_COUNT, prop_bundles.size(), GW::Constants::SkillMax};
+
+        SkillTextProvider &text_provider = SkillTextProvider::GetInstance(GW::Constants::Language::English);
+
+        bool is_opened = true;
+        bool skills_dirty = true;
+        bool request_state_update = true; // Set this to attempt to apply the pending state
+        bool attrs_changed = false;
+        bool state_update_in_progress = false;
+
+        bool include_pve_only_skills = true;
+        bool include_temporary_skills = false;
+        bool include_npc_skills = false;
+        bool include_archived_skills = false;
+        bool include_disguises = false;
+
+        bool first_draw = true;
+        bool use_precise_adrenaline = false;
+        bool prefer_concise_descriptions = false;
+        bool limit_to_characters_professions = false;
+        bool show_null_stats = false;
+        bool snap_to_skill = true;
+
+        char input_text[1024] = {'\0'};
+
+        std::string feedback;
+
+        VariableSizeClipper clipper;
+        std::future<bool> update_filter_future = std::future<bool>();
+        std::atomic<bool> cancel_state_update = false;
+
+        int8_t ResolveAttribute(AttributeOrTitle attr) const
+        {
+            // clang-format off
+            switch (attribute_mode) {
+                case AttributeMode::Generic: return -1;
+                case AttributeMode::Manual: return attr_lvl_slider;
+                case AttributeMode::Characters:
+                    if (attr.IsNone())
+                        return 0;
+                    return attributes[attr.value];
+
+                default:
+                    SOFT_ASSERT(false, L"Invalid attribute mode");
+                    return -1;
+            }
+            // clang-format on
+        };
+
+        void Update()
+        {
+            if (request_state_update)
+            {
+                request_state_update = false;
+                if (update_filter_future.valid())
+                {
+                    // Cancel the previous update
+                    cancel_state_update.store(true);
+                    update_filter_future.get();
+                }
+                state_update_in_progress = true;
+            }
+
+            if (state_update_in_progress)
+            {
+                bool success = TryUpdateQuery();
+                state_update_in_progress = !success;
+            }
+        }
+
+        std::string_view GetMetaStr(SkillTextPropertyID prop)
+        {
+            return {};
+        }
+
+        std::string_view GetStr(SkillTextPropertyID prop, GW::Constants::SkillID skill_id)
+        {
+            return std::string_view(catalog.GetPropertyPtr(prop)->GetIndexed((size_t)skill_id));
+        }
+
+        std::span<uint16_t> GetHL(SkillTextPropertyID prop, GW::Constants::SkillID skill_id)
+        {
+            auto span_id = catalog.GetPropertyPtr(prop)->GetSpanId((size_t)skill_id);
+            return hl_data.GetPropHL((size_t)prop, span_id);
+        }
+
+        void FetchDescriptions()
+        {
+            assert(text_provider.IsReady());
+            for (auto is_concise : {false, true})
+            {
+                auto &desc = descs[is_concise];
+                auto id = is_concise ? "skill_descriptions" : "skill_concise_descriptions";
+                desc.Reset();
+                desc.ReserveFromHint(id);
+                for (size_t i = 1; i < GW::Constants::SkillMax; ++i)
+                {
+                    auto skill_id = static_cast<GW::Constants::SkillID>(i);
+                    auto &cskill = CustomSkillDataModule::GetCustomSkillData(skill_id);
+                    auto attr_lvl = ResolveAttribute(cskill.attribute);
+                    desc.text.BeginWrite();
+                    desc.tags.BeginWrite();
+                    desc.text.AppendWriteBuffer(512, [&](std::span<char> &text_span)
+                                                { desc.tags.AppendWriteBuffer(64, [&](std::span<RichText::TextTag> &tags_span)
+                                                                              {
+                                    RichText::RichText rt{text_span, tags_span};
+                                    text_provider.MakeDescription(skill_id, is_concise, attr_lvl, rt);
+                                    text_span = rt.text;
+                                    tags_span = rt.tags; }); });
+                    desc.text.EndWrite(i);
+                    desc.tags.EndWrite(i);
+                }
+                desc.StoreCapacityHint(id);
+                auto prop_id = is_concise ? SkillTextPropertyID::Concise : SkillTextPropertyID::Description;
+                catalog.SetPropertyPtr(prop_id, &desc.text);
+            }
+        }
+
+        void DrawCheckboxes()
+        {
+            // if (ImGui::CollapsingHeader("Options"))
+            {
+                ImGui::Columns(2, nullptr, false);
+
+                skills_dirty |= ImGui::Checkbox("Include PvE-only skills", &include_pve_only_skills);
+                skills_dirty |= ImGui::Checkbox("Include Temporary skills", &include_temporary_skills);
+                skills_dirty |= ImGui::Checkbox("Include NPC skills", &include_npc_skills);
+                skills_dirty |= ImGui::Checkbox("Include Archived skills", &include_archived_skills);
+                skills_dirty |= ImGui::Checkbox("Include Disguises", &include_disguises);
 
                 ImGui::NextColumn();
 
-                ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
-                ImGui::TextUnformatted("Raw operators:");
-                ImGui::PopStyleColor();
+                ImGui::Checkbox("Show precise adrenaline", &use_precise_adrenaline);
+                ImGui::Checkbox("Show null stats", &show_null_stats);
+                ImGui::Checkbox("Snap to skill", &snap_to_skill);
+                ImGui::Checkbox("Prefer concise descriptions", &prefer_concise_descriptions);
+                skills_dirty |= ImGui::Checkbox("Limit to character's professions", &limit_to_characters_professions);
 
-                ImGui::TextUnformatted("Any number operator OR:");
-                for (auto &[ident, op] : adv_filter_operators)
+                ImGui::Columns(1);
+            }
+        }
+
+        void DrawAttributeModeSelection()
+        {
+            auto cursor_before = ImGui::GetCursorPos();
+            ImGui::SetCursorPosY(cursor_before.y + 2);
+            ImGui::TextUnformatted("Attributes");
+            ImGui::SameLine();
+            auto cursor_content_x = ImGui::GetCursorPosX();
+            ImGui::SetCursorPosY(cursor_before.y);
+
+            if (ImGui::RadioButton("(0...15)", attribute_mode == AttributeMode::Generic))
+            {
+                attribute_mode = AttributeMode::Generic;
+                request_state_update = true;
+                FetchDescriptions();
+            }
+
+            ImGui::SameLine();
+            if (ImGui::RadioButton("Character's", attribute_mode == AttributeMode::Characters))
+            {
+                attribute_mode = AttributeMode::Characters;
+                request_state_update = true;
+                FetchDescriptions();
+            }
+
+            ImGui::SameLine();
+            if (ImGui::RadioButton("Manual", attribute_mode == AttributeMode::Manual))
+            {
+                attribute_mode = AttributeMode::Manual;
+                request_state_update = true;
+                FetchDescriptions();
+            }
+
+            if (attribute_mode == AttributeMode::Manual)
+            {
+                // ImGui::SetCursorPosX(cursor_content_x);
+                if (ImGui::SliderInt("Attribute level", &attr_lvl_slider, 0, 21))
                 {
-                    const auto desc = GetOpDescription(SkillPropertyID{SkillPropertyType::RAW, 0}, op);
-                    char_buffer.clear();
-                    char_buffer.PushFormat("- %s %s", ident.data(), desc.data());
-                    col_buffer.try_push({2, req_color});
-                    col_buffer.try_push({2 + ident.size(), 0});
-                    Utils::DrawMultiColoredText(char_buffer.data(), char_buffer.data_end(), 0, width, col_buffer);
+                    request_state_update = true;
+                    FetchDescriptions();
                 }
             }
         }
 
-        ImGui::EndTooltip();
-    }
-
-    int FilterCallback(ImGuiInputTextCallbackData *data)
-    {
-        state_dirty = true;
-
-        return 0;
-    }
-
-    void DrawSearchBox()
-    {
-        if (ImGui::IsWindowAppearing())
-            ImGui::SetKeyboardFocusHere();
-        ImGui::InputTextWithHint(
-            "",
-            "Search for a skill...",
-            text_input, sizeof(text_input),
-            ImGuiInputTextFlags_CallbackEdit | ImGuiInputTextFlags_AutoSelectAll,
-            FilterCallback,
-            nullptr);
-        ImGui::SameLine();
-        ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 1);
-        ImGui::TextUnformatted("(?)");
-        if (ImGui::IsItemHovered())
+        DWORD state_update_start_timestamp = 0;
+        bool TryUpdateQuery()
         {
-            DrawFilterTooltip();
-        }
-
-        input_feedback.ImGuiRender(0, ImGui::GetWindowContentRegionMax().x);
-    }
-
-    bool first_draw = true;
-    void Draw(IDirect3DDevice9 *device)
-    {
-        if (first_draw)
-        {
-            auto vpw = GW::Render::GetViewportWidth();
-            auto vph = GW::Render::GetViewportHeight();
-            const auto window_width = 600;
-            const auto offset_from_top = ImGui::GetFrameHeight();
-            ImGui::SetNextWindowPos(ImVec2(vpw - window_width, offset_from_top), ImGuiCond_FirstUseEver);
-            ImGui::SetNextWindowSize(ImVec2(window_width, vph - offset_from_top), ImGuiCond_FirstUseEver);
-            first_draw = false;
-        }
-
-        if (auto _ = WINDOW_ALPHA_SCOPE(); ImGui::Begin("Skill Book (Ctrl + K)", &UpdateManager::open_skill_book, UpdateManager::GetWindowFlags()))
-        {
-            auto n_skills = state.filtered_skills.size();
-
-            DrawCheckboxes();
-            DrawAttributeModeSelection();
-            DrawSearchBox();
-
-            ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
-            ImGui::Text("%s results", std::to_string(n_skills).c_str());
-            ImGui::PopStyleColor();
-            ImGui::Separator();
-
-            if (ImGui::BeginChild("SkillList"))
-            {
-                auto est_item_height = 128.f;
-                // auto est_item_height = 1.f;
-
-                auto draw_list = ImGui::GetWindowDrawList();
-
-                auto DrawItem = [&](uint32_t i)
-                {
-                    const auto skill_id = static_cast<GW::Constants::SkillID>(state.filtered_skills[i]);
-                    auto &custom_sd = CustomSkillDataModule::GetCustomSkillData(skill_id);
-
-                    const auto initial_screen_cursor = ImGui::GetCursorScreenPos();
-                    const auto initial_cursor = ImGui::GetCursorPos();
-                    const auto content_width = ImGui::GetWindowContentRegionWidth();
-
-                    // Should not be null because the name was used to filter the skills
-                    std::string_view name = *custom_sd.TryGetName();
-                    DrawSkillHeader(custom_sd, name);
-                    DrawDescription(custom_sd, content_width);
-                    ImGui::Spacing();
-                    DrawSkillFooter(custom_sd, content_width);
-                    auto final_screen_cursor = ImGui::GetCursorScreenPos();
-
-                    auto entry_screen_max = final_screen_cursor;
-                    entry_screen_max.x += content_width;
-
-                    if (ImGui::IsWindowHovered() && ImGui::IsMouseHoveringRect(initial_screen_cursor, entry_screen_max))
-                    {
-                        if (ImGui::IsMouseClicked(0))
-                        {
-                            if (ImGui::GetIO().KeyCtrl)
-                            {
-                                Utils::OpenWikiPage(name);
-                            }
-                            else
-                            {
-                                UpdateManager::RequestSkillDragging(skill_id);
-                            }
-                        }
-#ifdef _DEBUG
-                        Debug::SetHoveredSkill(skill_id);
+#ifdef ASYNC_FILTERING
+            if (!update_filter_future.valid())
 #endif
+            {
+                if (state_update_start_timestamp == 0)
+                    state_update_start_timestamp = GW::MemoryMgr::GetSkillTimer();
+
+                if (base_skills.empty())
+                {
+                    if (!TryInitBaseSkills())
+                        return false;
+                }
+
+                query.Clear();
+                auto input_text_view = std::string_view(input_text, strlen(input_text));
+                CatalogUtils::ParseQuery(input_text_view, catalog.prop_bundle_names, query);
+
+                hl_data.Reset();
+                filtered_skills.clear();
+
+                if (attribute_mode == AttributeMode::Characters)
+                {
+                    auto custom_ad = CustomAgentDataModule::GetCustomAgentData(focused_agent_id);
+                    for (uint32_t i = 0; i < attributes.size(); i++)
+                    {
+                        auto attr_lvl = custom_ad.GetAttribute((AttributeOrTitle)i).value_or(0);
+                        attributes[i] = attr_lvl;
+                    }
+                }
+            }
+
+            uint32_t prof_mask;
+            if (limit_to_characters_professions)
+            {
+                prof_mask = Utils::GetProfessionMask(focused_agent_id);
+            }
+
+#ifdef _ARTIFICIAL_DELAY
+            // Artificially fail 64 times to test long delays
+            static uint32_t artificial_fail_counter = 0;
+            if ((++artificial_fail_counter % 64) != 0)
+                return false;
+#endif
+
+            for (auto skill_id_16 : base_skills)
+            {
+                const auto skill_id = static_cast<GW::Constants::SkillID>(skill_id_16);
+                auto &custom_sd = CustomSkillDataModule::GetCustomSkillData(skill_id);
+
+                if (!include_pve_only_skills)
+                {
+                    if (custom_sd.tags.PvEOnly)
+                        continue;
+                }
+                if (!include_temporary_skills)
+                {
+                    if (custom_sd.tags.Temporary)
+                        continue;
+                }
+                if (!include_archived_skills)
+                {
+                    if (custom_sd.tags.Archived)
+                        continue;
+                }
+                if (!include_npc_skills)
+                {
+                    if (custom_sd.tags.MonsterSkill ||
+                        custom_sd.tags.EnvironmentSkill)
+                        continue;
+                }
+                if (!include_disguises)
+                {
+                    if (custom_sd.skill->type == GW::Constants::SkillType::Disguise ||
+                        custom_sd.skill_id == GW::Constants::SkillID::Tonic_Tipsiness)
+                        continue;
+                }
+
+                if (limit_to_characters_professions)
+                {
+                    auto skill_prof_mask = 1 << (uint32_t)custom_sd.skill->profession;
+                    if ((prof_mask & skill_prof_mask) == 0)
+                        continue;
+                }
+
+                filtered_skills.push_back(static_cast<uint16_t>(skill_id));
+            }
+
+            auto filter_task = [this]()
+            {
+                // std::bitset<GW::Constants::SkillMax> discard;
+                this->catalog.RunQuery(this->query, this->filtered_skills, hl_data);
+                // RunFilters(parsed_filters, skill_properties, filtered_skills);
+                // TestRunFilters(parsed_filters, filtered_skills);
+                // SiftProps(parsed_filters, skill_properties, filtered_skills, discard);
+
+                // size_t i = 0;
+                // for (auto skill_id_16 : filtered_skills)
+                // {
+                //     // if (cancel_state_update.load() == true)
+                //     // {
+                //     //     cancel_state_update.store(false);
+                //     //     return false;
+                //     // }
+
+                //     // const auto skill_id = static_cast<GW::Constants::SkillID>(skill_id_16);
+                //     // auto &custom_sd = CustomSkillDataModule::GetCustomSkillData(skill_id);
+
+                //     // if (CheckPassesFilters(parsed_filters, custom_sd))
+                //     // {
+                //     //     filtered_skills[i++] = skill_id_16;
+                //     // }
+
+                //     if (!discard[skill_id_16])
+                //     {
+                //         filtered_skills[i++] = skill_id_16;
+                //     }
+
+                //     // if (PassesFilters(skill_properties, skill_id_16, parsed_filters))
+                //     // {
+                //     //     filtered_skills[i++] = skill_id_16;
+                //     // }
+                // }
+                // filtered_skills.resize(i);
+
+#ifdef _TIMING
+                auto timestamp_filtering = GW::MemoryMgr::GetSkillTimer();
+                auto duration = timestamp_filtering - state_update_start_timestamp;
+                GW::GameThread::Enqueue([=]()
+                                        { Utils::FormatToChat(L"Filtering took {} ms", duration); });
+#endif
+
+                // for (auto &command : parsed_commands)
+                // {
+                //     ApplyCommand(command, filtered_skills);
+                // }
+
+#ifdef _TIMING
+                auto timestamp_commands = GW::MemoryMgr::GetSkillTimer();
+                duration = timestamp_commands - timestamp_filtering;
+                GW::GameThread::Enqueue([=]()
+                                        { Utils::FormatToChat(L"Applying commands took {} ms", duration); });
+#endif
+                return true;
+            };
+
+#ifdef ASYNC_FILTERING
+            update_filter_future = std::async(std::launch::async, filter_task);
+            return false;
+        }
+        else
+        {
+            bool is_ready = update_filter_future.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready;
+            if (!is_ready)
+                return false;
+
+            assert(update_filter_future.valid());
+            bool success = update_filter_future.get();
+#else
+            bool success = filter_task();
+#endif
+            if (!success)
+                return false;
+
+            state_update_start_timestamp = 0;
+
+            CatalogUtils::GetFeedback(query, catalog.prop_bundle_names, feedback);
+
+            // if (active_state->filtered_skills.size() > 0)
+            // {
+            //     // This is messy
+            //     uint32_t max_count = std::min(active_state->filtered_skills.size(), filtered_skills.size());
+            //     max_count = std::min(max_count, clipper.visible_index_start + 1);
+            //     uint32_t same_count = 0;
+            //     while (same_count < max_count &&
+            //            filtered_skills[same_count] == active_state->filtered_skills[same_count])
+            //         same_count++;
+
+            //     if (same_count > 1)
+            //         clipper.SetScrollToIndex(same_count - 1);
+            //     else
+            //         clipper.Reset();
+
+            //     // auto focused_skill = state.filtered_skills[clipper.visible_index_start];
+            //     // auto it = std::find(filtered_skills.begin(), filtered_skills.end(), focused_skill);
+            //     // if (it != filtered_skills.end())
+            //     // {
+            //     //     auto index = std::distance(filtered_skills.begin(), it);
+            //     //     clipper.SetScrollToIndex(index);
+            //     // }
+            //     // else
+            //     // {
+            //     //     clipper.Reset();
+            //     // }
+            // }
+
+            return true;
+        }
+
+        void DrawSkillStats(const GW::Skill &skill)
+        {
+            ImGui::BeginGroup();
+            ImGui::PushFont(Constants::Fonts::skill_thick_font_15);
+
+            const auto skill_id = skill.skill_id;
+
+            const float width_per_stat = 45;
+
+            const auto draw_list = ImGui::GetWindowDrawList();
+
+            float max_pos_x = ImGui::GetWindowContentRegionWidth() - 20;
+            auto cursor_start_pos = ImGui::GetCursorPos();
+            float min_pos_x = cursor_start_pos.x;
+            float base_pos_y = cursor_start_pos.y + 1;
+
+            ImGui::SetCursorPosY(base_pos_y);
+
+            const auto icons = TextureModule::LoadTextureFromFileId(TextureModule::KnownFileIDs::UI_SkillStatsIcons);
+            const ImVec2 icon_size = ImVec2(16, 16);
+
+            struct Layout
+            {
+                SkillTextPropertyID id;
+                size_t atlas_index;
+                size_t pos_from_right;
+            };
+
+            Layout layout[]{
+                {SkillTextPropertyID::Overcast, 10, 4},
+                {SkillTextPropertyID::Sacrifice, 7, 4},
+                {SkillTextPropertyID::Upkeep, 0, 4},
+                {SkillTextPropertyID::Energy, 1, 3},
+                {use_precise_adrenaline ? SkillTextPropertyID::Adrenaline : SkillTextPropertyID::AdrenalineStrikes, 3, 3},
+                {SkillTextPropertyID::Activation, 2, 2},
+                {SkillTextPropertyID::Recharge, 1, 1},
+                {SkillTextPropertyID::Aftercast, 2, 0},
+            };
+
+            for (const auto &l : layout)
+            {
+                const auto text = GetStr(l.id, skill_id);
+                if (text.empty())
+                    continue;
+                const auto hl = GetHL(l.id, skill_id);
+                RichText::TextSegment seg_alloc[16];
+                std::span<RichText::TextSegment> seg_span = seg_alloc;
+                text_drawer.MakeTextSegments(text, seg_span, hl);
+                const auto text_width = RichText::CalcTextSegmentsWidth(seg_span);
+                float start_x = max_pos_x - l.pos_from_right * width_per_stat - text_width;
+                float current_x = std::max(start_x, min_pos_x);
+                const auto ls_text_cursor = ImVec2(current_x, base_pos_y + 4);
+                ImGui::SetCursorPos(ls_text_cursor);
+
+                text_drawer.DrawTextSegments(seg_span, 0, -1);
+
+                current_x += text_width;
+                min_pos_x = current_x + 5;
+            }
+
+            ImGui::PopFont();
+            ImGui::EndGroup();
+        }
+
+        void DrawSkillHeader(CustomSkillData &custom_sd)
+        {
+            ImGui::BeginGroup(); // Whole header
+
+            const auto &skill = *custom_sd.skill;
+            const auto skill_id = custom_sd.skill_id;
+
+            { // Draw skill icon
+                const auto skill_icon_size = 56;
+                auto icon_cursor_ss = ImGui::GetCursorScreenPos();
+                auto result = Utils::GetSkillFrame(custom_sd.skill_id);
+                bool is_equipable = Utils::IsSkillEquipable(*custom_sd.skill, focused_agent_id);
+                bool is_hovered = ImGui::IsMouseHoveringRect(icon_cursor_ss, icon_cursor_ss + ImVec2(skill_icon_size, skill_icon_size));
+                bool is_effect = custom_sd.tags.EffectOnly;
+                if (TextureModule::DrawSkill(*custom_sd.skill, icon_cursor_ss, skill_icon_size, is_effect, is_hovered) ||
+                    TextureModule::DrawSkill(*GW::SkillbarMgr::GetSkillConstantData(GW::Constants::SkillID::No_Skill), icon_cursor_ss, skill_icon_size, is_effect, is_hovered))
+                {
+                    if (is_hovered && is_equipable)
+                    {
+                        ImGui::BeginTooltip();
+                        ImGui::TextUnformatted("Click + Drag to equip");
+                        ImGui::EndTooltip();
                     }
 
-                    ImGui::Separator();
-                };
-
-                clipper.Draw(n_skills, est_item_height, snap_to_skill, DrawItem);
+                    ImGui::SameLine();
+                }
             }
-            ImGui::EndChild();
+
+            { // Draw stuff rightward of icon
+                ImGui::BeginGroup();
+                ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(7, 0));
+
+                auto name_cursor_ss = ImGui::GetCursorScreenPos();
+                auto wrapping_min = ImGui::GetCursorPosX();
+                auto wrapping_max = ImGui::GetWindowContentRegionMax().x;
+                auto width = wrapping_max - wrapping_min;
+
+                { // Draw skill name
+                    ImGui::PushFont(Constants::Fonts::skill_name_font);
+                    auto name_color = custom_sd.tags.Archived ? Constants::GWColors::skill_dull_gray : Constants::GWColors::header_beige;
+                    ImGui::PushStyleColor(ImGuiCol_Text, name_color);
+
+                    auto name_str = GetStr(SkillTextPropertyID::Name, skill_id);
+                    auto name_hl = GetHL(SkillTextPropertyID::Name, skill_id);
+                    RichText::TextSegment seg_alloc[256];
+                    std::span<RichText::TextSegment> seg_span = seg_alloc;
+                    text_drawer.MakeTextSegments(name_str, seg_span, name_hl);
+                    text_drawer.DrawTextSegments(seg_span, wrapping_min, wrapping_max);
+
+                    auto size = ImGui::GetItemRectSize();
+
+                    { // Strikethrough and underscore handling
+                        float strike_offsets_alloc[2];
+                        float *strike_offsets = strike_offsets_alloc;
+                        auto line_height = ImGui::GetTextLineHeight();
+                        if (custom_sd.tags.Archived) // Strikethrough
+                            *strike_offsets++ = line_height / 2;
+                        if (ImGui::GetIO().KeyCtrl) // Underscore
+                            *strike_offsets++ = line_height;
+
+                        if (strike_offsets != strike_offsets_alloc)
+                        {
+                            auto y_pos = name_cursor_ss.y;
+                            auto cumulative_width = 0.f;
+                            for (size_t i = 0; i <= seg_span.size(); i++)
+                            {
+                                auto seg_width = i < seg_span.size() ? seg_span[i].width : std::numeric_limits<float>::max();
+                                auto next_cumulative_width = cumulative_width + seg_width;
+                                if (next_cumulative_width > width)
+                                {
+                                    for (float *p_offset = strike_offsets_alloc; p_offset < strike_offsets; p_offset++)
+                                    {
+                                        auto y = y_pos + *p_offset;
+                                        ImGui::GetWindowDrawList()->AddLine(ImVec2(name_cursor_ss.x, y), ImVec2(name_cursor_ss.x + cumulative_width, y), name_color, 1.0f);
+                                    }
+                                    y_pos += line_height;
+                                    cumulative_width = seg_width;
+                                }
+                                else
+                                {
+                                    cumulative_width = next_cumulative_width;
+                                }
+                            }
+                        }
+                    }
+
+                    ImGui::PopStyleColor();
+                    ImGui::PopFont();
+                }
+
+                { // Draw skill stats
+                    ImGui::SameLine();
+                    DrawSkillStats(skill);
+                }
+
+                { // Draw skill type
+                    auto str = GetStr(SkillTextPropertyID::Type, skill_id);
+                    auto hl = GetHL(SkillTextPropertyID::Type, skill_id);
+                    text_drawer.DrawRichText(str, wrapping_min, wrapping_max, hl);
+                }
+
+                { // Draw skill tags
+                    auto str = GetStr(SkillTextPropertyID::Tag, skill_id);
+                    auto hl = GetHL(SkillTextPropertyID::Tag, skill_id);
+                    ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
+                    text_drawer.DrawRichText(str, wrapping_min, wrapping_max, hl);
+                    ImGui::PopStyleColor();
+                }
+
+                ImGui::PopStyleVar();
+                ImGui::EndGroup();
+            }
+
+            ImGui::EndGroup();
         }
 
-        ImGui::End();
+        void DrawFilterTooltip()
+        {
+            ImGui::BeginTooltip();
+
+            auto width = 600;
+            std::string_view text;
+
+            { // General info
+
+                text = "Here you can narrow down the results by using a filter.";
+                Utils::DrawMultiColoredText(text, 0, width);
+
+                text = "A filter requires a target, an operator and one or more values. "
+                       "If you do not specify target or operator, the target will be 'Text', and the operator will be ':'. "
+                       "This will essentially check if any text of the skill contains the provided string.";
+                Utils::DrawMultiColoredText(text, 0, width);
+
+                text = "Multiple values can be specified for a filter by separating them with '|', "
+                       "then ANY of them must be satisfied for that filter to match.";
+                Utils::DrawMultiColoredText(text, 0, width);
+
+                text = "You can use '&' (AND) or '|' (OR) to combine multiple filters.";
+                Utils::DrawMultiColoredText(text, 0, width);
+
+                text = "Once you are satisified with the filters, you may want to sort the results. "
+                       "This can be achieved by typing the special command \"#sort\" followed by a "
+                       "whitespace-separated list of targets to sort by. The results will be sorted by the first target, "
+                       "then by the second, and so on. To invert the order prepend a '!' character before the target";
+                Utils::DrawMultiColoredText(text, 0, width);
+
+                text = "If you are unsure how to proceed, take a look at the examples below.";
+                Utils::DrawMultiColoredText(text, 0, width);
+            }
+
+            ImGui::Spacing();
+
+            auto Example = [&](std::string_view filter, std::string_view desc)
+            {
+                ImGui::Text(" - \"%s\"", filter.data());
+                ImGui::SameLine();
+                ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
+                ImGui::Text("(%s)", desc.data());
+                ImGui::PopStyleColor();
+            };
+            { // Examples
+
+                ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
+                ImGui::TextUnformatted("Example filters:");
+                ImGui::PopStyleColor();
+                ImGui::TextUnformatted("Try these examples by typing them in the search bar.");
+
+                Example("health regen", "Show health regeneration skills");
+                Example("camp = night & ava = locked/unlocked", "Show Nightfall skills you have yet to learn");
+                Example("prof = mo/d & ty: enc", "Show monk or dervish enchantment spells");
+                Example("adr > 0 & ty = stance #sort !adr nam", "Show adrenal stances, sort by cost and then name");
+            }
+
+            ImGui::Spacing();
+
+            FixedArray<char, 128> char_buffer_alloc;
+            FixedArray<Utils::ColorChange, 8> col_buffer_alloc;
+            FixedArray<uint32_t, 8> boundaries_alloc;
+            auto char_buffer = char_buffer_alloc.ref();
+            auto col_buffer = col_buffer_alloc.ref();
+            auto boundaries = boundaries_alloc.ref();
+            ImU32 req_color = IM_COL32(0, 255, 0, 255);
+
+            { // Target and operator info
+                ImGui::Columns(3, "mycolumns", false);
+
+                auto DrawTargets = [&](std::string_view type, const auto &target_array)
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
+                    ImGui::Text("%s targets:", type);
+                    ImGui::PopStyleColor();
+                    uint32_t i = 0;
+                    for (auto &[_, target_type] : target_array)
+                    {
+                        if (i++ == 25)
+                            ImGui::NextColumn();
+                        auto ident = SkillPropertyID{target_type, 0}.ToStr();
+                        // bool success = CalcIdentMinChars(target_type, ident, char_buffer, boundaries);
+                        // assert(success);
+
+                        // assert(boundaries.size() % 2 == 0);
+                        // col_buffer.clear();
+                        // for (int32_t i = 0; i < boundaries.size(); i += 2)
+                        // {
+                        //     col_buffer.try_push({boundaries[i] + 2, req_color});
+                        //     col_buffer.try_push({boundaries[i + 1] + 2, 0});
+                        // }
+
+                        char_buffer.clear();
+                        char_buffer.PushFormat("- %s", ident.data());
+                        Utils::DrawMultiColoredText(char_buffer, 0, width);
+                    }
+                };
+
+                auto DrawOperators = [&](std::string_view type, const auto &op_array, SkillPropertyID::Type prop_type)
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
+                    ImGui::Text("%s operators:", type);
+                    ImGui::PopStyleColor();
+                    for (auto &[ident, op] : op_array)
+                    {
+                        const auto desc = GetOpDescription({prop_type, 0}, op);
+                        char_buffer.clear();
+                        char_buffer.PushFormat("- %s %s", ident.data(), desc.data());
+
+                        col_buffer.clear();
+                        col_buffer.try_push({2, req_color});
+                        col_buffer.try_push({2 + ident.size(), 0});
+                        Utils::DrawMultiColoredText(char_buffer, 0, width, col_buffer);
+                    }
+                };
+
+                // DrawTargets("Text", text_filter_targets);
+                ImGui::Spacing();
+                // DrawOperators("Text", text_filter_operators, SkillPropertyID::Type::TEXT);
+                ImGui::Spacing();
+                // DrawOperators("Number", number_filter_operators, SkillPropertyID::Type::NUMBER);
+
+                ImGui::Spacing();
+                ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
+                text = "The highlighted characters indicate the minimum required to uniquely identify it.";
+                Utils::DrawMultiColoredText(text, 0, width / 3);
+                ImGui::PopStyleColor();
+
+                ImGui::NextColumn();
+                // DrawTargets("Number", number_filter_targets);
+
+                ImGui::Columns(1);
+            }
+
+            { // Advanced info
+                ImGui::Spacing();
+
+                if (!ImGui::GetIO().KeyCtrl)
+                {
+                    ImGui::TextUnformatted("Hold CTRL to show advanced info");
+                }
+                else
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
+                    ImGui::TextUnformatted("Advanced:");
+                    ImGui::PopStyleColor();
+
+                    ImGui::TextUnformatted("For advanced users it's also possible to target specific bytes in the \"raw\" skill data\nstructure. "
+                                           "This can be useful for targeting specific flags or values that are not directly\nexposed.");
+
+                    ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
+                    ImGui::TextUnformatted("Example raw filter:");
+                    ImGui::PopStyleColor();
+                    Example("0x10 u32 : 4", "Show skills with the 3rd bit set in the u32 at offset 0x10");
+
+                    ImGui::Columns(2, "mycolumns", false);
+                    ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
+                    ImGui::TextUnformatted("Raw target:");
+                    ImGui::PopStyleColor();
+
+                    ImGui::TextUnformatted("A raw target consists a hex byte offset\nand the type of value to read at that offset.");
+                    ImGui::TextUnformatted("- ");
+                    ImGui::PushStyleColor(ImGuiCol_Text, req_color);
+                    ImGui::SameLine(0, 0);
+                    ImGui::TextUnformatted("0x");
+                    ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::hp_red);
+                    ImGui::SameLine(0, 0);
+                    ImGui::TextUnformatted("<HEX_OFFSET> ");
+                    ImGui::PopStyleColor(2);
+                    ImGui::SameLine(0, 0);
+                    ImGui::TextUnformatted("[u8|u16|u32|f32]");
+
+                    ImGui::NextColumn();
+
+                    ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
+                    ImGui::TextUnformatted("Raw operators:");
+                    ImGui::PopStyleColor();
+
+                    ImGui::TextUnformatted("Any number operator OR:");
+                    // for (auto &[ident, op] : adv_filter_operators)
+                    // {
+                    //     const auto desc = GetOpDescription(SkillPropertyID{SkillPropertyID::Type::RAW, 0}, op);
+                    //     char_buffer.clear();
+                    //     char_buffer.PushFormat("- %s %s", ident.data(), desc.data());
+                    //     col_buffer.try_push({2, req_color});
+                    //     col_buffer.try_push({2 + ident.size(), 0});
+                    //     Utils::DrawMultiColoredText(char_buffer, 0, width, col_buffer);
+                    // }
+                }
+            }
+
+            ImGui::EndTooltip();
+        }
+
+        void DrawSearchBox()
+        {
+            if (ImGui::IsWindowAppearing())
+                ImGui::SetKeyboardFocusHere();
+
+            ImGui::InputTextWithHint(
+                "",
+                "Search for a skill...",
+                input_text, sizeof(input_text),
+                ImGuiInputTextFlags_CallbackEdit | ImGuiInputTextFlags_AutoSelectAll,
+                [](ImGuiInputTextCallbackData *data)
+                {
+                    auto &book = *static_cast<BookState *>(data->UserData);
+                    book.request_state_update = true;
+
+                    return 0;
+                },
+                this
+            );
+
+            ImGui::SameLine();
+            auto pos = ImGui::GetCursorScreenPos();
+            ImGui::SetCursorScreenPos(ImVec2(pos.x, pos.y - 1));
+            ImGui::TextUnformatted("(?)");
+            if (ImGui::IsItemHovered())
+            {
+                DrawFilterTooltip();
+            }
+
+            if (state_update_start_timestamp)
+            {
+                DWORD now_timestamp = GW::MemoryMgr::GetSkillTimer();
+                float elapsed_sec = (float)(now_timestamp - state_update_start_timestamp) / 1000.0f;
+
+                if (elapsed_sec > 0.2f)
+                {
+                    // Draw spinning arrow
+                    auto packet = TextureModule::GetPacket_ImageInAtlas(
+                        TextureModule::KnownFileIDs::UI_SkillStatsIcons,
+                        ImVec2(23, 23),
+                        ImVec2(16, 16),
+                        3,
+                        ImVec2(0, 0),
+                        ImVec2(0, 0),
+                        ImColor(0.95f, 0.6f, 0.2f)
+                    );
+                    auto rads = 2.f * elapsed_sec * 6.28f;
+                    auto draw_list = ImGui::GetWindowDrawList();
+                    packet.AddToDrawList(draw_list, ImVec2(pos.x + 20, pos.y), rads);
+                }
+            }
+
+            if (!feedback.empty())
+            {
+                text_drawer.DrawRichText(feedback, 0, ImGui::GetWindowContentRegionMax().x);
+            }
+        }
+
+        void DrawDescription(GW::Constants::SkillID skill_id, float content_width)
+        {
+            auto tt_provider = SkillTooltipProvider(skill_id);
+            text_drawer.tooltip_provider = &tt_provider;
+
+            auto type = prefer_concise_descriptions ? SkillTextPropertyID::Concise : SkillTextPropertyID::Description;
+            auto alt_type = prefer_concise_descriptions ? SkillTextPropertyID::Description : SkillTextPropertyID::Concise;
+
+            auto main_desc = GetStr(type, skill_id);
+            auto alt_desc = GetStr(alt_type, skill_id);
+            auto main_hl = GetHL(type, skill_id);
+            auto alt_hl = GetHL(alt_type, skill_id);
+
+            text_drawer.DrawRichText(main_desc, 0, content_width, main_hl);
+
+            bool draw_alt = alt_hl.size() > main_hl.size();
+            if (!draw_alt)
+            {
+                // auto len = std::min(main_hl.size(), alt_hl.size());
+                // assert(len % 2 == 0);
+                // uint32_t i = 0;
+                // while (i < len)
+                // {
+                //     std::string_view hl_a = ((std::string_view)desc.str).substr(main_hl[i], main_hl[i + 1] - main_hl[i]);
+                //     std::string_view hl_b = ((std::string_view)desc_alt.str).substr(alt_hl[i], alt_hl[i + 1] - alt_hl[i]);
+                //     i += 2;
+                //     bool eq = (std::tolower(hl_a[0]) == std::tolower(hl_b[0])) &&
+                //               (hl_a.substr(1) == hl_b.substr(1));
+                //     if (!eq)
+                //     {
+                //         draw_alt = true;
+                //         break;
+                //     }
+                // }
+            }
+
+            if (draw_alt)
+            {
+                ImGui::Spacing();
+                ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
+                ImGui::TextUnformatted(prefer_concise_descriptions ? "Additional matches in full description: " : "Additional matches in concise description: ");
+                ImGui::PopStyleColor();
+                ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 3);
+                // ImGui::SameLine(0, 0);
+                // auto wrapping_min = ImGui::GetCursorPosX();
+
+                text_drawer.DrawRichText(alt_desc, 0, content_width, alt_hl);
+            }
+        }
+
+        void DrawSkillFooter(CustomSkillData &custom_sd, float content_width)
+        {
+            // auto &skill = *custom_sd.skill;
+            // auto skill_id = custom_sd.skill_id;
+            // ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
+            // ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
+            // auto content_max = ImGui::GetWindowContentRegionMax().x;
+            // auto cursor_x = ImGui::GetCursorPosX();
+
+            // // auto DrawProp = [&](SkillPropertyID::Type type, std::span<std::string_view> values)
+            // // {
+            // //     FixedArray<char, 32> header_salloc;
+            // //     auto header = header_salloc.ref();
+            // //     GetFormattedHeader(type, header);
+            // //     auto &hl = state.highlighting_map[GetHighlightKey(type)];
+            // //     Utils::DrawMultiColoredText(header, cursor_x, content_max, {}, hl);
+
+            // //     for (size_t i = 0; i < values.size(); ++i)
+            // //     {
+            // //         auto &value = values[i];
+            // //         ImGui::SameLine();
+            // //         if (i > 0)
+            // //         {
+            // //             ImGui::TextUnformatted(", ");
+            // //             ImGui::SameLine();
+            // //         }
+            // //         Utils::DrawMultiColoredText(value, cursor_x, content_max, {}, hl);
+            // //     }
+            // // };
+
+            // for (size_t i = (size_t)SkillTextPropertyID::FOOTER_FIRST; i <= (size_t)SkillTextPropertyID::FOOTER_LAST; ++i)
+            // {
+            //     auto id = (SkillTextPropertyID)i;
+            //     auto meta =
+            //         auto str = GetStr(id, skill_id);
+            //     auto hl = GetHL(id, skill_id);
+            // }
+
+            // if (show_null_stats || !custom_sd.attribute.IsNone())
+            // {
+            //     Utils::RichStringView str{
+            //         .str = custom_sd.GetAttributeStr(),
+            //     };
+            //     DrawProp(SkillPropertyID::Type::Attribute, skill_id, cursor_x, content_max, {&str, 1}, true);
+            // }
+            // if (show_null_stats || skill.profession != GW::Constants::ProfessionByte::None)
+            // {
+            //     Utils::RichStringView str{
+            //         .str = custom_sd.GetProfessionStr(),
+            //     };
+            //     DrawProp(SkillPropertyID::Type::Profession, skill_id, cursor_x, content_max, {&str, 1}, true);
+            // }
+            // if (show_null_stats || true)
+            // {
+            //     Utils::RichStringView str{
+            //         .str = custom_sd.GetCampaignStr(),
+            //     };
+            //     DrawProp(SkillPropertyID::Type::Campaign, skill_id, cursor_x, content_max, {&str, 1}, true);
+            // }
+
+            // ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 5);
+
+            // {
+            //     FixedVector<Utils::Range, 4> ranges;
+            //     custom_sd.GetRanges(ranges);
+            //     FixedArray<char, 256> chars_salloc;
+            //     auto chars = chars_salloc.ref();
+            //     FixedArray<Utils::RichStringView, 8> strs_salloc;
+            //     auto strs = strs_salloc.ref();
+            //     if (show_null_stats || ranges.size() > 0)
+            //     {
+            //         for (auto range : ranges)
+            //         {
+            //             auto start = chars.data_end();
+            //             chars.PushFormat("%d", range);
+            //             auto range_name = Utils::GetRangeStr(range);
+            //             if (range_name)
+            //             {
+            //                 chars.PushFormat(" (%s)", range_name.value());
+            //             }
+            //             auto end = chars.data_end();
+            //             strs.try_push(Utils::RichStringView{
+            //                 .str = std::string_view{start, (size_t)(end - start)},
+            //             });
+            //         }
+            //         DrawProp(SkillPropertyID::Type::Range, skill_id, cursor_x, content_max, strs, true);
+            //     }
+            // }
+
+            // auto attr_lvl = active_state->GetAttribute(custom_sd.attribute);
+            // // auto duration = custom_sd.GetDuration();
+            // for (auto &pd : custom_sd.parsed_data)
+            // {
+            //     auto &hl = active_state->highlighting_map[GetHighlightKey(ParsedToProp(pd.type), skill_id)].data;
+            //     pd.ImGuiRender(attr_lvl, content_max, hl);
+            // }
+
+            // ImGui::PopStyleVar();
+            // ImGui::PopStyleColor();
+
+            // { // Draw skill id
+            //     ImGui::SetWindowFontScale(0.7f);
+            //     const auto id_str = std::to_string((uint32_t)skill.skill_id);
+            //     const auto id_str_size = ImGui::CalcTextSize(id_str.c_str());
+            //     ImGui::SetCursorPosX(content_width - id_str_size.x - 4);
+            //     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 0.3f));
+            //     ImGui::TextUnformatted(id_str.c_str());
+            //     ImGui::PopStyleColor();
+            //     ImGui::SetWindowFontScale(1.f);
+            // }
+        }
+
+        void Draw(IDirect3DDevice9 *device, size_t instance_id)
+        {
+            if (first_draw)
+            {
+                auto vpw = GW::Render::GetViewportWidth();
+                auto vph = GW::Render::GetViewportHeight();
+                const auto window_width = 600;
+                const auto offset_from_top = ImGui::GetFrameHeight();
+                ImGui::SetNextWindowPos(ImVec2(vpw - window_width, offset_from_top), ImGuiCond_FirstUseEver);
+                ImGui::SetNextWindowSize(ImVec2(window_width, vph - offset_from_top), ImGuiCond_FirstUseEver);
+                first_draw = false;
+            }
+
+            if (ImGui::Begin("Skill Book (Ctrl + K)", &is_opened, UpdateManager::GetWindowFlags()))
+            {
+                DrawCheckboxes();
+                DrawAttributeModeSelection();
+                DrawSearchBox();
+
+                ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
+                auto n_skills = filtered_skills.size();
+                ImGui::Text("%s results", std::to_string(n_skills).c_str());
+                ImGui::PopStyleColor();
+                ImGui::Separator();
+
+                if (ImGui::BeginChild("SkillList"))
+                {
+                    if (!text_provider.IsReady())
+                    {
+                        ImGui::Text("Loading...");
+                    }
+                    else
+                    {
+                        auto est_item_height = 128.f;
+                        // auto est_item_height = 1.f;
+
+                        auto draw_list = ImGui::GetWindowDrawList();
+
+                        auto DrawItem = [&](uint32_t i)
+                        {
+                            const auto skill_id = static_cast<GW::Constants::SkillID>(filtered_skills[i]);
+                            auto &custom_sd = CustomSkillDataModule::GetCustomSkillData(skill_id);
+
+                            const auto initial_screen_cursor = ImGui::GetCursorScreenPos();
+                            const auto initial_cursor = ImGui::GetCursorPos();
+                            const auto content_width = ImGui::GetWindowContentRegionWidth();
+
+                            DrawSkillHeader(custom_sd);
+                            DrawDescription(skill_id, content_width);
+                            ImGui::Spacing();
+                            DrawSkillFooter(custom_sd, content_width);
+                            auto final_screen_cursor = ImGui::GetCursorScreenPos();
+
+                            auto entry_screen_max = final_screen_cursor;
+                            entry_screen_max.x += content_width;
+
+                            if (ImGui::IsWindowHovered() && ImGui::IsMouseHoveringRect(initial_screen_cursor, entry_screen_max))
+                            {
+                                bool ctrl_down = ImGui::GetIO().KeyCtrl;
+                                if (ctrl_down)
+                                {
+                                    ImGui::BeginTooltip();
+                                    if (IsInitialCursorPos())
+                                    {
+                                        ImGui::TextUnformatted("Ctrl + Click to open wiki!");
+                                    }
+                                    ImGui::EndTooltip();
+                                }
+
+                                if (ImGui::IsMouseClicked(0))
+                                {
+                                    if (ctrl_down)
+                                    {
+                                        auto name_str = GetStr(SkillTextPropertyID::Name, skill_id);
+                                        Utils::OpenWikiPage(name_str);
+                                    }
+                                    else
+                                    {
+                                        if (Utils::IsSkillEquipable(*custom_sd.skill, focused_agent_id))
+                                        {
+                                            UpdateManager::RequestSkillDragging(skill_id);
+                                        }
+                                    }
+                                }
+#ifdef _DEBUG
+                                Debug::SetHoveredSkill(skill_id);
+#endif
+                            }
+
+                            ImGui::Separator();
+                        };
+
+                        clipper.Draw(n_skills, est_item_height, snap_to_skill, DrawItem);
+                    }
+                }
+                ImGui::EndChild();
+            }
+            ImGui::End();
+
+            // if (!is_opened)
+            // {
+            //     books.remove(this);
+            // }
+        }
+    };
+
+    std::list<BookState> books;
+
+    void FetchNames()
+    {
+        auto &text_provider = SkillTextProvider::GetInstance(GW::Constants::Language::English);
+        auto names_ptr = &text_provider.GetNames();
+        for (auto &book : books)
+        {
+            book.catalog.SetPropertyPtr(SkillTextPropertyID::Name, names_ptr);
+        }
+    }
+
+    struct DoubleWriter
+    {
+        double value;
+
+        void operator()(std::span<char> &dst) const
+        {
+            auto [after, ec] = std::to_chars(dst.data(), dst.data() + dst.size(), value, std::chars_format::general);
+            const bool success = (ec == std::errc());
+#ifdef _DEBUG
+            assert(success);
+#endif
+            auto written_count = success ? after - dst.data() : 0;
+            dst = dst.subspan(0, written_count);
+        }
+    };
+
+    static std::unordered_map<SkillTextPropertyID, RichText::RichTextArena> static_props;
+
+    template <typename Func>
+    void FetchX(SkillTextPropertyID prop_id, Func &&func)
+    {
+        auto &prop = static_props[prop_id];
+        prop.Reset();
+        auto id = std::format("prop_{}", (size_t)prop_id);
+        prop.ReserveFromHint(id);
+
+        for (size_t i = 1; i < GW::Constants::SkillMax; ++i)
+        {
+            auto skill_id = static_cast<GW::Constants::SkillID>(i);
+            auto &custom_sd = CustomSkillDataModule::GetCustomSkillData(skill_id);
+            prop.BeginWrite();
+            std::invoke(std::forward<Func>(func), prop, custom_sd);
+            prop.EndWrite(i);
+        }
+
+        prop.StoreCapacityHint(id);
+
+        for (auto &book : books)
+        {
+            book.catalog.SetPropertyPtr(prop_id, &prop);
+        }
+    }
+
+    template <typename MemPtr>
+    void FetchXMember(SkillTextPropertyID prop_id, MemPtr getter, std::optional<uint32_t> icon_id = std::nullopt)
+    {
+        static_assert(std::is_member_function_pointer_v<MemPtr>, "This overload is for member function pointers only.");
+
+#define ACTUAL_CODE                                                         \
+    if constexpr (std::is_integral_v<Ret> || std::is_floating_point_v<Ret>) \
+    {                                                                       \
+        auto value = static_cast<double>(std::invoke(getter, cskill));      \
+        if (value != 0.0)                                                   \
+        {                                                                   \
+            dst.text.AppendWriteBuffer(32, DoubleWriter{value});            \
+            if (icon_id.has_value())                                        \
+                dst.PushImageTag(icon_id.value());                          \
+        }                                                                   \
+    }                                                                       \
+    else                                                                    \
+    {                                                                       \
+        dst.text.append_range(std::invoke(getter, cskill));                 \
+    }
+
+        FetchX(prop_id, [getter, icon_id](RichText::RichTextArena &dst, CustomSkillData &cskill)
+               {
+                // Try const-qualified call first
+                if constexpr (std::is_invocable_v<MemPtr, const CustomSkillData &>)
+                {
+                    using Ret = std::invoke_result_t<MemPtr, const CustomSkillData &>;
+                    ACTUAL_CODE
+                }
+                else
+                {
+                    // Non-const member function
+                    using Ret = std::invoke_result_t<MemPtr, CustomSkillData &>;
+                    ACTUAL_CODE
+                } });
+    }
+
+    void FetchTags()
+    {
+        FetchX(
+            SkillTextPropertyID::Tag,
+            [](RichText::RichTextArena &dst, CustomSkillData &cskill)
+            {
+                auto &skill = *cskill.skill;
+                auto &tags = cskill.tags;
+                auto skill_id_to_check = skill.IsPvP() ? skill.skill_id_pvp : skill.skill_id;
+
+                bool is_unlocked = GW::SkillbarMgr::GetIsSkillUnlocked(skill_id_to_check);
+                bool is_equipable = Utils::IsSkillEquipable(skill, focused_agent_id);
+                bool is_locked = tags.Unlockable && !is_unlocked;
+
+                auto PushTag = [&](std::string_view str, ImU32 color = NULL, std::optional<size_t> image_id = std::nullopt)
+                {
+                    if (color != NULL)
+                    {
+                        dst.PushColoredText(color, str);
+                    }
+                    else
+                    {
+                        dst.PushText(str);
+                    }
+
+                    if (image_id.has_value())
+                    {
+                        dst.PushText(" ");
+                        dst.PushImageTag(image_id.value());
+                    }
+
+                    dst.PushText(", ");
+                };
+
+                // clang-format off
+                if (is_equipable)          PushTag("Equipable", IM_COL32(100, 255, 255, 255));
+                if (is_unlocked)           PushTag("Unlocked" , IM_COL32(143, 255, 143, 255));
+                if (tags.Temporary)        PushTag("Temporary"                              );
+                if (is_locked)             PushTag("Locked"   , IM_COL32(255, 100, 100, 255));
+                
+                if (cskill.context != Utils::SkillContext::Null)
+                    PushTag(Utils::GetSkillContextString(cskill.context));
+
+                if (tags.Archived)         PushTag("Archived");
+                if (tags.EffectOnly)       PushTag("Effect-only");
+                if (tags.PvEOnly)          PushTag("PvE-only");
+                if (tags.PvPOnly)          PushTag("PvP-only");
+                if (tags.PvEVersion)       PushTag("PvE Version");
+                if (tags.PvPVersion)       PushTag("PvP Version");
+
+                if (tags.DeveloperSkill)   PushTag("Developer Skill");
+                if (tags.EnvironmentSkill) PushTag("Environment Skill");
+                if (tags.MonsterSkill)     PushTag("Monster Skill ", NULL, RichText::DefaultTextImageProvider::MonsterSkull);
+                if (tags.SpiritAttack)     PushTag("Spirit Attack");
+                
+                if (tags.Maintained)       PushTag("Maintained");
+                if (tags.ConditionSource)  PushTag("Condition Source");
+                if (tags.ExploitsCorpse)   PushTag("Exploits Corpse");
+                if (tags.Consumable)       PushTag("Consumable");
+                if (tags.Celestial)        PushTag("Celestial");
+                if (tags.Mission)          PushTag("Mission");
+                if (tags.Bundle)           PushTag("Bundle");
+                // clang-format on
+
+                if (dst.text.GetWrittenSize() > 0)
+                {
+                    // Cut off the last ", "
+                    dst.text.resize(dst.text.size() - 2);
+                }
+            }
+        );
+    }
+
+    void FetchStaticProps()
+    {
+        FetchNames();
+
+        FetchXMember(SkillTextPropertyID::Type, &CustomSkillData::GetTypeString);
+        FetchXMember(SkillTextPropertyID::Attribute, &CustomSkillData::GetAttributeStr);
+        FetchXMember(SkillTextPropertyID::Profession, &CustomSkillData::GetProfessionStr);
+        FetchXMember(SkillTextPropertyID::Campaign, &CustomSkillData::GetCampaignStr);
+        FetchXMember(SkillTextPropertyID::Upkeep, &CustomSkillData::GetUpkeep, RichText::DefaultTextImageProvider::Upkeep);
+        FetchXMember(SkillTextPropertyID::Energy, &CustomSkillData::GetEnergy, RichText::DefaultTextImageProvider::EnergyOrb);
+        FetchXMember(SkillTextPropertyID::AdrenalineStrikes, &CustomSkillData::GetAdrenalineStrikes, RichText::DefaultTextImageProvider::Adrenaline);
+        FetchXMember(SkillTextPropertyID::Overcast, &CustomSkillData::GetOvercast, RichText::DefaultTextImageProvider::Overcast);
+        FetchXMember(SkillTextPropertyID::Sacrifice, &CustomSkillData::GetSacrifice, RichText::DefaultTextImageProvider::Sacrifice);
+        FetchXMember(SkillTextPropertyID::Recharge, &CustomSkillData::GetRecharge, RichText::DefaultTextImageProvider::Recharge);
+
+        auto AppendFraction = [](RichText::RichTextArena &dst, double value)
+        {
+            float value_int;
+            float value_fract = std::modf(value, &value_int);
+
+            std::optional<RichText::FracTag> frac_tag = std::nullopt;
+            if (value_fract == 0.25f)
+                frac_tag = {1, 4};
+            else if (value_fract == 0.5f)
+                frac_tag = {1, 2};
+            else if (value_fract == 0.75f)
+                frac_tag = {3, 4};
+
+            if (frac_tag.has_value())
+            {
+                if (value_int > 0.f)
+                    dst.text.AppendWriteBuffer(32, DoubleWriter{value_int});
+                dst.PushTag(
+                    RichText::TextTag{
+                        .type = RichText::TextTag::Type::Frac,
+                        .frac_tag = frac_tag.value(),
+                    }
+                );
+            }
+            else
+            {
+                dst.text.AppendWriteBuffer(32, DoubleWriter{value});
+            }
+        };
+
+        FetchX(
+            SkillTextPropertyID::Adrenaline,
+            [&](RichText::RichTextArena &dst, CustomSkillData &cskill)
+            {
+                auto adrenaline = cskill.GetAdrenaline();
+                if (adrenaline == 0)
+                    return;
+                uint16_t adrenaline_div = adrenaline / 25;
+                uint16_t adrenaline_rem = adrenaline % 25;
+                if (adrenaline_div > 0)
+                {
+                    dst.text.AppendWriteBuffer(32, DoubleWriter{(double)adrenaline_div});
+                }
+                if (adrenaline_rem > 0)
+                {
+                    dst.PushTag(
+                        RichText::TextTag{
+                            .type = RichText::TextTag::Type::Frac,
+                            .frac_tag = {adrenaline_rem, 25},
+                        }
+                    );
+                }
+                dst.PushImageTag(RichText::DefaultTextImageProvider::Adrenaline); }
+        );
+
+        FetchX(
+            SkillTextPropertyID::Activation,
+            [&](RichText::RichTextArena &dst, CustomSkillData &cskill)
+            {
+                auto activation = cskill.GetActivation();
+                if (activation == 0.f)
+                    return;
+                AppendFraction(dst, activation);
+                dst.PushImageTag(RichText::DefaultTextImageProvider::Activation);
+            }
+        );
+
+        FetchX(
+            SkillTextPropertyID::Aftercast,
+            [&](RichText::RichTextArena &dst, CustomSkillData &cskill)
+            {
+                auto &skill = *cskill.skill;
+                const bool is_normal_aftercast = (skill.activation > 0 && skill.aftercast == 0.75f) ||
+                                                 (skill.activation == 0 && skill.aftercast == 0);
+                if (skill.aftercast == 0.f && is_normal_aftercast)
+                    return;
+
+                if (!is_normal_aftercast)
+                    dst.PushColorTag(IM_COL32(255, 255, 0, 255));
+                AppendFraction(dst, skill.aftercast);
+                if (!is_normal_aftercast)
+                    dst.PushColorTag(NULL);
+                dst.PushImageTag(RichText::DefaultTextImageProvider::Aftercast);
+            }
+        );
+
+        FetchX(
+            SkillTextPropertyID::Range,
+            [](RichText::RichTextArena &dst, CustomSkillData &cskill)
+            {
+                Utils::Range buffer[4];
+                std::span<Utils::Range> ranges(buffer);
+                cskill.GetRanges(ranges);
+                for (auto range : ranges)
+                {
+                    dst.text.AppendWriteBuffer(32, DoubleWriter{static_cast<double>(range)});
+                    auto range_name = Utils::GetRangeStr(range);
+                    if (range_name)
+                    {
+                        std::format_to(std::back_inserter(dst.text), std::string_view(" ({})"), range_name.value());
+                    }
+                }
+            }
+        );
+    }
+
+    GW::HookEntry attribute_update_entry;
+    GW::HookEntry select_hero_entry;
+    constexpr GW::UI::UIMessage kLoadHeroSkillsMessage = (GW::UI::UIMessage)(0x10000000 | 395);
+    constexpr GW::UI::UIMessage kSelectHeroMessage = (GW::UI::UIMessage)(0x10000000 | 432);
+    constexpr GW::UI::UIMessage kChangeProfession = (GW::UI::UIMessage)(0x10000000 | 78);
+
+    void AttributeUpdateCallback(GW::HookStatus *, const GW::Packet::StoC::PacketBase *packet)
+    {
+        const auto p = reinterpret_cast<const GW::Packet::StoC::AttributeUpdatePacket *>(packet);
+        auto packet_agent_id = p->agent_id;
+
+        for (auto &book : books)
+        {
+            if (book.attribute_mode == AttributeMode::Characters)
+            {
+                if (packet_agent_id == focused_agent_id)
+                {
+                    // auto attr = AttributeOrTitle((GW::Constants::AttributeByte)p->attribute);
+                    // attributes[attr.value] = p->value;
+                    book.attrs_changed = true;
+                    book.FetchDescriptions();
+                }
+            }
+        }
+    }
+    void TitleUpdateCallback(GW::HookStatus *, const GW::Packet::StoC::UpdateTitle *packet)
+    {
+        for (auto &book : books)
+        {
+            if (book.attribute_mode == AttributeMode::Characters)
+            {
+                // auto attr = AttributeOrTitle((GW::Constants::TitleID)packet->title_id);
+                // attributes[attr.value] = packet->new_value;
+                book.attrs_changed = true;
+            }
+        }
+    }
+
+    void LoadHeroSkillsCallback(GW::HookStatus *, GW::UI::UIMessage msg, void *wparam, void *lparam)
+    {
+        // This is called whenever a new set of skills are loaded in the deckbuilder
+        assert(msg == kLoadHeroSkillsMessage);
+
+        auto agent_id = (uint32_t)wparam;
+        if (agent_id > 0)
+        {
+            focused_agent_id = agent_id;
+            FetchTags();
+            for (auto &book : books)
+            {
+                book.request_state_update = true;
+            }
+        }
+    }
+
+    void SelectHeroCallback(GW::HookStatus *, GW::UI::UIMessage msg, void *wparam, void *lparam)
+    {
+        // This is called whenever the user selects a hero in either the deckbuilder or the inventory,
+        // but it doesn't come with any params/info
+        assert(msg == kSelectHeroMessage);
+
+        auto db = GW::UI::GetFrameByLabel(L"DeckBuilder");
+        if (!db)
+        {
+            // At this point, the inventory must be open
+            GW::GameThread::Enqueue(
+                [&]()
+                {
+                    // Open and close the deckbuilder to trigger LoadHeroSkillsCallback where we get the agent_id
+                    GW::UI::Keypress(GW::UI::ControlAction_OpenSkillsAndAttributes);
+                    GW::UI::Keypress(GW::UI::ControlAction_OpenSkillsAndAttributes);
+                }
+            );
+        }
+    }
+
+    void MapLoadedCallback(GW::HookStatus *, GW::UI::UIMessage msg, void *wparam, void *lparam)
+    {
+        // This is to keep it in sync with gw
+        focused_agent_id = GW::Agents::GetControlledCharacterId();
+        for (auto &book : books)
+        {
+            book.request_state_update = true;
+        }
+    }
+
+    void ChangeProfessionCallback(GW::HookStatus *, GW::UI::UIMessage msg, void *wparam, void *lparam)
+    {
+        auto p = (uint32_t *)wparam;
+        auto agent_id = p[0];
+        if (agent_id == focused_agent_id)
+        {
+            // auto primary = p[1];
+            // auto secondary = p[2];
+            for (auto &book : books)
+            {
+                book.request_state_update = true;
+            }
+        }
+    }
+
+    void ForceDeckbuilderCallbacks()
+    {
+        auto Refresh_DB = [&]()
+        {
+            GW::UI::Keypress(GW::UI::ControlAction_OpenSkillsAndAttributes);
+            GW::UI::Keypress(GW::UI::ControlAction_OpenSkillsAndAttributes);
+        };
+
+        auto inv = GW::UI::GetFrameByLabel(L"Inventory");
+        if (inv) // Inventory open
+        {
+            GW::GameThread::Enqueue(Refresh_DB);
+        }
+        else // Inventory closed
+        {
+            auto db = GW::UI::GetFrameByLabel(L"DeckBuilder");
+            if (db) // Deckbuilder open
+            {
+                GW::GameThread::Enqueue(
+                    [&]()
+                    {
+                        GW::UI::Keypress(GW::UI::ControlAction_ToggleInventoryWindow);
+                        GW::UI::Keypress(GW::UI::ControlAction_OpenSkillsAndAttributes);
+                        GW::UI::Keypress(GW::UI::ControlAction_OpenSkillsAndAttributes);
+                        GW::UI::Keypress(GW::UI::ControlAction_ToggleInventoryWindow);
+                    }
+                );
+            }
+            else // Deckbuilder closed
+            {
+                GW::GameThread::Enqueue(Refresh_DB);
+            }
+        }
+    }
+
+    void Initialize()
+    {
+        GW::StoC::RegisterPacketCallback(&attribute_update_entry, GAME_SMSG_AGENT_UPDATE_ATTRIBUTE, AttributeUpdateCallback);
+        GW::StoC::RegisterPacketCallback<GW::Packet::StoC::UpdateTitle>(&attribute_update_entry, TitleUpdateCallback);
+
+        GW::UI::RegisterUIMessageCallback(&select_hero_entry, kLoadHeroSkillsMessage, LoadHeroSkillsCallback);
+        GW::UI::RegisterUIMessageCallback(&select_hero_entry, kSelectHeroMessage, SelectHeroCallback);
+        GW::UI::RegisterUIMessageCallback(&select_hero_entry, GW::UI::UIMessage::kMapLoaded, MapLoadedCallback);
+        GW::UI::RegisterUIMessageCallback(&select_hero_entry, kChangeProfession, ChangeProfessionCallback);
+
+        ForceDeckbuilderCallbacks();
+
+        SetupPropBundles();
+        books.emplace_back(); // Add first book
+        FetchStaticProps();
+    }
+
+    void Terminate()
+    {
+        GW::StoC::RemoveCallbacks(&attribute_update_entry);
+
+        GW::UI::RemoveUIMessageCallback(&select_hero_entry, kLoadHeroSkillsMessage);
+        GW::UI::RemoveUIMessageCallback(&select_hero_entry, kSelectHeroMessage);
+        GW::UI::RemoveUIMessageCallback(&select_hero_entry, GW::UI::UIMessage::kMapLoaded);
+        GW::UI::RemoveUIMessageCallback(&select_hero_entry, kChangeProfession);
+    }
+
+    void FormatActivation(char *buffer, uint32_t len, float value)
+    {
+        float intpart;
+        float activation_fract = std::modf(value, &intpart);
+        uint32_t activation_int = static_cast<uint32_t>(intpart);
+
+        const auto thresh = 0.001f;
+        const char *str = nullptr;
+        if (((std::abs(activation_fract - 0.25f)) < thresh && (str = "¼")) ||
+            ((std::abs(activation_fract - 0.5f)) < thresh && (str = "½")) ||
+            ((std::abs(activation_fract - 0.75f)) < thresh && (str = "¾")))
+        {
+            if (activation_int)
+            {
+                auto written = snprintf(buffer, len, "%d", activation_int);
+                assert(written >= 0 && written < len);
+                buffer += written;
+                len -= written;
+            }
+
+            auto result = snprintf(buffer, len, str);
+            assert(result >= 0 && result < len);
+        }
+        else
+        {
+            auto result = snprintf(buffer, len, "%g", value);
+            assert(result >= 0 && result < len);
+        }
+    }
+
+    uint32_t GetHighlightKey(SkillPropertyID::Type target, GW::Constants::SkillID skill_id = GW::Constants::SkillID::No_Skill)
+    {
+        assert((uint32_t)skill_id < 0x10000);
+        assert((uint32_t)target < 0x10000);
+        return (((uint32_t)skill_id) << 16) | (uint32_t)target;
+    }
+
+    template <class _Container>
+    void GetFormattedHeader(const SkillPropertyID::Type type, std::back_insert_iterator<_Container> it)
+    {
+        auto prop_name = SkillPropertyID{type}.ToStr();
+        std::format_to(it, "{}: ", prop_name);
+    }
+
+    void DrawFormattedHeader(const SkillPropertyID::Type type, GW::Constants::SkillID skill_id)
+    {
+        char header[32];
+
+        // FixedString<32> header;
+        // GetFormattedHeader(type, std::back_inserter(header));
+
+        auto content_max = ImGui::GetWindowContentRegionMax().x;
+        auto cursor_x = ImGui::GetCursorPosX();
+
+        // auto has_header_hl = active_state->highlighting_map[GetHighlightKey(type, skill_id)].did_match_header;
+        // FixedVector<uint16_t, 2> header_hl;
+        // if (has_header_hl)
+        // {
+        //     header_hl.push_back(0);
+        //     header_hl.push_back(header.size() - 1);
+        // }
+        ImGui::PushFont(Constants::Fonts::gw_font_16);
+        ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
+        Utils::DrawMultiColoredText(header, cursor_x, content_max, {}, {});
+        ImGui::PopStyleColor();
+        ImGui::PopFont();
+    }
+
+    void DrawFormattedHeaderTooltip(const SkillPropertyID::Type type, GW::Constants::SkillID skill_id)
+    {
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::BeginTooltip();
+            bool untouched = IsInitialCursorPos();
+            if (untouched)
+            {
+                DrawFormattedHeader(type, skill_id);
+            }
+            ImGui::EndTooltip();
+        }
+    }
+
+    enum struct FilterJoin
+    {
+        None,
+        And,
+        Or,
+    };
+
+    enum struct FilterOperator
+    {
+        None,
+        Unknown,
+
+        Contain,
+        NotContain,
+        GreaterThanOrEqual,
+        LessThanOrEqual,
+        NotEqual,
+        Equal,
+        GreaterThan,
+        LessThan,
+    };
+
+    struct SortCommandArg
+    {
+        bool is_negated;
+        SkillPropertyID target;
+    };
+
+    struct SortCommand
+    {
+        std::vector<SortCommandArg> args;
+    };
+
+    struct Command
+    {
+        std::variant<SortCommand> data;
+    };
+
+    // Must not contain any whitespace
+    static constexpr uint32_t n_text_filter_targets = 7; // Must match the array below
+    static constexpr std::pair<std::string_view, SkillPropertyID::Type> filter_targets[] = {
+        // Text
+
+        // {"Text", SkillPropertyID::Type::TEXT},
+        {"Name", SkillPropertyID::Type::Name},
+        {"Type", SkillPropertyID::Type::SkillType},
+        {"Tag", SkillPropertyID::Type::TAGS},
+        {"Description", SkillPropertyID::Type::Description},
+        {"Attribute", SkillPropertyID::Type::Attribute},
+        {"Profession", SkillPropertyID::Type::Profession},
+        {"Campaign", SkillPropertyID::Type::Campaign},
+
+        // Number
+
+        {"Upkeep", SkillPropertyID::Type::Upkeep},
+        {"Overcast", SkillPropertyID::Type::Overcast},
+        {"Adrenaline", SkillPropertyID::Type::Adrenaline},
+        {"Sacrifice", SkillPropertyID::Type::Sacrifice},
+        {"Energy", SkillPropertyID::Type::Energy},
+        {"Activation", SkillPropertyID::Type::Activation},
+        {"Recharge", SkillPropertyID::Type::Recharge},
+        {"Aftercast", SkillPropertyID::Type::Aftercast},
+        {"Range", SkillPropertyID::Type::Range},
+        {"ID", SkillPropertyID::Type::ID},
+
+        {"Duration", ParsedToProp(ParsedSkillData::Type::Duration)},
+        {"Disable", ParsedToProp(ParsedSkillData::Type::Disable)},
+        {"Level", ParsedToProp(ParsedSkillData::Type::Level)},
+        {"Damage", ParsedToProp(ParsedSkillData::Type::Damage)},
+        {"Healing", ParsedToProp(ParsedSkillData::Type::Heal)},
+        {"ArmorBonus", ParsedToProp(ParsedSkillData::Type::ArmorIncrease)},
+        {"ArmorPenalty", ParsedToProp(ParsedSkillData::Type::ArmorDecrease)},
+
+        {"Conditions Removed", ParsedToProp(ParsedSkillData::Type::ConditionsRemoved)},
+        {"Hexes Removed", ParsedToProp(ParsedSkillData::Type::HexesRemoved)},
+        {"Enchantments Removed", ParsedToProp(ParsedSkillData::Type::EnchantmentsRemoved)},
+
+        {"Health Regeneration", ParsedToProp(ParsedSkillData::Type::HealthRegen)},
+        {"Health Degeneration", ParsedToProp(ParsedSkillData::Type::HealthDegen)},
+        {"Health Gain", ParsedToProp(ParsedSkillData::Type::HealthGain)},
+        {"Health Loss", ParsedToProp(ParsedSkillData::Type::HealthLoss)},
+        {"Health Steal", ParsedToProp(ParsedSkillData::Type::HealthSteal)},
+        {"Additional Health", ParsedToProp(ParsedSkillData::Type::AdditionalHealth)},
+
+        {"Energy Regeneration", ParsedToProp(ParsedSkillData::Type::EnergyRegen)},
+        {"Energy Degeneration", ParsedToProp(ParsedSkillData::Type::EnergyDegen)},
+        {"Energy Gain", ParsedToProp(ParsedSkillData::Type::EnergyGain)},
+        {"Energy Loss", ParsedToProp(ParsedSkillData::Type::EnergyLoss)},
+        {"Energy Steal", ParsedToProp(ParsedSkillData::Type::EnergySteal)},
+        {"Energy Discount", ParsedToProp(ParsedSkillData::Type::EnergyDiscount)},
+
+        {"Adrenaline Gain", ParsedToProp(ParsedSkillData::Type::AdrenalineGain)},
+        {"Adrenaline Loss", ParsedToProp(ParsedSkillData::Type::AdrenalineLoss)},
+
+        {"Bleeding", ParsedToProp(ParsedSkillData::Type::Bleeding)},
+        {"Blind", ParsedToProp(ParsedSkillData::Type::Blind)},
+        {"Burning", ParsedToProp(ParsedSkillData::Type::Burning)},
+        {"Cracked Armor", ParsedToProp(ParsedSkillData::Type::CrackedArmor)},
+        {"Crippled", ParsedToProp(ParsedSkillData::Type::Crippled)},
+        {"Dazed", ParsedToProp(ParsedSkillData::Type::Dazed)},
+        {"Deep Wound", ParsedToProp(ParsedSkillData::Type::DeepWound)},
+        {"Disease", ParsedToProp(ParsedSkillData::Type::Disease)},
+        {"Poison", ParsedToProp(ParsedSkillData::Type::Poison)},
+        {"Weakness", ParsedToProp(ParsedSkillData::Type::Weakness)},
+
+        {"Faster Activation", ParsedToProp(ParsedSkillData::Type::FasterActivation)},
+        {"Slower Activation", ParsedToProp(ParsedSkillData::Type::SlowerActivation)},
+        {"Faster Movement", ParsedToProp(ParsedSkillData::Type::FasterMovement)},
+        {"Slower Movement", ParsedToProp(ParsedSkillData::Type::SlowerMovement)},
+        {"Faster Recharge", ParsedToProp(ParsedSkillData::Type::FasterRecharge)},
+        {"Slower Recharge", ParsedToProp(ParsedSkillData::Type::SlowerRecharge)},
+        {"Faster Attacks", ParsedToProp(ParsedSkillData::Type::FasterAttacks)},
+        {"Slower Attacks", ParsedToProp(ParsedSkillData::Type::SlowerAttacks)},
+        {"Longer Duration", ParsedToProp(ParsedSkillData::Type::LongerDuration)},
+        {"Shorter Duration", ParsedToProp(ParsedSkillData::Type::ShorterDuration)},
+        {"More Damage", ParsedToProp(ParsedSkillData::Type::MoreDamage)},
+        {"Less Damage", ParsedToProp(ParsedSkillData::Type::LessDamage)},
+        {"More Healing", ParsedToProp(ParsedSkillData::Type::MoreHealing)},
+        {"Less Healing", ParsedToProp(ParsedSkillData::Type::LessHealing)},
+    };
+
+    static constexpr std::span<const std::pair<std::string_view, SkillPropertyID::Type>> text_filter_targets = {filter_targets, n_text_filter_targets};
+    static constexpr std::span<const std::pair<std::string_view, SkillPropertyID::Type>> number_filter_targets = {filter_targets + n_text_filter_targets, std::size(filter_targets) - n_text_filter_targets};
+
+    std::string_view PopWord(std::string_view &str)
+    {
+        char *p = (char *)str.data();
+        char *end = p + str.size();
+        while (p < end && Utils::IsSpace(*p))
+            ++p;
+
+        char *word_start = p;
+        bool is_alpha = Utils::IsAlpha(*p);
+        ++p;
+        if (is_alpha)
+        {
+            while (p < end && Utils::IsAlpha(*p))
+                ++p;
+        }
+
+        str = std::string_view(p, end - p);
+        return std::string_view(word_start, p - word_start);
+    }
+
+    SkillPropertyID ParseFilterTarget(std::string_view text)
+    {
+        SkillPropertyID target = {};
+
+        // if (TryParseRawFilterTarget(p, end, target))
+        // {
+        //     return target;
+        // }
+
+        auto matcher = Matcher(text, true);
+
+        size_t best_match_weight = std::numeric_limits<size_t>::max();
+        // int32_t best_match_index = -1;
+        for (size_t i = 0; i < std::size(filter_targets); ++i)
+        {
+            auto &pair = filter_targets[i];
+            auto &type = pair.second;
+            auto ident = SkillPropertyID{type, 0}.ToStr();
+
+            bool match = matcher.Matches(ident, nullptr);
+            if (match)
+            {
+                float match_weight = ident.size();
+                if (match_weight < best_match_weight)
+                {
+                    best_match_weight = match_weight;
+                    target.type = type;
+                }
+            }
+        }
+
+        return target;
+    }
+
+    std::string_view GetOpDescription(SkillPropertyID target, FilterOperator op)
+    {
+        // clang-format off
+        switch (op) {
+            case FilterOperator::Contain:            return target.IsRawNumberType() ? "must contain bitflags of" : "must contain";
+            case FilterOperator::NotContain:         return target.IsRawNumberType() ? "must NOT contain bitflags of" : "must NOT contain";
+            case FilterOperator::Equal:              return target.IsStringType() ? "must start with" : "must be equal to";
+            case FilterOperator::NotEqual:           return target.IsStringType() ? "must NOT start with" : "must NOT be equal to";
+            case FilterOperator::GreaterThanOrEqual: return "must be greater than or equal to";
+            case FilterOperator::GreaterThan:        return "must be greater than";
+            case FilterOperator::LessThanOrEqual:    return "must be less than or equal to";
+            case FilterOperator::LessThan:           return "must be less than";
+            default:                                 return "...";
+        }
+        // clang-format on
+    }
+
+    void StitchSkillProperty(FixedArrayRef<char> buffer, std::string_view name, std::string_view value)
+    {
+        constexpr std::string_view join(": ");
+        auto size = name.size() + join.size() + value.size();
+        assert(size < buffer.capacity());
+        buffer.clear();
+        char *p = buffer.data();
+
+        name.copy(p, name.size());
+        p += name.size();
+
+        join.copy(p, join.size());
+        p += join.size();
+
+        value.copy(p, value.size());
+
+        buffer.set_size(size);
+    }
+
+    // union SortProp
+    // {
+    //     char str[16];
+    //     double num[2];
+
+    //     SortProp() = default;
+    //     SortProp(SkillPropertyID id, CustomSkillData &custom_sd)
+    //     {
+    //         FixedArray<SkillProperty, 8> salloc;
+    //         auto props = salloc.ref();
+    //         GetSkillProperty(id, custom_sd, props);
+
+    //         if (id.IsStringType())
+    //         {
+    //             if (props.size() > 0)
+    //             {
+    //                 auto str_view = props[0].GetStr();
+    //                 std::strncpy(str, str_view.data(), sizeof(str));
+    //             }
+    //             else
+    //             {
+    //                 std::memset(str, 0, sizeof(str));
+    //             }
+    //         }
+    //         else
+    //         {
+    //             num[0] = props.size() > 0 ? props[0].GetNumber() : 0;
+    //             num[1] = num[0];
+    //             for (uint32_t i = 1; i < props.size(); i++)
+    //             {
+    //                 auto val = props[i].GetNumber();
+    //                 num[0] = std::min(num[0], val);
+    //                 num[1] = std::max(num[1], val);
+    //             }
+    //         }
+    //     }
+
+    //     bool ContainsFullString() const
+    //     {
+    //         return str[sizeof(str) - 1] == '\0';
+    //     }
+
+    //     int32_t CompareStr(const SortProp &other) const
+    //     {
+    //         return std::strncmp(str, other.str, sizeof(str));
+    //     }
+
+    //     int32_t CompareNumAscending(SortProp &other) const
+    //     {
+    //         if (num[0] != other.num[0])
+    //             return num[0] < other.num[0] ? -1 : 1;
+    //         if (num[1] != other.num[1])
+    //             return num[1] < other.num[1] ? -1 : 1;
+    //         return 0;
+    //     }
+
+    //     int32_t CompareNumDescending(SortProp &other) const
+    //     {
+    //         if (num[1] != other.num[1])
+    //             return num[1] < other.num[1] ? 1 : -1;
+    //         if (num[0] != other.num[0])
+    //             return num[0] < other.num[0] ? 1 : -1;
+    //         return 0;
+    //     }
+    // };
+
+    // void ApplyCommand(Command &command, std::span<uint16_t> filtered_skills)
+    // {
+    //     if (std::holds_alternative<SortCommand>(command.data))
+    //     {
+    //         // Sorting may be slow on debug builds but should be super fast on release builds
+    //         // (I experienced 110 ms in debug build and 4 ms in release build for the same sorting operation)
+
+    //         auto &sort_command = std::get<SortCommand>(command.data);
+    //         if (sort_command.args.empty())
+    //             return;
+
+    //         // Prefetch some data to speed up sorting (this might actually not be needed for release builds)
+    //         auto prefetched = std::array<SortProp, GW::Constants::SkillMax>{};
+    //         auto first_target = sort_command.args[0].target;
+    //         for (auto skill_id : filtered_skills)
+    //         {
+    //             auto &custom_sd = CustomSkillDataModule::GetCustomSkillData((GW::Constants::SkillID)skill_id);
+    //             prefetched[skill_id] = SortProp(first_target, custom_sd);
+    //         }
+
+    //         auto Comparer = [&](const uint16_t a, const uint16_t b)
+    //         {
+    //             for (uint32_t i = 0; i < sort_command.args.size(); i++)
+    //             {
+    //                 auto &arg = sort_command.args[i];
+    //                 auto target = arg.target;
+    //                 bool is_negated = arg.is_negated;
+
+    //                 auto &custom_sd_a = CustomSkillDataModule::GetCustomSkillData((GW::Constants::SkillID)a);
+    //                 auto &custom_sd_b = CustomSkillDataModule::GetCustomSkillData((GW::Constants::SkillID)b);
+
+    //                 bool is_string = target.IsStringType();
+    //                 int32_t cmp = 0;
+    //                 if (is_string)
+    //                 {
+    //                     if (i == 0)
+    //                     {
+    //                         // Do a cheap check on first 16 chars first
+    //                         auto &prop_a = prefetched[a];
+    //                         auto &prop_b = prefetched[b];
+    //                         cmp = prop_a.CompareStr(prop_b);
+    //                         if (cmp != 0)
+    //                             return is_negated ? cmp > 0 : cmp < 0;
+    //                         if (prop_a.ContainsFullString() && prop_b.ContainsFullString())
+    //                             continue;
+    //                     }
+
+    //                     constexpr auto buffer_size = 8;
+    //                     FixedArray<SkillProperty, buffer_size> salloc_a;
+    //                     FixedArray<SkillProperty, buffer_size> salloc_b;
+    //                     auto buffer_a = salloc_a.ref();
+    //                     auto buffer_b = salloc_b.ref();
+    //                     GetSkillProperty(target, custom_sd_a, buffer_a);
+    //                     GetSkillProperty(target, custom_sd_b, buffer_b);
+
+    //                     assert(buffer_a.size() == buffer_b.size());
+    //                     for (uint32_t i = 0; i < buffer_a.size(); i++)
+    //                     {
+    //                         auto str_a = buffer_a[i].GetStr();
+    //                         auto str_b = buffer_b[i].GetStr();
+
+    //                         cmp = str_a.compare(str_b);
+    //                         if (cmp != 0)
+    //                             return is_negated ? cmp > 0 : cmp < 0;
+    //                     }
+    //                 }
+    //                 else
+    //                 {
+    //                     auto prop_a = i == 0 ? prefetched[a] : SortProp(target, custom_sd_a);
+    //                     auto prop_b = i == 0 ? prefetched[b] : SortProp(target, custom_sd_b);
+    //                     cmp = is_negated ? prop_a.CompareNumDescending(prop_b)
+    //                                      : prop_a.CompareNumAscending(prop_b);
+    //                     if (cmp != 0)
+    //                         return cmp < 0;
+    //                 }
+    //             }
+    //             return false;
+    //         };
+    //         std::stable_sort(filtered_skills.begin(), filtered_skills.end(), Comparer);
+    //     }
+    //     else
+    //     {
+    //         SOFT_ASSERT(false, L"Invalid command type");
+    //     }
+    // }
+
+    void Update()
+    {
+#ifdef _DEBUG
+        DebugDisplay::PushToDisplay("Skill Book selected agent_id", focused_agent_id);
+#endif
+
+        for (auto &book : books)
+        {
+            book.Update();
+        }
+    };
+
+    void Draw(IDirect3DDevice9 *device)
+    {
+        size_t i = 0;
+        for (auto &book : books)
+        {
+            book.Draw(device, i++);
+        }
     }
 }
