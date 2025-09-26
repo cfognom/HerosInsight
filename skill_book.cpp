@@ -174,9 +174,8 @@ namespace HerosInsight::SkillBook
 
             auto n_a = text_provider.GetName((GW::Constants::SkillID)a);
             auto n_b = text_provider.GetName((GW::Constants::SkillID)b);
-            auto cmp = n_a.compare(n_b);
-            if (cmp != 0)
-                return cmp < 0;
+            if (n_a != n_b)
+                return n_a < n_b;
 
             return a < b;
         };
