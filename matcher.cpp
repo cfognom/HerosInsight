@@ -165,9 +165,6 @@ namespace HerosInsight
 
     void SkipTags(std::string_view text, size_t &offset)
     {
-#ifdef _DEBUG
-        assert(offset < text.size() && text[offset] == '<');
-#endif
         RichText::TextTag tag;
         auto rem = text.substr(offset);
         while (RichText::TextTag::TryRead(rem, tag))
