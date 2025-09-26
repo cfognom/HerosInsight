@@ -5,11 +5,14 @@ UseTab: Never
 ColumnLimit: 0
 BreakBeforeBraces: Allman
 AllowShortIfStatementsOnASingleLine: true
+AllowAllArgumentsOnNextLine: true
 IndentCaseLabels: true
 IndentCaseBlocks: false
 AccessModifierOffset: -4 # offset of public/private etc...
 NamespaceIndentation: All
 FixNamespaceComments: false
-AlignAfterOpenBracket: DontAlign
+# AlignAfterOpenBracket: DontAlign
+AlignAfterOpenBracket: BlockIndent
 PenaltyBreakBeforeFirstCallParameter: 1
 PenaltyReturnTypeOnItsOwnLine: 200
+PenaltyIndentedWhitespace: 10
