@@ -120,12 +120,6 @@ namespace HerosInsight
             id_to_span.clear();
         }
 
-        void Assign(StringArena<T> &other)
-        {
-            this->assign(other);
-            id_to_span.assign(other.id_to_span);
-        }
-
         // Deduper is valid until the StringArena is moved!
         deduper CreateDeduper(size_t n_buckets)
         {
