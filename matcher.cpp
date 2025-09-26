@@ -331,7 +331,7 @@ namespace HerosInsight
             {
                 size_t atom_start = 0;
                 size_t atom_end;
-                size_t atom_end_success = -1;
+                size_t atom_end_successful = -1;
                 for (size_t i = 0; i < n_atoms; ++i)
                 {
                     auto &atom = atoms[i];
@@ -342,23 +342,19 @@ namespace HerosInsight
                         size_t size = atom_end - atom_start;
                         if (size > 0)
                         {
-                            bool extend_prev = false;
-                            if (atom_end_success != -1)
+                            bool can_merge = false;
+                            if (atom_end_successful != -1)
                             {
-                                // Check if there is only spaces between last match and current
-                                std::string_view between(text.data() + atom_end_success, atom_start - atom_end_success);
-                                bool success = true;
-                                for (auto c : between)
-                                {
-                                    if (!Utils::IsSpace(c))
-                                    {
-                                        success = false;
-                                        break;
-                                    }
-                                }
-                                extend_prev = success;
+                                // Check if there is only spaces or tags between last match and current
+                                std::string_view between(text.data() + atom_end_successful, atom_start - atom_end_successful);
+                                RichText::TextTag dummy_tag;
+                                while (Utils::TryRead(' ', between) ||
+                                       RichText::TextTag::TryRead(between, dummy_tag))
+                                    ;
+
+                                can_merge = between.empty();
                             }
-                            if (extend_prev)
+                            if (can_merge)
                             {
                                 matches->back() = (uint16_t)atom_end;
                             }
@@ -368,7 +364,7 @@ namespace HerosInsight
                                 matches->push_back((uint16_t)atom_end);
                             }
 
-                            atom_end_success = atom_end;
+                            atom_end_successful = atom_end;
                         }
                     }
 
