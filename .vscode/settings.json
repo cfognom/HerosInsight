@@ -116,5 +116,8 @@
     "files.watcherExclude": {
         "[Bb]uild/**": true,
         "[Oo]ut/**": true
-    }
+    },
+    "C_Cpp.formatting": "clangFormat",
+    "C_Cpp.clang_format_style": "file",
+    "editor.defaultFormatter": "ms-vscode.cpptools"
 }

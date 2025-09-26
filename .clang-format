@@ -1,0 +1,15 @@
+BasedOnStyle: LLVM
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 0
+BreakBeforeBraces: Allman
+AllowShortIfStatementsOnASingleLine: true
+IndentCaseLabels: true
+IndentCaseBlocks: false
+AccessModifierOffset: -4 # offset of public/private etc...
+NamespaceIndentation: All
+FixNamespaceComments: false
+AlignAfterOpenBracket: DontAlign
+PenaltyBreakBeforeFirstCallParameter: 1
+PenaltyReturnTypeOnItsOwnLine: 200
