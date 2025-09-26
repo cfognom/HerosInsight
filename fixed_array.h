@@ -47,9 +47,9 @@ namespace HerosInsight
             return std::span<T>(buffer.data() + size(), capacity() - size());
         }
 
-        template <class Op>
-            requires std::invocable<Op, std::span<T> &>
-        void AppendWith(Op &&op)
+        template <class Writer>
+            requires std::invocable<Writer, std::span<T> &>
+        void AppendWith(Writer &&op)
         {
             auto span = AquireWritable();
             op(span);
