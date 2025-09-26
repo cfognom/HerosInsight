@@ -64,11 +64,10 @@ namespace HerosInsight::RichText
             return type == Type::Color ||
                    type == Type::Tooltip;
         }
-    };
 
-    // using TextTag = std::variant<ColorTag, TooltipTag, ImageTag, FracTag>;
-    bool TryReadTextTag(std::string_view &remaining, TextTag &out);
-    std::string_view FindTextTag(std::string_view text, TextTag &out);
+        static bool TryRead(std::string_view &remaining, TextTag &out);
+        static std::string_view Find(std::string_view text, TextTag &out);
+    };
 
     class TextImageProvider
     {

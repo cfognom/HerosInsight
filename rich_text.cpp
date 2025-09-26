@@ -106,122 +106,6 @@ namespace HerosInsight::RichText
         return false;
     }
 
-    bool TryReadTextTag(std::string_view &remaining, TextTag &out)
-    {
-        auto rem = remaining;
-        if (!Utils::TryRead('<', rem))
-            return false;
-
-        bool is_closing = Utils::TryRead('/', rem);
-
-        if (Utils::TryRead('c', rem))
-        {
-            auto &tag = out.color_tag;
-            out.type = TextTag::Type::Color;
-            if (is_closing)
-            {
-                if (Utils::TryRead('>', rem))
-                {
-                    tag.color = 0;
-                    remaining = rem;
-                    return true;
-                }
-            }
-            else if (Utils::TryRead('=', rem))
-            {
-                if (Utils::TryRead('#', rem))
-                {
-                    // Literal color tag
-                    if (Utils::TryReadHexColor(rem, tag.color) &&
-                        Utils::TryRead('>', rem))
-                    {
-                        remaining = rem;
-                        return true;
-                    }
-                }
-                else if (Utils::TryRead('@', rem))
-                {
-                    // Variable color tag
-                    if (Utils::TryRead("SKILLDULL", rem))
-                        tag.color = Constants::GWColors::skill_dull_gray;
-                    else if (Utils::TryRead("SKILLDYN", rem))
-                        tag.color = Constants::GWColors::skill_dynamic_green;
-                    else
-                        return false;
-                    if (Utils::TryRead('>', rem))
-                    {
-                        remaining = rem;
-                        return true;
-                    }
-                }
-            }
-        }
-        else if (Utils::TryRead("tip", rem))
-        {
-            auto &tag = out.tooltip_tag;
-            out.type = TextTag::Type::Tooltip;
-            if (is_closing)
-            {
-                if (Utils::TryRead('>', rem))
-                {
-                    tag.id = -1;
-                    remaining = rem;
-                    return true;
-                }
-            }
-            else if (Utils::TryRead('=', rem) &&
-                     Utils::TryReadInt(rem, tag.id) &&
-                     Utils::TryRead('>', rem))
-            {
-                remaining = rem;
-                return true;
-            }
-        }
-        else if (Utils::TryRead("img=", rem))
-        {
-            assert(!is_closing);
-            int32_t id;
-            if (Utils::TryReadInt(rem, id) &&
-                Utils::TryRead('>', rem))
-            {
-                auto &tag = out.image_tag;
-                out.type = TextTag::Type::Image;
-                tag.id = id;
-                remaining = rem;
-                return true;
-            }
-        }
-
-        {
-            auto &tag = out.frac_tag;
-            out.type = TextTag::Type::Frac;
-            if (FracTag::TryRead(remaining, tag))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    std::string_view FindTextTag(std::string_view text, TextTag &out)
-    {
-        while (true)
-        {
-            auto potential_tag = text.find('<');
-            if (potential_tag == std::string::npos)
-                return {};
-
-            text = text.substr(potential_tag);
-            auto start = text.data();
-            if (TryReadTextTag(text, out))
-            {
-                return std::string_view(start, text.data() - start);
-            }
-            text = text.substr(1); // Skip '<'
-        }
-    }
-
     void ExtractTags(std::string_view text_with_tags, std::span<char> &only_text, std::span<TextTag> &only_tags)
     {
         size_t tag_count = 0;
@@ -457,7 +341,8 @@ namespace HerosInsight::RichText
         // Screen-space bounding box
         ImRect bb = ImRect(
             std::numeric_limits<float>::max(), std::numeric_limits<float>::max(),
-            std::numeric_limits<float>::min(), std::numeric_limits<float>::min());
+            std::numeric_limits<float>::min(), std::numeric_limits<float>::min()
+        );
 
         size_t i_rem = 0;  // start of remaining segments
         size_t i_wrap = 0; // i_wrap > i_rem
@@ -591,5 +476,119 @@ namespace HerosInsight::RichText
             width += seg.width;
         }
         return width;
+    }
+    bool TextTag::TryRead(std::string_view &remaining, TextTag &out)
+    {
+        auto rem = remaining;
+        if (!Utils::TryRead('<', rem))
+            return false;
+
+        bool is_closing = Utils::TryRead('/', rem);
+
+        if (Utils::TryRead('c', rem))
+        {
+            auto &tag = out.color_tag;
+            out.type = TextTag::Type::Color;
+            if (is_closing)
+            {
+                if (Utils::TryRead('>', rem))
+                {
+                    tag.color = 0;
+                    remaining = rem;
+                    return true;
+                }
+            }
+            else if (Utils::TryRead('=', rem))
+            {
+                if (Utils::TryRead('#', rem))
+                {
+                    // Literal color tag
+                    if (Utils::TryReadHexColor(rem, tag.color) &&
+                        Utils::TryRead('>', rem))
+                    {
+                        remaining = rem;
+                        return true;
+                    }
+                }
+                else if (Utils::TryRead('@', rem))
+                {
+                    // Variable color tag
+                    if (Utils::TryRead("SKILLDULL", rem))
+                        tag.color = Constants::GWColors::skill_dull_gray;
+                    else if (Utils::TryRead("SKILLDYN", rem))
+                        tag.color = Constants::GWColors::skill_dynamic_green;
+                    else
+                        return false;
+                    if (Utils::TryRead('>', rem))
+                    {
+                        remaining = rem;
+                        return true;
+                    }
+                }
+            }
+        }
+        else if (Utils::TryRead("tip", rem))
+        {
+            auto &tag = out.tooltip_tag;
+            out.type = TextTag::Type::Tooltip;
+            if (is_closing)
+            {
+                if (Utils::TryRead('>', rem))
+                {
+                    tag.id = -1;
+                    remaining = rem;
+                    return true;
+                }
+            }
+            else if (Utils::TryRead('=', rem) &&
+                     Utils::TryReadInt(rem, tag.id) &&
+                     Utils::TryRead('>', rem))
+            {
+                remaining = rem;
+                return true;
+            }
+        }
+        else if (Utils::TryRead("img=", rem))
+        {
+            assert(!is_closing);
+            int32_t id;
+            if (Utils::TryReadInt(rem, id) &&
+                Utils::TryRead('>', rem))
+            {
+                auto &tag = out.image_tag;
+                out.type = TextTag::Type::Image;
+                tag.id = id;
+                remaining = rem;
+                return true;
+            }
+        }
+
+        {
+            auto &tag = out.frac_tag;
+            out.type = TextTag::Type::Frac;
+            if (FracTag::TryRead(remaining, tag))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+    std::string_view TextTag::Find(std::string_view text, TextTag &out)
+    {
+        while (true)
+        {
+            auto potential_tag = text.find('<');
+            if (potential_tag == std::string::npos)
+                return {};
+
+            text = text.substr(potential_tag);
+            auto start = text.data();
+            if (TryReadTextTag(text, out))
+            {
+                return std::string_view(start, text.data() - start);
+            }
+            text = text.substr(1); // Skip '<'
+        }
     }
 }
