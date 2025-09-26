@@ -477,6 +477,51 @@ namespace HerosInsight::RichText
         }
         return width;
     }
+
+    void TextTag::ToChars(std::span<char> &out) const
+    {
+        std::format_to_n_result<char *> result;
+        std::string_view to_copy{};
+        switch (type)
+        {
+            case Type::Color:
+                if (color_tag.color == NULL)
+                    to_copy = "</c>";
+                else
+                    result = std::format_to_n(out.data(), out.size(), "<c={:x}>", color_tag.color);
+                break;
+
+            case Type::Tooltip:
+                if (tooltip_tag.id == -1)
+                    to_copy = "</t>";
+                else
+                    result = std::format_to_n(out.data(), out.size(), "<t={}>", tooltip_tag.id);
+                break;
+
+            case Type::Image:
+                result = std::format_to_n(out.data(), out.size(), "<img={}>", image_tag.id);
+                break;
+
+            case Type::Frac:
+                result = std::format_to_n(out.data(), out.size(), "<frac={}/{}>", frac_tag.num, frac_tag.den);
+                break;
+
+            default:
+                assert(false);
+        }
+
+        if (to_copy.data() != nullptr)
+        {
+            assert(out.size() >= to_copy.size());
+            to_copy.copy(out.data(), to_copy.size());
+            out = std::span<char>(out.data(), to_copy.size());
+        }
+        else
+        {
+            out = std::span<char>(out.data(), result.size);
+        }
+    }
+
     bool TextTag::TryRead(std::string_view &remaining, TextTag &out)
     {
         auto rem = remaining;

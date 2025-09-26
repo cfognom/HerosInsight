@@ -65,6 +65,7 @@ namespace HerosInsight::RichText
                    type == Type::Tooltip;
         }
 
+        void ToChars(std::span<char> &out) const;
         static bool TryRead(std::string_view &remaining, TextTag &out);
         static std::string_view Find(std::string_view text, TextTag &out);
     };
