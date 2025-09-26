@@ -488,7 +488,12 @@ namespace HerosInsight::RichText
                 if (color_tag.color == NULL)
                     to_copy = "</c>";
                 else
-                    result = std::format_to_n(out.data(), out.size(), "<c={:x}>", color_tag.color);
+                {
+                    ImU32 color = color_tag.color;
+                    // Swap red and blue channels because that's how GW formats them!
+                    color = ((color & 0xFF00FF00) | ((color & 0xFF) << 16) | ((color & 0xFF0000) >> 16));
+                    result = std::format_to_n(out.data(), out.size(), "<c=#{:x}>", color);
+                }
                 break;
 
             case Type::Tooltip:
