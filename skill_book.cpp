@@ -192,18 +192,6 @@ namespace HerosInsight::SkillBook
         Manual
     };
 
-    struct HighlightData
-    {
-        bool did_match_header = false;
-        std::vector<uint16_t> data; // start/stop offsets
-
-        void clear()
-        {
-            did_match_header = false;
-            data.clear();
-        }
-    };
-
     enum struct SkillTextPropertyID : uint16_t
     {
         Name,
