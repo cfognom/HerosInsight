@@ -74,6 +74,7 @@ namespace HerosInsight
             auto measured_range = IndexRange::None();
             float distance_to_target = 0.f;
             bool is_pressing_scrollbar = this->IsPressingScrollbar();
+            // TODO: Fix empty tail of view when scrolling fast upwards
             if (is_pressing_scrollbar)
             {
                 // TODO: Fix flickering when pressing scroll bar
