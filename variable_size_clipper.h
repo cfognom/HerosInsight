@@ -71,11 +71,12 @@ namespace HerosInsight
 
             size_t i;
             uint32_t cursor;
-            float scroll_delta = 0.f;
-            Position next_scroll_current;
+            auto measured_range = IndexRange::None();
+            float distance_to_target = 0.f;
             bool is_pressing_scrollbar = this->IsPressingScrollbar();
             if (is_pressing_scrollbar)
             {
+                // TODO: Fix flickering when pressing scroll bar
 #ifdef _DEBUG
                 Utils::FormatToChat(0xFFFFFFFF, L"Scrollbar pressed");
 #endif
@@ -94,23 +95,13 @@ namespace HerosInsight
             }
             else
             {
-                UpdateTargetWithWheel(snap_to_items);
+                IndexRange measured_range;
+                UpdateTargetWithInput(snap_to_items, measured_range);
 
                 if (scroll_current != scroll_target)
                 {
-                    // Do smooth scrolling towards target scroll
-                    DisableDrawingGuard guard{};
-                    auto total_distance = CalcDistance(scroll_current, scroll_target, IndexRange::None());
-                    const auto dt = ImGui::GetIO().DeltaTime;
-                    scroll_delta = SmoothScroll(0, total_distance, dt);
-                    if (scroll_delta >= 0)
-                    {
-                        next_scroll_current = WalkForwards(this->scroll_current, scroll_delta, IndexRange{scroll_current.entry_index, scroll_target.entry_index});
-                    }
-                    else
-                    {
-                        next_scroll_current = WalkBackwards(this->scroll_current, -scroll_delta, IndexRange{scroll_target.entry_index, scroll_current.entry_index});
-                    }
+                    // Update sizes between scroll_current and scroll_target and calculate accurate distance
+                    distance_to_target = CalcDistance(scroll_current, scroll_target, measured_range);
                 }
 
                 i = this->scroll_current.entry_index;
@@ -139,9 +130,19 @@ namespace HerosInsight
             SOFT_ASSERT((float)cursor == ImGui::GetCursorPosY(), L"cursor != ImGui::GetCursorPosY() ({} != {})", (float)cursor, ImGui::GetCursorPosY());
 #endif
 
-            if (scroll_delta != 0)
+            if (distance_to_target != 0.f)
             {
-                this->scroll_current = next_scroll_current;
+                const auto dt = ImGui::GetIO().DeltaTime;
+                auto scroll_delta = SmoothScroll(0, distance_to_target, dt);
+                // We can skip measuring since we already did that in when we calculated distance_to_target
+                if (scroll_delta >= 0)
+                {
+                    this->scroll_current = WalkForwards(this->scroll_current, scroll_delta, IndexRange::All());
+                }
+                else
+                {
+                    this->scroll_current = WalkBackwards(this->scroll_current, -scroll_delta, IndexRange::All());
+                }
                 ImGui::SetScrollY(view_start + scroll_delta);
             }
 
@@ -297,14 +298,15 @@ namespace HerosInsight
             return WalkBackwards(Position{this->item_sizes.size(), 0}, view_height, IndexRange{0, 0});
         }
 
-        void UpdateTargetWithWheel(bool snap_to_items)
+        void UpdateTargetWithInput(bool snap_to_items, IndexRange &measured_range)
         {
+            measured_range = IndexRange::None();
+
             float wheel_input = GetWheelInput();
 
             if (wheel_input == 0.f)
                 return;
 
-            IndexRange measured_range{0, 0};
             if (snap_to_items)
             {
                 // Update target with wheel input when scrolling by items
@@ -348,12 +350,12 @@ namespace HerosInsight
                 Position new_target;
                 if (pixel_offset < 0)
                 {
-                    new_target = WalkBackwards(this->scroll_target, distance, IndexRange{0, 0});
+                    new_target = WalkBackwards(this->scroll_target, distance, IndexRange::None());
                     measured_range = IndexRange{new_target.entry_index, this->scroll_target.entry_index};
                 }
                 else
                 {
-                    auto pos = WalkForwards(this->scroll_target, distance, IndexRange{0, 0});
+                    auto pos = WalkForwards(this->scroll_target, distance, IndexRange::None());
                     new_target = pos.Min(this->scroll_max);
                     measured_range = IndexRange{this->scroll_target.entry_index, new_target.entry_index};
                 }
