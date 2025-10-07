@@ -8,19 +8,43 @@ namespace HerosInsight
     // Must not be stack allocated, contains state
     struct VariableSizeClipper
     {
-        std::vector<uint32_t> item_end_positions; // TODO: Instead of storing float offsets it will prob be better to store uint16 sizes and keep a record of last scroll position + last item index
-        float current_scroll = 0;
-        float target_scroll = 0;
-        int32_t target_scroll_index = 0;
-        int32_t final_target_snap_index = 0;
-        uint32_t visible_index_start = 0;
-        bool snap_to_items = false;
+        struct Position
+        {
+            uint32_t entry_index;
+            float pixel_offset;
+
+            bool operator==(const Position &other) const
+            {
+                return entry_index == other.entry_index &&
+                       pixel_offset == other.pixel_offset;
+            }
+
+            bool operator<(const Position &other) const
+            {
+                return entry_index < other.entry_index ||
+                       (entry_index == other.entry_index && pixel_offset < other.pixel_offset);
+            }
+
+            Position Min(Position other) const
+            {
+                if (other < *this)
+                    return other;
+                return *this;
+            }
+        };
+
         ImGuiWindow *window = nullptr;
-        bool at_end = false;
+        std::vector<uint16_t> item_sizes;
+        Position scroll_current = {0, 0};
+        Position scroll_target = {0, 0};
+        Position scroll_max = {0, 0};
+        std::function<void(uint32_t)> draw_item;
+
+        VariableSizeClipper() {}
 
         void Reset()
         {
-            item_end_positions.clear();
+            item_sizes.clear();
             ResetScroll();
         }
 
@@ -29,196 +53,129 @@ namespace HerosInsight
             if (!window)
                 return;
 
-            current_scroll = 0;
-            target_scroll = 0;
-            target_scroll_index = 0;
+            scroll_current = scroll_target = scroll_max = {0, 0};
             ImGui::SetScrollY(window, 0);
-        }
-
-        void SetScrollToIndex(uint32_t index)
-        {
-            if (!window)
-                return;
-
-            ImGui::SetScrollY(window, GetStartPosOfEntry(index));
         }
 
         void Draw(size_t size, float est_avg_height, bool snap_to_items, std::function<void(uint32_t)> draw_item)
         {
+#ifdef _TIMING
+            auto start = std::chrono::high_resolution_clock::now();
+#endif
             this->window = ImGui::GetCurrentWindow();
             this->window->Flags |= ImGuiWindowFlags_NoScrollWithMouse;
-            this->resize(size, est_avg_height);
-            bool scroll_modified = false;
-            bool started_snapping = snap_to_items && !this->snap_to_items;
-            scroll_modified |= started_snapping;
-            this->snap_to_items = snap_to_items;
+            this->item_sizes.resize(size, est_avg_height);
+            this->draw_item = draw_item;
 
-            const auto view_start = ImGui::GetScrollY();
-            const auto view_height = ImGui::GetWindowHeight();
-            const auto view_end = view_start + view_height;
+            this->scroll_max = CalcScrollMax();
 
-            const auto diff = view_start - current_scroll;
-            if (std::abs(diff) > 1.f)
+            size_t i;
+            uint32_t cursor;
+            float scroll_delta = 0.f;
+            Position next_scroll_current;
+            bool is_pressing_scrollbar = this->IsPressingScrollbar();
+            if (is_pressing_scrollbar)
             {
-                // Current scroll is not what we set it to last frame, it was modified elsewhere
-                // Set it as the new target
-                current_scroll = view_start;
-                target_scroll = view_start;
-                if (snap_to_items)
-                    target_scroll_index = GetEntryIndexContainingPos(view_start, false);
-                scroll_modified = true;
-            }
-
-            if (started_snapping)
-            {
-                target_scroll_index = GetEntryIndexContainingPos(target_scroll, false);
-            }
-
-            auto DrawItem = [&](uint32_t index)
-            {
-                ImGui::SetCursorPosY(GetStartPosOfEntry(index));
-                ImGui::BeginGroup();
-                draw_item(index);
-                ImGui::EndGroup();
-                auto after = ImGui::GetCursorPosY();
-                update_end_pos(index, after);
-            };
-
-            visible_index_start = GetEntryIndexContainingPos(current_scroll, false);
-            auto draw_index = visible_index_start;
-            const auto draw_cursor_start = GetStartPosOfEntry(draw_index);
-            auto draw_cursor = draw_cursor_start;
-            ImGui::SetCursorPosY(draw_cursor);
-
-            while (draw_index < size && draw_cursor < view_end)
-            {
-                DrawItem(draw_index);
-                draw_cursor = ImGui::GetCursorPosY();
-                draw_index++;
-            }
-            const auto draw_cursor_end = draw_cursor;
-            const auto visible_index_end = draw_index;
-
-            float wheel_input = get_wheel_input();
-
-            // Handle mouse wheel input or other scroll modifications
-            if (wheel_input != 0.f)
-            {
+#ifdef _DEBUG
+                Utils::FormatToChat(0xFFFFFFFF, L"Scrollbar pressed");
+#endif
+                auto imgui_scroll = ImGui::GetScrollY();
+                auto jumped = WalkForwards(Position{0, 0}, imgui_scroll, IndexRange::All());
                 if (snap_to_items)
                 {
-                    const auto wheel_ticks = (int32_t)std::round(wheel_input);
-                    target_scroll_index = target_scroll_index + wheel_ticks;
-                    target_scroll_index = std::max(target_scroll_index, 0);
+                    jumped.pixel_offset = 0;
                 }
-                else
-                {
-                    target_scroll += wheel_input * 100.f;
-                    target_scroll = std::max(target_scroll, 0.0f);
-                }
-            }
+                jumped = jumped.Min(this->scroll_max);
+                this->scroll_current = jumped;
+                this->scroll_target = jumped;
 
-            if (wheel_input != 0.f || scroll_modified || current_scroll != target_scroll)
+                i = jumped.entry_index;
+                cursor = imgui_scroll - jumped.pixel_offset;
+            }
+            else
             {
-                // Use clip rect to hide the following items, they are only drawn to get their sizes
-                ImGui::PushClipRect(ImVec2(0, 0), ImVec2(0, 0), false);
+                UpdateTargetWithWheel(snap_to_items);
+
+                if (scroll_current != scroll_target)
                 {
-                    // Draw items below the visible range to get an accurate position of target_scroll
-                    draw_index = visible_index_end;
-                    while (draw_index < size && (GetStartPosOfEntry(draw_index) < target_scroll || (snap_to_items && draw_index < target_scroll_index)))
+                    // Do smooth scrolling towards target scroll
+                    DisableDrawingGuard guard{};
+                    auto total_distance = CalcDistance(scroll_current, scroll_target, IndexRange::None());
+                    const auto dt = ImGui::GetIO().DeltaTime;
+                    scroll_delta = SmoothScroll(0, total_distance, dt);
+                    if (scroll_delta >= 0)
                     {
-                        DrawItem(draw_index);
-                        draw_index++;
+                        next_scroll_current = WalkForwards(this->scroll_current, scroll_delta, IndexRange{scroll_current.entry_index, scroll_target.entry_index});
                     }
-
-                    // Draw items above the visible range to get an accurate position of target_scroll
-                    draw_index = visible_index_start;
-                    while (draw_index > 0 && (target_scroll < GetStartPosOfEntry(draw_index) || (snap_to_items && target_scroll_index < draw_index)))
+                    else
                     {
-                        draw_index--;
-                        DrawItem(draw_index);
-                    }
-
-                    // Draw items at end to get an accurate position of scroll_max
-                    draw_index = size;
-                    while (draw_index > 0 && GetStartPosOfEntry(size) - GetStartPosOfEntry(draw_index) < view_height)
-                    {
-                        draw_index--;
-                        DrawItem(draw_index);
+                        next_scroll_current = WalkBackwards(this->scroll_current, -scroll_delta, IndexRange{scroll_target.entry_index, scroll_current.entry_index});
                     }
                 }
-                ImGui::PopClipRect();
-                const auto scroll_max = std::max(GetStartPosOfEntry(size) - view_height, 0.f);
 
-                if (snap_to_items)
-                {
-                    // Clamp target_scroll_index to valid range
-                    final_target_snap_index = draw_index;
-                    const auto end_target_snap_index = final_target_snap_index + 1;
-
-                    if ((scroll_modified && target_scroll == scroll_max && target_scroll != GetStartPosOfEntry(target_scroll_index)) ||
-                        (target_scroll_index > end_target_snap_index))
-                    {
-                        target_scroll_index = end_target_snap_index;
-                    }
-
-                    // Update target_scroll based on the target snap index
-                    target_scroll = GetStartPosOfEntry(target_scroll_index);
-                }
-
-                at_end = false;
-                if (scroll_max <= target_scroll)
-                {
-                    target_scroll = scroll_max;
-                    at_end = true;
-                }
-
-                // Do smooth scrolling towards target scroll
-                const auto dt = ImGui::GetIO().DeltaTime;
-                current_scroll = smooth_scroll(current_scroll, target_scroll, dt);
+                i = this->scroll_current.entry_index;
+                cursor = CalcDistance(Position{0, 0}, Position{i, 0}, IndexRange::All());
             }
 
-            set_cursor_to_end();
+            auto view_start = std::round((float)cursor + this->scroll_current.pixel_offset);
+            auto view_height = GetViewHeight();
+            auto view_end = view_start + view_height;
+            ImGui::SetCursorPosY((float)cursor);
+#ifdef _DEBUG
+            SOFT_ASSERT((float)cursor == ImGui::GetCursorPosY(), L"cursor != ImGui::GetCursorPosY() ({} != {})", (float)cursor, ImGui::GetCursorPosY());
+#endif
+            for (; i < item_sizes.size() && cursor < view_end; ++i)
+            {
+                DrawAndMeasureEntry(i);
+                cursor += item_sizes[i];
+            }
+#ifdef _DEBUG
+            SOFT_ASSERT((float)cursor == ImGui::GetCursorPosY(), L"cursor != ImGui::GetCursorPosY() ({} != {})", (float)cursor, ImGui::GetCursorPosY());
+#endif
+            auto trailing_height = CalcDistance(Position{i, 0}, Position{item_sizes.size(), 0}, IndexRange::All());
+            cursor += trailing_height;
+            ImGui::SetCursorPosY((float)cursor); // To trick ImGui into thinking we used all that space
+#ifdef _DEBUG
+            SOFT_ASSERT((float)cursor == ImGui::GetCursorPosY(), L"cursor != ImGui::GetCursorPosY() ({} != {})", (float)cursor, ImGui::GetCursorPosY());
+#endif
 
-            ImGui::SetScrollY(std::round(current_scroll));
-            // auto window = ImGui::GetCurrentWindow();
-            // window->Scroll.y = current_scroll;
+            if (scroll_delta != 0)
+            {
+                this->scroll_current = next_scroll_current;
+                ImGui::SetScrollY(view_start + scroll_delta);
+            }
 
 #ifdef _DEBUG
-            display_wheel_input(wheel_input);
+            DrawDebugInfo();
+#endif
+#ifdef defined(_TIMING) && !defined(_DEBUG)
+            auto end = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+            Utils::FormatToChat(0xFFFFFFFF, L"VariableSizeClipper Draw took {} ms", duration);
 #endif
         }
 
-        float GetStartPosOfEntry(uint32_t index)
-        {
-            return index > 0 && index <= item_end_positions.size() ? item_end_positions[index - 1] : 0;
-        }
-
-        float GetEndPosOfEntry(uint32_t index)
-        {
-            return item_end_positions[index];
-        }
-
-        uint32_t GetEntryIndexContainingPos(float pos, bool include_end = false)
-        {
-            // Perform binary search to find the current index based on scroll position
-            auto it = std::lower_bound(item_end_positions.begin(), item_end_positions.end(), pos);
-            if (it == item_end_positions.end())
-                return item_end_positions.size();
-            auto index = std::distance(item_end_positions.begin(), it);
-            if (!include_end && *it == pos) // if the position is exactly at the end of an item, we treat it as the next item
-                index++;
-            return index;
-        }
-
     private:
+        struct IndexRange
+        {
+            uint32_t start;
+            uint32_t end;
+
+            bool Contains(uint32_t index) const { return start <= index && index < end; }
+
+            static constexpr IndexRange All() { return {0, std::numeric_limits<uint32_t>::max()}; }
+            static constexpr IndexRange None() { return {0, 0}; }
+        };
+
 #ifdef _DEBUG
         int32_t wheel_display = 0;
         DWORD wheel_display_timestamp = 0;
 
-        void display_wheel_input(float wheel_input)
+        void DisplayWheelInput()
         {
             auto window = ImGui::GetCurrentWindow();
             const auto timestamp = GetTickCount();
+            auto wheel_input = GetWheelInput();
             if (wheel_input != 0.f)
             {
                 wheel_display = wheel_input;
@@ -238,106 +195,236 @@ namespace HerosInsight
                 ImGui::PopFont();
             }
         }
+
+        void DrawDebugInfo()
+        {
+            DisplayWheelInput();
+            ImGui::SetCursorPosY(ImGui::GetScrollY());
+            ImGui::Text("target_scroll_index: %d, target_scroll_offset: %f", this->scroll_target.entry_index, this->scroll_target.pixel_offset);
+        }
 #endif
 
-        static float smooth_scroll(float current_scroll, float target_scroll, float dt)
+        bool IsPressingScrollbar()
         {
+            auto scroll_bar_id = ImGui::GetWindowScrollbarID(this->window, ImGuiAxis_Y);
+            return ImGui::GetCurrentContext()->ActiveId == scroll_bar_id;
+        }
+
+        void DrawEntry(uint32_t index)
+        {
+            ImGui::BeginGroup();
+            draw_item(index);
+            ImGui::EndGroup();
+        };
+
+        void DrawAndMeasureEntry(uint32_t index)
+        {
+            auto cursor = ImGui::GetCursorPosY();
+            DrawEntry(index);
+            auto size = ImGui::GetCursorPosY() - cursor;
 #ifdef _DEBUG
-            // dt *= 0.1f; // Slow down the smooth scrolling for debugging purposes, so we can see the scroll position change
+            assert(std::floor(size) == size);
+#endif
+            this->item_sizes[index] = size;
+        }
+
+        void MeasureEntry(uint32_t index)
+        {
+            auto current_cursor = ImGui::GetCursorPosY();
+            auto scroll_y = ImGui::GetScrollY();
+            ImGui::SetCursorPosY(scroll_y); // If we dont do this, it grows weirdly each frame
+            DrawEntry(index);
+            auto size = ImGui::GetCursorPosY() - scroll_y;
+            auto &old_size = this->item_sizes[index];
+#ifdef _DEBUG
+            assert(std::floor(size) == size);
+            // if (old_size != size)
+            // {
+            //     Utils::FormatToChat(0xFFFFFFFF, L"Index {} size changed from {} to {}", index, old_size, size);
+            // }
+#endif
+            old_size = size;
+            ImGui::SetCursorPosY(current_cursor); // Restore cursor
+        }
+
+        Position WalkBackwards(Position start, float distance, IndexRange skip_measure_range)
+        {
+            DisableDrawingGuard guard{};
+            auto i = start.entry_index;
+            distance -= start.pixel_offset;
+            while (i > 0 && distance > 0)
+            {
+                --i;
+                if (!skip_measure_range.Contains(i))
+                    MeasureEntry(i);
+                distance -= this->item_sizes[i];
+            }
+            return {
+                .entry_index = i,
+                .pixel_offset = -distance,
+            };
+        }
+
+        Position WalkForwards(Position start, float distance, IndexRange skip_measure_range)
+        {
+            DisableDrawingGuard guard{};
+            auto i = start.entry_index;
+            distance += start.pixel_offset;
+            while (i < this->item_sizes.size() && distance >= this->item_sizes[i])
+            {
+                if (!skip_measure_range.Contains(i))
+                    MeasureEntry(i);
+                distance -= this->item_sizes[i];
+                ++i;
+            }
+            return {
+                .entry_index = i,
+                .pixel_offset = distance,
+            };
+        }
+
+        struct DisableDrawingGuard
+        {
+            DisableDrawingGuard() { ImGui::PushClipRect(ImVec2(0, 0), ImVec2(0, 0), false); }
+            ~DisableDrawingGuard() { ImGui::PopClipRect(); }
+        };
+
+        Position CalcScrollMax()
+        {
+            // Figure out the furthest down position we can scroll to
+            DisableDrawingGuard guard{};
+            float view_height = GetViewHeight();
+            return WalkBackwards(Position{this->item_sizes.size(), 0}, view_height, IndexRange{0, 0});
+        }
+
+        void UpdateTargetWithWheel(bool snap_to_items)
+        {
+            float wheel_input = GetWheelInput();
+
+            if (wheel_input == 0.f)
+                return;
+
+            IndexRange measured_range{0, 0};
+            if (snap_to_items)
+            {
+                // Update target with wheel input when scrolling by items
+                auto delta_index = (int32_t)std::round(wheel_input);
+                auto target_index = (int32_t)this->scroll_target.entry_index + delta_index;
+
+                if (delta_index < 0 && scroll_target.pixel_offset > 0)
+                {
+                    // If we're scrolling backwards and we're not at the start of the entry, scroll to the start of the entry
+                    ++target_index;
+                }
+
+                if (target_index < 0)
+                {
+                    this->scroll_target = {
+                        .entry_index = 0,
+                        .pixel_offset = 0,
+                    };
+                }
+                else if (target_index > this->scroll_max.entry_index)
+                {
+#ifdef _DEBUG
+                    Utils::FormatToChat(0xFFFFFFFF, L"Scroll max reached");
+#endif
+                    this->scroll_target = this->scroll_max;
+                }
+                else
+                {
+                    this->scroll_target = {
+                        .entry_index = (uint32_t)target_index,
+                        .pixel_offset = 0,
+                    };
+                }
+            }
+            else
+            {
+                // Update target with wheel input when scrolling by pixels
+                auto delta_pixels = (int32_t)std::round(wheel_input * 100.f);
+                auto pixel_offset = (int32_t)this->scroll_target.pixel_offset + delta_pixels;
+                auto distance = std::abs(pixel_offset);
+                Position new_target;
+                if (pixel_offset < 0)
+                {
+                    new_target = WalkBackwards(this->scroll_target, distance, IndexRange{0, 0});
+                    measured_range = IndexRange{new_target.entry_index, this->scroll_target.entry_index};
+                }
+                else
+                {
+                    auto pos = WalkForwards(this->scroll_target, distance, IndexRange{0, 0});
+                    new_target = pos.Min(this->scroll_max);
+                    measured_range = IndexRange{this->scroll_target.entry_index, new_target.entry_index};
+                }
+                this->scroll_target = new_target;
+            }
+        }
+
+        float CalcDistance(Position start, Position end, IndexRange skip_measure_range)
+        {
+            bool is_backward = end < start;
+            if (is_backward)
+            {
+                std::swap(start, end);
+            }
+            DisableDrawingGuard guard{};
+            uint32_t height_sum = 0;
+            for (uint32_t i = start.entry_index; i < end.entry_index; ++i)
+            {
+                if (!skip_measure_range.Contains(i))
+                    MeasureEntry(i);
+                height_sum += item_sizes[i];
+            }
+            auto distance = (float)height_sum + end.pixel_offset - start.pixel_offset;
+            if (is_backward)
+            {
+                distance = -distance;
+            }
+            return distance;
+        }
+
+        static float SmoothScroll(float current_scroll, float target_scroll, float dt)
+        {
+            assert(dt >= 0.f);
+#ifdef _DEBUG
+            dt *= 0.1f; // Slow down the smooth scrolling for debugging purposes, so we can see the scroll position change
 #endif
             const bool positive_sign = target_scroll > current_scroll;
             const auto sign = positive_sign ? 1.f : -1.f;
-            const auto remaining = positive_sign ? target_scroll - current_scroll : current_scroll - target_scroll;
+            const auto dist = std::abs(target_scroll - current_scroll);
 
             float c = std::powf(2e-4, dt);
+            assert(c >= 0.f && c <= 1.f);
 
-            auto new_remaining = sign * std::max(c * remaining - 100.f * dt, 0.f);
+            auto dist_eased = std::max(c * dist - 100.f * dt, 0.f);
+            // auto dist_eased = std::max(dist - 100.f * dt, 0.f);
 
-            auto new_scroll = target_scroll - new_remaining;
+            auto new_scroll = target_scroll - sign * dist_eased;
 #ifdef _DEBUG
             SOFT_ASSERT(new_scroll == target_scroll || std::signbit(target_scroll - current_scroll) == std::signbit(target_scroll - new_scroll));
 #endif
             return new_scroll;
         }
 
-        uint32_t size()
+        uint32_t Size()
         {
-            return item_end_positions.size();
+            return item_sizes.size();
         }
 
-        void set_cursor_to_end()
+        float GetViewHeight()
         {
-            ImGui::SetCursorPosY(GetStartPosOfEntry(size()));
+            return this->window->Size.y;
         }
 
-        void resize(size_t size, float est_avg_height)
-        {
-            uint32_t old_size = item_end_positions.size();
-
-            if (old_size < size)
-            {
-                item_end_positions.reserve(size);
-                float last_end = GetStartPosOfEntry(old_size);
-                for (uint32_t i = old_size; i < size; i++)
-                {
-                    last_end += est_avg_height;
-                    item_end_positions.push_back(last_end);
-                }
-            }
-            else if (old_size > size)
-            {
-                item_end_positions.resize(size);
-            }
-        }
-
-        float get_wheel_input()
+        float GetWheelInput()
         {
             if (ImGui::IsWindowHovered())
             {
                 const auto &io = ImGui::GetIO();
-                return -io.MouseWheel; // Negate so positive is down.
+                return -io.MouseWheel; // Negate, so that positive is down.
             }
             return 0.f;
-        }
-
-        float get_size(uint32_t index)
-        {
-            return GetEndPosOfEntry(index) - GetStartPosOfEntry(index);
-        }
-
-        void update_end_pos(uint32_t index, float new_end)
-        {
-            float old_end = item_end_positions[index];
-            // if (old_end == new_end)
-            if (std::abs(old_end - new_end) <= 1.f) // For some reason the same content has different sizes by 1 pixel
-                return;
-
-            float start_pos = GetStartPosOfEntry(index);
-
-            // auto old_size = get_size(index);
-            item_end_positions[index] = new_end;
-            // auto new_size = get_size(index);
-            // Utils::FormatToChat(L"item {} size changed from {} to {}", index, old_size, new_size);
-
-            float diff = new_end - old_end;
-            // #ifdef _TIMING
-            //             auto start_timestamp = std::chrono::high_resolution_clock::now();
-            // #endif
-            if (old_end <= current_scroll)
-            {
-                current_scroll += diff;
-                target_scroll += diff;
-            }
-
-            for (uint32_t i = index + 1; i < item_end_positions.size(); i++)
-            {
-                item_end_positions[i] += diff;
-            }
-            // #ifdef _TIMING
-            //             auto timestamp_end = std::chrono::high_resolution_clock::now();
-            //             auto duration = std::chrono::duration_cast<std::chrono::microseconds>(timestamp_end - start_timestamp).count();
-            //             Utils::FormatToChat(L"updating clipper ends took {} micro s", duration);
-            // #endif
         }
     };
 }
