@@ -25,11 +25,9 @@ namespace HerosInsight
                        (entry_index == other.entry_index && pixel_offset < other.pixel_offset);
             }
 
-            Position Min(Position other) const
+            static Position Min(Position a, Position b)
             {
-                if (other < *this)
-                    return other;
-                return *this;
+                return a < b ? a : b;
             }
         };
 
@@ -77,19 +75,16 @@ namespace HerosInsight
             // TODO: Fix empty tail of view when scrolling fast upwards
             if (is_pressing_scrollbar)
             {
-                // TODO: Fix flickering when pressing scroll bar
-#ifdef _DEBUG
-                Utils::FormatToChat(0xFFFFFFFF, L"Scrollbar pressed");
-#endif
                 auto imgui_scroll = ImGui::GetScrollY();
                 auto jumped = WalkForwards(Position{0, 0}, imgui_scroll, IndexRange::All());
-                if (snap_to_items)
-                {
-                    jumped.pixel_offset = 0;
-                }
-                jumped = jumped.Min(this->scroll_max);
+                bool at_end = !(jumped < this->scroll_max);
+                jumped = at_end ? this->scroll_max : jumped;
                 this->scroll_current = jumped;
                 this->scroll_target = jumped;
+                if (snap_to_items && !at_end)
+                {
+                    this->scroll_target.pixel_offset = 0;
+                }
 
                 i = jumped.entry_index;
                 cursor = imgui_scroll - jumped.pixel_offset;
@@ -357,7 +352,7 @@ namespace HerosInsight
                 else
                 {
                     auto pos = WalkForwards(this->scroll_target, distance, IndexRange::None());
-                    new_target = pos.Min(this->scroll_max);
+                    new_target = Position::Min(pos, this->scroll_max);
                     measured_range = IndexRange{this->scroll_target.entry_index, new_target.entry_index};
                 }
                 this->scroll_target = new_target;
