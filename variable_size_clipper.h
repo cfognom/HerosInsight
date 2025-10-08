@@ -150,7 +150,7 @@ namespace HerosInsight
 #ifdef _DEBUG
             DrawDebugInfo();
 #endif
-#ifdef defined(_TIMING) && !defined(_DEBUG)
+#if defined(_TIMING) && !defined(_DEBUG)
             auto end = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
             Utils::FormatToChat(0xFFFFFFFF, L"VariableSizeClipper Draw took {} ms", duration);
