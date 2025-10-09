@@ -352,19 +352,22 @@ namespace HerosInsight
             else
             {
                 // Update target with wheel input when scrolling by pixels
-                auto delta_pixels = (int32_t)std::round(wheel_input * 100.f);
-                auto pixel_offset = (int32_t)this->scroll_target.pixel_offset + delta_pixels;
+                auto delta_pixels = std::round(wheel_input * 100.f);
+
+                // We make the start pos the start of the current entry in case we have the wrong size
+                auto pixel_offset = this->scroll_target.pixel_offset + delta_pixels;
+                auto start_pos = Position{this->scroll_target.entry_index, 0};
                 auto distance = std::abs(pixel_offset);
                 Position new_target;
                 if (pixel_offset < 0)
                 {
-                    new_target = WalkBackwards(this->scroll_target, distance, IndexRange::None());
+                    new_target = WalkBackwards(start_pos, distance, IndexRange::None());
                     new_target = Position::Max(new_target, Position{0, 0});
                     measured_range = IndexRange{new_target.entry_index, this->scroll_target.entry_index};
                 }
                 else
                 {
-                    new_target = WalkForwards(this->scroll_target, distance, IndexRange::None());
+                    new_target = WalkForwards(start_pos, distance, IndexRange::None());
                     new_target = Position::Min(new_target, this->scroll_max);
                     measured_range = IndexRange{this->scroll_target.entry_index, new_target.entry_index};
                 }
