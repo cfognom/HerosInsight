@@ -31,6 +31,11 @@ namespace HerosInsight
             {
                 return a < b ? a : b;
             }
+
+            static Position Max(Position a, Position b)
+            {
+                return a < b ? b : a;
+            }
         };
 
         VariableSizeClipper() {}
@@ -297,7 +302,8 @@ namespace HerosInsight
             // Figure out the furthest down position we can scroll to
             DisableDrawingGuard guard{};
             float view_height = GetViewHeight();
-            return WalkBackwards(Position{this->item_sizes.size(), 0}, view_height, IndexRange{0, 0});
+            auto pos = WalkBackwards(Position{this->item_sizes.size(), 0}, view_height, IndexRange{0, 0});
+            return Position::Max(pos, Position{0, 0});
         }
 
         void UpdateTargetWithInput(bool snap_to_items, IndexRange &measured_range)
@@ -353,12 +359,13 @@ namespace HerosInsight
                 if (pixel_offset < 0)
                 {
                     new_target = WalkBackwards(this->scroll_target, distance, IndexRange::None());
+                    new_target = Position::Max(new_target, Position{0, 0});
                     measured_range = IndexRange{new_target.entry_index, this->scroll_target.entry_index};
                 }
                 else
                 {
-                    auto pos = WalkForwards(this->scroll_target, distance, IndexRange::None());
-                    new_target = Position::Min(pos, this->scroll_max);
+                    new_target = WalkForwards(this->scroll_target, distance, IndexRange::None());
+                    new_target = Position::Min(new_target, this->scroll_max);
                     measured_range = IndexRange{this->scroll_target.entry_index, new_target.entry_index};
                 }
                 this->scroll_target = new_target;
