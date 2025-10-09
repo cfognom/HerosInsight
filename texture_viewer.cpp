@@ -111,7 +111,7 @@ namespace HerosInsight::TextureViewer
         ImGui::SetNextWindowPos(ImVec2(600, 100), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(400, 600), ImGuiCond_FirstUseEver);
 
-        static VariableSizeClipper clipper;
+        static VariableSizeClipper clipper{};
         if (ImGui::Begin("Texture Viewer", &UpdateManager::open_texture_viewer, UpdateManager::GetWindowFlags()))
         {
             if (ImGui::InputInt("Start Offset", &start_offset))
@@ -131,7 +131,7 @@ namespace HerosInsight::TextureViewer
                     loaded_textures.push_back({i, *entry});
             }
             search_start = search_end;
-            if (loaded_textures.size() - clipper.visible_index_start < 256)
+            if (loaded_textures.size() - clipper.GetCurrentScroll().entry_index < 256)
             {
                 search_end = std::min(search_end + 256, TextureModule::KnownFileIDs::MAX);
                 for (uint32_t i = search_start; i < search_end; i++)

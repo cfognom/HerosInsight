@@ -3,6 +3,8 @@
 #include <functional>
 #include <update_manager.h>
 
+// #define PRINT_VARIABLE_SIZE_CLIPPER_TIMING
+
 namespace HerosInsight
 {
     // Must not be stack allocated, contains state
@@ -31,13 +33,6 @@ namespace HerosInsight
             }
         };
 
-        ImGuiWindow *window = nullptr;
-        std::vector<uint16_t> item_sizes;
-        Position scroll_current = {0, 0};
-        Position scroll_target = {0, 0};
-        Position scroll_max = {0, 0};
-        std::function<void(uint32_t)> draw_item;
-
         VariableSizeClipper() {}
 
         void Reset()
@@ -55,9 +50,14 @@ namespace HerosInsight
             ImGui::SetScrollY(window, 0);
         }
 
+        Position GetCurrentScroll() const
+        {
+            return scroll_current;
+        }
+
         void Draw(size_t size, float est_avg_height, bool snap_to_items, std::function<void(uint32_t)> draw_item)
         {
-#ifdef _TIMING
+#ifdef PRINT_VARIABLE_SIZE_CLIPPER_TIMING
             auto start = std::chrono::high_resolution_clock::now();
 #endif
             this->window = ImGui::GetCurrentWindow();
@@ -67,15 +67,17 @@ namespace HerosInsight
 
             this->scroll_max = CalcScrollMax();
 
-            size_t i;
-            uint32_t cursor;
-            auto measured_range = IndexRange::None();
-            float distance_to_target = 0.f;
+            auto imgui_scroll = ImGui::GetScrollY();
+            auto view_height = GetViewHeight();
+            auto view_end = imgui_scroll + view_height;
+
             bool is_pressing_scrollbar = this->IsPressingScrollbar();
-            // TODO: Fix empty tail of view when scrolling fast upwards
             if (is_pressing_scrollbar)
             {
-                auto imgui_scroll = ImGui::GetScrollY();
+                // When pressing scrollbar:
+                // - Mouse pointer drives imgui_scroll
+                // - imgui_scroll drives scroll_current + scroll_target
+
                 auto jumped = WalkForwards(Position{0, 0}, imgui_scroll, IndexRange::All());
                 bool at_end = !(jumped < this->scroll_max);
                 jumped = at_end ? this->scroll_max : jumped;
@@ -85,67 +87,64 @@ namespace HerosInsight
                 {
                     this->scroll_target.pixel_offset = 0;
                 }
-
-                i = jumped.entry_index;
-                cursor = imgui_scroll - jumped.pixel_offset;
-            }
-            else
-            {
-                IndexRange measured_range;
-                UpdateTargetWithInput(snap_to_items, measured_range);
-
-                if (scroll_current != scroll_target)
-                {
-                    // Update sizes between scroll_current and scroll_target and calculate accurate distance
-                    distance_to_target = CalcDistance(scroll_current, scroll_target, measured_range);
-                }
-
-                i = this->scroll_current.entry_index;
-                cursor = CalcDistance(Position{0, 0}, Position{i, 0}, IndexRange::All());
             }
 
-            auto view_start = std::round((float)cursor + this->scroll_current.pixel_offset);
-            auto view_height = GetViewHeight();
-            auto view_end = view_start + view_height;
-            ImGui::SetCursorPosY((float)cursor);
-#ifdef _DEBUG
-            SOFT_ASSERT((float)cursor == ImGui::GetCursorPosY(), L"cursor != ImGui::GetCursorPosY() ({} != {})", (float)cursor, ImGui::GetCursorPosY());
-#endif
+            float cursor = imgui_scroll - this->scroll_current.pixel_offset;
+            size_t i = this->scroll_current.entry_index;
+            ImGui::SetCursorPosY(cursor);
             for (; i < item_sizes.size() && cursor < view_end; ++i)
             {
                 DrawAndMeasureEntry(i);
                 cursor += item_sizes[i];
             }
 #ifdef _DEBUG
-            SOFT_ASSERT((float)cursor == ImGui::GetCursorPosY(), L"cursor != ImGui::GetCursorPosY() ({} != {})", (float)cursor, ImGui::GetCursorPosY());
+            // Just a check to make sure our recorded sizes matches with how much imgui advanced the cursor
+            SOFT_ASSERT(cursor == ImGui::GetCursorPosY(), L"cursor != ImGui::GetCursorPosY() ({} != {})", cursor, ImGui::GetCursorPosY());
 #endif
-            auto trailing_height = CalcDistance(Position{i, 0}, Position{item_sizes.size(), 0}, IndexRange::All());
+            auto trailing_height = CalcDistance(Position{i, 0}, Position{item_sizes.size(), 0}, IndexRange::All()); // We skip measuring for performance
             cursor += trailing_height;
-            ImGui::SetCursorPosY((float)cursor); // To trick ImGui into thinking we used all that space
-#ifdef _DEBUG
-            SOFT_ASSERT((float)cursor == ImGui::GetCursorPosY(), L"cursor != ImGui::GetCursorPosY() ({} != {})", (float)cursor, ImGui::GetCursorPosY());
-#endif
+            ImGui::SetCursorPosY(cursor); // To trick ImGui into thinking we used all that space
 
-            if (distance_to_target != 0.f)
+            if (!is_pressing_scrollbar)
             {
-                const auto dt = ImGui::GetIO().DeltaTime;
-                auto scroll_delta = SmoothScroll(0, distance_to_target, dt);
-                // We can skip measuring since we already did that in when we calculated distance_to_target
-                if (scroll_delta >= 0)
+                // When not pressing scrollbar:
+                // - Mouse wheel drives scroll_target
+                // - scroll_target drives scroll_current
+                // - scroll_current drives imgui_scroll
+
+                auto measured_range = IndexRange::None(); // We keep track of which entries were measured this frame to avoid measuring them twice
+                UpdateTargetWithInput(snap_to_items, measured_range);
+
+                if (scroll_current != scroll_target)
                 {
-                    this->scroll_current = WalkForwards(this->scroll_current, scroll_delta, IndexRange::All());
+                    // Update sizes between scroll_current and scroll_target and calculate accurate distance
+                    auto distance_to_target = CalcDistance(scroll_current, scroll_target, measured_range);
+
+                    // Calculate scroll_delta
+                    const auto dt = ImGui::GetIO().DeltaTime;
+                    auto scroll_delta = SmoothScroll(0, distance_to_target, dt);
+
+                    // Apply scroll_delta to scroll_current
+                    // We can skip measuring since we already did that when we calculated distance_to_target
+                    if (scroll_delta >= 0)
+                    {
+                        this->scroll_current = WalkForwards(this->scroll_current, scroll_delta, IndexRange::All());
+                    }
+                    else
+                    {
+                        this->scroll_current = WalkBackwards(this->scroll_current, -scroll_delta, IndexRange::All());
+                    }
+
+                    // Apply scroll_current to imgui_scroll
+                    auto new_imgui_scroll = CalcDistance(Position{0, 0}, this->scroll_current, IndexRange::All()); // We skip measuring for performance
+                    ImGui::SetScrollY(new_imgui_scroll);
                 }
-                else
-                {
-                    this->scroll_current = WalkBackwards(this->scroll_current, -scroll_delta, IndexRange::All());
-                }
-                ImGui::SetScrollY(view_start + scroll_delta);
             }
 
 #ifdef _DEBUG
             DrawDebugInfo();
 #endif
-#if defined(_TIMING) && !defined(_DEBUG)
+#ifdef PRINT_VARIABLE_SIZE_CLIPPER_TIMING
             auto end = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
             Utils::FormatToChat(0xFFFFFFFF, L"VariableSizeClipper Draw took {} ms", duration);
@@ -153,6 +152,13 @@ namespace HerosInsight
         }
 
     private:
+        ImGuiWindow *window = nullptr;
+        std::vector<uint16_t> item_sizes;
+        Position scroll_current = {0, 0};
+        Position scroll_target = {0, 0};
+        Position scroll_max = {0, 0};
+        std::function<void(uint32_t)> draw_item;
+
         struct IndexRange
         {
             uint32_t start;
