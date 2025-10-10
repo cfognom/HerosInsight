@@ -566,7 +566,7 @@ namespace HerosInsight::SkillBook
 
         std::string feedback;
 
-        VariableSizeClipper clipper;
+        VariableSizeClipper clipper{};
         std::future<bool> update_filter_future = std::future<bool>();
         std::atomic<bool> cancel_state_update = false;
 
