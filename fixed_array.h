@@ -42,49 +42,45 @@ namespace HerosInsight
             return buffer[(*len_ptr)++];
         }
 
-        std::span<T> AquireWritable() const
+        std::span<T> RemainingSpan() const
         {
-            return std::span<T>(buffer.data() + size(), capacity() - size());
+            return std::span<T>(buffer.data() + size(), remaining());
+        }
+
+        void AppendRange(std::span<const T> src)
+        {
+            auto dst = RemainingSpan();
+            assert(dst.size() >= src.size());
+            std::copy(src.begin(), src.end(), dst.begin());
+            AddSize(src.size());
         }
 
         template <class Writer>
             requires std::invocable<Writer, std::span<T> &>
         void AppendWith(Writer &&op)
         {
-            auto span = AquireWritable();
+            auto span = RemainingSpan();
             op(span);
             AddSize(span.size());
         }
 
         T pop()
         {
-            if (size() == 0)
-            {
-                throw std::out_of_range("FixedArray is empty");
-            }
+            assert(!empty());
             return std::move(buffer[--(*len_ptr)]);
         }
 
         void remove(std::size_t index)
         {
-            if (index >= size())
-            {
-                throw std::out_of_range("Index out of range");
-            }
+            assert(index < size());
             std::copy(data() + index + 1, data_end(), data() + index);
             --(*len_ptr);
         }
 
         void insert(std::size_t index, const T &value)
         {
-            if (index > size())
-            {
-                throw std::out_of_range("Index out of range");
-            }
-            if (size() >= capacity())
-            {
-                throw std::out_of_range("FixedArray is full");
-            }
+            assert(index <= size());
+            assert(!full());
             std::copy_backward(data() + index, data_end(), data_end() + 1);
             buffer[index] = value;
             ++(*len_ptr);
@@ -92,19 +88,13 @@ namespace HerosInsight
 
         T &operator[](std::size_t index)
         {
-            if (index >= size())
-            {
-                throw std::out_of_range("Index out of range");
-            }
+            assert(index < size());
             return buffer[index];
         }
 
         const T &operator[](std::size_t index) const
         {
-            if (index >= size())
-            {
-                throw std::out_of_range("Index out of range");
-            }
+            assert(index < size());
             return buffer[index];
         }
 
@@ -123,6 +113,17 @@ namespace HerosInsight
         {
             static_assert(std::is_same_v<T, char>, "Conversion to std::string_view is only available for char arrays");
             return std::string_view(buffer.data(), size());
+        }
+
+        template <typename... Args>
+        void AppendFormat(const std::format_string<Args...> &format, Args &&...args)
+        {
+            static_assert(std::is_same_v<T, char>, "Format is only available for char arrays");
+            auto rem = RemainingSpan();
+            auto result = std::format_to_n(rem.begin(), rem.size(), format, std::forward<Args>(args)...);
+            size_t size = result.out - rem.begin();
+            assert(size == result.size);
+            AddSize(size);
         }
 
         // Returns the number of written chars
@@ -161,6 +162,11 @@ namespace HerosInsight
             return buffer.size();
         }
 
+        std::size_t remaining() const
+        {
+            return capacity() - size();
+        }
+
         std::size_t size() const
         {
             return *len_ptr;
@@ -169,6 +175,11 @@ namespace HerosInsight
         bool empty() const
         {
             return size() == 0;
+        }
+
+        bool full() const
+        {
+            return size() == capacity();
         }
 
         void set_size(std::size_t new_size)
@@ -256,10 +267,7 @@ namespace HerosInsight
 
         constexpr FixedArray(std::initializer_list<T> init_list)
         {
-            if (init_list.size() > N)
-            {
-                throw std::out_of_range("Initializer list too large");
-            }
+            assert(init_list.size() <= N);
             for (const auto &value : init_list)
             {
                 buffer_storage[length_storage++] = value;

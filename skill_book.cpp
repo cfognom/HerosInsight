@@ -497,17 +497,280 @@ namespace HerosInsight::SkillBook
         SetupBundle("Description", SkillCatalog::MakePropset({SkillTextPropertyID::Description, SkillTextPropertyID::Concise}));
     }
 
+    struct DoubleWriter
+    {
+        double value;
+
+        void operator()(std::span<char> &dst) const
+        {
+            auto [after, ec] = std::to_chars(dst.data(), dst.data() + dst.size(), value, std::chars_format::general);
+            const bool success = (ec == std::errc());
+#ifdef _DEBUG
+            assert(success);
+#endif
+            auto written_count = success ? after - dst.data() : 0;
+            dst = dst.subspan(0, written_count);
+        }
+    };
+
+    static std::unordered_map<SkillTextPropertyID, RichText::RichTextArena> static_props;
+
+    template <typename Func>
+    void FetchX(SkillTextPropertyID prop_id, Func &&func)
+    {
+        auto &prop = static_props[prop_id];
+        prop.Reset();
+        auto id = std::format("prop_{}", (size_t)prop_id);
+        prop.ReserveFromHint(id);
+
+        for (size_t i = 1; i < GW::Constants::SkillMax; ++i)
+        {
+            auto skill_id = static_cast<GW::Constants::SkillID>(i);
+            auto &custom_sd = CustomSkillDataModule::GetCustomSkillData(skill_id);
+            prop.BeginWrite();
+            std::invoke(std::forward<Func>(func), prop, custom_sd);
+            prop.EndWrite(i);
+        }
+
+        prop.StoreCapacityHint(id);
+    }
+
+    template <typename MemPtr>
+    void FetchXMember(SkillTextPropertyID prop_id, MemPtr getter, std::optional<uint32_t> icon_id = std::nullopt)
+    {
+        static_assert(std::is_member_function_pointer_v<MemPtr>, "This overload is for member function pointers only.");
+
+#define ACTUAL_CODE                                                         \
+    if constexpr (std::is_integral_v<Ret> || std::is_floating_point_v<Ret>) \
+    {                                                                       \
+        auto value = static_cast<double>(std::invoke(getter, cskill));      \
+        if (value != 0.0)                                                   \
+        {                                                                   \
+            dst.AppendWriteBuffer(32, DoubleWriter{value});                 \
+            if (icon_id.has_value())                                        \
+                dst.PushImageTag(icon_id.value());                          \
+        }                                                                   \
+    }                                                                       \
+    else                                                                    \
+    {                                                                       \
+        dst.append_range(std::invoke(getter, cskill));                      \
+    }
+
+        FetchX(
+            prop_id,
+            [getter, icon_id](RichText::RichTextArena &dst, CustomSkillData &cskill)
+            {
+                // Try const-qualified call first
+                if constexpr (std::is_invocable_v<MemPtr, const CustomSkillData &>)
+                {
+                    using Ret = std::invoke_result_t<MemPtr, const CustomSkillData &>;
+                    ACTUAL_CODE
+                }
+                else
+                {
+                    // Non-const member function
+                    using Ret = std::invoke_result_t<MemPtr, CustomSkillData &>;
+                    ACTUAL_CODE
+                }
+            }
+        );
+    }
+
+    void FetchTags()
+    {
+        FetchX(
+            SkillTextPropertyID::Tag,
+            [](RichText::RichTextArena &dst, CustomSkillData &cskill)
+            {
+                auto &skill = *cskill.skill;
+                auto &tags = cskill.tags;
+                auto skill_id_to_check = skill.IsPvP() ? skill.skill_id_pvp : skill.skill_id;
+
+                bool is_unlocked = GW::SkillbarMgr::GetIsSkillUnlocked(skill_id_to_check);
+                bool is_equipable = Utils::IsSkillEquipable(skill, focused_agent_id);
+                bool is_locked = tags.Unlockable && !is_unlocked;
+
+                auto PushTag = [&](std::string_view str, ImU32 color = NULL, std::optional<size_t> image_id = std::nullopt)
+                {
+                    if (color != NULL)
+                    {
+                        dst.PushColoredText(color, str);
+                    }
+                    else
+                    {
+                        dst.PushText(str);
+                    }
+
+                    if (image_id.has_value())
+                    {
+                        dst.PushText(" ");
+                        dst.PushImageTag(image_id.value());
+                    }
+
+                    dst.PushText(", ");
+                };
+
+                // clang-format off
+                if (is_equipable)          PushTag("Equipable", IM_COL32(100, 255, 255, 255));
+                if (is_unlocked)           PushTag("Unlocked" , IM_COL32(143, 255, 143, 255));
+                if (tags.Temporary)        PushTag("Temporary"                              );
+                if (is_locked)             PushTag("Locked"   , IM_COL32(255, 100, 100, 255));
+                
+                if (cskill.context != Utils::SkillContext::Null)
+                    PushTag(Utils::GetSkillContextString(cskill.context));
+
+                if (tags.Archived)         PushTag("Archived");
+                if (tags.EffectOnly)       PushTag("Effect-only");
+                if (tags.PvEOnly)          PushTag("PvE-only");
+                if (tags.PvPOnly)          PushTag("PvP-only");
+                if (tags.PvEVersion)       PushTag("PvE Version");
+                if (tags.PvPVersion)       PushTag("PvP Version");
+
+                if (tags.DeveloperSkill)   PushTag("Developer Skill");
+                if (tags.EnvironmentSkill) PushTag("Environment Skill");
+                if (tags.MonsterSkill)     PushTag("Monster Skill ", NULL, RichText::DefaultTextImageProvider::MonsterSkull);
+                if (tags.SpiritAttack)     PushTag("Spirit Attack");
+                
+                if (tags.Maintained)       PushTag("Maintained");
+                if (tags.ConditionSource)  PushTag("Condition Source");
+                if (tags.ExploitsCorpse)   PushTag("Exploits Corpse");
+                if (tags.Consumable)       PushTag("Consumable");
+                if (tags.Celestial)        PushTag("Celestial");
+                if (tags.Mission)          PushTag("Mission");
+                if (tags.Bundle)           PushTag("Bundle");
+                // clang-format on
+
+                if (dst.GetWrittenSize() > 0)
+                {
+                    // Cut off the last ", "
+                    dst.resize(dst.size() - 2);
+                }
+            }
+        );
+    }
+
+    void FetchStaticProps()
+    {
+        FetchTags();
+
+        FetchXMember(SkillTextPropertyID::Type, &CustomSkillData::GetTypeString);
+        FetchXMember(SkillTextPropertyID::Attribute, &CustomSkillData::GetAttributeStr);
+        FetchXMember(SkillTextPropertyID::Profession, &CustomSkillData::GetProfessionStr);
+        FetchXMember(SkillTextPropertyID::Campaign, &CustomSkillData::GetCampaignStr);
+        FetchXMember(SkillTextPropertyID::Upkeep, &CustomSkillData::GetUpkeep, RichText::DefaultTextImageProvider::Upkeep);
+        FetchXMember(SkillTextPropertyID::Energy, &CustomSkillData::GetEnergy, RichText::DefaultTextImageProvider::EnergyOrb);
+        FetchXMember(SkillTextPropertyID::AdrenalineStrikes, &CustomSkillData::GetAdrenalineStrikes, RichText::DefaultTextImageProvider::Adrenaline);
+        FetchXMember(SkillTextPropertyID::Overcast, &CustomSkillData::GetOvercast, RichText::DefaultTextImageProvider::Overcast);
+        FetchXMember(SkillTextPropertyID::Sacrifice, &CustomSkillData::GetSacrifice, RichText::DefaultTextImageProvider::Sacrifice);
+        FetchXMember(SkillTextPropertyID::Recharge, &CustomSkillData::GetRecharge, RichText::DefaultTextImageProvider::Recharge);
+
+        auto AppendFraction = [](RichText::RichTextArena &dst, double value)
+        {
+            float value_int;
+            float value_fract = std::modf(value, &value_int);
+
+            std::optional<RichText::FracTag> frac_tag = std::nullopt;
+            if (value_fract == 0.25f)
+                frac_tag = {1, 4};
+            else if (value_fract == 0.5f)
+                frac_tag = {1, 2};
+            else if (value_fract == 0.75f)
+                frac_tag = {3, 4};
+
+            if (frac_tag.has_value())
+            {
+                if (value_int > 0.f)
+                    dst.AppendWriteBuffer(32, DoubleWriter{value_int});
+                dst.PushTag(RichText::TextTag(frac_tag.value()));
+            }
+            else
+            {
+                dst.AppendWriteBuffer(32, DoubleWriter{value});
+            }
+        };
+
+        FetchX(
+            SkillTextPropertyID::Adrenaline,
+            [&](RichText::RichTextArena &dst, CustomSkillData &cskill)
+            {
+                auto adrenaline = cskill.GetAdrenaline();
+                if (adrenaline == 0)
+                    return;
+                uint16_t adrenaline_div = adrenaline / 25;
+                uint16_t adrenaline_rem = adrenaline % 25;
+                if (adrenaline_div > 0)
+                {
+                    dst.AppendWriteBuffer(32, DoubleWriter{(double)adrenaline_div});
+                }
+                if (adrenaline_rem > 0)
+                {
+                    dst.PushTag(RichText::TextTag(RichText::FracTag{adrenaline_rem, 25}));
+                }
+                dst.PushImageTag(RichText::DefaultTextImageProvider::Adrenaline); }
+        );
+
+        FetchX(
+            SkillTextPropertyID::Activation,
+            [&](RichText::RichTextArena &dst, CustomSkillData &cskill)
+            {
+                auto activation = cskill.GetActivation();
+                if (activation == 0.f)
+                    return;
+                AppendFraction(dst, activation);
+                dst.PushImageTag(RichText::DefaultTextImageProvider::Activation);
+            }
+        );
+
+        FetchX(
+            SkillTextPropertyID::Aftercast,
+            [&](RichText::RichTextArena &dst, CustomSkillData &cskill)
+            {
+                auto &skill = *cskill.skill;
+                const bool is_normal_aftercast = (skill.activation > 0 && skill.aftercast == 0.75f) ||
+                                                 (skill.activation == 0 && skill.aftercast == 0);
+                if (skill.aftercast == 0.f && is_normal_aftercast)
+                    return;
+
+                if (!is_normal_aftercast)
+                    dst.PushColorTag(IM_COL32(255, 255, 0, 255));
+                AppendFraction(dst, skill.aftercast);
+                if (!is_normal_aftercast)
+                    dst.PushColorTag(NULL);
+                dst.PushImageTag(RichText::DefaultTextImageProvider::Aftercast);
+            }
+        );
+
+        FetchX(
+            SkillTextPropertyID::Range,
+            [](RichText::RichTextArena &dst, CustomSkillData &cskill)
+            {
+                Utils::Range buffer[4];
+                std::span<Utils::Range> ranges(buffer);
+                cskill.GetRanges(ranges);
+                for (auto range : ranges)
+                {
+                    dst.AppendWriteBuffer(32, DoubleWriter{static_cast<double>(range)});
+                    auto range_name = Utils::GetRangeStr(range);
+                    if (range_name)
+                    {
+                        std::format_to(std::back_inserter(dst), std::string_view(" ({})"), range_name.value());
+                    }
+                }
+            }
+        );
+    }
+
     struct BookState;
     std::vector<std::unique_ptr<BookState>> books;
     void AddBook()
     {
-        books.emplace_back(std::make_unique<BookState>());
+        auto &book = books.emplace_back(std::make_unique<BookState>());
     }
     struct BookState
     {
         BookState()
         {
-            FetchDescriptions();
+            FetchProperties();
         }
 
         struct Settings
@@ -528,7 +791,6 @@ namespace HerosInsight::SkillBook
             bool snap_to_skill = true;
         };
         Settings settings;
-
         SkillCatalog catalog{prop_bundle_names, prop_bundles};
         RichText::RichTextArena descs[2]{};
         std::vector<uint16_t> filtered_skills; // skill ids
@@ -610,6 +872,30 @@ namespace HerosInsight::SkillBook
         {
             auto span_id = catalog.GetPropertyPtr(prop)->GetSpanId((size_t)skill_id);
             return hl_data.GetPropHL((size_t)prop, span_id);
+        }
+
+        void FetchProperties()
+        {
+            assert(!static_props.empty());
+            for (auto &[prop_id, prop] : static_props)
+            {
+                catalog.SetPropertyPtr(prop_id, &prop);
+            }
+            FetchNames();
+            FetchDescriptions();
+        }
+
+        void FetchTags()
+        {
+            auto &prop = static_props[SkillTextPropertyID::Tag];
+            this->catalog.SetPropertyPtr(SkillTextPropertyID::Tag, &prop);
+        }
+
+        void FetchNames()
+        {
+            auto &text_provider = SkillTextProvider::GetInstance(GW::Constants::Language::English);
+            auto names_ptr = &text_provider.GetNames();
+            this->catalog.SetPropertyPtr(SkillTextPropertyID::Name, names_ptr);
         }
 
         void FetchDescriptions()
@@ -1481,7 +1767,19 @@ namespace HerosInsight::SkillBook
             // }
         }
 
-        void Draw(IDirect3DDevice9 *device, size_t instance_id)
+        void MakeBookName(std::span<char> buf, size_t book_index)
+        {
+            size_t name_len = 0;
+            FixedArrayRef<char> name_writer{buf, name_len};
+            name_writer.AppendRange(std::string_view("Skill Book (Ctrl + K)"));
+            if (book_index > 0)
+            {
+                name_writer.AppendFormat(" ({})", book_index);
+            }
+            name_writer.push_back('\0');
+        }
+
+        void Draw(IDirect3DDevice9 *device, size_t book_index)
         {
             if (first_draw)
             {
@@ -1494,7 +1792,10 @@ namespace HerosInsight::SkillBook
                 first_draw = false;
             }
 
-            if (ImGui::Begin("Skill Book (Ctrl + K)", &is_opened, UpdateManager::GetWindowFlags()))
+            char name_buf[64];
+            MakeBookName(name_buf, book_index);
+
+            if (ImGui::Begin(name_buf, &is_opened, UpdateManager::GetWindowFlags()))
             {
                 DrawDupeButton();
                 DrawCheckboxes();
@@ -1588,284 +1889,6 @@ namespace HerosInsight::SkillBook
         }
     };
 
-    void FetchNames()
-    {
-        auto &text_provider = SkillTextProvider::GetInstance(GW::Constants::Language::English);
-        auto names_ptr = &text_provider.GetNames();
-        for (auto &book : books)
-        {
-            book->catalog.SetPropertyPtr(SkillTextPropertyID::Name, names_ptr);
-        }
-    }
-
-    struct DoubleWriter
-    {
-        double value;
-
-        void operator()(std::span<char> &dst) const
-        {
-            auto [after, ec] = std::to_chars(dst.data(), dst.data() + dst.size(), value, std::chars_format::general);
-            const bool success = (ec == std::errc());
-#ifdef _DEBUG
-            assert(success);
-#endif
-            auto written_count = success ? after - dst.data() : 0;
-            dst = dst.subspan(0, written_count);
-        }
-    };
-
-    static std::unordered_map<SkillTextPropertyID, RichText::RichTextArena> static_props;
-
-    template <typename Func>
-    void FetchX(SkillTextPropertyID prop_id, Func &&func)
-    {
-        auto &prop = static_props[prop_id];
-        prop.Reset();
-        auto id = std::format("prop_{}", (size_t)prop_id);
-        prop.ReserveFromHint(id);
-
-        for (size_t i = 1; i < GW::Constants::SkillMax; ++i)
-        {
-            auto skill_id = static_cast<GW::Constants::SkillID>(i);
-            auto &custom_sd = CustomSkillDataModule::GetCustomSkillData(skill_id);
-            prop.BeginWrite();
-            std::invoke(std::forward<Func>(func), prop, custom_sd);
-            prop.EndWrite(i);
-        }
-
-        prop.StoreCapacityHint(id);
-
-        for (auto &book : books)
-        {
-            book->catalog.SetPropertyPtr(prop_id, &prop);
-        }
-    }
-
-    template <typename MemPtr>
-    void FetchXMember(SkillTextPropertyID prop_id, MemPtr getter, std::optional<uint32_t> icon_id = std::nullopt)
-    {
-        static_assert(std::is_member_function_pointer_v<MemPtr>, "This overload is for member function pointers only.");
-
-#define ACTUAL_CODE                                                         \
-    if constexpr (std::is_integral_v<Ret> || std::is_floating_point_v<Ret>) \
-    {                                                                       \
-        auto value = static_cast<double>(std::invoke(getter, cskill));      \
-        if (value != 0.0)                                                   \
-        {                                                                   \
-            dst.AppendWriteBuffer(32, DoubleWriter{value});                 \
-            if (icon_id.has_value())                                        \
-                dst.PushImageTag(icon_id.value());                          \
-        }                                                                   \
-    }                                                                       \
-    else                                                                    \
-    {                                                                       \
-        dst.append_range(std::invoke(getter, cskill));                      \
-    }
-
-        FetchX(
-            prop_id,
-            [getter, icon_id](RichText::RichTextArena &dst, CustomSkillData &cskill)
-            {
-                // Try const-qualified call first
-                if constexpr (std::is_invocable_v<MemPtr, const CustomSkillData &>)
-                {
-                    using Ret = std::invoke_result_t<MemPtr, const CustomSkillData &>;
-                    ACTUAL_CODE
-                }
-                else
-                {
-                    // Non-const member function
-                    using Ret = std::invoke_result_t<MemPtr, CustomSkillData &>;
-                    ACTUAL_CODE
-                }
-            }
-        );
-    }
-
-    void FetchTags()
-    {
-        FetchX(
-            SkillTextPropertyID::Tag,
-            [](RichText::RichTextArena &dst, CustomSkillData &cskill)
-            {
-                auto &skill = *cskill.skill;
-                auto &tags = cskill.tags;
-                auto skill_id_to_check = skill.IsPvP() ? skill.skill_id_pvp : skill.skill_id;
-
-                bool is_unlocked = GW::SkillbarMgr::GetIsSkillUnlocked(skill_id_to_check);
-                bool is_equipable = Utils::IsSkillEquipable(skill, focused_agent_id);
-                bool is_locked = tags.Unlockable && !is_unlocked;
-
-                auto PushTag = [&](std::string_view str, ImU32 color = NULL, std::optional<size_t> image_id = std::nullopt)
-                {
-                    if (color != NULL)
-                    {
-                        dst.PushColoredText(color, str);
-                    }
-                    else
-                    {
-                        dst.PushText(str);
-                    }
-
-                    if (image_id.has_value())
-                    {
-                        dst.PushText(" ");
-                        dst.PushImageTag(image_id.value());
-                    }
-
-                    dst.PushText(", ");
-                };
-
-                // clang-format off
-                if (is_equipable)          PushTag("Equipable", IM_COL32(100, 255, 255, 255));
-                if (is_unlocked)           PushTag("Unlocked" , IM_COL32(143, 255, 143, 255));
-                if (tags.Temporary)        PushTag("Temporary"                              );
-                if (is_locked)             PushTag("Locked"   , IM_COL32(255, 100, 100, 255));
-                
-                if (cskill.context != Utils::SkillContext::Null)
-                    PushTag(Utils::GetSkillContextString(cskill.context));
-
-                if (tags.Archived)         PushTag("Archived");
-                if (tags.EffectOnly)       PushTag("Effect-only");
-                if (tags.PvEOnly)          PushTag("PvE-only");
-                if (tags.PvPOnly)          PushTag("PvP-only");
-                if (tags.PvEVersion)       PushTag("PvE Version");
-                if (tags.PvPVersion)       PushTag("PvP Version");
-
-                if (tags.DeveloperSkill)   PushTag("Developer Skill");
-                if (tags.EnvironmentSkill) PushTag("Environment Skill");
-                if (tags.MonsterSkill)     PushTag("Monster Skill ", NULL, RichText::DefaultTextImageProvider::MonsterSkull);
-                if (tags.SpiritAttack)     PushTag("Spirit Attack");
-                
-                if (tags.Maintained)       PushTag("Maintained");
-                if (tags.ConditionSource)  PushTag("Condition Source");
-                if (tags.ExploitsCorpse)   PushTag("Exploits Corpse");
-                if (tags.Consumable)       PushTag("Consumable");
-                if (tags.Celestial)        PushTag("Celestial");
-                if (tags.Mission)          PushTag("Mission");
-                if (tags.Bundle)           PushTag("Bundle");
-                // clang-format on
-
-                if (dst.GetWrittenSize() > 0)
-                {
-                    // Cut off the last ", "
-                    dst.resize(dst.size() - 2);
-                }
-            }
-        );
-    }
-
-    void FetchStaticProps()
-    {
-        FetchNames();
-
-        FetchXMember(SkillTextPropertyID::Type, &CustomSkillData::GetTypeString);
-        FetchXMember(SkillTextPropertyID::Attribute, &CustomSkillData::GetAttributeStr);
-        FetchXMember(SkillTextPropertyID::Profession, &CustomSkillData::GetProfessionStr);
-        FetchXMember(SkillTextPropertyID::Campaign, &CustomSkillData::GetCampaignStr);
-        FetchXMember(SkillTextPropertyID::Upkeep, &CustomSkillData::GetUpkeep, RichText::DefaultTextImageProvider::Upkeep);
-        FetchXMember(SkillTextPropertyID::Energy, &CustomSkillData::GetEnergy, RichText::DefaultTextImageProvider::EnergyOrb);
-        FetchXMember(SkillTextPropertyID::AdrenalineStrikes, &CustomSkillData::GetAdrenalineStrikes, RichText::DefaultTextImageProvider::Adrenaline);
-        FetchXMember(SkillTextPropertyID::Overcast, &CustomSkillData::GetOvercast, RichText::DefaultTextImageProvider::Overcast);
-        FetchXMember(SkillTextPropertyID::Sacrifice, &CustomSkillData::GetSacrifice, RichText::DefaultTextImageProvider::Sacrifice);
-        FetchXMember(SkillTextPropertyID::Recharge, &CustomSkillData::GetRecharge, RichText::DefaultTextImageProvider::Recharge);
-
-        auto AppendFraction = [](RichText::RichTextArena &dst, double value)
-        {
-            float value_int;
-            float value_fract = std::modf(value, &value_int);
-
-            std::optional<RichText::FracTag> frac_tag = std::nullopt;
-            if (value_fract == 0.25f)
-                frac_tag = {1, 4};
-            else if (value_fract == 0.5f)
-                frac_tag = {1, 2};
-            else if (value_fract == 0.75f)
-                frac_tag = {3, 4};
-
-            if (frac_tag.has_value())
-            {
-                if (value_int > 0.f)
-                    dst.AppendWriteBuffer(32, DoubleWriter{value_int});
-                dst.PushTag(RichText::TextTag(frac_tag.value()));
-            }
-            else
-            {
-                dst.AppendWriteBuffer(32, DoubleWriter{value});
-            }
-        };
-
-        FetchX(
-            SkillTextPropertyID::Adrenaline,
-            [&](RichText::RichTextArena &dst, CustomSkillData &cskill)
-            {
-                auto adrenaline = cskill.GetAdrenaline();
-                if (adrenaline == 0)
-                    return;
-                uint16_t adrenaline_div = adrenaline / 25;
-                uint16_t adrenaline_rem = adrenaline % 25;
-                if (adrenaline_div > 0)
-                {
-                    dst.AppendWriteBuffer(32, DoubleWriter{(double)adrenaline_div});
-                }
-                if (adrenaline_rem > 0)
-                {
-                    dst.PushTag(RichText::TextTag(RichText::FracTag{adrenaline_rem, 25}));
-                }
-                dst.PushImageTag(RichText::DefaultTextImageProvider::Adrenaline); }
-        );
-
-        FetchX(
-            SkillTextPropertyID::Activation,
-            [&](RichText::RichTextArena &dst, CustomSkillData &cskill)
-            {
-                auto activation = cskill.GetActivation();
-                if (activation == 0.f)
-                    return;
-                AppendFraction(dst, activation);
-                dst.PushImageTag(RichText::DefaultTextImageProvider::Activation);
-            }
-        );
-
-        FetchX(
-            SkillTextPropertyID::Aftercast,
-            [&](RichText::RichTextArena &dst, CustomSkillData &cskill)
-            {
-                auto &skill = *cskill.skill;
-                const bool is_normal_aftercast = (skill.activation > 0 && skill.aftercast == 0.75f) ||
-                                                 (skill.activation == 0 && skill.aftercast == 0);
-                if (skill.aftercast == 0.f && is_normal_aftercast)
-                    return;
-
-                if (!is_normal_aftercast)
-                    dst.PushColorTag(IM_COL32(255, 255, 0, 255));
-                AppendFraction(dst, skill.aftercast);
-                if (!is_normal_aftercast)
-                    dst.PushColorTag(NULL);
-                dst.PushImageTag(RichText::DefaultTextImageProvider::Aftercast);
-            }
-        );
-
-        FetchX(
-            SkillTextPropertyID::Range,
-            [](RichText::RichTextArena &dst, CustomSkillData &cskill)
-            {
-                Utils::Range buffer[4];
-                std::span<Utils::Range> ranges(buffer);
-                cskill.GetRanges(ranges);
-                for (auto range : ranges)
-                {
-                    dst.AppendWriteBuffer(32, DoubleWriter{static_cast<double>(range)});
-                    auto range_name = Utils::GetRangeStr(range);
-                    if (range_name)
-                    {
-                        std::format_to(std::back_inserter(dst), std::string_view(" ({})"), range_name.value());
-                    }
-                }
-            }
-        );
-    }
-
     GW::HookEntry attribute_update_entry;
     GW::HookEntry select_hero_entry;
     constexpr GW::UI::UIMessage kLoadHeroSkillsMessage = (GW::UI::UIMessage)(0x10000000 | 395);
@@ -1913,9 +1936,10 @@ namespace HerosInsight::SkillBook
         if (agent_id > 0)
         {
             focused_agent_id = agent_id;
-            FetchTags();
+            FetchTags(); // Why this here?
             for (auto &book : books)
             {
+                book->FetchTags();
                 book->request_state_update = true;
             }
         }
@@ -2015,8 +2039,8 @@ namespace HerosInsight::SkillBook
         ForceDeckbuilderCallbacks();
 
         SetupPropBundles();
-        AddBook(); // Add first book
         FetchStaticProps();
+        AddBook(); // Add first book
     }
 
     void Terminate()
