@@ -94,7 +94,7 @@ namespace HerosInsight
                 }
             }
 
-            float cursor = imgui_scroll - this->scroll_current.pixel_offset;
+            float cursor = std::round(std::max(imgui_scroll - this->scroll_current.pixel_offset, 0.f));
             size_t i = this->scroll_current.entry_index;
             ImGui::SetCursorPosY(cursor);
             for (; i < item_sizes.size() && cursor < view_end; ++i)
