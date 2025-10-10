@@ -226,33 +226,6 @@ namespace HerosInsight::SkillBook
 
     using SkillCatalog = Catalog<SkillTextPropertyID, GW::Constants::SkillMax>;
 
-    //     void ReserveProperties()
-    //     {
-    // #define RESERVE_PROPERTY(prop, char_count) \
-//     catalog.GetProperty(SkillTextPropertyID::prop).text.Reserve(char_count);
-
-    //         RESERVE_PROPERTY(Name, 65536);
-    //         // RESERVE_PROPERTY(Concise, N * 128);
-    //         RESERVE_PROPERTY(Description, 131072);
-
-    //         RESERVE_PROPERTY(Type, 2048);
-    //         RESERVE_PROPERTY(Attribute, 1024);
-    //         RESERVE_PROPERTY(Profession, 128);
-    //         RESERVE_PROPERTY(Campaign, 128);
-
-    //         RESERVE_PROPERTY(Upkeep, 8);
-    //         RESERVE_PROPERTY(Energy, 32);
-    //         RESERVE_PROPERTY(Adrenaline, 32);
-    //         RESERVE_PROPERTY(Sacrifice, 32);
-    //         RESERVE_PROPERTY(Activation, 128);
-    //         RESERVE_PROPERTY(Recharge, 128);
-    //         RESERVE_PROPERTY(Aftercast, 128);
-
-    //         RESERVE_PROPERTY(Range, 1024);
-    //         RESERVE_PROPERTY(Tag, 4096);
-    //         // RESERVE_PROPERTY(Parsed, N * 24);
-    //     }
-
     uint32_t focused_agent_id = 0;
     std::array<int8_t, AttributeOrTitle::Count> attributes = {};
 
@@ -524,6 +497,12 @@ namespace HerosInsight::SkillBook
         SetupBundle("Description", SkillCatalog::MakePropset({SkillTextPropertyID::Description, SkillTextPropertyID::Concise}));
     }
 
+    struct BookState;
+    std::vector<std::unique_ptr<BookState>> books;
+    void AddBook()
+    {
+        books.emplace_back(std::make_unique<BookState>());
+    }
     struct BookState
     {
         BookState()
@@ -531,12 +510,27 @@ namespace HerosInsight::SkillBook
             FetchDescriptions();
         }
 
-        static constexpr size_t MAX_WINDOWS = 8;
+        struct Settings
+        {
+            AttributeMode attribute_mode = AttributeMode::Generic;
+            int attr_lvl_slider = 0;
+
+            bool include_pve_only_skills = true;
+            bool include_temporary_skills = false;
+            bool include_npc_skills = false;
+            bool include_archived_skills = false;
+            bool include_disguises = false;
+
+            bool use_precise_adrenaline = false;
+            bool prefer_concise_descriptions = false;
+            bool limit_to_characters_professions = false;
+            bool show_null_stats = false;
+            bool snap_to_skill = true;
+        };
+        Settings settings;
 
         SkillCatalog catalog{prop_bundle_names, prop_bundles};
         RichText::RichTextArena descs[2]{};
-        AttributeMode attribute_mode = AttributeMode::Generic;
-        int attr_lvl_slider = 0;
         std::vector<uint16_t> filtered_skills; // skill ids
         CatalogUtils::Query query;
         CatalogUtils::HLData hl_data{SkillCatalog::PROP_COUNT, prop_bundles.size(), GW::Constants::SkillMax};
@@ -548,19 +542,7 @@ namespace HerosInsight::SkillBook
         bool request_state_update = true; // Set this to attempt to apply the pending state
         bool attrs_changed = false;
         bool state_update_in_progress = false;
-
-        bool include_pve_only_skills = true;
-        bool include_temporary_skills = false;
-        bool include_npc_skills = false;
-        bool include_archived_skills = false;
-        bool include_disguises = false;
-
         bool first_draw = true;
-        bool use_precise_adrenaline = false;
-        bool prefer_concise_descriptions = false;
-        bool limit_to_characters_professions = false;
-        bool show_null_stats = false;
-        bool snap_to_skill = true;
 
         char input_text[1024] = {'\0'};
 
@@ -570,12 +552,17 @@ namespace HerosInsight::SkillBook
         std::future<bool> update_filter_future = std::future<bool>();
         std::atomic<bool> cancel_state_update = false;
 
+        void Duplicate(BookState &other)
+        {
+            other.settings = settings;
+        }
+
         int8_t ResolveAttribute(AttributeOrTitle attr) const
         {
             // clang-format off
-            switch (attribute_mode) {
+            switch (settings.attribute_mode) {
                 case AttributeMode::Generic: return -1;
-                case AttributeMode::Manual: return attr_lvl_slider;
+                case AttributeMode::Manual: return settings.attr_lvl_slider;
                 case AttributeMode::Characters:
                     if (attr.IsNone())
                         return 0;
@@ -655,25 +642,35 @@ namespace HerosInsight::SkillBook
             }
         }
 
+        // Draw's a button to duplicate the current book
+        void DrawDupeButton()
+        {
+            ImGui::SameLine();
+            if (ImGui::Button("Open new book"))
+            {
+                AddBook();
+            }
+        }
+
         void DrawCheckboxes()
         {
             // if (ImGui::CollapsingHeader("Options"))
             {
                 ImGui::Columns(2, nullptr, false);
 
-                skills_dirty |= ImGui::Checkbox("Include PvE-only skills", &include_pve_only_skills);
-                skills_dirty |= ImGui::Checkbox("Include Temporary skills", &include_temporary_skills);
-                skills_dirty |= ImGui::Checkbox("Include NPC skills", &include_npc_skills);
-                skills_dirty |= ImGui::Checkbox("Include Archived skills", &include_archived_skills);
-                skills_dirty |= ImGui::Checkbox("Include Disguises", &include_disguises);
+                skills_dirty |= ImGui::Checkbox("Include PvE-only skills", &settings.include_pve_only_skills);
+                skills_dirty |= ImGui::Checkbox("Include Temporary skills", &settings.include_temporary_skills);
+                skills_dirty |= ImGui::Checkbox("Include NPC skills", &settings.include_npc_skills);
+                skills_dirty |= ImGui::Checkbox("Include Archived skills", &settings.include_archived_skills);
+                skills_dirty |= ImGui::Checkbox("Include Disguises", &settings.include_disguises);
 
                 ImGui::NextColumn();
 
-                ImGui::Checkbox("Show precise adrenaline", &use_precise_adrenaline);
-                ImGui::Checkbox("Show null stats", &show_null_stats);
-                ImGui::Checkbox("Snap to skill", &snap_to_skill);
-                ImGui::Checkbox("Prefer concise descriptions", &prefer_concise_descriptions);
-                skills_dirty |= ImGui::Checkbox("Limit to character's professions", &limit_to_characters_professions);
+                ImGui::Checkbox("Show precise adrenaline", &settings.use_precise_adrenaline);
+                ImGui::Checkbox("Show null stats", &settings.show_null_stats);
+                ImGui::Checkbox("Snap to skill", &settings.snap_to_skill);
+                ImGui::Checkbox("Prefer concise descriptions", &settings.prefer_concise_descriptions);
+                skills_dirty |= ImGui::Checkbox("Limit to character's professions", &settings.limit_to_characters_professions);
 
                 ImGui::Columns(1);
             }
@@ -688,33 +685,33 @@ namespace HerosInsight::SkillBook
             auto cursor_content_x = ImGui::GetCursorPosX();
             ImGui::SetCursorPosY(cursor_before.y);
 
-            if (ImGui::RadioButton("(0...15)", attribute_mode == AttributeMode::Generic))
+            if (ImGui::RadioButton("(0...15)", settings.attribute_mode == AttributeMode::Generic))
             {
-                attribute_mode = AttributeMode::Generic;
+                settings.attribute_mode = AttributeMode::Generic;
                 request_state_update = true;
                 FetchDescriptions();
             }
 
             ImGui::SameLine();
-            if (ImGui::RadioButton("Character's", attribute_mode == AttributeMode::Characters))
+            if (ImGui::RadioButton("Character's", settings.attribute_mode == AttributeMode::Characters))
             {
-                attribute_mode = AttributeMode::Characters;
+                settings.attribute_mode = AttributeMode::Characters;
                 request_state_update = true;
                 FetchDescriptions();
             }
 
             ImGui::SameLine();
-            if (ImGui::RadioButton("Manual", attribute_mode == AttributeMode::Manual))
+            if (ImGui::RadioButton("Manual", settings.attribute_mode == AttributeMode::Manual))
             {
-                attribute_mode = AttributeMode::Manual;
+                settings.attribute_mode = AttributeMode::Manual;
                 request_state_update = true;
                 FetchDescriptions();
             }
 
-            if (attribute_mode == AttributeMode::Manual)
+            if (settings.attribute_mode == AttributeMode::Manual)
             {
                 // ImGui::SetCursorPosX(cursor_content_x);
-                if (ImGui::SliderInt("Attribute level", &attr_lvl_slider, 0, 21))
+                if (ImGui::SliderInt("Attribute level", &settings.attr_lvl_slider, 0, 21))
                 {
                     request_state_update = true;
                     FetchDescriptions();
@@ -745,7 +742,7 @@ namespace HerosInsight::SkillBook
                 hl_data.Reset();
                 filtered_skills.clear();
 
-                if (attribute_mode == AttributeMode::Characters)
+                if (settings.attribute_mode == AttributeMode::Characters)
                 {
                     auto custom_ad = CustomAgentDataModule::GetCustomAgentData(focused_agent_id);
                     for (uint32_t i = 0; i < attributes.size(); i++)
@@ -757,7 +754,7 @@ namespace HerosInsight::SkillBook
             }
 
             uint32_t prof_mask;
-            if (limit_to_characters_professions)
+            if (settings.limit_to_characters_professions)
             {
                 prof_mask = Utils::GetProfessionMask(focused_agent_id);
             }
@@ -774,35 +771,35 @@ namespace HerosInsight::SkillBook
                 const auto skill_id = static_cast<GW::Constants::SkillID>(skill_id_16);
                 auto &custom_sd = CustomSkillDataModule::GetCustomSkillData(skill_id);
 
-                if (!include_pve_only_skills)
+                if (!settings.include_pve_only_skills)
                 {
                     if (custom_sd.tags.PvEOnly)
                         continue;
                 }
-                if (!include_temporary_skills)
+                if (!settings.include_temporary_skills)
                 {
                     if (custom_sd.tags.Temporary)
                         continue;
                 }
-                if (!include_archived_skills)
+                if (!settings.include_archived_skills)
                 {
                     if (custom_sd.tags.Archived)
                         continue;
                 }
-                if (!include_npc_skills)
+                if (!settings.include_npc_skills)
                 {
                     if (custom_sd.tags.MonsterSkill ||
                         custom_sd.tags.EnvironmentSkill)
                         continue;
                 }
-                if (!include_disguises)
+                if (!settings.include_disguises)
                 {
                     if (custom_sd.skill->type == GW::Constants::SkillType::Disguise ||
                         custom_sd.skill_id == GW::Constants::SkillID::Tonic_Tipsiness)
                         continue;
                 }
 
-                if (limit_to_characters_professions)
+                if (settings.limit_to_characters_professions)
                 {
                     auto skill_prof_mask = 1 << (uint32_t)custom_sd.skill->profession;
                     if ((prof_mask & skill_prof_mask) == 0)
@@ -923,7 +920,7 @@ namespace HerosInsight::SkillBook
                 {SkillTextPropertyID::Sacrifice, 7, 4},
                 {SkillTextPropertyID::Upkeep, 0, 4},
                 {SkillTextPropertyID::Energy, 1, 3},
-                {use_precise_adrenaline ? SkillTextPropertyID::Adrenaline : SkillTextPropertyID::AdrenalineStrikes, 3, 3},
+                {settings.use_precise_adrenaline ? SkillTextPropertyID::Adrenaline : SkillTextPropertyID::AdrenalineStrikes, 3, 3},
                 {SkillTextPropertyID::Activation, 2, 2},
                 {SkillTextPropertyID::Recharge, 1, 1},
                 {SkillTextPropertyID::Aftercast, 2, 0},
@@ -1327,8 +1324,8 @@ namespace HerosInsight::SkillBook
             auto tt_provider = SkillTooltipProvider(skill_id);
             text_drawer.tooltip_provider = &tt_provider;
 
-            auto type = prefer_concise_descriptions ? SkillTextPropertyID::Concise : SkillTextPropertyID::Description;
-            auto alt_type = prefer_concise_descriptions ? SkillTextPropertyID::Description : SkillTextPropertyID::Concise;
+            auto type = settings.prefer_concise_descriptions ? SkillTextPropertyID::Concise : SkillTextPropertyID::Description;
+            auto alt_type = settings.prefer_concise_descriptions ? SkillTextPropertyID::Description : SkillTextPropertyID::Concise;
 
             auto main_desc = GetStr(type, skill_id);
             auto alt_desc = GetStr(alt_type, skill_id);
@@ -1362,7 +1359,7 @@ namespace HerosInsight::SkillBook
             {
                 ImGui::Spacing();
                 ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
-                ImGui::TextUnformatted(prefer_concise_descriptions ? "Additional matches in full description: " : "Additional matches in concise description: ");
+                ImGui::TextUnformatted(settings.prefer_concise_descriptions ? "Additional matches in full description: " : "Additional matches in concise description: ");
                 ImGui::PopStyleColor();
                 ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 3);
                 // ImGui::SameLine(0, 0);
@@ -1499,6 +1496,7 @@ namespace HerosInsight::SkillBook
 
             if (ImGui::Begin("Skill Book (Ctrl + K)", &is_opened, UpdateManager::GetWindowFlags()))
             {
+                DrawDupeButton();
                 DrawCheckboxes();
                 DrawAttributeModeSelection();
                 DrawSearchBox();
@@ -1576,7 +1574,7 @@ namespace HerosInsight::SkillBook
                             ImGui::Separator();
                         };
 
-                        clipper.Draw(n_skills, est_item_height, snap_to_skill, DrawItem);
+                        clipper.Draw(n_skills, est_item_height, settings.snap_to_skill, DrawItem);
                     }
                 }
                 ImGui::EndChild();
@@ -1590,15 +1588,13 @@ namespace HerosInsight::SkillBook
         }
     };
 
-    std::list<BookState> books;
-
     void FetchNames()
     {
         auto &text_provider = SkillTextProvider::GetInstance(GW::Constants::Language::English);
         auto names_ptr = &text_provider.GetNames();
         for (auto &book : books)
         {
-            book.catalog.SetPropertyPtr(SkillTextPropertyID::Name, names_ptr);
+            book->catalog.SetPropertyPtr(SkillTextPropertyID::Name, names_ptr);
         }
     }
 
@@ -1641,7 +1637,7 @@ namespace HerosInsight::SkillBook
 
         for (auto &book : books)
         {
-            book.catalog.SetPropertyPtr(prop_id, &prop);
+            book->catalog.SetPropertyPtr(prop_id, &prop);
         }
     }
 
@@ -1883,14 +1879,14 @@ namespace HerosInsight::SkillBook
 
         for (auto &book : books)
         {
-            if (book.attribute_mode == AttributeMode::Characters)
+            if (book->settings.attribute_mode == AttributeMode::Characters)
             {
                 if (packet_agent_id == focused_agent_id)
                 {
                     // auto attr = AttributeOrTitle((GW::Constants::AttributeByte)p->attribute);
                     // attributes[attr.value] = p->value;
-                    book.attrs_changed = true;
-                    book.FetchDescriptions();
+                    book->attrs_changed = true;
+                    book->FetchDescriptions();
                 }
             }
         }
@@ -1899,11 +1895,11 @@ namespace HerosInsight::SkillBook
     {
         for (auto &book : books)
         {
-            if (book.attribute_mode == AttributeMode::Characters)
+            if (book->settings.attribute_mode == AttributeMode::Characters)
             {
                 // auto attr = AttributeOrTitle((GW::Constants::TitleID)packet->title_id);
                 // attributes[attr.value] = packet->new_value;
-                book.attrs_changed = true;
+                book->attrs_changed = true;
             }
         }
     }
@@ -1920,7 +1916,7 @@ namespace HerosInsight::SkillBook
             FetchTags();
             for (auto &book : books)
             {
-                book.request_state_update = true;
+                book->request_state_update = true;
             }
         }
     }
@@ -1952,7 +1948,7 @@ namespace HerosInsight::SkillBook
         focused_agent_id = GW::Agents::GetControlledCharacterId();
         for (auto &book : books)
         {
-            book.request_state_update = true;
+            book->request_state_update = true;
         }
     }
 
@@ -1966,7 +1962,7 @@ namespace HerosInsight::SkillBook
             // auto secondary = p[2];
             for (auto &book : books)
             {
-                book.request_state_update = true;
+                book->request_state_update = true;
             }
         }
     }
@@ -2019,7 +2015,7 @@ namespace HerosInsight::SkillBook
         ForceDeckbuilderCallbacks();
 
         SetupPropBundles();
-        books.emplace_back(); // Add first book
+        AddBook(); // Add first book
         FetchStaticProps();
     }
 
@@ -2489,7 +2485,7 @@ namespace HerosInsight::SkillBook
 
         for (auto &book : books)
         {
-            book.Update();
+            book->Update();
         }
     };
 
@@ -2498,7 +2494,7 @@ namespace HerosInsight::SkillBook
         size_t i = 0;
         for (auto &book : books)
         {
-            book.Draw(device, i++);
+            book->Draw(device, i++);
         }
     }
 }
