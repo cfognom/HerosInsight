@@ -146,9 +146,9 @@ namespace HerosInsight
                 }
             }
 
-#ifdef _DEBUG
-            DrawDebugInfo();
-#endif
+// #ifdef _DEBUG
+//             DrawDebugInfo();
+// #endif
 #ifdef PRINT_VARIABLE_SIZE_CLIPPER_TIMING
             auto end = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
@@ -336,9 +336,9 @@ namespace HerosInsight
                 }
                 else if (target_index > this->scroll_max.entry_index)
                 {
-#ifdef _DEBUG
-                    Utils::FormatToChat(0xFFFFFFFF, L"Scroll max reached");
-#endif
+                    // #ifdef _DEBUG
+                    //                     Utils::FormatToChat(0xFFFFFFFF, L"Scroll max reached");
+                    // #endif
                     this->scroll_target = this->scroll_max;
                 }
                 else
@@ -401,9 +401,9 @@ namespace HerosInsight
         static float SmoothScroll(float current_scroll, float target_scroll, float dt)
         {
             assert(dt >= 0.f);
-#ifdef _DEBUG
-            dt *= 0.1f; // Slow down the smooth scrolling for debugging purposes, so we can see the scroll position change
-#endif
+            // #ifdef _DEBUG
+            //             dt *= 0.1f; // Slow down the smooth scrolling for debugging purposes, so we can see the scroll position change
+            // #endif
             const bool positive_sign = target_scroll > current_scroll;
             const auto sign = positive_sign ? 1.f : -1.f;
             const auto dist = std::abs(target_scroll - current_scroll);
