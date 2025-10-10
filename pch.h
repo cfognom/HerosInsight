@@ -19,9 +19,9 @@
 #endif
 
 #include "GWCA_BACKUP/gwca-src/Source/stdafx.h"
+#include <buffer.h>
 #include <cassert>
 #include <cstdint>
-#include <fixed_array.h>
 #include <fixed_set.h>
 
 #include "enum_as_int.h"

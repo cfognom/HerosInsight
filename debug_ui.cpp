@@ -85,13 +85,15 @@ namespace HerosInsight::DebugUI
         if (packet->component_flags == 33280 ||
             packet->component_flags == 768)
             return;
-        Utils::FormatToChat(L"UI frame created: id={}, name={}, comp_label={}, comp_flags={}, tab_index={}, event_callback={}",
+        Utils::FormatToChat(
+            L"UI frame created: id={}, name={}, comp_label={}, comp_flags={}, tab_index={}, event_callback={}",
             packet->frame_id,
             static_cast<const void *>(packet->name_enc),
             static_cast<const void *>(packet->component_label),
             packet->component_flags,
             packet->tab_index,
-            static_cast<const void *>(packet->event_callback));
+            static_cast<const void *>(packet->event_callback)
+        );
     }
 
     void ForAllUIMessages(std::function<void(GW::UI::UIMessage)> action)
@@ -112,7 +114,8 @@ namespace HerosInsight::DebugUI
             [](GW::UI::UIMessage msg)
             {
                 GW::UI::RegisterUIMessageCallback(&entry, msg, DebugCallback);
-            });
+            }
+        );
         GW::UI::RegisterCreateUIComponentCallback(&creation_entry, DebugCreationCallback, 1);
     }
 
@@ -124,7 +127,8 @@ namespace HerosInsight::DebugUI
             [](GW::UI::UIMessage msg)
             {
                 GW::UI::RemoveUIMessageCallback(&entry, msg);
-            });
+            }
+        );
         GW::UI::RemoveCreateUIComponentCallback(&creation_entry);
     }
 
@@ -165,7 +169,7 @@ namespace HerosInsight::DebugUI
             }
         }
 
-        FixedArray<char, 128> label_salloc;
+        Buffer<char, 128> label_salloc;
         auto label = label_salloc.ref();
 
         if (hovered_frame)
@@ -184,14 +188,16 @@ namespace HerosInsight::DebugUI
             auto cyan = ImColor(0, 255, 255);
             Utils::DrawOutlineOnFrame(*hovered_frame, cyan, label, ImVec2(0.5f, 0.5f));
 
-            Utils::ForEachChildFrame(*hovered_frame,
+            Utils::ForEachChildFrame(
+                *hovered_frame,
                 [&](const GW::UI::Frame &frame)
                 {
                     label.clear();
                     label.PushFormat("ID: %u, (child %i of hovered)", frame.frame_id, frame.child_offset_id);
                     auto magenta = ImColor(255, 0, 255);
                     Utils::DrawOutlineOnFrame(frame, magenta, label, ImVec2(1.f, 1.f));
-                });
+                }
+            );
         }
 
         auto root = GW::UI::GetRootFrame();

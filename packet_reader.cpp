@@ -122,13 +122,11 @@ namespace HerosInsight::PacketReader
         const auto agent_name = Utils::GetAgentName(agent_id);
         const auto color = success ? 0xFF00FF00 : 0xFFFF0000; // green : red
         const auto message = success ? L"CORRECT" : L"WRONG";
-        Utils::WriteStringToChat(color, L"Calculated %s of '%s'/'%s' was %s. Calculated '%f', Actual '%f'",
-            property_name,
-            agent_name.c_str(),
-            skill_name.c_str(),
-            message,
-            calc,
-            actual);
+        Utils::WriteStringToChat(
+            color,
+            L"Calculated %s of '%s'/'%s' was %s. Calculated '%f', Actual '%f'",
+            property_name, agent_name.c_str(), skill_name.c_str(), message, calc, actual
+        );
     }
 
     void CheckEnergyCostCalculation(uint32_t agent_id, uint8_t energy_spent, GW::Constants::SkillID skill_id)
@@ -201,7 +199,7 @@ namespace HerosInsight::PacketReader
 
         auto &attack_skill = CustomSkillDataModule::GetCustomSkillData(skill_id);
         auto &caster = CustomAgentDataModule::GetCustomAgentData(cause_id);
-        FixedArray<SkillEffect, 8> effects_to_apply_salloc;
+        Buffer<SkillEffect, 8> effects_to_apply_salloc;
         auto effects_to_apply = effects_to_apply_salloc.ref();
         // attack_skill.GetOnHitEffects(caster, target_id, is_projectile, effects_to_apply);
 
@@ -211,9 +209,9 @@ namespace HerosInsight::PacketReader
         }
 
         EffectTracking::RemoveTrackers(cause_id, [](EffectTracking::EffectTracker &tracker)
-            {
-                return tracker.skill_id == GW::Constants::SkillID::Poison_Tip_Signet; //
-            });
+                                       {
+                                           return tracker.skill_id == GW::Constants::SkillID::Poison_Tip_Signet; //
+                                       });
     }
 
     void OnProjectileHit(uint32_t target_id, uint32_t projectile_id)
@@ -282,10 +280,10 @@ namespace HerosInsight::PacketReader
             {
                 auto p = reinterpret_cast<const StoC::GenericFloat *>(packet);
                 ids_to_check.push_back(p->agent_id);
-                message = std::format(L"GenericFloat: type={}, target={}, value={}",
-                    Utils::GenericValueIDToString(p->type),
-                    p->agent_id,
-                    p->value);
+                message = std::format(
+                    L"GenericFloat: type={}, target={}, value={}",
+                    Utils::GenericValueIDToString(p->type), p->agent_id, p->value
+                );
                 break;
             }
             case StoC::GenericModifier::STATIC_HEADER:
@@ -293,21 +291,20 @@ namespace HerosInsight::PacketReader
                 auto p = reinterpret_cast<const StoC::GenericModifier *>(packet);
                 ids_to_check.push_back(p->target_id);
                 ids_to_check.push_back(p->cause_id);
-                message = std::format(L"GenericModifier: type={}, target={}, cause={}, value={}",
-                    Utils::GenericValueIDToString(p->type),
-                    p->target_id,
-                    p->cause_id,
-                    p->value);
+                message = std::format(
+                    L"GenericModifier: type={}, target={}, cause={}, value={}",
+                    Utils::GenericValueIDToString(p->type), p->target_id, p->cause_id, p->value
+                );
                 break;
             }
             case StoC::GenericValue::STATIC_HEADER:
             {
                 auto p = reinterpret_cast<const StoC::GenericValue *>(packet);
                 ids_to_check.push_back(p->agent_id);
-                message = std::format(L"GenericValue: type={}, target={}, value={}",
-                    Utils::GenericValueIDToString(p->value_id),
-                    p->agent_id,
-                    p->value);
+                message = std::format(
+                    L"GenericValue: type={}, target={}, value={}",
+                    Utils::GenericValueIDToString(p->value_id), p->agent_id, p->value
+                );
                 break;
             }
             case StoC::GenericValueTarget::STATIC_HEADER:
@@ -315,98 +312,90 @@ namespace HerosInsight::PacketReader
                 auto p = reinterpret_cast<const StoC::GenericValueTarget *>(packet);
                 ids_to_check.push_back(p->target);
                 ids_to_check.push_back(p->caster);
-                message = std::format(L"GenericValueTarget: type={}, target={}, caster={}, value={}",
-                    Utils::GenericValueIDToString(p->Value_id),
-                    p->target,
-                    p->caster,
-                    p->value);
+                message = std::format(
+                    L"GenericValueTarget: type={}, target={}, caster={}, value={}",
+                    Utils::GenericValueIDToString(p->Value_id), p->target, p->caster, p->value
+                );
                 break;
             }
             case StoC::AddEffect::STATIC_HEADER:
             {
                 auto p = reinterpret_cast<const StoC::AddEffect *>(packet);
                 ids_to_check.push_back(p->agent_id);
-                message = std::format(L"AddEffect: agent={}, skill={}, attr_lvl={}, effect_id={}, duration={}",
-                    p->agent_id,
-                    p->skill_id,
-                    p->attribute_level,
-                    p->effect_id,
-                    *(float *)&p->timestamp);
+                message = std::format(
+                    L"AddEffect: agent={}, skill={}, attr_lvl={}, effect_id={}, duration={}",
+                    p->agent_id, p->skill_id, p->attribute_level, p->effect_id, *(float *)&p->timestamp
+                );
                 break;
             }
             case GAME_SMSG_EFFECT_RENEWED:
             {
                 auto p = reinterpret_cast<const StoC::AddEffect *>(packet);
                 ids_to_check.push_back(p->agent_id);
-                message = std::format(L"EffectRenewed: agent={}, skill={}, attr_lvl={}, effect_id={}, duration={}",
-                    p->agent_id,
-                    p->skill_id,
-                    p->attribute_level,
-                    p->effect_id,
-                    *(float *)&p->timestamp);
+                message = std::format(
+                    L"EffectRenewed: agent={}, skill={}, attr_lvl={}, effect_id={}, duration={}",
+                    p->agent_id, p->skill_id, p->attribute_level, p->effect_id, *(float *)&p->timestamp
+                );
                 break;
             }
             case StoC::RemoveEffect::STATIC_HEADER:
             {
                 auto p = reinterpret_cast<const StoC::RemoveEffect *>(packet);
                 ids_to_check.push_back(p->agent_id);
-                message = std::format(L"RemoveEffect: agent={}, effect_id={}",
-                    p->agent_id,
-                    p->effect_id);
+                message = std::format(
+                    L"RemoveEffect: agent={}, effect_id={}",
+                    p->agent_id, p->effect_id
+                );
                 break;
             }
             case StoC::SkillActivate::STATIC_HEADER:
             {
                 auto p = reinterpret_cast<const StoC::SkillActivate *>(packet);
                 ids_to_check.push_back(p->agent_id);
-                message = std::format(L"SkillActivate: agent={}, skill={}, skill_instance={}",
-                    p->agent_id,
-                    p->skill_id,
-                    p->skill_instance);
+                message = std::format(
+                    L"SkillActivate: agent={}, skill={}, skill_instance={}",
+                    p->agent_id, p->skill_id, p->skill_instance
+                );
                 break;
             }
             case StoC::SkillRecharge::STATIC_HEADER:
             {
                 auto p = reinterpret_cast<const StoC::SkillRecharge *>(packet);
                 ids_to_check.push_back(p->agent_id);
-                message = std::format(L"SkillRecharge: agent={}, skill={}, skill_instance={}, recharge={}",
-                    p->agent_id,
-                    p->skill_id,
-                    p->skill_instance,
-                    p->recharge);
+                message = std::format(
+                    L"SkillRecharge: agent={}, skill={}, skill_instance={}, recharge={}",
+                    p->agent_id, p->skill_id, p->skill_instance, p->recharge
+                );
                 break;
             }
             case StoC::SkillRecharged::STATIC_HEADER:
             {
                 auto p = reinterpret_cast<const StoC::SkillRecharged *>(packet);
                 ids_to_check.push_back(p->agent_id);
-                message = std::format(L"SkillRecharged: agent={}, skill={}, skill_instance={}",
-                    p->agent_id,
-                    p->skill_id,
-                    p->skill_instance);
+                message = std::format(
+                    L"SkillRecharged: agent={}, skill={}, skill_instance={}",
+                    p->agent_id, p->skill_id, p->skill_instance
+                );
                 break;
             }
             case StoC::PlayEffect::STATIC_HEADER:
             {
                 auto p = reinterpret_cast<const StoC::PlayEffect *>(packet);
                 ids_to_check.push_back(p->agent_id);
-                message = std::format(L"PlayEffect: agent={}, effect_id={}, coords=({}, {}), plane={}, data5={}, data6={}",
-                    p->agent_id,
-                    p->effect_id,
-                    p->coords.x,
-                    p->coords.y,
-                    p->plane,
-                    p->data5,
-                    p->data6);
+                message = std::format(
+                    L"PlayEffect: agent={}, effect_id={}, coords=({}, {}), plane={}, data5={}, data6={}",
+                    p->agent_id, p->effect_id, p->coords.x, p->coords.y, p->plane, p->data5, p->data6
+                );
                 break;
             }
             case StoC::AgentState::STATIC_HEADER:
             {
                 auto p = reinterpret_cast<const StoC::AgentState *>(packet);
                 ids_to_check.push_back(p->agent_id);
-                message = std::format(L"AgentState: agent={}, state={}",
-                    p->agent_id,
-                    p->state);
+                message = std::format(
+                    L"AgentState: agent={}, state={}",
+                    p->agent_id, p->state
+                );
                 break;
             }
             case StoC::AgentAdd::STATIC_HEADER:
@@ -414,31 +403,32 @@ namespace HerosInsight::PacketReader
                 auto p = reinterpret_cast<const StoC::AgentAdd *>(packet);
                 // ids_to_check.push_back(p->agent_id);
                 auto name = Utils::GetAgentName(p->agent_id);
-                message = std::format(LR"(AgentAdd:
-                                    agent_id={},
-                                    agent_type = {},
-                                    type = {},
-                                    unk3 = {},
-                                    position = ({}, {}),
-                                    unk4 = {},
-                                    unk5 = ({}, {}),
-                                    unk6 = {},
-                                    speed = {},
-                                    unk7 = {},
-                                    unknown_bitwise_1 = {},
-                                    allegiance_bits = {},
-                                    unk8[0] = {},
-                                    unk8[1] = {},
-                                    unk8[2] = {},
-                                    unk8[3] = {},
-                                    unk8[4] = {},
-                                    unk9 = ({}, {}),
-                                    unk10 = ({}, {}),
-                                    unk11[0] = {},
-                                    unk11[1] = {},
-                                    unk12 = ({}, {}),
-                                    unk13 = {}
-                                    )",
+                message = std::format(
+                    LR"(AgentAdd:
+                    agent_id={},
+                    agent_type = {},
+                    type = {},
+                    unk3 = {},
+                    position = ({}, {}),
+                    unk4 = {},
+                    unk5 = ({}, {}),
+                    unk6 = {},
+                    speed = {},
+                    unk7 = {},
+                    unknown_bitwise_1 = {},
+                    allegiance_bits = {},
+                    unk8[0] = {},
+                    unk8[1] = {},
+                    unk8[2] = {},
+                    unk8[3] = {},
+                    unk8[4] = {},
+                    unk9 = ({}, {}),
+                    unk10 = ({}, {}),
+                    unk11[0] = {},
+                    unk11[1] = {},
+                    unk12 = ({}, {}),
+                    unk13 = {}
+                    )",
                     p->agent_id,
                     p->agent_type,
                     p->type,
@@ -456,18 +446,18 @@ namespace HerosInsight::PacketReader
                     p->unk10.x, p->unk10.y,
                     p->unk11[0], p->unk11[1],
                     p->unk12.x, p->unk12.y,
-                    p->unk13);
+                    p->unk13
+                );
                 break;
             }
             case StoC::InstanceLoadInfo::STATIC_HEADER:
             {
                 auto p = reinterpret_cast<const StoC::InstanceLoadInfo *>(packet);
                 ids_to_check.push_back(p->agent_id);
-                message = std::format(L"InstanceLoadInfo: agent={}, map_id={}, is_explorable={}, is_observer={}",
-                    p->agent_id,
-                    p->map_id,
-                    p->is_explorable,
-                    p->is_observer);
+                message = std::format(
+                    L"InstanceLoadInfo: agent={}, map_id={}, is_explorable={}, is_observer={}",
+                    p->agent_id, p->map_id, p->is_explorable, p->is_observer
+                );
                 break;
             }
             case StoC::AttributeUpdatePacket::STATIC_HEADER:
@@ -477,13 +467,10 @@ namespace HerosInsight::PacketReader
 
                 auto agent_name = Utils::GetAgentName(p->agent_id);
                 auto attribute_name = Utils::StrToWStr(Utils::GetAttributeString((GW::Constants::AttributeByte)p->attribute));
-                message = std::format(L"AgentAttribute: agent={}({}), attribute={}({}), old_value={}, new_value={}",
-                    p->agent_id,
-                    agent_name,
-                    (uint32_t)p->attribute,
-                    attribute_name,
-                    p->old_value,
-                    p->new_value);
+                message = std::format(
+                    L"AgentAttribute: agent={}({}), attribute={}({}), old_value={}, new_value={}",
+                    p->agent_id, agent_name, (uint32_t)p->attribute, attribute_name, p->old_value, p->new_value
+                );
                 break;
             }
             case StoC::UpdateTitle::STATIC_HEADER:
@@ -493,149 +480,145 @@ namespace HerosInsight::PacketReader
                 ids_to_check.push_back(agent_id);
 
                 auto title_name = Utils::StrToWStr(Utils::GetTitleString((GW::Constants::TitleID)p->title_id));
-                message = std::format(L"TitleUpdate: title_id={}({}), new_value={}",
-                    p->title_id,
-                    title_name,
-                    p->new_value);
+                message = std::format(
+                    L"TitleUpdate: title_id={}({}), new_value={}",
+                    p->title_id, title_name, p->new_value
+                );
                 break;
             }
             case StoC::ProjectileCreated::STATIC_HEADER:
             {
                 auto p = reinterpret_cast<const StoC::ProjectileCreated *>(packet);
                 ids_to_check.push_back(p->agent_id);
-                message = std::format(L"ProjectileCreated: agent={}, dest=({},{}), unk1={}, air_time={}, model_id={}, projectile_id={}, is_physical={}",
-                    p->agent_id,
-                    (int32_t)p->destination.x, (int32_t)p->destination.y,
-                    p->unk1,
-                    p->air_time,
-                    p->model_id,
-                    p->projectile_id,
-                    p->is_physical);
+                message = std::format(
+                    L"ProjectileCreated: agent={}, dest=({},{}), unk1={}, air_time={}, model_id={}, projectile_id={}, is_physical={}",
+                    p->agent_id, (int32_t)p->destination.x, (int32_t)p->destination.y, p->unk1, p->air_time, p->model_id, p->projectile_id, p->is_physical
+                );
                 break;
             }
             case StoC::ProjectileDestroyed::STATIC_HEADER:
             {
                 auto p = reinterpret_cast<const StoC::ProjectileDestroyed *>(packet);
-                message = std::format(L"ProjectileDestroyed: caster={}, projectile_id={}, damage_type={}",
-                    p->caster_id,
-                    p->projectile_id,
-                    (uint32_t)p->damage_type);
+                message = std::format(
+                    L"ProjectileDestroyed: caster={}, projectile_id={}, damage_type={}",
+                    p->caster_id, p->projectile_id, (uint32_t)p->damage_type
+                );
                 break;
             }
             case StoC::ActivationDone::STATIC_HEADER:
             {
                 auto p = reinterpret_cast<const StoC::ActivationDone *>(packet);
-                message = std::format(L"ActivationDone: agent={}, skill={}",
-                    p->agent_id,
-                    p->skill_id);
+                message = std::format(
+                    L"ActivationDone: agent={}, skill={}",
+                    p->agent_id, p->skill_id
+                );
                 break;
             }
             case StoC::Overcast::STATIC_HEADER:
             {
                 auto p = reinterpret_cast<const StoC::Overcast *>(packet);
-                message = std::format(L"Overcast: agent={}, overcast={}, loss_rate={}",
-                    p->agent_id,
-                    p->overcast_amount,
-                    p->overcast_loss_rate);
+                message = std::format(
+                    L"Overcast: agent={}, overcast={}, loss_rate={}",
+                    p->agent_id, p->overcast_amount, p->overcast_loss_rate
+                );
                 break;
             }
             case StoC::SpeechBubble::STATIC_HEADER:
             {
                 auto p = reinterpret_cast<const StoC::SpeechBubble *>(packet);
-                message = std::format(L"SpeechBubble: agent={}, message={}",
-                    p->agent_id,
-                    Utils::DecodeString(p->message));
+                message = std::format(
+                    L"SpeechBubble: agent={}, message={}",
+                    p->agent_id, Utils::DecodeString(p->message)
+                );
                 break;
             }
             case StoC::AdrenalineGain::STATIC_HEADER:
             {
                 auto p = reinterpret_cast<const StoC::AdrenalineGain *>(packet);
-                message = std::format(L"AdrenalineGain: agent_id={}, amount={}",
-                    p->agent_id,
-                    p->amount);
+                message = std::format(
+                    L"AdrenalineGain: agent_id={}, amount={}",
+                    p->agent_id, p->amount
+                );
                 break;
             }
             case StoC::MovementTick::STATIC_HEADER:
             {
                 auto p = reinterpret_cast<const StoC::MovementTick *>(packet);
-                message = std::format(L"MovementTick: unk1={}",
-                    p->unk1);
+                message = std::format(
+                    L"MovementTick: unk1={}",
+                    p->unk1
+                );
                 break;
             }
             case StoC::MoveToPoint::STATIC_HEADER:
             {
                 auto p = reinterpret_cast<const StoC::MoveToPoint *>(packet);
-                message = std::format(L"MoveToPoint: agent={}, destination=({}, {}), unk1={}, unk2={}, unk3={}",
-                    p->agent_id,
-                    p->destination.x, p->destination.y,
-                    p->unk1,
-                    p->unk2,
-                    p->unk3);
+                message = std::format(
+                    L"MoveToPoint: agent={}, destination=({}, {}), unk1={}, unk2={}, unk3={}",
+                    p->agent_id, p->destination.x, p->destination.y, p->unk1, p->unk2, p->unk3
+                );
                 break;
             }
             case StoC::UnkOnMapLoad::STATIC_HEADER:
             {
                 auto p = reinterpret_cast<const StoC::UnkOnMapLoad *>(packet);
-                message = std::format(L"UnkOnMapLoad: unk1={}, unk2={}, unk3={}, unk4={}",
-                    p->unk1,
-                    p->unk2,
-                    p->unk3,
-                    p->unk4);
+                message = std::format(
+                    L"UnkOnMapLoad: unk1={}, unk2={}, unk3={}, unk4={}",
+                    p->unk1, p->unk2, p->unk3, p->unk4
+                );
                 break;
             }
             case StoC::AgentName::STATIC_HEADER:
             {
                 auto p = reinterpret_cast<const StoC::AgentName *>(packet);
-                message = std::format(L"AgentName: agent={}, name={}",
-                    p->agent_id,
-                    Utils::DecodeString(p->name_enc));
+                message = std::format(
+                    L"AgentName: agent={}, name={}",
+                    p->agent_id, Utils::DecodeString(p->name_enc)
+                );
                 break;
             }
             case StoC::InitialEffect::STATIC_HEADER:
             {
                 auto p = reinterpret_cast<const StoC::InitialEffect *>(packet);
-                message = std::format(L"InitialEffects: agent_id={}, unk_bitwise={}, padding1={}, effect_id={}, duration={}",
-                    p->agent_id,
-                    p->unk_bitwise,
-                    p->padding1,
-                    p->effect_id,
-                    p->duration);
+                message = std::format(
+                    L"InitialEffects: agent_id={}, unk_bitwise={}, padding1={}, effect_id={}, duration={}",
+                    p->agent_id, p->unk_bitwise, p->padding1, p->effect_id, p->duration
+                );
                 break;
             }
             case StoC::AgentUnk2::STATIC_HEADER:
             {
                 auto p = reinterpret_cast<const StoC::AgentUnk2 *>(packet);
-                message = std::format(L"AgentUnk2: agent={}, unk1={}, unk2={}",
-                    p->agent_id,
-                    p->unk1,
-                    p->unk2);
+                message = std::format(
+                    L"AgentUnk2: agent={}, unk1={}, unk2={}",
+                    p->agent_id, p->unk1, p->unk2
+                );
                 break;
             }
             case StoC::AddExternalBond::STATIC_HEADER:
             {
                 auto p = reinterpret_cast<const StoC::AddExternalBond *>(packet);
-                message = std::format(L"AddExternalBond: caster_id={}, receiver_id={}, skill_id={}, effect_type={}, effect_id={}",
-                    p->caster_id,
-                    p->receiver_id,
-                    p->skill_id,
-                    p->effect_type,
-                    p->effect_id);
+                message = std::format(
+                    L"AddExternalBond: caster_id={}, receiver_id={}, skill_id={}, effect_type={}, effect_id={}",
+                    p->caster_id, p->receiver_id, p->skill_id, p->effect_type, p->effect_id
+                );
                 break;
             }
             case StoC::CreateNPC::STATIC_HEADER:
             {
                 auto p = reinterpret_cast<const StoC::CreateNPC *>(packet);
-                message = std::format(L"CreateNPC: agent_id={}, allegiance_bits={}, agent_type={}, effect_id={}, lifetime={}",
-                    p->agent_id,
-                    p->allegiance_bits,
-                    p->agent_type,
-                    p->effect_id,
-                    p->lifetime);
+                message = std::format(
+                    L"CreateNPC: agent_id={}, allegiance_bits={}, agent_type={}, effect_id={}, lifetime={}",
+                    p->agent_id, p->allegiance_bits, p->agent_type, p->effect_id, p->lifetime
+                );
                 break;
             }
             default:
             {
-                message = std::format(L"Unknown packet: header={}", packet->header);
+                message = std::format(
+                    L"Unknown packet: header={}",
+                    packet->header
+                );
                 break;
             }
         }
@@ -917,7 +900,7 @@ namespace HerosInsight::PacketReader
                 if (cast_data.finished_frame == current_frame &&
                     cast_data.skill_id == skill_id &&
                     (cast_data.caster == target_id ||
-                        cast_data.target_id == target_id))
+                     cast_data.target_id == target_id))
                 {
                     caster_id = cast_data.caster;
                     break;
@@ -956,7 +939,7 @@ namespace HerosInsight::PacketReader
         const auto effect_id = packet->effect_id;
 
         EffectTracking::RemoveTrackers(agent_id, [&](EffectTracking::EffectTracker &effect)
-            { return effect.effect_id == effect_id; });
+                                       { return effect.effect_id == effect_id; });
 
         // if (effect_id > 0)
         // {
@@ -1064,7 +1047,7 @@ namespace HerosInsight::PacketReader
         auto id = AttributeOrTitle((GW::Constants::TitleID)packet->title_id);
         auto new_value = packet->new_value;
 
-        FixedArray<uint32_t, 8> agent_ids_salloc;
+        Buffer<uint32_t, 8> agent_ids_salloc;
         auto agent_ids = agent_ids_salloc.ref();
         Utils::GetControllableAgentsOfPlayer(agent_ids);
         for (auto agent_id : agent_ids)

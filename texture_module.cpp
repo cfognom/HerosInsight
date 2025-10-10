@@ -139,7 +139,8 @@ namespace TextureModule
 
     typedef void(__cdecl *Depalletize_pt)(
         gw_image_bits destBits, uint8_t *destPalette, GR_FORMAT destFormat, int *destMipWidths, gw_image_bits sourceBits, uint8_t *sourcePallete, GR_FORMAT sourceFormat, int *sourceMipWidths, Vec2i *sourceDims, uint32_t sourceLevels,
-        uint32_t unk1_0, int *unk2_0);
+        uint32_t unk1_0, int *unk2_0
+    );
     Depalletize_pt Depalletize_func;
 
     // typedef void(__cdecl *ConvertImage_pt) (uint8_t *destBytes, int *destPallete, uint32_t destFormat, Vec2i *destDims,
@@ -378,7 +379,7 @@ namespace TextureModule
         auto gwimg_ptr = new GwImg{file_id};
         textures_by_file_id[file_id] = gwimg_ptr;
         EnqueueDxTask([gwimg_ptr](IDirect3DDevice9 *device)
-            { gwimg_ptr->m_tex = CreateTexture(device, gwimg_ptr->m_file_id, gwimg_ptr->m_dims); });
+                      { gwimg_ptr->m_tex = CreateTexture(device, gwimg_ptr->m_file_id, gwimg_ptr->m_dims); });
         return &gwimg_ptr->m_tex;
     }
     void Terminate()
@@ -469,7 +470,8 @@ namespace TextureModule
                 0,                 // ColorKey
                 nullptr,           // pSrcInfo
                 nullptr,           // pPalette
-                &img_ptr->m_tex);
+                &img_ptr->m_tex
+            );
             assert(result == D3D_OK);
         };
 
@@ -497,7 +499,7 @@ namespace TextureModule
         auto skill_type_icons = TextureModule::LoadTextureFromFileId(KnownFileIDs::UI_SkillLeadOffhandEncDualHexWepSpIcons);
 
         if (!(skill_icon && *skill_icon &&
-                skill_overlays && *skill_overlays))
+              skill_overlays && *skill_overlays))
             return false;
 
         uint32_t overlay_index = 0;
@@ -551,7 +553,8 @@ namespace TextureModule
                         g_pd3dDevice->SetRenderState(D3DRS_SRCBLEND, D3DBLEND_DESTCOLOR);
                         g_pd3dDevice->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_ONE);
                     },
-                    nullptr);
+                    nullptr
+                );
                 draw_list->AddImage(*skill_hover_effect, min, max, ImVec2(0, 0), ImVec2(1, 1), ImColor(0.6f, 0.6f, 0.6f, 1.f));
                 draw_list->AddCallback(
                     [](const ImDrawList *parent_list, const ImDrawCmd *cmd)
@@ -559,7 +562,8 @@ namespace TextureModule
                         g_pd3dDevice->SetRenderState(D3DRS_SRCBLEND, D3DBLEND_SRCALPHA);
                         g_pd3dDevice->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
                     },
-                    nullptr);
+                    nullptr
+                );
             }
         }
 
@@ -709,7 +713,7 @@ namespace TextureModule
         auto number_size_scaled = number_size_actual * scale;
         auto number_stride_scaled = number_stride * scale;
 
-        HerosInsight::FixedArray<uint8_t, 16> digits_salloc;
+        HerosInsight::Buffer<uint8_t, 16> digits_salloc;
         auto digits = digits_salloc.ref();
         auto rem = std::abs(number);
         while (rem)

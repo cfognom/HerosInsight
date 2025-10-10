@@ -1,7 +1,7 @@
 #pragma once
 
 #include <attribute_or_title.h>
-#include <fixed_array.h>
+#include <buffer.h>
 
 namespace HerosInsight
 {
@@ -13,7 +13,7 @@ namespace HerosInsight
 
     struct AttributeStore
     {
-        FixedArray<AttributeData, 12> attributes = {};
+        Buffer<AttributeData, 12> attributes = {};
 
         AttributeStore() = default;
         AttributeStore(std::span<GW::Attribute> attrs);

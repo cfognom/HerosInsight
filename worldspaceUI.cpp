@@ -173,7 +173,7 @@ namespace HerosInsight::WorldSpaceUI
         }
         else if (healing <= 0 &&
                  (skill.type == GW::Constants::SkillType::Hex ||
-                     skill.type == GW::Constants::SkillType::Condition))
+                  skill.type == GW::Constants::SkillType::Condition))
         {
             entry.pos_type = PositionType::AgentTopLeft;
         }
@@ -486,7 +486,8 @@ namespace HerosInsight::WorldSpaceUI
             scale *= std::clamp(
                 Utils::Remap(0.f, 1.f, animation_min_scale, animation_max_scale, animation_progress),
                 animation_min_scale,
-                animation_max_scale);
+                animation_max_scale
+            );
 
             auto screen_pos = screen_base_pos;
             if (it->pos_type == PositionType::AgentTopLeft)
@@ -524,7 +525,7 @@ namespace HerosInsight::WorldSpaceUI
                 bool skip = it->IsFinished() && now_or_ended_timestamp > it->GetEndTimestamp() - 300;
                 if (!skip)
                 {
-                    FixedArray<char, 16> time_str_salloc;
+                    Buffer<char, 16> time_str_salloc;
                     auto time_str = time_str_salloc.ref();
                     if (rem_sec_ceil > 999)
                         time_str.PushFormat("999+");
@@ -533,19 +534,23 @@ namespace HerosInsight::WorldSpaceUI
                     const auto rem_sec_pos = icon_min + ImVec2(2, 2);
                     const auto font_size = scale * Constants::Fonts::skill_thick_font_12->FontSize;
 
-                    bg_draw_list->AddText(Constants::Fonts::skill_thick_font_12,
+                    bg_draw_list->AddText(
+                        Constants::Fonts::skill_thick_font_12,
                         font_size,
                         rem_sec_pos + ImVec2(1, 1),
                         ImGui::GetColorU32(IM_COL32_BLACK),
                         time_str.data(),
-                        time_str.data() + time_str.size());
+                        time_str.data() + time_str.size()
+                    );
 
-                    bg_draw_list->AddText(Constants::Fonts::skill_thick_font_12,
+                    bg_draw_list->AddText(
+                        Constants::Fonts::skill_thick_font_12,
                         font_size,
                         rem_sec_pos,
                         ImGui::GetColorU32(IM_COL32_WHITE),
                         time_str.data(),
-                        time_str.data() + time_str.size());
+                        time_str.data() + time_str.size()
+                    );
                 }
             }
             // Draw progressbar

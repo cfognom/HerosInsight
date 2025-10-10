@@ -161,10 +161,10 @@ namespace HerosInsight::RichText
         }
 
         size_t result_len = 0;
-        FixedArrayRef<TextSegment> result_builder{result, result_len};
-        FixedArray<ImU32, 32> color_buffer;
+        BufferWriter<TextSegment> result_builder{result, result_len};
+        Buffer<ImU32, 32> color_buffer;
         auto color_stack = color_buffer.ref();
-        FixedArray<uint32_t, 32> tooltip_buffer;
+        Buffer<uint32_t, 32> tooltip_buffer;
         auto tooltip_stack = tooltip_buffer.ref();
 
         bool is_currently_highlighted = false;

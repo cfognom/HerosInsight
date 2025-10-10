@@ -932,7 +932,7 @@ namespace HerosInsight::Utils
 
     uint32_t GetHCTChance(GW::AgentLiving &agent, GW::Constants::AttributeByte attribute)
     {
-        FixedArray<uint32_t, 2> hct_sources_salloc;
+        Buffer<uint32_t, 2> hct_sources_salloc;
         auto hct_sources = hct_sources_salloc.ref();
 
         for (const auto item_id : Utils::GetAgentWeaponAndOffhandItemIds(agent))
@@ -1314,7 +1314,7 @@ namespace HerosInsight::Utils
         if (csd == nullptr)
             return std::nullopt;
 
-        FixedArray<ParsedSkillData, 4> reg_salloc, deg_salloc;
+        Buffer<ParsedSkillData, 4> reg_salloc, deg_salloc;
         auto regs = reg_salloc.ref();
         auto degs = deg_salloc.ref();
 
@@ -1746,23 +1746,6 @@ namespace HerosInsight::Utils
         return old_state;
     }
 
-    template <typename T>
-    struct Buffer
-    {
-        T *ptr;
-        size_t len;
-        size_t cap;
-
-        bool Push(T element)
-        {
-            if (len == cap)
-                return false;
-
-            ptr[len++] = element;
-            return true;
-        }
-    };
-
     float DistanceSqrd(GW::Vec3f a, GW::Vec3f b)
     {
         const auto dx = a.x - b.x;
@@ -1823,15 +1806,14 @@ namespace HerosInsight::Utils
         return true;
     }
 
-    float CircleCast(GW::Vec2f start, GW::Vec2f direction, float radius, Buffer<GW::Vec2f> positions, float max = std::numeric_limits<float>::max())
+    float CircleCast(GW::Vec2f start, GW::Vec2f direction, float radius, std::span<GW::Vec2f> positions, float max = std::numeric_limits<float>::max())
     {
         const auto perp = Cross(1.f, direction);
         const auto radius_sqrd = radius * radius;
 
         float closest_hit_distance = max;
-        for (size_t i = 0; i < positions.len; i++)
+        for (auto position : positions)
         {
-            const auto position = positions.ptr[i];
             const auto position_local = position - start;
 
             if (Dot(position_local, position_local) <= radius_sqrd)
@@ -1868,8 +1850,10 @@ namespace HerosInsight::Utils
         return agent->allegiance == GW::Constants::Allegiance::Enemy;
     }
 
-    void CollectEnemyPositions(Buffer<GW::Vec2f> *positions)
+    void CollectEnemyPositions(std::span<GW::Vec2f> &positions)
     {
+        size_t len = 0;
+        BufferWriter<GW::Vec2f> positions_writer(positions, len);
         const auto *aa = GW::Agents::GetAgentArray();
         if (aa == nullptr)
             return;
@@ -1884,18 +1868,18 @@ namespace HerosInsight::Utils
 
             if (IsFoe(living_agent))
             {
-                if (!positions->Push({living_agent->pos.x, living_agent->pos.y}))
+                if (!positions_writer.try_push({living_agent->pos.x, living_agent->pos.y}))
                     break;
             }
         }
+        positions = positions_writer;
     }
 
-    bool CircleOverlap(GW::Vec2f center, float radius, Buffer<GW::Vec2f> positions)
+    bool CircleOverlap(GW::Vec2f center, float radius, std::span<GW::Vec2f> positions)
     {
         const auto radius_sqrd = radius * radius;
-        for (size_t i = 0; i < positions.len; i++)
+        for (auto position : positions)
         {
-            const auto position = positions.ptr[i];
             const auto position_local = position - center;
             const auto distance_sqrd = Dot(position_local, position_local);
             if (distance_sqrd <= radius_sqrd)
@@ -1914,11 +1898,11 @@ namespace HerosInsight::Utils
         if (hero_agent == nullptr)
             return 0.f;
 
-        GW::Vec2f positions[64];
-        Buffer<GW::Vec2f> positions_buffer = {positions, 0, 64};
-        CollectEnemyPositions(&positions_buffer);
+        GW::Vec2f positions_salloc[64];
+        std::span<GW::Vec2f> positions = positions_salloc;
+        CollectEnemyPositions(positions);
 
-        if (positions_buffer.len > 0)
+        if (!positions.empty())
         {
             const auto aggro_range = GW::Constants::Range::Earshot;
 
@@ -1930,13 +1914,13 @@ namespace HerosInsight::Utils
             {
                 const auto hero_speed = std::sqrt(hero_speed_sqrd);
                 auto direction = hero_vel / hero_speed;
-                const auto closest_hit_distance = CircleCast(hero_position, direction, aggro_range, positions_buffer, 5000 - aggro_range);
+                const auto closest_hit_distance = CircleCast(hero_position, direction, aggro_range, positions, 5000 - aggro_range);
                 const auto seconds = closest_hit_distance / hero_speed;
                 return seconds;
             }
             else
             {
-                if (CircleOverlap(hero_position, aggro_range, positions_buffer))
+                if (CircleOverlap(hero_position, aggro_range, positions))
                     return 0.f;
             }
         }
@@ -3164,7 +3148,7 @@ namespace HerosInsight::Utils
 
     bool IsControllableAgentOfPlayer(uint32_t agent_id, uint32_t player_number)
     {
-        FixedArray<uint32_t, 8> player_agents_salloc;
+        Buffer<uint32_t, 8> player_agents_salloc;
         auto player_agents = player_agents_salloc.ref();
 
         GetControllableAgentsOfPlayer(player_agents, player_number);
@@ -3178,7 +3162,7 @@ namespace HerosInsight::Utils
         return false;
     }
 
-    void GetControllableAgentsOfPlayer(FixedArrayRef<uint32_t> out, uint32_t player_number)
+    void GetControllableAgentsOfPlayer(BufferWriter<uint32_t> out, uint32_t player_number)
     {
         if (!player_number)
             player_number = GW::PlayerMgr::GetPlayerNumber();
@@ -3285,7 +3269,7 @@ namespace HerosInsight::Utils
     }
 
     // Splits on space, ignores leading and trailing spaces
-    void Split(std::string_view str, FixedArrayRef<std::string_view> out)
+    void Split(std::string_view str, BufferWriter<std::string_view> out)
     {
         uint32_t i = 0;
         while (i < str.size())
@@ -3303,7 +3287,7 @@ namespace HerosInsight::Utils
         }
     }
 
-    void CamelSplit(std::string_view str, FixedArrayRef<std::string_view> out)
+    void CamelSplit(std::string_view str, BufferWriter<std::string_view> out)
     {
         uint32_t i = 0;
         while (i < str.size() && str[i] == ' ')
@@ -3612,7 +3596,7 @@ namespace HerosInsight::Utils
 
     void DebugFrame(GW::UI::Frame &frame, size_t depth)
     {
-        FixedArray<wchar_t, 256> buffer_salloc;
+        Buffer<wchar_t, 256> buffer_salloc;
         auto buffer = buffer_salloc.ref();
         for (size_t i = 0; i < depth; ++i)
         {

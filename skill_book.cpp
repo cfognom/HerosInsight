@@ -1412,9 +1412,9 @@ namespace HerosInsight::SkillBook
 
             ImGui::Spacing();
 
-            FixedArray<char, 128> char_buffer_alloc;
-            FixedArray<Utils::ColorChange, 8> col_buffer_alloc;
-            FixedArray<uint32_t, 8> boundaries_alloc;
+            Buffer<char, 128> char_buffer_alloc;
+            Buffer<Utils::ColorChange, 8> col_buffer_alloc;
+            Buffer<uint32_t, 8> boundaries_alloc;
             auto char_buffer = char_buffer_alloc.ref();
             auto col_buffer = col_buffer_alloc.ref();
             auto boundaries = boundaries_alloc.ref();
@@ -1770,7 +1770,7 @@ namespace HerosInsight::SkillBook
         void MakeBookName(std::span<char> buf, size_t book_index)
         {
             size_t name_len = 0;
-            FixedArrayRef<char> name_writer{buf, name_len};
+            BufferWriter<char> name_writer{buf, name_len};
             name_writer.AppendRange(std::string_view("Skill Book (Ctrl + K)"));
             if (book_index > 0)
             {
@@ -2330,7 +2330,7 @@ namespace HerosInsight::SkillBook
         // clang-format on
     }
 
-    void StitchSkillProperty(FixedArrayRef<char> buffer, std::string_view name, std::string_view value)
+    void StitchSkillProperty(BufferWriter<char> buffer, std::string_view name, std::string_view value)
     {
         constexpr std::string_view join(": ");
         auto size = name.size() + join.size() + value.size();

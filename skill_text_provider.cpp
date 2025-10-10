@@ -644,7 +644,7 @@ From GWCA/TB++ discord
     void SkillTextProvider::SkillDescriptionToEncStr(const GW::Skill &skill, bool concise, int32_t attr_lvl, std::span<wchar_t> &dst)
     {
         size_t written_len = 0;
-        FixedArrayRef<wchar_t> buffer{dst, written_len};
+        BufferWriter<wchar_t> buffer{dst, written_len};
         auto str_id = concise ? skill.concise : skill.description;
         buffer.AppendWith(
             [=](auto &dst)

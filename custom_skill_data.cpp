@@ -87,10 +87,10 @@
 #include <async_lazy.h>
 #include <attribute_or_title.h>
 #include <attribute_store.h>
+#include <buffer.h>
 #include <custom_agent_data.h>
 #include <debug_display.h>
 #include <effect_tracking.h>
-#include <fixed_array.h>
 #include <skill_book.h>
 #include <skill_text_provider.h>
 #include <utils.h>
@@ -1875,7 +1875,7 @@ namespace HerosInsight
 
                 if (!IsMatch(just_before, DescToken::Max))
                 {
-                    FixedArray<ParsedSkillData::Type, 8> salloc;
+                    Buffer<ParsedSkillData::Type, 8> salloc;
                     auto buffer = salloc.ref();
                     for (int32_t i = just_before; i >= 0; i--)
                     {
@@ -2488,7 +2488,7 @@ namespace HerosInsight
                 return;
         }
 
-        FixedArray<ParsedSkillData, 8> conditions_salloc, end_conditions_salloc, removals_salloc, end_removals_salloc;
+        Buffer<ParsedSkillData, 8> conditions_salloc, end_conditions_salloc, removals_salloc, end_removals_salloc;
         auto conditions = conditions_salloc.ref();
         auto end_conditions = end_conditions_salloc.ref();
         auto removals = removals_salloc.ref();
@@ -3347,7 +3347,7 @@ namespace HerosInsight
         return {0, 0};
     }
 
-    void CustomSkillData::GetParsedSkillParams(ParsedSkillData::Type type, FixedArrayRef<ParsedSkillData> result) const
+    void CustomSkillData::GetParsedSkillParams(ParsedSkillData::Type type, BufferWriter<ParsedSkillData> result) const
     {
         for (const auto &pd : this->parsed_data)
         {
@@ -3356,7 +3356,7 @@ namespace HerosInsight
         }
     }
 
-    void GetConditionsFromSpan(std::span<const ParsedSkillData> parsed_data, GW::Constants::SkillID source_skill_id, uint8_t attr_lvl, FixedArrayRef<SkillEffect> result)
+    void GetConditionsFromSpan(std::span<const ParsedSkillData> parsed_data, GW::Constants::SkillID source_skill_id, uint8_t attr_lvl, BufferWriter<SkillEffect> result)
     {
         bool success = true;
         for (const auto &pd : parsed_data)
@@ -3369,7 +3369,7 @@ namespace HerosInsight
         SOFT_ASSERT(success, L"Failed to push condition");
     }
 
-    void CustomSkillData::GetInitConditions(uint8_t attr_lvl, FixedArrayRef<SkillEffect> result) const
+    void CustomSkillData::GetInitConditions(uint8_t attr_lvl, BufferWriter<SkillEffect> result) const
     {
         if (!tags.ConditionSource)
             return;
@@ -3377,7 +3377,7 @@ namespace HerosInsight
         GetConditionsFromSpan(GetInitParsedData(), skill_id, attr_lvl, result);
     }
 
-    void CustomSkillData::GetEndConditions(uint8_t attr_lvl, FixedArrayRef<SkillEffect> result) const
+    void CustomSkillData::GetEndConditions(uint8_t attr_lvl, BufferWriter<SkillEffect> result) const
     {
         if (!tags.ConditionSource)
             return;
@@ -3462,7 +3462,7 @@ namespace HerosInsight
             }
         }
 
-        FixedArray<SkillEffect, 18> skill_effects_salloc;
+        Buffer<SkillEffect, 18> skill_effects_salloc;
         auto skill_effects = skill_effects_salloc.ref();
 
         // custom_sd.GetOnActivationEffects(caster, target_id, skill_effects);
@@ -3633,7 +3633,7 @@ namespace HerosInsight
     void CustomSkillData::GetRanges(std::span<Utils::Range> &out) const
     {
         size_t len = 0;
-        FixedArrayRef<Utils::Range> builder{out, len};
+        BufferWriter<Utils::Range> builder{out, len};
         if (Utils::IsRangeValue(skill->aoe_range))
             builder.push_back((Utils::Range)skill->aoe_range);
         if (Utils::IsRangeValue(skill->const_effect))
@@ -3681,7 +3681,7 @@ namespace HerosInsight
         return 0;
     }
 
-    FixedArray<std::string, 128> skill_type_strings;
+    Buffer<std::string, 128> skill_type_strings;
     std::string_view CustomSkillData::GetTypeString()
     {
         if (type_str.data() != nullptr)
@@ -3990,7 +3990,7 @@ namespace HerosInsight
     {
         std::wstring out = L"StaticSkillEffect: ";
 
-        FixedArray<char, 64> salloc;
+        Buffer<char, 64> salloc;
         auto buffer = salloc.ref();
         buffer.AppendWith([=](auto &dst)
                           { duration_or_count.Print(-1, dst); });

@@ -129,11 +129,13 @@ namespace HerosInsight::EffectInitiator
             {
                 for (auto &packet : postponed)
                 {
-                    EffectTracking::RemoveTrackers(packet.agent_id,
+                    EffectTracking::RemoveTrackers(
+                        packet.agent_id,
                         [&](EffectTracking::EffectTracker &effect)
                         {
                             return effect.effect_id == packet.effect_id;
-                        });
+                        }
+                    );
                 }
                 postponed.clear();
             }
@@ -145,7 +147,8 @@ namespace HerosInsight::EffectInitiator
     void GetSpellEffects(
         uint32_t caster_id, uint32_t target_id,
         GW::Constants::SkillID skill_id, uint8_t attr_lvl,
-        FixedArrayRef<StaticSkillEffect> result)
+        BufferWriter<StaticSkillEffect> result
+    )
     {
         auto caster_ptr = Utils::GetAgentLivingByID(caster_id);
         // auto target_ptr = Utils::GetAgentLivingByID(target_id);
@@ -225,9 +228,11 @@ namespace HerosInsight::EffectInitiator
     TrackedCoroutine OnSkillActivated(uint32_t caster_id, uint32_t target_id, GW::Constants::SkillID skill_id)
     {
 #ifdef DEBUG_ACTIVATIONS
-        Utils::FormatToChat(DEBUG_ACTIVATIONS_COLOR,
+        Utils::FormatToChat(
+            DEBUG_ACTIVATIONS_COLOR,
             L"SkillActivated: skill_id={}, caster_id={}, target_id={}",
-            (uint32_t)skill_id, caster_id, target_id);
+            (uint32_t)skill_id, caster_id, target_id
+        );
 #endif
         auto &cskill = CustomSkillDataModule::GetCustomSkillData(skill_id);
         auto &caster = CustomAgentDataModule::GetCustomAgentData(caster_id);
@@ -253,11 +258,13 @@ namespace HerosInsight::EffectInitiator
                 case GW::Constants::SkillID::Barrage:
                 case GW::Constants::SkillID::Volley:
                 {
-                    EffectTracking::RemoveTrackers(caster_id,
+                    EffectTracking::RemoveTrackers(
+                        caster_id,
                         [](EffectTracking::EffectTracker &effect)
                         {
                             return GW::SkillbarMgr::GetSkillConstantData(effect.skill_id)->type == GW::Constants::SkillType::Preparation;
-                        });
+                        }
+                    );
                     break;
                 }
             }
@@ -267,13 +274,14 @@ namespace HerosInsight::EffectInitiator
 
         if (has_init_effects)
         {
-            FixedArray<StaticSkillEffect, 18> effects_salloc;
+            Buffer<StaticSkillEffect, 18> effects_salloc;
             auto effects = effects_salloc.ref();
             GetSpellEffects(caster_id, target_id, skill_id, attr_lvl, effects);
 
             FixedSet<uint32_t, (size_t)(16 / 0.75)> handled_agents;
             {
-                EffectClaimingScope scope(caster_id,
+                EffectClaimingScope scope(
+                    caster_id,
                     [&](const StoC::AddEffect &packet)
                     {
                         if (packet.skill_id == skill_id)
@@ -284,7 +292,8 @@ namespace HerosInsight::EffectInitiator
                         }
 
                         handled_agents.insert(packet.agent_id);
-                    });
+                    }
+                );
                 if (target_id == 0) // Some targeted instant skills don't properly disclose their target, so we attempt to deduce it
                 {
                     PacketListenerScope listener(
@@ -292,7 +301,8 @@ namespace HerosInsight::EffectInitiator
                         {
                             if (packet.caster == caster_id)
                                 target_id = packet.target;
-                        });
+                        }
+                    );
                 }
                 co_await AfterEffectsAwaiter(caster_id);
             }
@@ -302,11 +312,15 @@ namespace HerosInsight::EffectInitiator
 
             for (auto &effect : effects)
             {
-                effect.Apply(caster_id, target_id, attr_lvl,
+                effect.Apply(
+                    caster_id,
+                    target_id,
+                    attr_lvl,
                     [&](GW::AgentLiving &agent)
                     {
                         return !handled_agents.has(agent.agent_id);
-                    });
+                    }
+                );
             }
         }
 
@@ -330,7 +344,8 @@ namespace HerosInsight::EffectInitiator
                     skill_id,
                     effect_id,
                     caster_id,
-                    lifetime);
+                    lifetime
+                );
                 break;
             }
 
@@ -344,7 +359,8 @@ namespace HerosInsight::EffectInitiator
                     skill_id,
                     0,
                     caster_id,
-                    duration);
+                    duration
+                );
                 break;
             }
         }
@@ -355,17 +371,21 @@ namespace HerosInsight::EffectInitiator
         if (attack.is_projectile)
         {
 #ifdef DEBUG_ACTIVATIONS
-            Utils::FormatToChat(DEBUG_ACTIVATIONS_COLOR,
+            Utils::FormatToChat(
+                DEBUG_ACTIVATIONS_COLOR,
                 L"ProjectileHit: skill_id={}, attacker_id={}, victim_id={}",
-                (uint32_t)attack.skill_id, attacker_id, victim_id);
+                (uint32_t)attack.skill_id, attacker_id, victim_id
+            );
 #endif
         }
         else // is_melee
         {
 #ifdef DEBUG_ACTIVATIONS
-            Utils::FormatToChat(DEBUG_ACTIVATIONS_COLOR,
+            Utils::FormatToChat(
+                DEBUG_ACTIVATIONS_COLOR,
                 L"MeleeHit: skill_id={}, attacker_id={}, victim_id={}",
-                (uint32_t)attack.skill_id, attacker_id, victim_id);
+                (uint32_t)attack.skill_id, attacker_id, victim_id
+            );
 #endif
         }
 
@@ -380,11 +400,13 @@ namespace HerosInsight::EffectInitiator
             case GW::Constants::SkillID::Wild_Strike_PvP:
             case GW::Constants::SkillID::Forceful_Blow:
             case GW::Constants::SkillID::Whirling_Axe:
-                EffectTracking::RemoveTrackers(victim_id,
+                EffectTracking::RemoveTrackers(
+                    victim_id,
                     [](EffectTracking::EffectTracker &effect)
                     {
                         return GW::SkillbarMgr::GetSkillConstantData(effect.skill_id)->type == GW::Constants::SkillType::Stance;
-                    });
+                    }
+                );
         }
     }
 
@@ -393,9 +415,11 @@ namespace HerosInsight::EffectInitiator
         if (attack.is_projectile)
         {
 #ifdef DEBUG_ACTIVATIONS
-            Utils::FormatToChat(DEBUG_ACTIVATIONS_COLOR,
+            Utils::FormatToChat(
+                DEBUG_ACTIVATIONS_COLOR,
                 L"ProjectileBlock: attacker_id={}, defender_id={}",
-                attacker_id, defender_id);
+                attacker_id, defender_id
+            );
 #endif
             switch (attack.prep_skill_id)
             {
@@ -411,9 +435,11 @@ namespace HerosInsight::EffectInitiator
         else // is_melee
         {
 #ifdef DEBUG_ACTIVATIONS
-            Utils::FormatToChat(DEBUG_ACTIVATIONS_COLOR,
+            Utils::FormatToChat(
+                DEBUG_ACTIVATIONS_COLOR,
                 L"MeleeBlock: attacker_id={}, defender_id={}",
-                attacker_id, defender_id);
+                attacker_id, defender_id
+            );
 #endif
             // Swift_Chop
             auto condition = GW::Constants::SkillID::Deep_Wound;
@@ -446,11 +472,15 @@ namespace HerosInsight::EffectInitiator
                         {
                             auto base_duration = Utils::LinearAttributeScale(5, 15, defender_effect.attribute_level);
                             auto bleeding_effect = SkillEffect{GW::Constants::SkillID::Bleeding, GW::Constants::SkillID::Deflect_Arrows, base_duration};
-                            Utils::ForEnemiesInCircle(defender->pos, (float)Utils::Range::Adjacent, defender->allegiance,
+                            Utils::ForEnemiesInCircle(
+                                defender->pos,
+                                (float)Utils::Range::Adjacent,
+                                defender->allegiance,
                                 [&](GW::AgentLiving &agent)
                                 {
                                     EffectTracking::ApplySkillEffect(agent.agent_id, defender_id, bleeding_effect);
-                                });
+                                }
+                            );
                         }
                     }
                     break;
@@ -462,14 +492,18 @@ namespace HerosInsight::EffectInitiator
                     {
                         auto base_duration = Utils::LinearAttributeScale(5, 20, defender_effect.attribute_level);
                         auto weakness_effect = SkillEffect{GW::Constants::SkillID::Weakness, GW::Constants::SkillID::Shield_of_Force, base_duration};
-                        Utils::ForEnemiesInCircle(defender->pos, (float)Utils::Range::Adjacent, defender->allegiance,
+                        Utils::ForEnemiesInCircle(
+                            defender->pos,
+                            (float)Utils::Range::Adjacent,
+                            defender->allegiance,
                             [&](GW::AgentLiving &enemy)
                             {
                                 if (enemy.GetIsAttacking())
                                 {
                                     EffectTracking::ApplySkillEffect(enemy.agent_id, defender_id, weakness_effect);
                                 }
-                            });
+                            }
+                        );
                     }
                     spent_charges.push_back(defender_effect.skill_id);
                     break;
@@ -514,13 +548,13 @@ namespace HerosInsight::EffectInitiator
         }
     }
 
-    void CollectAttackEffects(uint32_t attacker_id, GW::Constants::SkillID skill_id, bool is_melee, FixedArrayRef<SkillEffect> out)
+    void CollectAttackEffects(uint32_t attacker_id, GW::Constants::SkillID skill_id, bool is_melee, BufferWriter<SkillEffect> out)
     {
         auto attacker_effects = EffectTracking::GetTrackers(attacker_id);
         std::vector<GW::Constants::SkillID> spent_charges;
         for (const auto &attacker_effect : attacker_effects)
         {
-            FixedArray<SkillEffect, 8> conditions_salloc;
+            Buffer<SkillEffect, 8> conditions_salloc;
             auto conditions = conditions_salloc.ref();
 
             auto effect_skill_id = attacker_effect.skill_id;
@@ -627,7 +661,7 @@ namespace HerosInsight::EffectInitiator
 
     TrackedCoroutine TrackHit(uint32_t attacker_id, Attack attack)
     {
-        FixedArray<SkillEffect, 18> effects_salloc;
+        Buffer<SkillEffect, 18> effects_salloc;
         auto effects = effects_salloc.ref();
         CollectAttackEffects(attacker_id, attack.skill_id, attack.IsMelee(), effects);
 
@@ -650,7 +684,8 @@ namespace HerosInsight::EffectInitiator
                         }
                         awaiter.stop();
                     }
-                });
+                }
+            );
             PacketListenerScope hit_listener(
                 [&](const StoC::GenericModifier &packet)
                 {
@@ -666,7 +701,8 @@ namespace HerosInsight::EffectInitiator
                             OnAttackHit(attacker_id, packet.target_id, attack, is_crit, effects);
                             awaiter.stop();
                     }
-                });
+                }
+            );
             co_await awaiter;
         }
 
@@ -676,9 +712,11 @@ namespace HerosInsight::EffectInitiator
     TrackedCoroutine TrackProjectile(uint32_t projectile_id, uint32_t caster_id, float air_time, Attack proj)
     {
 #ifdef DEBUG_ACTIVATIONS
-        Utils::FormatToChat(DEBUG_ACTIVATIONS_COLOR,
+        Utils::FormatToChat(
+            DEBUG_ACTIVATIONS_COLOR,
             L"ProjectileCreated: skill_id={}, caster_id={}",
-            (uint32_t)proj.skill_id, caster_id);
+            (uint32_t)proj.skill_id, caster_id
+        );
 #endif
 
         bool timed_out = true;
@@ -693,7 +731,8 @@ namespace HerosInsight::EffectInitiator
                     TrackHit(caster_id, proj);
                     timed_out = false;
                     awaiter.stop();
-                });
+                }
+            );
             co_await awaiter;
         }
 
@@ -725,7 +764,8 @@ namespace HerosInsight::EffectInitiator
                         case StoC::GenericValueID::attack_stopped:
                             awaiter.stop();
                     }
-                });
+                }
+            );
             PacketListenerScope ranged_listener(
                 [&](const StoC::ProjectileCreated &packet)
                 {
@@ -735,7 +775,8 @@ namespace HerosInsight::EffectInitiator
                     auto proj = CreateRangedAttack(attacker_id, skill_id);
                     TrackProjectile(packet.projectile_id, attacker_id, packet.air_time, proj);
                     awaiter.stop();
-                });
+                }
+            );
             co_await awaiter;
         }
 
@@ -758,9 +799,11 @@ namespace HerosInsight::EffectInitiator
 #ifdef DEBUG_ACTIVATIONS
             auto attr_str = Utils::GetAttributeString(attribute);
             auto attr_str_w = Utils::StrToWStr(attr_str);
-            Utils::FormatToChat(DEBUG_ACTIVATIONS_COLOR,
+            Utils::FormatToChat(
+                DEBUG_ACTIVATIONS_COLOR,
                 L"Deduced attribute: caster_id={}, attribute={}, level={}",
-                caster_id, level, attr_str_w);
+                caster_id, level, attr_str_w
+            );
 #endif
 
             auto &caster = CustomAgentDataModule::GetCustomAgentData(caster_id);
@@ -798,7 +841,8 @@ namespace HerosInsight::EffectInitiator
                         case StoC::GenericValueID::skill_finished:
                             awaiter.stop();
                     }
-                });
+                }
+            );
             co_await awaiter;
         }
 
@@ -819,7 +863,8 @@ namespace HerosInsight::EffectInitiator
 
                     auto proj = CreateRangedAttack(caster_id, skill_id);
                     TrackProjectile(packet.projectile_id, caster_id, packet.air_time, proj);
-                });
+                }
+            );
 
             bool caster_has_unknown_attributes = Utils::GetAgentAttributeSpan(caster_id).empty();
             if (caster_has_unknown_attributes)
@@ -828,7 +873,8 @@ namespace HerosInsight::EffectInitiator
                     [&](const StoC::AddEffect &packet)
                     {
                         ReverseEngineerAttribute(caster_id, skill_id, packet);
-                    });
+                    }
+                );
                 co_await AfterEffectsAwaiter(caster_id, std::span(&target_id, 1));
             }
 
@@ -935,11 +981,13 @@ namespace HerosInsight::EffectInitiator
         }
         else
         {
-            EffectTracking::RemoveTrackers(packet->agent_id,
+            EffectTracking::RemoveTrackers(
+                packet->agent_id,
                 [&](EffectTracking::EffectTracker &effect)
                 {
                     return effect.effect_id == packet->effect_id;
-                });
+                }
+            );
         }
     }
 

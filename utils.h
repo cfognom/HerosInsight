@@ -454,7 +454,8 @@ namespace HerosInsight::Utils
         std::span<uint16_t> highlighting = {},
         std::span<TextTooltip> tooltips = {},
         std::function<void(uint32_t)> draw_tooltip = nullptr,
-        std::span<TextEmoji> emojis = {} /**/);
+        std::span<TextEmoji> emojis = {}
+    );
 
     enum struct SkillContext
     {
@@ -509,7 +510,7 @@ namespace HerosInsight::Utils
     uint32_t GetSkillEffectBorderIndex(const GW::Skill &skill);
 
     bool IsControllableAgentOfPlayer(uint32_t agent_id, uint32_t player_number = 0);
-    void GetControllableAgentsOfPlayer(FixedArrayRef<uint32_t> out, uint32_t player_number = 0);
+    void GetControllableAgentsOfPlayer(BufferWriter<uint32_t> out, uint32_t player_number = 0);
 
     void OpenWikiPage(std::string_view page);
     void ImGuiCenterAlignCursorX(float size_x);
@@ -518,8 +519,8 @@ namespace HerosInsight::Utils
     bool AppendFormattedV(char *buf, size_t buf_size, size_t &len, const char *fmt, va_list args);
     bool AppendFormatted(std::string &str, size_t append_max_size, const char *fmt, ...);
 
-    void Split(std::string_view str, FixedArrayRef<std::string_view> out);
-    void CamelSplit(std::string_view str, FixedArrayRef<std::string_view> out);
+    void Split(std::string_view str, BufferWriter<std::string_view> out);
+    void CamelSplit(std::string_view str, BufferWriter<std::string_view> out);
 
     bool IsFrameValid(GW::UI::Frame *frame);
 

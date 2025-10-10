@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cassert>
 #include <cstdio> // Include for snprintf
 #include <initializer_list>
 #include <iterator> // Include for iterator support
@@ -12,12 +13,12 @@
 namespace HerosInsight
 {
     template <typename T>
-    struct FixedArrayRef
+    struct BufferWriter
     {
         std::span<T> buffer;
         std::size_t *len_ptr; // TODO: Store len directly and rename struct to BufferWriter
 
-        FixedArrayRef(std::span<T> buf, std::size_t &len)
+        BufferWriter(std::span<T> buf, std::size_t &len)
             : buffer(buf), len_ptr(&len) {}
 
         bool try_push(const T &value)
@@ -258,14 +259,14 @@ namespace HerosInsight
     };
 
     template <typename T, std::size_t N>
-    struct FixedArray
+    struct Buffer
     {
         std::array<T, N> buffer_storage;
         std::size_t length_storage = 0;
 
-        FixedArray() = default;
+        Buffer() = default;
 
-        constexpr FixedArray(std::initializer_list<T> init_list)
+        constexpr Buffer(std::initializer_list<T> init_list)
         {
             assert(init_list.size() <= N);
             for (const auto &value : init_list)
@@ -274,15 +275,15 @@ namespace HerosInsight
             }
         }
 
-        FixedArrayRef<T> ref()
+        BufferWriter<T> ref()
         {
-            return FixedArrayRef<T>(std::span<T>(buffer_storage.data(), buffer_storage.size()), length_storage);
+            return BufferWriter<T>(std::span<T>(buffer_storage.data(), buffer_storage.size()), length_storage);
         }
 
-        const FixedArrayRef<const T> ref() const
+        const BufferWriter<const T> ref() const
         {
             auto length_ref = (std::size_t *)&length_storage;
-            return FixedArrayRef<const T>(std::span<const T>(buffer_storage.data(), buffer_storage.size()), *length_ref);
+            return BufferWriter<const T>(std::span<const T>(buffer_storage.data(), buffer_storage.size()), *length_ref);
         }
 
         // Method to get the capacity
