@@ -2,13 +2,11 @@
 
 #include <array>
 #include <cassert>
-#include <cstdio> // Include for snprintf
+#include <cstdio>
 #include <initializer_list>
-#include <iterator> // Include for iterator support
+#include <iterator>
 #include <span>
 #include <stdexcept>
-
-// AI GENERATED CODE (some of it)
 
 namespace HerosInsight
 {
