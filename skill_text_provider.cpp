@@ -337,7 +337,11 @@ namespace HerosInsight
             }
         }
 
-        // Expects first chars to mismatch
+        // Expects first chars to mismatch.
+        // Returns how long to "go" in a and b before they start to match up again.
+        // For example if a = "Eating" and b = "Sleeping", returns {3, 5}.
+        //                     012345           01234567
+        //                        ^                  ^
         std::pair<size_t, size_t> MinPrefixDiffLength(std::string_view a, std::string_view b)
         {
             size_t iend = std::max(a.size(), b.size());
