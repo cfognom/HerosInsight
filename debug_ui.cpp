@@ -169,8 +169,7 @@ namespace HerosInsight::DebugUI
             }
         }
 
-        Buffer<char, 128> label_salloc;
-        auto label = label_salloc.ref();
+        Buffer<char, 128> label;
 
         if (hovered_frame)
         {

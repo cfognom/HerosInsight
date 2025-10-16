@@ -1875,8 +1875,7 @@ namespace HerosInsight
 
                 if (!IsMatch(just_before, DescToken::Max))
                 {
-                    Buffer<ParsedSkillData::Type, 8> salloc;
-                    auto buffer = salloc.ref();
+                    Buffer<ParsedSkillData::Type, 8> buffer;
                     for (int32_t i = just_before; i >= 0; i--)
                     {
                         if (IsMatch(i, DescToken::Seconds))
@@ -2488,11 +2487,7 @@ namespace HerosInsight
                 return;
         }
 
-        Buffer<ParsedSkillData, 8> conditions_salloc, end_conditions_salloc, removals_salloc, end_removals_salloc;
-        auto conditions = conditions_salloc.ref();
-        auto end_conditions = end_conditions_salloc.ref();
-        auto removals = removals_salloc.ref();
-        auto end_removals = end_removals_salloc.ref();
+        Buffer<ParsedSkillData, 8> conditions, end_conditions, removals, end_removals;
 
         ParsedSkillData::Type stage = ParsedSkillData::Type::Null;
         for (ParsedSkillData pd : cskill.parsed_data)
@@ -3347,29 +3342,33 @@ namespace HerosInsight
         return {0, 0};
     }
 
-    void CustomSkillData::GetParsedSkillParams(ParsedSkillData::Type type, BufferWriter<ParsedSkillData> result) const
+    void CustomSkillData::GetParsedSkillParams(ParsedSkillData::Type type, std::span<ParsedSkillData> &result) const
     {
+        BufferWriter<ParsedSkillData> result_writer(result);
         for (const auto &pd : this->parsed_data)
         {
             if (pd.type == type)
-                result.try_push(pd);
+                result_writer.try_push(pd);
         }
+        result = result_writer.WrittenSpan();
     }
 
-    void GetConditionsFromSpan(std::span<const ParsedSkillData> parsed_data, GW::Constants::SkillID source_skill_id, uint8_t attr_lvl, BufferWriter<SkillEffect> result)
+    void GetConditionsFromSpan(std::span<const ParsedSkillData> parsed_data, GW::Constants::SkillID source_skill_id, uint8_t attr_lvl, std ::span<SkillEffect> &result)
     {
+        BufferWriter<SkillEffect> result_writer(result);
         bool success = true;
         for (const auto &pd : parsed_data)
         {
             const auto condition_skill_id = pd.GetCondition();
             if (condition_skill_id == GW::Constants::SkillID::No_Skill)
                 continue;
-            success &= result.try_push({condition_skill_id, source_skill_id, pd.param.Resolve(attr_lvl)});
+            success &= result_writer.try_push({condition_skill_id, source_skill_id, pd.param.Resolve(attr_lvl)});
         }
+        result = result_writer.WrittenSpan();
         SOFT_ASSERT(success, L"Failed to push condition");
     }
 
-    void CustomSkillData::GetInitConditions(uint8_t attr_lvl, BufferWriter<SkillEffect> result) const
+    void CustomSkillData::GetInitConditions(uint8_t attr_lvl, std::span<SkillEffect> &result) const
     {
         if (!tags.ConditionSource)
             return;
@@ -3377,7 +3376,7 @@ namespace HerosInsight
         GetConditionsFromSpan(GetInitParsedData(), skill_id, attr_lvl, result);
     }
 
-    void CustomSkillData::GetEndConditions(uint8_t attr_lvl, BufferWriter<SkillEffect> result) const
+    void CustomSkillData::GetEndConditions(uint8_t attr_lvl, std::span<SkillEffect> &result) const
     {
         if (!tags.ConditionSource)
             return;
@@ -3462,8 +3461,7 @@ namespace HerosInsight
             }
         }
 
-        Buffer<SkillEffect, 18> skill_effects_salloc;
-        auto skill_effects = skill_effects_salloc.ref();
+        Buffer<SkillEffect, 18> skill_effects;
 
         // custom_sd.GetOnActivationEffects(caster, target_id, skill_effects);
 
@@ -3632,15 +3630,14 @@ namespace HerosInsight
 
     void CustomSkillData::GetRanges(std::span<Utils::Range> &out) const
     {
-        size_t len = 0;
-        BufferWriter<Utils::Range> builder{out, len};
+        BufferWriter<Utils::Range> builder = out;
         if (Utils::IsRangeValue(skill->aoe_range))
             builder.push_back((Utils::Range)skill->aoe_range);
         if (Utils::IsRangeValue(skill->const_effect))
             builder.push_back((Utils::Range)skill->const_effect);
         if (skill->bonusScale0 == skill->bonusScale15 && Utils::IsRangeValue(skill->bonusScale0))
             builder.push_back((Utils::Range)skill->bonusScale0);
-        out = out.subspan(0, len);
+        out = builder.WrittenSpan();
     }
 
     uint32_t CustomSkillData::ResolveBaseDuration(CustomAgentData &caster, std::optional<uint8_t> skill_attr_lvl_override) const
@@ -3782,8 +3779,7 @@ namespace HerosInsight
         }
         // clang-format on
 
-        auto cached_strs = skill_type_strings.ref();
-        for (auto &cached_str : cached_strs)
+        for (auto &cached_str : skill_type_strings)
         {
             if (cached_str == str)
             {
@@ -3792,9 +3788,9 @@ namespace HerosInsight
             }
         }
 
-        if (cached_strs.try_push(std::move(str)))
+        if (skill_type_strings.try_push(std::move(str)))
         {
-            type_str = cached_strs[cached_strs.size() - 1];
+            type_str = skill_type_strings.back();
         }
         else
         {
@@ -3990,10 +3986,13 @@ namespace HerosInsight
     {
         std::wstring out = L"StaticSkillEffect: ";
 
-        Buffer<char, 64> salloc;
-        auto buffer = salloc.ref();
-        buffer.AppendWith([=](auto &dst)
-                          { duration_or_count.Print(-1, dst); });
+        Buffer<char, 64> buffer;
+        buffer.AppendWith(
+            [=](auto &dst)
+            {
+                duration_or_count.Print(-1, dst);
+            }
+        );
         auto dur_or_count_string = Utils::StrToWStr(buffer);
 
         if (auto skill_id = std::get_if<GW::Constants::SkillID>(&skill_id_or_removal))

@@ -932,8 +932,7 @@ namespace HerosInsight::Utils
 
     uint32_t GetHCTChance(GW::AgentLiving &agent, GW::Constants::AttributeByte attribute)
     {
-        Buffer<uint32_t, 2> hct_sources_salloc;
-        auto hct_sources = hct_sources_salloc.ref();
+        Buffer<uint32_t, 2> hct_sources;
 
         for (const auto item_id : Utils::GetAgentWeaponAndOffhandItemIds(agent))
         {
@@ -1314,14 +1313,22 @@ namespace HerosInsight::Utils
         if (csd == nullptr)
             return std::nullopt;
 
-        Buffer<ParsedSkillData, 4> reg_salloc, deg_salloc;
-        auto regs = reg_salloc.ref();
-        auto degs = deg_salloc.ref();
+        Buffer<ParsedSkillData, 4> regs, degs;
 
         int32_t regen_hp_per_second = 0;
         int32_t degen_hp_per_second = 0;
-        custom_sd.GetParsedSkillParams(ParsedSkillData::Type::HealthRegen, regs);
-        custom_sd.GetParsedSkillParams(ParsedSkillData::Type::HealthDegen, degs);
+        regs.AppendWith(
+            [&](std::span<ParsedSkillData> &span)
+            {
+                custom_sd.GetParsedSkillParams(ParsedSkillData::Type::HealthRegen, span);
+            }
+        );
+        degs.AppendWith(
+            [&](std::span<ParsedSkillData> &span)
+            {
+                custom_sd.GetParsedSkillParams(ParsedSkillData::Type::HealthDegen, span);
+            }
+        );
         for (auto &reg : regs)
         {
             regen_hp_per_second += 2 * reg.param.Resolve(attribute_level);
@@ -1852,8 +1859,7 @@ namespace HerosInsight::Utils
 
     void CollectEnemyPositions(std::span<GW::Vec2f> &positions)
     {
-        size_t len = 0;
-        BufferWriter<GW::Vec2f> positions_writer(positions, len);
+        BufferWriter<GW::Vec2f> positions_writer = positions;
         const auto *aa = GW::Agents::GetAgentArray();
         if (aa == nullptr)
             return;
@@ -1872,7 +1878,7 @@ namespace HerosInsight::Utils
                     break;
             }
         }
-        positions = positions_writer;
+        positions = positions_writer.WrittenSpan();
     }
 
     bool CircleOverlap(GW::Vec2f center, float radius, std::span<GW::Vec2f> positions)
@@ -3148,22 +3154,26 @@ namespace HerosInsight::Utils
 
     bool IsControllableAgentOfPlayer(uint32_t agent_id, uint32_t player_number)
     {
-        Buffer<uint32_t, 8> player_agents_salloc;
-        auto player_agents = player_agents_salloc.ref();
+        Buffer<uint32_t, 8> player_agents;
+        player_agents.AppendWith(
+            [=](auto &dst)
+            {
+                GetControllableAgentsOfPlayer(dst, player_number);
+            }
+        );
 
-        GetControllableAgentsOfPlayer(player_agents, player_number);
-
-        for (uint32_t i = 0; i < player_agents.size(); i++)
+        for (auto player_agent : player_agents)
         {
-            if (player_agents[i] == agent_id)
+            if (player_agent == agent_id)
                 return true;
         }
 
         return false;
     }
 
-    void GetControllableAgentsOfPlayer(BufferWriter<uint32_t> out, uint32_t player_number)
+    void GetControllableAgentsOfPlayer(std::span<uint32_t> &out, uint32_t player_number)
     {
+        BufferWriter<uint32_t> out_writer(out);
         if (!player_number)
             player_number = GW::PlayerMgr::GetPlayerNumber();
 
@@ -3181,15 +3191,16 @@ namespace HerosInsight::Utils
         }
 
         bool success = true;
-        success &= out.try_push(GW::PlayerMgr::GetPlayerAgentId(player_number));
+        success &= out_writer.try_push(GW::PlayerMgr::GetPlayerAgentId(player_number));
 
         for (auto hero : info->heroes)
         {
             if (hero.owner_player_id == player_number)
             {
-                success &= out.try_push(hero.agent_id);
+                success &= out_writer.try_push(hero.agent_id);
             }
         }
+        out = out_writer.WrittenSpan();
         SOFT_ASSERT(success, L"Failed to get controllable agents of player");
     }
 
@@ -3596,8 +3607,7 @@ namespace HerosInsight::Utils
 
     void DebugFrame(GW::UI::Frame &frame, size_t depth)
     {
-        Buffer<wchar_t, 256> buffer_salloc;
-        auto buffer = buffer_salloc.ref();
+        Buffer<wchar_t, 256> buffer;
         for (size_t i = 0; i < depth; ++i)
         {
             buffer.PushFormat(L"   ");

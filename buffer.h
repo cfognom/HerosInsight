@@ -12,40 +12,87 @@
 
 namespace HerosInsight
 {
-    template <typename T>
-    struct BufferWriter
+    template <typename Derived, typename T>
+    class BufferBase
     {
-        std::span<T> buffer;
-        std::size_t *len_ptr; // TODO: Store len directly and rename struct to BufferWriter
+        std::size_t len = 0;
 
-        BufferWriter(std::span<T> buf, std::size_t &len)
-            : buffer(buf), len_ptr(&len) {}
+    protected:
+        void push_unchecked(const T &value)
+        {
+            Span()[len++] = value;
+        }
+
+        void push_unchecked(T &&value)
+        {
+            Span()[len++] = std::move(value);
+        }
+
+    public:
+        std::span<const T> Span() const
+        {
+            return static_cast<const Derived *>(this)->Span();
+        }
+
+        std::span<T> Span()
+        {
+            return static_cast<Derived *>(this)->Span();
+        }
 
         bool try_push(const T &value)
         {
             if (size() >= capacity())
-            {
                 return false;
-            }
-            buffer[(*len_ptr)++] = std::move(value);
+
+            push_unchecked(value);
+            return true;
+        }
+
+        bool try_push(T &&value)
+        {
+            if (size() >= capacity())
+                return false;
+
+            push_unchecked(std::move(value));
             return true;
         }
 
         void push_back(const T &value)
         {
             assert(size() < capacity());
-            buffer[(*len_ptr)++] = std::move(value);
+            push_unchecked(value);
+        }
+
+        void push_back(T &&value)
+        {
+            assert(size() < capacity());
+            push_unchecked(std::move(value));
+        }
+
+        operator std::span<T>() const
+        {
+            return WrittenSpan();
         }
 
         T &emplace_back()
         {
             assert(size() < capacity());
-            return buffer[(*len_ptr)++];
+            return Span()[len++];
         }
 
-        std::span<T> RemainingSpan() const
+        std::span<T> RemainingSpan()
         {
-            return std::span<T>(buffer.data() + size(), remaining());
+            return std::span<T>(Span().data() + size(), remaining());
+        }
+
+        std::span<T> WrittenSpan()
+        {
+            return std::span<T>(Span().data(), size());
+        }
+
+        std::span<const T> WrittenSpan() const
+        {
+            return std::span<const T>(Span().data(), size());
         }
 
         void AppendRange(std::span<const T> src)
@@ -68,14 +115,14 @@ namespace HerosInsight
         T pop()
         {
             assert(!empty());
-            return std::move(buffer[--(*len_ptr)]);
+            return std::move(Span()[--len]);
         }
 
         void remove(std::size_t index)
         {
             assert(index < size());
             std::copy(data() + index + 1, data_end(), data() + index);
-            --(*len_ptr);
+            --len;
         }
 
         void insert(std::size_t index, const T &value)
@@ -83,37 +130,37 @@ namespace HerosInsight
             assert(index <= size());
             assert(!full());
             std::copy_backward(data() + index, data_end(), data_end() + 1);
-            buffer[index] = value;
-            ++(*len_ptr);
+            Span()[index] = value;
+            ++len;
         }
 
         T &operator[](std::size_t index)
         {
             assert(index < size());
-            return buffer[index];
+            return Span()[index];
         }
 
         const T &operator[](std::size_t index) const
         {
             assert(index < size());
-            return buffer[index];
+            return Span()[index];
         }
 
         operator std::span<T>()
         {
-            return std::span<T>(buffer.data(), size());
+            return std::span<T>(Span().data(), size());
         }
 
         operator std::span<const T>() const
         {
-            return std::span<const T>(buffer.data(), size());
+            return std::span<const T>(Span().data(), size());
         }
 
         // Conversion operator to std::string_view for FixedArrayRef<char>
         operator std::string_view() const
         {
             static_assert(std::is_same_v<T, char>, "Conversion to std::string_view is only available for char arrays");
-            return std::string_view(buffer.data(), size());
+            return std::string_view(Span().data(), size());
         }
 
         template <typename... Args>
@@ -133,12 +180,12 @@ namespace HerosInsight
         {
             static_assert(std::is_same_v<T, char>, "Format is only available for char or wchar_t arrays");
             auto rem_size = capacity() - size();
-            int n = std::snprintf(buffer.data() + size(), rem_size, format, args...);
+            int n = std::snprintf(Span().data() + size(), rem_size, format, args...);
             if (n < 0 || static_cast<std::size_t>(n) >= rem_size)
             {
                 throw std::runtime_error("Format failed or output was truncated");
             }
-            *len_ptr += static_cast<std::size_t>(n);
+            len += static_cast<std::size_t>(n);
             return n;
         }
 
@@ -148,19 +195,19 @@ namespace HerosInsight
         {
             static_assert(std::is_same_v<T, wchar_t>, "Format is only available for char or wchar_t arrays");
             auto rem_size = capacity() - size();
-            int n = std::swprintf(buffer.data() + size(), rem_size, format, args...);
+            int n = std::swprintf(Span().data() + size(), rem_size, format, args...);
             if (n < 0 || static_cast<std::size_t>(n) >= rem_size)
             {
                 throw std::runtime_error("Format failed or output was truncated");
             }
-            *len_ptr += static_cast<std::size_t>(n);
+            len += static_cast<std::size_t>(n);
             return n;
         }
 
         // Method to get the capacity
         std::size_t capacity() const
         {
-            return buffer.size();
+            return Span().size();
         }
 
         std::size_t remaining() const
@@ -170,7 +217,7 @@ namespace HerosInsight
 
         std::size_t size() const
         {
-            return *len_ptr;
+            return len;
         }
 
         bool empty() const
@@ -183,90 +230,129 @@ namespace HerosInsight
             return size() == capacity();
         }
 
-        void set_size(std::size_t new_size)
+        void SetSize(std::size_t new_size)
         {
             assert(new_size <= capacity());
-            *len_ptr = new_size;
+            len = new_size;
         }
 
         void AddSize(std::size_t add_size)
         {
-            set_size(size() + add_size);
+            SetSize(size() + add_size);
         }
 
         T *data()
         {
-            return buffer.data();
+            return Span().data();
         }
 
         // Method to get a pointer to the end of the buffer
         T *data_end()
         {
-            return buffer.data() + size();
+            return Span().data() + size();
         }
 
         // Method to get a const pointer to the end of the buffer
         const T *data_end() const
         {
-            return buffer.data() + size();
+            return Span().data() + size();
         }
 
         T &back()
         {
             assert(size() > 0);
-            return buffer[size() - 1];
+            return WrittenSpan().back();
         }
 
         // Method to clear the buffer
         void clear()
         {
-            *len_ptr = 0;
+            len = 0;
         }
 
         // Iterator support
-        using iterator = typename std::span<T>::iterator;
-        using const_iterator = typename std::span<T>::const_iterator;
 
-        iterator begin()
+        auto begin()
         {
-            return buffer.begin();
+            return WrittenSpan().begin();
         }
 
-        iterator end()
+        auto end()
         {
-            return buffer.begin() + size();
+            return WrittenSpan().end();
         }
 
-        const_iterator begin() const
+        auto begin() const
         {
-            return buffer.begin();
+            return WrittenSpan().begin();
         }
 
-        const_iterator end() const
+        auto end() const
         {
-            return buffer.begin() + size();
+            return WrittenSpan().end();
         }
 
-        const_iterator cbegin() const
+        auto cbegin() const
         {
-            return buffer.cbegin();
+            return WrittenSpan().cbegin();
         }
 
-        const_iterator cend() const
+        auto cend() const
         {
-            return buffer.cbegin() + size();
+            return WrittenSpan().cend();
+        }
+    };
+
+    template <typename T>
+    class BufferWriter : public BufferBase<BufferWriter<T>, T>
+    {
+        std::span<T> span;
+
+    public:
+        BufferWriter(std::span<T> span) : span(span) {}
+
+        std::span<T> Span() const
+        {
+            return span;
         }
     };
 
     template <typename T, std::size_t N>
-    struct Buffer
+    class Buffer : public BufferBase<Buffer<T, N>, T>
+    {
+        std::array<T, N> array;
+
+    public:
+        constexpr Buffer() = default;
+        constexpr Buffer(std::initializer_list<T> init_list)
+        {
+            assert(init_list.size() <= N);
+            for (const auto &value : init_list)
+            {
+                this->push_unchecked(value);
+            }
+        }
+
+        std::span<const T> Span() const
+        {
+            return std::span<const T>(array.data(), array.size());
+        }
+
+        std::span<T> Span()
+        {
+            return std::span<T>(array.data(), array.size());
+        }
+    };
+
+    template <typename T, std::size_t N>
+    struct BufferOld
     {
         std::array<T, N> buffer_storage;
         std::size_t length_storage = 0;
 
-        Buffer() = default;
+        BufferOld() = default;
 
-        constexpr Buffer(std::initializer_list<T> init_list)
+        constexpr BufferOld(std::initializer_list<T> init_list)
         {
             assert(init_list.size() <= N);
             for (const auto &value : init_list)

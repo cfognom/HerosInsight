@@ -199,8 +199,7 @@ namespace HerosInsight::PacketReader
 
         auto &attack_skill = CustomSkillDataModule::GetCustomSkillData(skill_id);
         auto &caster = CustomAgentDataModule::GetCustomAgentData(cause_id);
-        Buffer<SkillEffect, 8> effects_to_apply_salloc;
-        auto effects_to_apply = effects_to_apply_salloc.ref();
+        Buffer<SkillEffect, 8> effects_to_apply;
         // attack_skill.GetOnHitEffects(caster, target_id, is_projectile, effects_to_apply);
 
         if (!Utils::ReceivesStoCEffects(target_id))
@@ -222,7 +221,7 @@ namespace HerosInsight::PacketReader
 
         if (!Utils::ReceivesStoCEffects(target_id))
         {
-            EffectTracking::ApplySkillEffects(target_id, projectile.owner_agent_id, projectile.carried_effects.ref());
+            EffectTracking::ApplySkillEffects(target_id, projectile.owner_agent_id, projectile.carried_effects);
         }
 
         OnAttackHit(projectile.owner_agent_id, target_id, true, projectile_skill_id);
@@ -869,7 +868,7 @@ namespace HerosInsight::PacketReader
         auto &projectile_skill = CustomSkillDataModule::GetCustomSkillData(data.skill_id);
         auto &caster = CustomAgentDataModule::GetCustomAgentData(caster_id);
 
-        auto carried_effects = projectile.carried_effects.ref();
+        auto carried_effects = projectile.carried_effects.WrittenSpan();
         // projectile_skill.GetProjectileEffects(caster, carried_effects);
     }
 
@@ -1047,9 +1046,13 @@ namespace HerosInsight::PacketReader
         auto id = AttributeOrTitle((GW::Constants::TitleID)packet->title_id);
         auto new_value = packet->new_value;
 
-        Buffer<uint32_t, 8> agent_ids_salloc;
-        auto agent_ids = agent_ids_salloc.ref();
-        Utils::GetControllableAgentsOfPlayer(agent_ids);
+        Buffer<uint32_t, 8> agent_ids;
+        agent_ids.AppendWith(
+            [&](auto &span)
+            {
+                Utils::GetControllableAgentsOfPlayer(span);
+            }
+        );
         for (auto agent_id : agent_ids)
         {
             auto &agent_data = CustomAgentDataModule::GetCustomAgentData(agent_id);

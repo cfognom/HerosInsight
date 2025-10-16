@@ -510,7 +510,7 @@ namespace HerosInsight::Utils
     uint32_t GetSkillEffectBorderIndex(const GW::Skill &skill);
 
     bool IsControllableAgentOfPlayer(uint32_t agent_id, uint32_t player_number = 0);
-    void GetControllableAgentsOfPlayer(BufferWriter<uint32_t> out, uint32_t player_number = 0);
+    void GetControllableAgentsOfPlayer(std::span<uint32_t> &out, uint32_t player_number = 0);
 
     void OpenWikiPage(std::string_view page);
     void ImGuiCenterAlignCursorX(float size_x);

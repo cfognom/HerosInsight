@@ -160,12 +160,9 @@ namespace HerosInsight::RichText
             return;
         }
 
-        size_t result_len = 0;
-        BufferWriter<TextSegment> result_builder{result, result_len};
-        Buffer<ImU32, 32> color_buffer;
-        auto color_stack = color_buffer.ref();
-        Buffer<uint32_t, 32> tooltip_buffer;
-        auto tooltip_stack = tooltip_buffer.ref();
+        BufferWriter<TextSegment> result_builder = result;
+        Buffer<ImU32, 32> color_stack;
+        Buffer<uint32_t, 32> tooltip_stack;
 
         bool is_currently_highlighted = false;
         size_t i_hl = 0;
@@ -319,7 +316,7 @@ namespace HerosInsight::RichText
             }
         }
 
-        result = result.subspan(0, result_len);
+        result = result_builder.WrittenSpan();
     }
 
     void Drawer::DrawTextSegments(std::span<TextSegment> segments, float wrapping_min, float wrapping_max)

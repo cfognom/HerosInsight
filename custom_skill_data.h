@@ -597,13 +597,13 @@ namespace HerosInsight
 
         SkillParam GetSkillParam(uint32_t id) const;
         SkillParam GetParsedSkillParam(std::function<bool(const ParsedSkillData &)> predicate) const;
-        void GetParsedSkillParams(ParsedSkillData::Type type, BufferWriter<ParsedSkillData> result) const;
-        void GetInitConditions(uint8_t attr_lvl, BufferWriter<SkillEffect> result) const;
-        void GetEndConditions(uint8_t attr_lvl, BufferWriter<SkillEffect> result) const;
+        void GetParsedSkillParams(ParsedSkillData::Type type, std::span<ParsedSkillData> &result) const;
+        void GetInitConditions(uint8_t attr_lvl, std::span<SkillEffect> &result) const;
+        void GetEndConditions(uint8_t attr_lvl, std::span<SkillEffect> &result) const;
         std::span<const ParsedSkillData> GetInitParsedData() const;
         std::span<const ParsedSkillData> GetEndParsedData() const;
 
-        void GetOnExpireEffects(CustomAgentData &caster, BufferWriter<SkillEffect> result) const;
+        void GetOnExpireEffects(CustomAgentData &caster, std::span<SkillEffect> &result) const;
 
         std::string ToString() const;
         std::string_view GetTypeString();

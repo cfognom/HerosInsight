@@ -643,8 +643,7 @@ From GWCA/TB++ discord
 
     void SkillTextProvider::SkillDescriptionToEncStr(const GW::Skill &skill, bool concise, int32_t attr_lvl, std::span<wchar_t> &dst)
     {
-        size_t written_len = 0;
-        BufferWriter<wchar_t> buffer{dst, written_len};
+        BufferWriter<wchar_t> buffer = dst;
         auto str_id = concise ? skill.concise : skill.description;
         buffer.AppendWith(
             [=](auto &dst)
@@ -697,7 +696,7 @@ From GWCA/TB++ discord
             buffer.push_back('\x1');
         }
 
-        dst = dst.subspan(0, written_len);
+        dst = buffer.WrittenSpan();
         buffer.push_back('\0');
     }
 }

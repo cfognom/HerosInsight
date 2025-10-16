@@ -282,8 +282,7 @@ static LRESULT CALLBACK SafeWndProc(HWND hWnd, UINT Message, WPARAM wParam, LPAR
 // It returns a stateblock that can be used to restore the previous state, or a nullptr if nothing was done.
 IDirect3DStateBlock9 *TryPrepareStencil(IDirect3DDevice9 *device)
 {
-    HerosInsight::Buffer<ImRect, 2> holes_salloc;
-    auto holes = holes_salloc.ref();
+    HerosInsight::Buffer<ImRect, 2> holes;
 
     auto dragged_skill_frame = HerosInsight::Utils::GetDraggedSkillFrame();
     if (dragged_skill_frame &&

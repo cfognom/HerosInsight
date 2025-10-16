@@ -21,8 +21,7 @@ namespace HerosInsight
         if (id.IsNone())
             return;
 
-        auto datas = attributes.ref();
-        for (auto &data : datas)
+        for (auto &data : attributes)
         {
             if (data.id == id)
             {
@@ -30,7 +29,7 @@ namespace HerosInsight
                 return;
             }
         }
-        if (datas.try_push({id, level}))
+        if (attributes.try_push(AttributeData{id, level}))
             return;
 
         SOFT_ASSERT(false, L"AttributeStore::SetAttribute: No space for new attribute");
@@ -38,12 +37,11 @@ namespace HerosInsight
 
     bool AttributeStore::RemoveAttribute(AttributeOrTitle id)
     {
-        auto datas = attributes.ref();
-        for (size_t i = 0; i < datas.size(); i++)
+        for (size_t i = 0; i < attributes.size(); i++)
         {
-            if (datas[i].id == id)
+            if (attributes[i].id == id)
             {
-                datas.remove(i);
+                attributes.remove(i);
                 return true;
             }
         }
@@ -52,8 +50,7 @@ namespace HerosInsight
 
     std::optional<uint8_t> AttributeStore::GetAttribute(AttributeOrTitle id) const
     {
-        auto datas = attributes.ref();
-        for (const auto &data : datas)
+        for (const auto &data : attributes)
         {
             if (data.id == id)
                 return {data.level};

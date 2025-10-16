@@ -147,9 +147,10 @@ namespace HerosInsight::EffectInitiator
     void GetSpellEffects(
         uint32_t caster_id, uint32_t target_id,
         GW::Constants::SkillID skill_id, uint8_t attr_lvl,
-        BufferWriter<StaticSkillEffect> result
+        std::span<StaticSkillEffect> &result
     )
     {
+        BufferWriter<StaticSkillEffect> result_writer = result;
         auto caster_ptr = Utils::GetAgentLivingByID(caster_id);
         // auto target_ptr = Utils::GetAgentLivingByID(target_id);
         if (!caster_ptr)
@@ -190,7 +191,7 @@ namespace HerosInsight::EffectInitiator
                 }
             }
 
-            result.try_push(init_effect);
+            result_writer.try_push(init_effect);
         }
 
         switch (skill_id)
@@ -216,13 +217,14 @@ namespace HerosInsight::EffectInitiator
                             effect.radius = Utils::Range::Adjacent;
                             effect.skill_id_or_removal = effect_skill.skill_id;
                             effect.duration_or_count = {rem_sec, rem_sec};
-                            result.try_push(effect);
+                            result_writer.try_push(effect);
                         }
                     }
                 }
                 return;
             }
         }
+        result = result_writer.WrittenSpan();
     }
 
     TrackedCoroutine OnSkillActivated(uint32_t caster_id, uint32_t target_id, GW::Constants::SkillID skill_id)
@@ -274,9 +276,13 @@ namespace HerosInsight::EffectInitiator
 
         if (has_init_effects)
         {
-            Buffer<StaticSkillEffect, 18> effects_salloc;
-            auto effects = effects_salloc.ref();
-            GetSpellEffects(caster_id, target_id, skill_id, attr_lvl, effects);
+            Buffer<StaticSkillEffect, 18> effects;
+            effects.AppendWith(
+                [&](std::span<StaticSkillEffect> &span)
+                {
+                    GetSpellEffects(caster_id, target_id, skill_id, attr_lvl, span);
+                }
+            );
 
             FixedSet<uint32_t, (size_t)(16 / 0.75)> handled_agents;
             {
@@ -548,14 +554,14 @@ namespace HerosInsight::EffectInitiator
         }
     }
 
-    void CollectAttackEffects(uint32_t attacker_id, GW::Constants::SkillID skill_id, bool is_melee, BufferWriter<SkillEffect> out)
+    void CollectAttackEffects(uint32_t attacker_id, GW::Constants::SkillID skill_id, bool is_melee, std::span<SkillEffect> &out)
     {
+        BufferWriter<SkillEffect> out_writer(out);
         auto attacker_effects = EffectTracking::GetTrackers(attacker_id);
         std::vector<GW::Constants::SkillID> spent_charges;
         for (const auto &attacker_effect : attacker_effects)
         {
-            Buffer<SkillEffect, 8> conditions_salloc;
-            auto conditions = conditions_salloc.ref();
+            Buffer<SkillEffect, 8> conditions;
 
             auto effect_skill_id = attacker_effect.skill_id;
             switch (effect_skill_id)
@@ -566,7 +572,7 @@ namespace HerosInsight::EffectInitiator
                     {
                         auto base_duration = Utils::LinearAttributeScale(3, 15, attacker_effect.attribute_level);
                         auto poison_effect = SkillEffect{GW::Constants::SkillID::Poison, GW::Constants::SkillID::Apply_Poison, base_duration};
-                        out.try_push(poison_effect);
+                        out_writer.try_push(poison_effect);
                     }
                     break;
                 }
@@ -576,7 +582,7 @@ namespace HerosInsight::EffectInitiator
                     bool is_pet = Utils::GetIsPet(attacker_id);
                     auto base_duration = Utils::LinearAttributeScale(5, 15, attacker_effect.attribute_level);
                     auto condition = is_pet ? GW::Constants::SkillID::Bleeding : GW::Constants::SkillID::Crippled;
-                    out.try_push({condition, effect_skill_id, base_duration});
+                    out_writer.try_push({condition, effect_skill_id, base_duration});
                     spent_charges.push_back(effect_skill_id);
                     break;
                 }
@@ -597,12 +603,17 @@ namespace HerosInsight::EffectInitiator
                 case GW::Constants::SkillID::Find_Their_Weakness_PvP: // We dont spend charge yet. Needs special handling because it requires a critical hit.
                 {
                     auto &cskill = CustomSkillDataModule::GetCustomSkillData(effect_skill_id);
-                    cskill.GetInitConditions(attacker_effect.attribute_level, conditions);
+                    conditions.AppendWith(
+                        [&](std::span<SkillEffect> &span)
+                        {
+                            cskill.GetInitConditions(attacker_effect.attribute_level, span);
+                        }
+                    );
 #ifdef _DEBUG
                     SOFT_ASSERT(conditions.size() > 0, L"Missing conditions for skill {}", Utils::GetSkillName(effect_skill_id));
 #endif
                     if (conditions.size() > 0)
-                        out.try_push(conditions[0]);
+                        out_writer.try_push(conditions[0]);
                     break;
                 }
             }
@@ -611,6 +622,7 @@ namespace HerosInsight::EffectInitiator
         {
             EffectTracking::SpendCharge(attacker_id, skill_id);
         }
+        out = out_writer.WrittenSpan();
     }
 
     Attack CreateMeleeAttack(uint32_t caster_id, GW::Constants::SkillID skill_id)
@@ -661,9 +673,13 @@ namespace HerosInsight::EffectInitiator
 
     TrackedCoroutine TrackHit(uint32_t attacker_id, Attack attack)
     {
-        Buffer<SkillEffect, 18> effects_salloc;
-        auto effects = effects_salloc.ref();
-        CollectAttackEffects(attacker_id, attack.skill_id, attack.IsMelee(), effects);
+        Buffer<SkillEffect, 18> effects;
+        effects.AppendWith(
+            [&](std::span<SkillEffect> &span)
+            {
+                CollectAttackEffects(attacker_id, attack.skill_id, attack.IsMelee(), span);
+            }
+        );
 
         {
             FrameEndAwaiter awaiter;
