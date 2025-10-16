@@ -932,7 +932,7 @@ namespace HerosInsight::Utils
 
     uint32_t GetHCTChance(GW::AgentLiving &agent, GW::Constants::AttributeByte attribute)
     {
-        Buffer<uint32_t, 2> hct_sources;
+        FixedVector<uint32_t, 2> hct_sources;
 
         for (const auto item_id : Utils::GetAgentWeaponAndOffhandItemIds(agent))
         {
@@ -1313,7 +1313,7 @@ namespace HerosInsight::Utils
         if (csd == nullptr)
             return std::nullopt;
 
-        Buffer<ParsedSkillData, 4> regs, degs;
+        FixedVector<ParsedSkillData, 4> regs, degs;
 
         int32_t regen_hp_per_second = 0;
         int32_t degen_hp_per_second = 0;
@@ -3154,7 +3154,7 @@ namespace HerosInsight::Utils
 
     bool IsControllableAgentOfPlayer(uint32_t agent_id, uint32_t player_number)
     {
-        Buffer<uint32_t, 8> player_agents;
+        FixedVector<uint32_t, 8> player_agents;
         player_agents.AppendWith(
             [=](auto &dst)
             {
@@ -3607,7 +3607,7 @@ namespace HerosInsight::Utils
 
     void DebugFrame(GW::UI::Frame &frame, size_t depth)
     {
-        Buffer<wchar_t, 256> buffer;
+        FixedVector<wchar_t, 256> buffer;
         for (size_t i = 0; i < depth; ++i)
         {
             buffer.PushFormat(L"   ");

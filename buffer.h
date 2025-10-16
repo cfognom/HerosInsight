@@ -318,13 +318,13 @@ namespace HerosInsight
     };
 
     template <typename T, std::size_t N>
-    class Buffer : public BufferBase<Buffer<T, N>, T>
+    class FixedVector : public BufferBase<FixedVector<T, N>, T>
     {
         std::array<T, N> array;
 
     public:
-        constexpr Buffer() = default;
-        constexpr Buffer(std::initializer_list<T> init_list)
+        constexpr FixedVector() = default;
+        constexpr FixedVector(std::initializer_list<T> init_list)
         {
             assert(init_list.size() <= N);
             for (const auto &value : init_list)

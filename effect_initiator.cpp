@@ -276,7 +276,7 @@ namespace HerosInsight::EffectInitiator
 
         if (has_init_effects)
         {
-            Buffer<StaticSkillEffect, 18> effects;
+            FixedVector<StaticSkillEffect, 18> effects;
             effects.AppendWith(
                 [&](std::span<StaticSkillEffect> &span)
                 {
@@ -561,7 +561,7 @@ namespace HerosInsight::EffectInitiator
         std::vector<GW::Constants::SkillID> spent_charges;
         for (const auto &attacker_effect : attacker_effects)
         {
-            Buffer<SkillEffect, 8> conditions;
+            FixedVector<SkillEffect, 8> conditions;
 
             auto effect_skill_id = attacker_effect.skill_id;
             switch (effect_skill_id)
@@ -673,7 +673,7 @@ namespace HerosInsight::EffectInitiator
 
     TrackedCoroutine TrackHit(uint32_t attacker_id, Attack attack)
     {
-        Buffer<SkillEffect, 18> effects;
+        FixedVector<SkillEffect, 18> effects;
         effects.AppendWith(
             [&](std::span<SkillEffect> &span)
             {

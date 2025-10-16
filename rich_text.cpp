@@ -161,8 +161,8 @@ namespace HerosInsight::RichText
         }
 
         SpanWriter<TextSegment> result_builder = result;
-        Buffer<ImU32, 32> color_stack;
-        Buffer<uint32_t, 32> tooltip_stack;
+        FixedVector<ImU32, 32> color_stack;
+        FixedVector<uint32_t, 32> tooltip_stack;
 
         bool is_currently_highlighted = false;
         size_t i_hl = 0;

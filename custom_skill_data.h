@@ -528,7 +528,7 @@ namespace HerosInsight
         DWORD timestamp_impact;
         GW::Vec2f destination;
         uint32_t impact_frame;
-        Buffer<SkillEffect, 8> carried_effects;
+        FixedVector<SkillEffect, 8> carried_effects;
 
         bool HasExpired() const
         {

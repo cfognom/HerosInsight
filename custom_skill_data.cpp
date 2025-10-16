@@ -1875,7 +1875,7 @@ namespace HerosInsight
 
                 if (!IsMatch(just_before, DescToken::Max))
                 {
-                    Buffer<ParsedSkillData::Type, 8> buffer;
+                    FixedVector<ParsedSkillData::Type, 8> buffer;
                     for (int32_t i = just_before; i >= 0; i--)
                     {
                         if (IsMatch(i, DescToken::Seconds))
@@ -2487,7 +2487,7 @@ namespace HerosInsight
                 return;
         }
 
-        Buffer<ParsedSkillData, 8> conditions, end_conditions, removals, end_removals;
+        FixedVector<ParsedSkillData, 8> conditions, end_conditions, removals, end_removals;
 
         ParsedSkillData::Type stage = ParsedSkillData::Type::Null;
         for (ParsedSkillData pd : cskill.parsed_data)
@@ -3461,7 +3461,7 @@ namespace HerosInsight
             }
         }
 
-        Buffer<SkillEffect, 18> skill_effects;
+        FixedVector<SkillEffect, 18> skill_effects;
 
         // custom_sd.GetOnActivationEffects(caster, target_id, skill_effects);
 
@@ -3678,7 +3678,7 @@ namespace HerosInsight
         return 0;
     }
 
-    Buffer<std::string, 128> skill_type_strings;
+    FixedVector<std::string, 128> skill_type_strings;
     std::string_view CustomSkillData::GetTypeString()
     {
         if (type_str.data() != nullptr)
@@ -3986,7 +3986,7 @@ namespace HerosInsight
     {
         std::wstring out = L"StaticSkillEffect: ";
 
-        Buffer<char, 64> buffer;
+        FixedVector<char, 64> buffer;
         buffer.AppendWith(
             [=](auto &dst)
             {

@@ -525,7 +525,7 @@ namespace HerosInsight::WorldSpaceUI
                 bool skip = it->IsFinished() && now_or_ended_timestamp > it->GetEndTimestamp() - 300;
                 if (!skip)
                 {
-                    Buffer<char, 16> time_str;
+                    FixedVector<char, 16> time_str;
                     if (rem_sec_ceil > 999)
                         time_str.PushFormat("999+");
                     else

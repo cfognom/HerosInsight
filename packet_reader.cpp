@@ -199,7 +199,7 @@ namespace HerosInsight::PacketReader
 
         auto &attack_skill = CustomSkillDataModule::GetCustomSkillData(skill_id);
         auto &caster = CustomAgentDataModule::GetCustomAgentData(cause_id);
-        Buffer<SkillEffect, 8> effects_to_apply;
+        FixedVector<SkillEffect, 8> effects_to_apply;
         // attack_skill.GetOnHitEffects(caster, target_id, is_projectile, effects_to_apply);
 
         if (!Utils::ReceivesStoCEffects(target_id))
@@ -1046,7 +1046,7 @@ namespace HerosInsight::PacketReader
         auto id = AttributeOrTitle((GW::Constants::TitleID)packet->title_id);
         auto new_value = packet->new_value;
 
-        Buffer<uint32_t, 8> agent_ids;
+        FixedVector<uint32_t, 8> agent_ids;
         agent_ids.AppendWith(
             [&](auto &span)
             {

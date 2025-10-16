@@ -1412,9 +1412,9 @@ namespace HerosInsight::SkillBook
 
             ImGui::Spacing();
 
-            Buffer<char, 128> char_buffer;
-            Buffer<Utils::ColorChange, 8> col_buffer;
-            Buffer<uint32_t, 8> boundaries;
+            FixedVector<char, 128> char_buffer;
+            FixedVector<Utils::ColorChange, 8> col_buffer;
+            FixedVector<uint32_t, 8> boundaries;
             ImU32 req_color = IM_COL32(0, 255, 0, 255);
 
             { // Target and operator info

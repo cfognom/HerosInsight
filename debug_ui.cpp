@@ -169,7 +169,7 @@ namespace HerosInsight::DebugUI
             }
         }
 
-        Buffer<char, 128> label;
+        FixedVector<char, 128> label;
 
         if (hovered_frame)
         {

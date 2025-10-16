@@ -13,7 +13,7 @@ namespace HerosInsight
 
     struct AttributeStore
     {
-        Buffer<AttributeData, 12> attributes = {};
+        FixedVector<AttributeData, 12> attributes = {};
 
         AttributeStore() = default;
         AttributeStore(std::span<GW::Attribute> attrs);
