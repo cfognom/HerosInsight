@@ -519,8 +519,8 @@ namespace HerosInsight::Utils
     bool AppendFormattedV(char *buf, size_t buf_size, size_t &len, const char *fmt, va_list args);
     bool AppendFormatted(std::string &str, size_t append_max_size, const char *fmt, ...);
 
-    void Split(std::string_view str, BufferWriter<std::string_view> out);
-    void CamelSplit(std::string_view str, BufferWriter<std::string_view> out);
+    void Split(std::string_view str, SpanWriter<std::string_view> out);
+    void CamelSplit(std::string_view str, SpanWriter<std::string_view> out);
 
     bool IsFrameValid(GW::UI::Frame *frame);
 

@@ -304,12 +304,12 @@ namespace HerosInsight
     };
 
     template <typename T>
-    class BufferWriter : public BufferBase<BufferWriter<T>, T>
+    class SpanWriter : public BufferBase<SpanWriter<T>, T>
     {
         std::span<T> span;
 
     public:
-        BufferWriter(std::span<T> span) : span(span) {}
+        SpanWriter(std::span<T> span) : span(span) {}
 
         std::span<T> Span() const
         {
@@ -361,15 +361,15 @@ namespace HerosInsight
             }
         }
 
-        BufferWriter<T> ref()
+        SpanWriter<T> ref()
         {
-            return BufferWriter<T>(std::span<T>(buffer_storage.data(), buffer_storage.size()), length_storage);
+            return SpanWriter<T>(std::span<T>(buffer_storage.data(), buffer_storage.size()), length_storage);
         }
 
-        const BufferWriter<const T> ref() const
+        const SpanWriter<const T> ref() const
         {
             auto length_ref = (std::size_t *)&length_storage;
-            return BufferWriter<const T>(std::span<const T>(buffer_storage.data(), buffer_storage.size()), *length_ref);
+            return SpanWriter<const T>(std::span<const T>(buffer_storage.data(), buffer_storage.size()), *length_ref);
         }
 
         // Method to get the capacity

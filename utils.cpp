@@ -1859,7 +1859,7 @@ namespace HerosInsight::Utils
 
     void CollectEnemyPositions(std::span<GW::Vec2f> &positions)
     {
-        BufferWriter<GW::Vec2f> positions_writer = positions;
+        SpanWriter<GW::Vec2f> positions_writer = positions;
         const auto *aa = GW::Agents::GetAgentArray();
         if (aa == nullptr)
             return;
@@ -3173,7 +3173,7 @@ namespace HerosInsight::Utils
 
     void GetControllableAgentsOfPlayer(std::span<uint32_t> &out, uint32_t player_number)
     {
-        BufferWriter<uint32_t> out_writer(out);
+        SpanWriter<uint32_t> out_writer(out);
         if (!player_number)
             player_number = GW::PlayerMgr::GetPlayerNumber();
 
@@ -3280,7 +3280,7 @@ namespace HerosInsight::Utils
     }
 
     // Splits on space, ignores leading and trailing spaces
-    void Split(std::string_view str, BufferWriter<std::string_view> out)
+    void Split(std::string_view str, SpanWriter<std::string_view> out)
     {
         uint32_t i = 0;
         while (i < str.size())
@@ -3298,7 +3298,7 @@ namespace HerosInsight::Utils
         }
     }
 
-    void CamelSplit(std::string_view str, BufferWriter<std::string_view> out)
+    void CamelSplit(std::string_view str, SpanWriter<std::string_view> out)
     {
         uint32_t i = 0;
         while (i < str.size() && str[i] == ' ')

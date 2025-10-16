@@ -150,7 +150,7 @@ namespace HerosInsight::EffectInitiator
         std::span<StaticSkillEffect> &result
     )
     {
-        BufferWriter<StaticSkillEffect> result_writer = result;
+        SpanWriter<StaticSkillEffect> result_writer = result;
         auto caster_ptr = Utils::GetAgentLivingByID(caster_id);
         // auto target_ptr = Utils::GetAgentLivingByID(target_id);
         if (!caster_ptr)
@@ -556,7 +556,7 @@ namespace HerosInsight::EffectInitiator
 
     void CollectAttackEffects(uint32_t attacker_id, GW::Constants::SkillID skill_id, bool is_melee, std::span<SkillEffect> &out)
     {
-        BufferWriter<SkillEffect> out_writer(out);
+        SpanWriter<SkillEffect> out_writer(out);
         auto attacker_effects = EffectTracking::GetTrackers(attacker_id);
         std::vector<GW::Constants::SkillID> spent_charges;
         for (const auto &attacker_effect : attacker_effects)

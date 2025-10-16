@@ -1766,7 +1766,7 @@ namespace HerosInsight::SkillBook
 
         void MakeBookName(std::span<char> buf, size_t book_index)
         {
-            BufferWriter<char> name_writer = buf;
+            SpanWriter<char> name_writer = buf;
             name_writer.AppendRange(std::string_view("Skill Book (Ctrl + K)"));
             if (book_index > 0)
             {

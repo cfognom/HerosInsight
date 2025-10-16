@@ -3344,7 +3344,7 @@ namespace HerosInsight
 
     void CustomSkillData::GetParsedSkillParams(ParsedSkillData::Type type, std::span<ParsedSkillData> &result) const
     {
-        BufferWriter<ParsedSkillData> result_writer(result);
+        SpanWriter<ParsedSkillData> result_writer(result);
         for (const auto &pd : this->parsed_data)
         {
             if (pd.type == type)
@@ -3355,7 +3355,7 @@ namespace HerosInsight
 
     void GetConditionsFromSpan(std::span<const ParsedSkillData> parsed_data, GW::Constants::SkillID source_skill_id, uint8_t attr_lvl, std ::span<SkillEffect> &result)
     {
-        BufferWriter<SkillEffect> result_writer(result);
+        SpanWriter<SkillEffect> result_writer(result);
         bool success = true;
         for (const auto &pd : parsed_data)
         {
@@ -3630,7 +3630,7 @@ namespace HerosInsight
 
     void CustomSkillData::GetRanges(std::span<Utils::Range> &out) const
     {
-        BufferWriter<Utils::Range> builder = out;
+        SpanWriter<Utils::Range> builder = out;
         if (Utils::IsRangeValue(skill->aoe_range))
             builder.push_back((Utils::Range)skill->aoe_range);
         if (Utils::IsRangeValue(skill->const_effect))

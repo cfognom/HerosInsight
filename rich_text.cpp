@@ -160,7 +160,7 @@ namespace HerosInsight::RichText
             return;
         }
 
-        BufferWriter<TextSegment> result_builder = result;
+        SpanWriter<TextSegment> result_builder = result;
         Buffer<ImU32, 32> color_stack;
         Buffer<uint32_t, 32> tooltip_stack;
 
