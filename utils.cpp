@@ -3279,42 +3279,6 @@ namespace HerosInsight::Utils
         return success;
     }
 
-    // Splits on space, ignores leading and trailing spaces
-    void Split(std::string_view str, SpanWriter<std::string_view> out)
-    {
-        uint32_t i = 0;
-        while (i < str.size())
-        {
-            while (i < str.size() && str[i] == ' ')
-                i++;
-            if (i == str.size())
-                break;
-            uint32_t start = i;
-            while (i < str.size() && str[i] != ' ')
-                i++;
-            uint32_t end = i;
-
-            out.try_push(str.substr(start, end - start));
-        }
-    }
-
-    void CamelSplit(std::string_view str, SpanWriter<std::string_view> out)
-    {
-        uint32_t i = 0;
-        while (i < str.size() && str[i] == ' ')
-            i++;
-        while (i < str.size())
-        {
-            uint32_t start = i;
-            i++;
-            while (i < str.size() && str[i] >= 'a' && str[i] <= 'z')
-                i++;
-            uint32_t end = i;
-
-            out.try_push(str.substr(start, end - start));
-        }
-    }
-
     bool IsFrameValid(GW::UI::Frame *frame)
     {
         return frame && (int)frame != -1;
