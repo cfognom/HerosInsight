@@ -341,39 +341,4 @@ namespace HerosInsight
             return std::span<T>(array.data(), array.size());
         }
     };
-
-    template <typename T, std::size_t N>
-    struct BufferOld
-    {
-        std::array<T, N> buffer_storage;
-        std::size_t length_storage = 0;
-
-        BufferOld() = default;
-
-        constexpr BufferOld(std::initializer_list<T> init_list)
-        {
-            assert(init_list.size() <= N);
-            for (const auto &value : init_list)
-            {
-                buffer_storage[length_storage++] = value;
-            }
-        }
-
-        SpanWriter<T> ref()
-        {
-            return SpanWriter<T>(std::span<T>(buffer_storage.data(), buffer_storage.size()), length_storage);
-        }
-
-        const SpanWriter<const T> ref() const
-        {
-            auto length_ref = (std::size_t *)&length_storage;
-            return SpanWriter<const T>(std::span<const T>(buffer_storage.data(), buffer_storage.size()), *length_ref);
-        }
-
-        // Method to get the capacity
-        constexpr std::size_t capacity() const
-        {
-            return N;
-        }
-    };
 }
