@@ -57,7 +57,19 @@ namespace HerosInsight
 
         Position GetCurrentScroll() const
         {
-            return scroll_current;
+            return this->scroll_current;
+        }
+
+        Position GetTargetScroll() const
+        {
+            return this->scroll_target;
+        }
+
+        void SetScroll(Position scroll)
+        {
+            this->scroll_target = scroll;
+            this->scroll_current = scroll;
+            this->scroll_set_by_api = true;
         }
 
         void Draw(size_t size, float est_avg_height, bool snap_to_items, std::function<void(uint32_t)> draw_item)
@@ -71,6 +83,15 @@ namespace HerosInsight
             this->draw_item = draw_item;
 
             this->scroll_max = CalcScrollMax();
+            this->scroll_current = Position::Min(this->scroll_current, this->scroll_max); // Safety if number of items changed or entry sizes changed
+            this->scroll_target = Position::Min(this->scroll_target, this->scroll_max);   // Safety if number of items changed or entry sizes changed
+
+            if (this->scroll_set_by_api)
+            {
+                this->scroll_set_by_api = false;
+                auto distance = CalcDistance(Position{0, 0}, scroll_current, IndexRange::All());
+                ImGui::SetScrollY(window, distance);
+            }
 
             auto imgui_scroll = ImGui::GetScrollY();
             auto view_height = GetViewHeight();
@@ -163,6 +184,7 @@ namespace HerosInsight
         Position scroll_target = {0, 0};
         Position scroll_max = {0, 0};
         std::function<void(uint32_t)> draw_item;
+        bool scroll_set_by_api = false;
 
         struct IndexRange
         {
@@ -293,8 +315,18 @@ namespace HerosInsight
 
         struct DisableDrawingGuard
         {
-            DisableDrawingGuard() { ImGui::PushClipRect(ImVec2(0, 0), ImVec2(0, 0), false); }
-            ~DisableDrawingGuard() { ImGui::PopClipRect(); }
+            bool active;
+            DisableDrawingGuard()
+            {
+                active = ImGui::GetCurrentWindowRead() != nullptr;
+                if (active)
+                    ImGui::PushClipRect(ImVec2(0, 0), ImVec2(0, 0), false);
+            }
+            ~DisableDrawingGuard()
+            {
+                if (active)
+                    ImGui::PopClipRect();
+            }
         };
 
         Position CalcScrollMax()

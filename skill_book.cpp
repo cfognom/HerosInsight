@@ -806,6 +806,18 @@ namespace HerosInsight::SkillBook
         bool state_update_in_progress = false;
         bool first_draw = true;
 
+        struct ScrollTracking
+        {
+            std::vector<VariableSizeClipper::Position> scroll_positions;
+            uint16_t old_input_text_len = 0;
+            char input_text_history[1024] = {'\0'};
+
+            std::string_view GetOldInputText() const
+            {
+                return std::string_view(input_text_history, old_input_text_len);
+            }
+        };
+        ScrollTracking scroll_tracking;
         char input_text[1024] = {'\0'};
 
         std::string feedback;
@@ -962,6 +974,37 @@ namespace HerosInsight::SkillBook
             }
         }
 
+        void UpdateScrollTracking(std::string_view input_text)
+        {
+            assert(input_text.size() < sizeof(scroll_tracking.input_text_history));
+            auto old_input_text = this->scroll_tracking.GetOldInputText();
+            size_t common_len = std::mismatch(input_text.begin(), input_text.end(), scroll_tracking.input_text_history).first - input_text.begin();
+            auto target_scroll = clipper.GetTargetScroll();
+            if (common_len < input_text.size())
+            {
+                scroll_tracking.scroll_positions.resize(common_len); // Discard old history
+                auto dst = scroll_tracking.input_text_history + common_len;
+                auto src = input_text.data() + common_len;
+                auto size = input_text.size() - common_len;
+                std::memcpy(dst, src, size);
+                dst[size] = '\0';
+                clipper.Reset();
+            }
+            else
+            {
+                // Restore old scroll
+                if (input_text.size() < scroll_tracking.scroll_positions.size())
+                {
+                    auto old_scroll = scroll_tracking.scroll_positions[input_text.size()];
+                    clipper.SetScroll(old_scroll);
+                }
+            }
+            if (scroll_tracking.scroll_positions.size() < old_input_text.size() + 1)
+                scroll_tracking.scroll_positions.resize(old_input_text.size() + 1, target_scroll); // Save new scroll
+            scroll_tracking.scroll_positions[old_input_text.size()] = target_scroll;               // Overwrite old scroll
+            scroll_tracking.old_input_text_len = input_text.size();
+        }
+
         void DrawAttributeModeSelection()
         {
             auto cursor_before = ImGui::GetCursorPos();
@@ -1023,6 +1066,7 @@ namespace HerosInsight::SkillBook
 
                 query.Clear();
                 auto input_text_view = std::string_view(input_text, strlen(input_text));
+                UpdateScrollTracking(input_text_view);
                 CatalogUtils::ParseQuery(input_text_view, catalog.prop_bundle_names, query);
 
                 hl_data.Reset();
