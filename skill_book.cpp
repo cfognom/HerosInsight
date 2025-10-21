@@ -950,12 +950,35 @@ namespace HerosInsight::SkillBook
         // Draw's a button to duplicate the current book
         void DrawDupeButton()
         {
-            if (ImGui::Button("Open new book"))
+            auto window = ImGui::GetCurrentWindow();
+            auto title_bar_height = window->TitleBarHeight();
+            auto title_bar_rect = window->TitleBarRect();
+            const auto button_padding = 0;
+            auto button_side = title_bar_height - 2 * button_padding;
+            auto button_size = ImVec2(button_side, button_side);
+            auto saved_cursor = ImGui::GetCursorPos();
+            auto button_pos = ImVec2(window->Size.x - button_size.x - 24, button_padding);
+
+            ImGui::PushClipRect(title_bar_rect.Min, title_bar_rect.Max, false);
+            ImGui::SetCursorPos(button_pos);
+            if (ImGui::Button("##DupeButton", button_size))
             {
                 auto book = AddBook();
-                auto window = ImGui::GetCurrentWindow();
                 book->init_dims = {window->Pos + ImVec2(16, 16), window->Size};
             }
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::SetTooltip("Open new book");
+            }
+            const auto center = window->Pos + button_pos + button_size / 2;
+            const auto plus_radius = button_side * 0.3f;
+            auto plus_color = IM_COL32_WHITE;
+            const auto plus_thickness = 1.25f;
+            window->DrawList->AddLine(center - ImVec2(plus_radius, 0), center + ImVec2(plus_radius, 0), plus_color, plus_thickness);
+            window->DrawList->AddLine(center - ImVec2(0, plus_radius), center + ImVec2(0, plus_radius), plus_color, plus_thickness);
+            ImGui::PopClipRect();
+
+            ImGui::SetCursorPos(saved_cursor);
         }
 
         void DrawCheckboxes()
