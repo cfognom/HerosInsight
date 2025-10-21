@@ -161,15 +161,26 @@ namespace HerosInsight
             return std::string_view(Span().data(), size());
         }
 
+        template <typename Int>
+        void AppendIntToChars(Int value, const int base = 10)
+        {
+            static_assert(std::is_same_v<T, char>, "AppendIntToChars is only available for char arrays");
+            auto rem = RemainingSpan();
+            auto result = std::to_chars(rem.data(), rem.data() + rem.size(), value, base);
+            size_t added_size = result.ptr - rem.data();
+            assert(result.ec == std::errc());
+            AddSize(added_size);
+        }
+
         template <typename... Args>
         void AppendFormat(const std::format_string<Args...> &format, Args &&...args)
         {
             static_assert(std::is_same_v<T, char>, "Format is only available for char arrays");
             auto rem = RemainingSpan();
             auto result = std::format_to_n(rem.begin(), rem.size(), format, std::forward<Args>(args)...);
-            size_t size = result.out - rem.begin();
-            assert(size == result.size);
-            AddSize(size);
+            size_t added_size = result.out - rem.begin();
+            assert(added_size == result.size);
+            AddSize(added_size);
         }
 
         // Returns the number of written chars

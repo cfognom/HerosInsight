@@ -762,9 +762,10 @@ namespace HerosInsight::SkillBook
 
     struct BookState;
     std::vector<std::unique_ptr<BookState>> books;
-    void AddBook()
+    BookState *AddBook()
     {
         auto &book = books.emplace_back(std::make_unique<BookState>());
+        return book.get();
     }
     struct BookState
     {
@@ -790,6 +791,12 @@ namespace HerosInsight::SkillBook
             bool show_null_stats = false;
             bool snap_to_skill = true;
         };
+        struct WindowDims
+        {
+            ImVec2 window_pos;
+            ImVec2 window_size;
+        };
+        std::optional<WindowDims> init_dims = std::nullopt;
         Settings settings;
         SkillCatalog catalog{prop_bundle_names, prop_bundles};
         RichText::RichTextArena descs[2]{};
@@ -872,7 +879,7 @@ namespace HerosInsight::SkillBook
 
         std::string_view GetMetaStr(SkillTextPropertyID prop)
         {
-            return {};
+            return std::string_view(catalog.prop_bundle_names.Get((size_t)prop));
         }
 
         std::string_view GetStr(SkillTextPropertyID prop, GW::Constants::SkillID skill_id)
@@ -943,10 +950,11 @@ namespace HerosInsight::SkillBook
         // Draw's a button to duplicate the current book
         void DrawDupeButton()
         {
-            ImGui::SameLine();
             if (ImGui::Button("Open new book"))
             {
-                AddBook();
+                auto book = AddBook();
+                auto window = ImGui::GetCurrentWindow();
+                book->init_dims = {window->Pos + ImVec2(16, 16), window->Size};
             }
         }
 
@@ -1816,6 +1824,11 @@ namespace HerosInsight::SkillBook
             {
                 name_writer.AppendFormat(" ({})", book_index);
             }
+
+            // Add unique id: Hex-string of pointer to BookState
+            name_writer.AppendRange(std::string_view("###"));
+            name_writer.AppendIntToChars(reinterpret_cast<size_t>(this), 16);
+
             name_writer.push_back('\0');
         }
 
@@ -1823,12 +1836,24 @@ namespace HerosInsight::SkillBook
         {
             if (first_draw)
             {
-                auto vpw = GW::Render::GetViewportWidth();
-                auto vph = GW::Render::GetViewportHeight();
-                const auto window_width = 600;
-                const auto offset_from_top = ImGui::GetFrameHeight();
-                ImGui::SetNextWindowPos(ImVec2(vpw - window_width, offset_from_top), ImGuiCond_FirstUseEver);
-                ImGui::SetNextWindowSize(ImVec2(window_width, vph - offset_from_top), ImGuiCond_FirstUseEver);
+                ImVec2 pos, size;
+                if (init_dims.has_value())
+                {
+                    auto &init_dims_value = init_dims.value();
+                    pos = init_dims_value.window_pos;
+                    size = init_dims_value.window_size;
+                }
+                else
+                {
+                    auto vpw = GW::Render::GetViewportWidth();
+                    auto vph = GW::Render::GetViewportHeight();
+                    const auto window_width = 600;
+                    const auto offset_from_top = ImGui::GetFrameHeight();
+                    pos = ImVec2(vpw - window_width, offset_from_top);
+                    size = ImVec2(window_width, vph - offset_from_top);
+                }
+                ImGui::SetNextWindowPos(pos, ImGuiCond_FirstUseEver);
+                ImGui::SetNextWindowSize(size, ImGuiCond_FirstUseEver);
                 first_draw = false;
             }
 
@@ -1921,11 +1946,6 @@ namespace HerosInsight::SkillBook
                 ImGui::EndChild();
             }
             ImGui::End();
-
-            // if (!is_opened)
-            // {
-            //     books.remove(this);
-            // }
         }
     };
 
@@ -2522,11 +2542,38 @@ namespace HerosInsight::SkillBook
     //     }
     // }
 
+    void CloseBooks()
+    {
+        bool all_closed = true;
+        for (auto &book : books)
+        {
+            bool is_closed = !book->is_opened;
+            all_closed &= is_closed;
+        }
+
+        auto it = std::remove_if(
+            books.begin() + all_closed, books.end(),
+            [](const std::unique_ptr<BookState> &book)
+            {
+                return !book->is_opened;
+            }
+        );
+        books.erase(it, books.end());
+
+        if (all_closed)
+        {
+            books[0]->is_opened = true;
+            UpdateManager::open_skill_book = false;
+        }
+    }
+
     void Update()
     {
 #ifdef _DEBUG
         DebugDisplay::PushToDisplay("Skill Book selected agent_id", focused_agent_id);
 #endif
+
+        CloseBooks();
 
         for (auto &book : books)
         {
@@ -2536,10 +2583,12 @@ namespace HerosInsight::SkillBook
 
     void Draw(IDirect3DDevice9 *device)
     {
-        size_t i = 0;
-        for (auto &book : books)
+        // Books may be added in book->Draw().
+        size_t n_books_before_draw = books.size();
+        for (size_t i = 0; i < n_books_before_draw; ++i)
         {
-            book->Draw(device, i++);
+            auto &book = books[i];
+            book->Draw(device, i);
         }
     }
 }
