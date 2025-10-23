@@ -227,17 +227,18 @@ namespace HerosInsight::Utils
     std::string StrIDToStr(uint32_t id);
 
     template <typename... Args>
-    void FormatToChat(const std::wstring &format_str, Args &&...args)
+    void FormatToChat(GW::Chat::Color color, const std::wformat_string<Args...> &format_str, Args &&...args)
     {
-        std::wstring message = std::vformat(format_str, std::make_wformat_args(args...));
-        WriteDebugMessageRaw(message.c_str());
+        wchar_t buf[1024];
+        auto result = std::format_to_n(buf, sizeof(buf) - 1, format_str, std::forward<Args>(args)...);
+        result.out = '\0';
+        WriteDebugMessageRaw(buf, color);
     }
 
     template <typename... Args>
-    void FormatToChat(GW::Chat::Color color, const std::wstring &format_str, Args &&...args)
+    void FormatToChat(const std::wformat_string<Args...> &format_str, Args &&...args)
     {
-        std::wstring message = std::vformat(format_str, std::make_wformat_args(args...));
-        WriteDebugMessageRaw(message.c_str(), color);
+        FormatToChat(NULL, format_str, std::forward<Args>(args)...);
     }
 
     uint32_t DivHalfToEven(uint32_t nom, uint32_t den);
