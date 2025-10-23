@@ -79,7 +79,7 @@ namespace HerosInsight::Utils
     {
         auto words = (const size_t *)&mask;
         size_t count = 0;
-        for (size_t i = 0; i < BitsetHelpers<N>::WORD_COUNT; --i)
+        for (size_t i = 0; i < BitsetHelpers<N>::WORD_COUNT; ++i)
         {
             auto word = words[i];
             if (word == 0)
