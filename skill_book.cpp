@@ -884,12 +884,21 @@ namespace HerosInsight::SkillBook
 
         std::string_view GetStr(SkillTextPropertyID prop, GW::Constants::SkillID skill_id)
         {
-            return std::string_view(catalog.GetPropertyPtr(prop)->GetIndexed((size_t)skill_id));
+            auto prop_ptr = catalog.GetPropertyPtr(prop);
+            if (prop_ptr == nullptr)
+                return {};
+
+            auto chars = prop_ptr->GetIndexed((size_t)skill_id);
+            return std::string_view(chars);
         }
 
         std::span<uint16_t> GetHL(SkillTextPropertyID prop, GW::Constants::SkillID skill_id)
         {
-            auto span_id = catalog.GetPropertyPtr(prop)->GetSpanId((size_t)skill_id);
+            auto prop_ptr = catalog.GetPropertyPtr(prop);
+            if (prop_ptr == nullptr)
+                return {};
+
+            auto span_id = prop_ptr->GetSpanId((size_t)skill_id);
             return hl_data.GetPropHL((size_t)prop, span_id);
         }
 
