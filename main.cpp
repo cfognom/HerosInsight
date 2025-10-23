@@ -307,6 +307,40 @@ IDirect3DStateBlock9 *TryPrepareStencil(IDirect3DDevice9 *device)
     return HerosInsight::Utils::PrepareStencilHoles(device, holes);
 }
 
+static GW::HookEntry game_loop_callback_entry;
+static void Shutdown()
+{
+    HWND hWnd = GW::MemoryMgr::GetGWWindowHandle();
+
+    ImGui_ImplDX9_Shutdown();
+    ImGui::DestroyContext();
+    SetWindowLongPtr(hWnd, GWL_WNDPROC, OldWndProc);
+
+    HerosInsight::UpdateManager::Terminate();
+    GW::GameThread::RemoveGameThreadCallback(&game_loop_callback_entry);
+    GW::DisableHooks();
+    running = false;
+}
+
+template <typename Fn, typename... Args>
+static void SafeCall(std::wstring_view context, Fn &&fn, Args &&...args)
+{
+    try
+    {
+        std::forward<Fn>(fn)(std::forward<Args>(args)...);
+    }
+    catch (const std::exception &e)
+    {
+        HerosInsight::Utils::FormatToChat(L"{} exception: {}", context, HerosInsight::Utils::StrToWStr(e.what()));
+        Shutdown();
+    }
+    catch (...)
+    {
+        HerosInsight::Utils::FormatToChat(L"{} exception: Unknown", context);
+        Shutdown();
+    }
+}
+
 static void OnRender(GW::Render::Helper helper)
 {
     auto device = helper.device;
@@ -324,6 +358,14 @@ static void OnRender(GW::Render::Helper helper)
     {
         if (!HerosInsight::UpdateManager::TryInitialize())
             return;
+
+        GW::GameThread::RegisterGameThreadCallback(
+            &game_loop_callback_entry,
+            [](GW::HookStatus *)
+            {
+                SafeCall(L"Update", HerosInsight::UpdateManager::Update);
+            }
+        );
         initialized = true;
     }
 
@@ -349,15 +391,7 @@ static void OnRender(GW::Render::Helper helper)
 #endif
     )
     {
-        HWND hWnd = GW::MemoryMgr::GetGWWindowHandle();
-
-        ImGui_ImplDX9_Shutdown();
-        ImGui::DestroyContext();
-        SetWindowLongPtr(hWnd, GWL_WNDPROC, OldWndProc);
-
-        HerosInsight::UpdateManager::Terminate();
-        GW::DisableHooks();
-        running = false;
+        Shutdown();
     }
 }
 
@@ -381,7 +415,12 @@ static DWORD WINAPI ThreadProc(LPVOID lpModule)
 
     GW::Initialize();
 
-    GW::Render::SetRenderCallback(OnRender);
+    GW::Render::SetRenderCallback(
+        [](GW::Render::Helper helper)
+        {
+            SafeCall(L"Render", OnRender, helper);
+        }
+    );
     GW::Render::SetResetCallback(
         [](GW::Render::Helper helper)
         {

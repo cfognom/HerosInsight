@@ -99,7 +99,8 @@ namespace HerosInsight
         const char *msg,
         const char *file,
         unsigned int line,
-        const char *function)
+        const char *function
+    )
     {
         if (level == GW::LogLevel::LEVEL_INFO)
         {
@@ -108,7 +109,6 @@ namespace HerosInsight
         }
     }
 
-    static GW::HookEntry game_loop_callback_entry;
     bool UpdateManager::TryInitialize()
     {
         auto &text_provider = HerosInsight::SkillTextProvider::GetInstance(GW::Constants::Language::English); // Init SkillTextProvider
@@ -134,7 +134,6 @@ namespace HerosInsight
         {
             GW::RegisterLogHandler(&LogHandler, &log_context);
         }
-        GW::GameThread::RegisterGameThreadCallback(&game_loop_callback_entry, UpdateManager::Update);
         GW::Chat::WriteChat(GW::Chat::CHANNEL_MODERATOR, L"HerosInsight: Initialized");
         return true;
     }
@@ -150,8 +149,7 @@ namespace HerosInsight
         HerosInsight::PacketStepper::Terminate();
         HerosInsight::EffectInitiator::Terminate();
         HerosInsight::EnergyDisplay::Terminate();
-        GW::GameThread::RemoveGameThreadCallback(&game_loop_callback_entry);
-        GW::Chat::WriteChat(GW::Chat::CHANNEL_MODERATOR, L"HerosInsight: Bye!");
+        GW::Chat::WriteChat(GW::Chat::CHANNEL_MODERATOR, L"HerosInsight: Terminated");
     }
 
     ImGuiWindowFlags UpdateManager::GetWindowFlags()
@@ -447,7 +445,7 @@ namespace HerosInsight
         }
     }
 
-    void UpdateManager::Update(GW::HookStatus *)
+    void UpdateManager::Update()
     {
         UpdateManager::frame_id++; // We increment frame_id at the beginning of the frame so that any draw updates that happen after this use the same frame_id
         const auto gw_ms = GW::MemoryMgr::GetSkillTimer();
