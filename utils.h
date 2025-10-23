@@ -231,7 +231,7 @@ namespace HerosInsight::Utils
     {
         wchar_t buf[1024];
         auto result = std::format_to_n(buf, sizeof(buf) - 1, format_str, std::forward<Args>(args)...);
-        result.out = '\0';
+        *result.out = '\0';
         WriteDebugMessageRaw(buf, color);
     }
 
