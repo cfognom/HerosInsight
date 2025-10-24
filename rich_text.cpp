@@ -327,6 +327,7 @@ namespace HerosInsight::RichText
         float max_width = wrapping_max < 0 ? std::numeric_limits<float>::max() : wrapping_max - wrapping_min;
         float used_width = ImGui::GetCursorPosX() - wrapping_min;
         auto ss_cursor = ImGui::GetCursorScreenPos();
+        const auto style = ImGui::GetStyle();
         const auto text_height = ImGui::GetTextLineHeight();
 
         auto window = ImGui::GetCurrentWindow();
@@ -449,6 +450,7 @@ namespace HerosInsight::RichText
 
         ImGui::ItemSize(bb);
         ImGui::ItemAdd(bb, 0);
+        ss_cursor.y += style.ItemSpacing.y;
         ImGui::SetCursorScreenPos(ss_cursor);
     }
 
