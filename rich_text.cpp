@@ -341,38 +341,36 @@ namespace HerosInsight::RichText
             std::numeric_limits<float>::min(), std::numeric_limits<float>::min()
         );
 
-        size_t i_rem = 0;  // start of remaining segments
-        size_t i_wrap = 0; // i_wrap > i_rem
-        size_t i = -1;
+        size_t n_segments = segments.size();
+        size_t i_rem = 0; // start of remaining segments or end of done segments
         while (true)
         {
-            ++i;
-            if (i < segments.size())
+            // Discover how much we can draw before wrapping (i_wrap).
+            size_t i_wrap = n_segments;
+            std::optional<size_t> i_wrap_allowed = std::nullopt;
+            for (size_t i = i_rem; i < n_segments; ++i)
             {
                 auto &seg = segments[i];
-                if (seg.wrap_mode == TextSegment::WrapMode::Force)
+                if (used_width > 0.f) // We only allow wrapping if we are not direactly at the start
                 {
-                    i_wrap = i;
-                    // Flush
-                }
-                else
-                {
-                    used_width += seg.width;
-                    if (seg.wrap_mode == TextSegment::WrapMode::Allow)
+                    if (seg.wrap_mode == TextSegment::WrapMode::Force)
                     {
                         i_wrap = i;
+                        break;
                     }
 
-                    bool flush = used_width >= max_width;
-                    if (!flush)
-                        continue;
-                    // Flush
+                    if (seg.wrap_mode == TextSegment::WrapMode::Allow)
+                    {
+                        i_wrap_allowed = i;
+                    }
                 }
-            }
-            else
-            {
-                i_wrap = segments.size();
-                // Flush
+
+                used_width += seg.width;
+                if (used_width >= max_width && i_wrap_allowed.has_value())
+                {
+                    i_wrap = i_wrap_allowed.value();
+                    break;
+                }
             }
 
             // Flush
@@ -441,10 +439,9 @@ namespace HerosInsight::RichText
                 ss_cursor.x += seg.width;
             }
 
-            if (i_wrap == segments.size())
+            if (i_wrap == n_segments)
                 break;
 
-            i = i_wrap;
             i_rem = i_wrap;
             used_width = 0.f;
             ss_cursor.x = window->ContentRegionRect.Min.x + wrapping_min;
