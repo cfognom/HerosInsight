@@ -342,8 +342,8 @@ namespace HerosInsight::RichText
         );
 
         size_t n_segments = segments.size();
-        size_t i_rem = 0; // start of remaining segments or end of done segments
-        while (true)
+        // i_rem is the start of remaining segments or end of done segments
+        for (size_t i_rem = 0; i_rem < n_segments;)
         {
             // Discover how much we can draw before wrapping (i_wrap).
             size_t i_wrap = n_segments;
@@ -373,10 +373,10 @@ namespace HerosInsight::RichText
                 }
             }
 
-            // Flush
-            for (size_t i = i_rem; i < i_wrap; ++i)
+            // Draw segments in the range [i_rem, i_wrap)
+            for (; i_rem < i_wrap; ++i_rem)
             {
-                auto &seg = segments[i];
+                auto &seg = segments[i_rem];
                 auto segment_size = ImVec2(seg.width, text_height);
                 auto min = ss_cursor;
                 auto max = min + segment_size;
@@ -439,10 +439,7 @@ namespace HerosInsight::RichText
                 ss_cursor.x += seg.width;
             }
 
-            if (i_wrap == n_segments)
-                break;
-
-            i_rem = i_wrap;
+            // Make newline
             used_width = 0.f;
             ss_cursor.x = window->ContentRegionRect.Min.x + wrapping_min;
             ss_cursor.y += text_height;
@@ -452,13 +449,14 @@ namespace HerosInsight::RichText
 
         ImGui::ItemSize(bb);
         ImGui::ItemAdd(bb, 0);
+        ImGui::SetCursorScreenPos(ss_cursor);
     }
 
-    void Drawer::DrawRichText(std::string_view text, float wrapping_min, float wrapping_max, std::span<uint16_t> highlighting)
+    void Drawer::DrawRichText(std::string_view text, float wrapping_min, float wrapping_max, std::span<uint16_t> highlighting, TextSegment::WrapMode first_segment_wrap_mode)
     {
         TextSegment segments[512];
         std::span<TextSegment> seg_view = segments;
-        MakeTextSegments(text, seg_view, highlighting);
+        MakeTextSegments(text, seg_view, highlighting, first_segment_wrap_mode);
         DrawTextSegments(seg_view, wrapping_min, wrapping_max);
     }
 
