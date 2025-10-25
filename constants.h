@@ -10,8 +10,35 @@
 
 namespace Constants
 {
-    inline std::filesystem::path dll_path;
-    inline std::filesystem::path resources_path;
+    struct Paths : public std::array<std::filesystem::path, 4>
+    {
+        // clang-format off
+        std::filesystem::path &root()      { return (*this)[0]; };
+        std::filesystem::path &resources() { return (*this)[1]; };
+        std::filesystem::path &cache()     { return (*this)[2]; };
+        std::filesystem::path &crash()     { return (*this)[3]; };
+        // clang-format on
+
+        void Init(HMODULE hModule)
+        {
+            wchar_t buffer[MAX_PATH];
+            GetModuleFileNameW(hModule, buffer, MAX_PATH);
+            auto dll_dir_path = std::filesystem::path(buffer).parent_path();
+
+            this->root() = dll_dir_path;
+            this->resources() = dll_dir_path / "resources";
+            this->cache() = dll_dir_path / "cache";
+            this->crash() = dll_dir_path / "crash";
+            for (auto &path : *this)
+            {
+                if (!std::filesystem::exists(path))
+                {
+                    std::filesystem::create_directory(path);
+                }
+            }
+        }
+    };
+    inline Paths paths;
 
     namespace GWColors
     {

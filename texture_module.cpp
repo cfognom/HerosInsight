@@ -448,7 +448,7 @@ namespace TextureModule
         textures_by_filename[filename] = img_ptr;
         auto Loadtask = [img_ptr](IDirect3DDevice9 *device)
         {
-            auto full_path_str = (Constants::resources_path / img_ptr->m_filename).string();
+            auto full_path_str = (Constants::paths.resources() / img_ptr->m_filename).string();
 
             D3DXIMAGE_INFO image_info;
             auto result = D3DXGetImageInfoFromFileA(full_path_str.c_str(), &image_info);

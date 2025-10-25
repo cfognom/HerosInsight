@@ -5,33 +5,18 @@
 #include <windows.h>
 
 #include "capacity_hints.h"
+#include <constants.h>
 
-std::string GetDefaultFilePath()
+std::unordered_map<std::string, size_t> hints_map;
+
+std::filesystem::path GetFilePath()
 {
-    constexpr auto filename = "capacity_hints.txt";
-
-    // Get the DLL handle based on this function's address
-    HMODULE hMod = nullptr;
-    if (!GetModuleHandleExA(
-            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
-                GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-            reinterpret_cast<LPCSTR>(&GetDefaultFilePath),
-            &hMod))
-    {
-        return filename; // fallback to CWD
-    }
-
-    char path[MAX_PATH];
-    DWORD len = GetModuleFileNameA(hMod, path, MAX_PATH);
-    if (len == 0 || len == MAX_PATH)
-        return filename; // fallback
-
-    std::filesystem::path dllPath(path);
-    return (dllPath.parent_path() / filename).string();
+    return Constants::paths.cache() / "capacity_hints.txt";
 }
 
-void LoadHints(const std::string &filename, std::unordered_map<std::string, size_t> &hints)
+void HerosInsight::CapacityHints::LoadHints()
 {
+    auto filename = GetFilePath();
     std::ifstream f(filename);
     if (!f) return;
 
@@ -39,21 +24,19 @@ void LoadHints(const std::string &filename, std::unordered_map<std::string, size
     size_t cap;
     while (f >> id >> cap)
     {
-        hints[id] = cap;
+        hints_map[id] = cap;
     }
 }
 
-void SaveHints(const std::string &filename, std::unordered_map<std::string, size_t> &hints)
+void HerosInsight::CapacityHints::SaveHints()
 {
+    auto filename = GetFilePath();
     std::ofstream f(filename, std::ios::trunc);
     if (!f) return;
 
-    std::vector<std::pair<std::string, size_t>> items(hints.begin(), hints.end());
-    std::sort(items.begin(), items.end(),
-        [](auto &a, auto &b)
-        {
-            return a.first < b.first;
-        });
+    std::vector<std::pair<std::string, size_t>> items(hints_map.begin(), hints_map.end());
+    std::sort(items.begin(), items.end(), [](auto &a, auto &b)
+              { return a.first < b.first; });
 
     for (auto &[id, cap] : items)
     {
@@ -61,26 +44,15 @@ void SaveHints(const std::string &filename, std::unordered_map<std::string, size
     }
 }
 
-HerosInsight::CapacityHints::CapacityHints()
+size_t HerosInsight::CapacityHints::GetHint(const std::string &id)
 {
-    filename_ = GetDefaultFilePath();
-    LoadHints(filename_, hints_);
+    auto it = hints_map.find(id);
+    return it != hints_map.end() ? it->second : 0;
 }
 
-HerosInsight::CapacityHints::~CapacityHints()
+void HerosInsight::CapacityHints::UpdateHint(const std::string &id, size_t capacity)
 {
-    SaveHints(filename_, hints_);
-}
-
-size_t HerosInsight::CapacityHints::get(const std::string &id) const
-{
-    auto it = hints_.find(id);
-    return it != hints_.end() ? it->second : 0;
-}
-
-void HerosInsight::CapacityHints::update(const std::string &id, size_t capacity)
-{
-    auto &stored = hints_[id];
+    auto &stored = hints_map[id];
     if (stored < capacity)
         stored = capacity;
 }

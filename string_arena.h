@@ -93,15 +93,15 @@ namespace HerosInsight
 
         void ReserveFromHint(const std::string &id)
         {
-            auto n_spans = g_capacityHints.get(id + "_spans");
-            auto n_elements = g_capacityHints.get(id + "_elements");
+            auto n_spans = CapacityHints::GetHint(id + "_spans");
+            auto n_elements = CapacityHints::GetHint(id + "_elements");
             Reserve(n_spans, n_elements);
         }
 
         void StoreCapacityHint(const std::string &id)
         {
-            g_capacityHints.update(id + "_spans", id_to_span.size());
-            g_capacityHints.update(id + "_elements", this->size());
+            CapacityHints::UpdateHint(id + "_spans", id_to_span.size());
+            CapacityHints::UpdateHint(id + "_elements", this->size());
         }
 
         float CalcAvgSpanSize() const { return id_to_span.empty() ? 0.f : (float)this->size() / (float)id_to_span.size(); }
@@ -265,14 +265,14 @@ namespace HerosInsight
 
         void ReserveFromHint(const std::string &id)
         {
-            size_t n_indices = g_capacityHints.get(id + "_indices");
+            size_t n_indices = CapacityHints::GetHint(id + "_indices");
             ReserveIndices(n_indices);
             base::ReserveFromHint(id);
         }
 
         void StoreCapacityHint(const std::string &id)
         {
-            g_capacityHints.update(id + "_indices", index_to_id.size());
+            CapacityHints::UpdateHint(id + "_indices", index_to_id.size());
             base::StoreCapacityHint(id);
         }
 

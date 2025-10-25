@@ -6,25 +6,14 @@
 #include <unordered_map>
 #include <windows.h>
 
-namespace HerosInsight
+namespace HerosInsight::CapacityHints
 {
     // Helper to get and set capacity hints
     // Expected to be used together with vector like storage
-    class CapacityHints
-    {
-    public:
-        CapacityHints();
-        ~CapacityHints();
-
-        size_t get(const std::string &id) const;
-        void update(const std::string &id, size_t capacity);
-
-    private:
-        std::unordered_map<std::string, size_t> hints_;
-        std::string filename_;
-    };
-
-    inline CapacityHints g_capacityHints;
+    size_t GetHint(const std::string &id);
+    void UpdateHint(const std::string &id, size_t capacity);
+    void LoadHints();
+    void SaveHints();
 
     template <typename Container>
     class CapacityGuard
@@ -33,12 +22,12 @@ namespace HerosInsight
         CapacityGuard(Container &c, std::string_view id)
             : c_(c), id_(id)
         {
-            c_.reserve(g_capacityHints.get(id_));
+            c_.reserve(CapacityHints::GetHint(id_));
         }
 
         ~CapacityGuard()
         {
-            g_capacityHints.update(id_, c_.size());
+            CapacityHints::UpdateHint(id_, c_.size());
         }
 
     private:
