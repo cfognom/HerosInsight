@@ -427,8 +427,9 @@ namespace HerosInsight
                         if (generic_str[i_gen] != specific_str[i_spe])
                         {
                             auto [gen_len, spe_len] = MinPrefixDiffLength(generic_str.substr(i_gen), specific_str.substr(i_spe));
+                            assert(gen_len < std::numeric_limits<uint8_t>::max());
                             auto replacement = specific_str.substr(i_spe, spe_len);
-                            provider->spec_kits.emplace_back(i_gen, gen_len, replacement);
+                            provider->spec_kits.emplace_back(i_gen, (uint8_t)gen_len, replacement);
                             i_gen += gen_len;
                             i_spe += spe_len;
                         }
