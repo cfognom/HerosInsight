@@ -123,7 +123,8 @@ namespace HerosInsight::Utils
                     ++word_index;
                     if (word_index == BitsetHelpers<N>::WORD_COUNT)
                         break;
-                    auto words = (const size_t *)&bitset;
+                    static_assert(alignof(std::bitset<N>) >= alignof(size_t));
+                    auto words = (const size_t *)&bitset; // We assume bitset is an array of size_t
                     word_copy = words[word_index];
                     if (word_copy != 0)
                         break;
@@ -131,9 +132,9 @@ namespace HerosInsight::Utils
             }
             auto trailing_zeros = std::countr_zero(word_copy);
             index = std::min(word_index * BitsetHelpers<N>::WORD_BITS + trailing_zeros, N);
-            if (index < N)
+            if (word_copy != 0)
             {
-                word_copy &= word_copy - 1;
+                word_copy &= word_copy - 1; // Clear lowest set bit
             }
         }
         bool IsDone() const { return index == N; }

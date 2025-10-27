@@ -204,6 +204,7 @@ namespace HerosInsight
                         span_ids[span_id_opt.value()] = true;
                     }
                     const auto unique_count = prop.SpanCount();
+                    span_ids[unique_count] = true; // Prevents it.Next() from running all the way to the end.
                     for (Utils::BitsetIterator it(span_ids); it.index < unique_count; it.Next())
                     {
                         auto span_id = it.index;
@@ -255,6 +256,7 @@ namespace HerosInsight
                     span_ids[span_id_opt.value()] = true;
                 }
                 const auto unique_count = prop.SpanCount();
+                span_ids[unique_count] = true; // Prevents it.Next() from running all the way to the end.
                 for (Utils::BitsetIterator it(span_ids); it.index < unique_count; it.Next())
                 {
                     auto span_id = it.index;
