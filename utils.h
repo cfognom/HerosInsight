@@ -116,21 +116,37 @@ namespace HerosInsight::Utils
         size_t index;
         void Next()
         {
-            index = Utils::CountTrailingZeros(bitset);
+            if (word_copy == 0)
+            {
+                while (true)
+                {
+                    ++word_index;
+                    if (word_index == BitsetHelpers<N>::WORD_COUNT)
+                        break;
+                    auto words = (const size_t *)&bitset;
+                    word_copy = words[word_index];
+                    if (word_copy != 0)
+                        break;
+                }
+            }
+            auto trailing_zeros = std::countr_zero(word_copy);
+            index = std::min(word_index * BitsetHelpers<N>::WORD_BITS + trailing_zeros, N);
             if (index < N)
             {
-                bitset[index] = false;
+                word_copy &= word_copy - 1;
             }
         }
         bool IsDone() const { return index == N; }
-        BitsetIterator(std::bitset<N> bitset)
+        BitsetIterator(std::bitset<N> &bitset)
             : bitset(bitset)
         {
             Next();
         }
 
     private:
-        std::bitset<N> bitset;
+        size_t word_index = -1;
+        size_t word_copy = 0;
+        std::bitset<N> &bitset;
     };
 
     enum struct SkillTargetType : uint8_t
