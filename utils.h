@@ -110,6 +110,29 @@ namespace HerosInsight::Utils
         }
     }
 
+    template <size_t N>
+    struct BitsetIterator
+    {
+        size_t index;
+        void Next()
+        {
+            index = Utils::CountTrailingZeros(bitset);
+            if (index < N)
+            {
+                bitset[index] = false;
+            }
+        }
+        bool IsDone() const { return index == N; }
+        BitsetIterator(std::bitset<N> bitset)
+            : bitset(bitset)
+        {
+            Next();
+        }
+
+    private:
+        std::bitset<N> bitset;
+    };
+
     enum struct SkillTargetType : uint8_t
     {
         None = 0,
