@@ -287,11 +287,14 @@ namespace HerosInsight
 
         std::span<T_span_id> SpanIds() { return index_to_id; }
 
-        T_span_id GetSpanId(size_t index)
+        std::optional<T_span_id> GetSpanId(size_t index)
         {
             if (index >= index_to_id.size())
-                return NULL_SPAN_ID;
-            return index_to_id[index];
+                return std::nullopt;
+            auto span_id = index_to_id[index];
+            if (span_id == NULL_SPAN_ID)
+                return std::nullopt;
+            return span_id;
         }
 
         void SetSpanId(size_t index, T_span_id span_id)
@@ -303,7 +306,14 @@ namespace HerosInsight
             index_to_id[index] = span_id;
         }
 
-        std::span<T> GetIndexed(size_t index) { return base::Get(GetSpanId(index)); }
+        std::span<T> GetIndexed(size_t index)
+        {
+            auto span_id_opt = GetSpanId(index);
+            if (!span_id_opt.has_value())
+                return {};
+            auto span_id = span_id_opt.value();
+            return base::Get(span_id);
+        }
 
         void BeginWrite()
         {
