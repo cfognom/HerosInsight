@@ -119,8 +119,5 @@
     },
     "C_Cpp.formatting": "clangFormat",
     "C_Cpp.clang_format_style": "file",
-    "editor.defaultFormatter": "ms-vscode.cpptools",
-    "cmake.configureArgs": [
-        "-A Win32"
-    ]
+    "editor.defaultFormatter": "ms-vscode.cpptools"
 }
