@@ -159,29 +159,31 @@ namespace HerosInsight
                     bool is_meta = i_prop == PROP_COUNT;
                     if (is_meta) // Special case for meta properties
                     {
+                        // Iterate the bundle names and check for matches
                         for (size_t i_bundle = 0; i_bundle < prop_bundle_names.SpanCount(); ++i_bundle)
                         {
                             auto str = std::string_view(prop_bundle_names.Get(i_bundle));
                             auto &hl = hl_data.GetBundleHL(i_bundle);
                             bool is_match = filter.matcher.Matches(str, &hl);
-                            if (is_match)
+                            if (!is_match)
+                                continue;
+
+                            auto &bundle_prop_set = prop_bundles[i_bundle];
+                            // Iterate the indices and check which ones have values in this bundle
+                            for (auto index : indices)
                             {
-                                // Add any entry that has properties in this bundle to the found_by_filter set
-                                for (auto index : indices)
+                                for (Utils::BitsetIterator it(bundle_prop_set); !it.IsDone(); it.Next())
                                 {
-                                    for (Utils::BitsetIterator it(prop_bundles[i_bundle]); !it.IsDone(); it.Next())
+                                    auto i_prop = it.index;
+                                    auto prop_ptr = props[i_prop];
+                                    if (prop_ptr == nullptr)
+                                        continue;
+                                    auto &prop = *prop_ptr;
+                                    auto span_id_opt = prop.GetSpanId(index);
+                                    if (span_id_opt.has_value())
                                     {
-                                        auto i_prop = it.index;
-                                        auto prop_ptr = props[i_prop];
-                                        if (prop_ptr == nullptr)
-                                            continue;
-                                        auto &prop = *prop_ptr;
-                                        auto span_id_opt = prop.GetSpanId(index);
-                                        if (span_id_opt.has_value())
-                                        {
-                                            found_by_filter.set(index);
-                                            break;
-                                        }
+                                        found_by_filter[index] = true;
+                                        break;
                                     }
                                 }
                             }
