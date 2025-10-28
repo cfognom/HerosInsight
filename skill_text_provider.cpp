@@ -228,9 +228,9 @@ namespace HerosInsight
             else
             {
                 std::optional<size_t> span_id = std::nullopt;
-                for (auto m = affected_attr_lvls; m.any(); Utils::ClearLowestSetBit(m))
+                for (Utils::BitsetIterator it(affected_attr_lvls); !it.IsDone(); it.Next())
                 {
-                    auto attr_index = Utils::CountTrailingZeros(m);
+                    auto attr_index = it.index;
                     auto attr_lvl = attr_index - 1;
                     auto dst_index = GetGenericAttrIndex(skill_id_16, is_concise, attr_lvl);
                     if (!span_id.has_value())
