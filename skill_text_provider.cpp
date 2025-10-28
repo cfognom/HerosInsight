@@ -125,6 +125,12 @@ namespace HerosInsight
             dst = std::span<char>(dst.data(), i_dst);
         }
 
+        // Iterates the description and:
+        // If the description is generic:
+        //   - Removes the <param> tags and KEEPS their contents
+        //   - Creates a ParamSpan for each <param> tag
+        // If the description is specific:
+        //   - Removes the <param> tags and DROPS their contents
         static void ExtractParams(std::span<char> &desc, bool is_generic, IndexedStringArena<ParamSpan> &param_spans)
         {
             bool is_param = false;
@@ -135,33 +141,33 @@ namespace HerosInsight
             while (i_src < desc.size())
             {
                 auto rem = std::string_view(desc.subspan(i_src));
-                if (Utils::TryRead("</param>", rem))
+                if (Utils::TryRead("<param=", rem) &&
+                    Utils::TryReadNumber(rem, param_id) &&
+                    Utils::TryRead('>', rem))
+                {
+                    is_param = true;
+                    param_str_pos = i_dst;
+                    i_src = rem.data() - desc.data(); // Skip the <param> tag
+                }
+                else if (Utils::TryRead("</param>", rem))
                 {
                     is_param = false;
-                    i_src = rem.data() - desc.data();
+                    i_src = rem.data() - desc.data(); // Skip the </param> tag
                     if (is_generic)
                     {
                         uint8_t param_str_size = i_dst - param_str_pos;
                         param_spans.emplace_back(param_str_pos, param_str_size, (uint8_t)param_id);
                     }
                 }
-                else if (Utils::TryRead("<param=", rem) &&
-                         Utils::TryReadNumber(rem, param_id) &&
-                         Utils::TryRead('>', rem))
-                {
-                    is_param = true;
-                    param_str_pos = i_dst;
-                    i_src = rem.data() - desc.data();
-                }
                 else
                 {
-                    bool skip = !is_generic && is_param;
+                    bool skip = !is_generic && is_param; // If the description is specific, skip the contents of <param> tags
                     if (!skip)
                     {
                         desc[i_dst] = desc[i_src];
+                        ++i_dst;
                     }
 
-                    ++i_dst;
                     ++i_src;
                 }
             }
@@ -206,12 +212,8 @@ namespace HerosInsight
 
             text_dst_ptr->AppendWriteBuffer(
                 1024,
-                [&](std::span<char> &text_buf)
+                [wstr, is_generic, &decode](std::span<char> &text_buf)
                 {
-                    if (skill_id_16 == (uint16_t)GW::Constants::SkillID::Power_Block)
-                    {
-                        assert(true);
-                    }
                     Utils::WStrToStr(wstr, text_buf);
                     ExtractParams(text_buf, is_generic, decode.param_spans);
                 }
