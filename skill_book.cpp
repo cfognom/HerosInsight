@@ -1087,7 +1087,6 @@ namespace HerosInsight::SkillBook
             ImGui::SetCursorPosY(cursor_before.y + 2);
             ImGui::TextUnformatted("Attributes");
             ImGui::SameLine();
-            auto cursor_content_x = ImGui::GetCursorPosX();
             ImGui::SetCursorPosY(cursor_before.y);
 
             if (ImGui::RadioButton("(0...15)", settings.attribute_mode == AttributeMode::Generic))
@@ -1115,7 +1114,6 @@ namespace HerosInsight::SkillBook
 
             if (settings.attribute_mode == AttributeMode::Manual)
             {
-                // ImGui::SetCursorPosX(cursor_content_x);
                 if (ImGui::SliderInt("Attribute level", &settings.attr_lvl_slider, 0, 21))
                 {
                     request_state_update = true;
@@ -1312,7 +1310,10 @@ namespace HerosInsight::SkillBook
 
             const auto draw_list = ImGui::GetWindowDrawList();
 
-            float max_pos_x = ImGui::GetWindowContentRegionWidth() - 20;
+            auto window = ImGui::GetCurrentWindow();
+            auto work_width = window->WorkRect.GetWidth();
+
+            float max_pos_x = work_width - 20;
             auto cursor_start_pos = ImGui::GetCursorPos();
             float min_pos_x = cursor_start_pos.x;
             float base_pos_y = cursor_start_pos.y + 1;
@@ -1399,7 +1400,8 @@ namespace HerosInsight::SkillBook
 
                 auto name_cursor_ss = ImGui::GetCursorScreenPos();
                 auto wrapping_min = ImGui::GetCursorPosX();
-                auto wrapping_max = ImGui::GetWindowContentRegionMax().x;
+                auto window = ImGui::GetCurrentWindow();
+                auto wrapping_max = window->WorkRect.GetWidth();
                 auto width = wrapping_max - wrapping_min;
 
                 { // Draw skill name
@@ -1726,11 +1728,13 @@ namespace HerosInsight::SkillBook
 
             if (!feedback.empty())
             {
-                text_drawer.DrawRichText(feedback, 0, ImGui::GetWindowContentRegionMax().x);
+                auto window = ImGui::GetCurrentWindow();
+                auto wrapping_max = window->WorkRect.GetWidth();
+                text_drawer.DrawRichText(feedback, 0, wrapping_max);
             }
         }
 
-        void DrawDescription(GW::Constants::SkillID skill_id, float content_width)
+        void DrawDescription(GW::Constants::SkillID skill_id, float work_width)
         {
             auto tt_provider = SkillTooltipProvider(skill_id);
             text_drawer.tooltip_provider = &tt_provider;
@@ -1743,7 +1747,7 @@ namespace HerosInsight::SkillBook
             auto main_hl = GetHL(type, skill_id);
             auto alt_hl = GetHL(alt_type, skill_id);
 
-            text_drawer.DrawRichText(main_desc, 0, content_width, main_hl);
+            text_drawer.DrawRichText(main_desc, 0, work_width, main_hl);
 
             bool draw_alt = alt_hl.size() > main_hl.size();
             if (!draw_alt)
@@ -1776,18 +1780,16 @@ namespace HerosInsight::SkillBook
                 // ImGui::SameLine(0, 0);
                 // auto wrapping_min = ImGui::GetCursorPosX();
 
-                text_drawer.DrawRichText(alt_desc, 0, content_width, alt_hl);
+                text_drawer.DrawRichText(alt_desc, 0, work_width, alt_hl);
             }
         }
 
-        void DrawSkillFooter(CustomSkillData &custom_sd, float content_width)
+        void DrawSkillFooter(CustomSkillData &custom_sd, float work_width)
         {
             auto &skill = *custom_sd.skill;
             auto skill_id = custom_sd.skill_id;
             ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
-            auto content_max = ImGui::GetWindowContentRegionMax().x;
-            auto cursor_x = ImGui::GetCursorPosX();
 
             for (auto bundle_id = footer_bundle_section.start_index; bundle_id < footer_bundle_section.end_index; ++bundle_id)
             {
@@ -1804,14 +1806,14 @@ namespace HerosInsight::SkillBook
                     {
                         auto meta = GetBundleName(bundle_id);
                         auto meta_hl = GetMetaHL(bundle_id);
-                        text_drawer.DrawRichText(meta, 0, content_max, meta_hl);
+                        text_drawer.DrawRichText(meta, 0, work_width, meta_hl);
                         ImGui::SameLine();
-                        text_drawer.DrawRichText(": ", 0, content_max);
+                        text_drawer.DrawRichText(": ", 0, work_width);
                         ImGui::SameLine();
                         has_drawn_header = true;
                     }
                     auto str_hl = GetHL(prop_id, skill_id);
-                    text_drawer.DrawRichText(str, 0, content_max, str_hl);
+                    text_drawer.DrawRichText(str, 0, work_width, str_hl);
                 }
             }
 
@@ -1823,7 +1825,7 @@ namespace HerosInsight::SkillBook
                 FixedVector<char, 32> id_str;
                 id_str.AppendIntToChars((uint32_t)skill.skill_id);
                 const auto id_str_size = ImGui::CalcTextSize(id_str.data(), id_str.data_end());
-                ImGui::SetCursorPosX(content_width - id_str_size.x - 4);
+                ImGui::SetCursorPosX(work_width - id_str_size.x - 4);
                 ImVec4 color(1, 1, 1, 0.3f);
                 ImGui::PushStyleColor(ImGuiCol_Text, color);
                 ImGui::TextUnformatted(id_str.data(), id_str.data_end());
@@ -1909,16 +1911,17 @@ namespace HerosInsight::SkillBook
 
                             const auto initial_screen_cursor = ImGui::GetCursorScreenPos();
                             const auto initial_cursor = ImGui::GetCursorPos();
-                            const auto content_width = ImGui::GetWindowContentRegionWidth();
+                            const auto window = ImGui::GetCurrentWindow();
+                            const auto work_width = window->WorkRect.GetWidth();
 
                             DrawSkillHeader(custom_sd);
-                            DrawDescription(skill_id, content_width);
+                            DrawDescription(skill_id, work_width);
                             ImGui::Spacing();
-                            DrawSkillFooter(custom_sd, content_width);
+                            DrawSkillFooter(custom_sd, work_width);
                             auto final_screen_cursor = ImGui::GetCursorScreenPos();
 
                             auto entry_screen_max = final_screen_cursor;
-                            entry_screen_max.x += content_width;
+                            entry_screen_max.x += work_width;
 
                             if (ImGui::IsWindowHovered() && ImGui::IsMouseHoveringRect(initial_screen_cursor, entry_screen_max))
                             {
@@ -2180,7 +2183,8 @@ namespace HerosInsight::SkillBook
         // FixedString<32> header;
         // GetFormattedHeader(type, std::back_inserter(header));
 
-        auto content_max = ImGui::GetWindowContentRegionMax().x;
+        auto window = ImGui::GetCurrentWindow();
+        auto work_width = window->WorkRect.GetWidth();
         auto cursor_x = ImGui::GetCursorPosX();
 
         // auto has_header_hl = active_state->highlighting_map[GetHighlightKey(type, skill_id)].did_match_header;
@@ -2192,7 +2196,7 @@ namespace HerosInsight::SkillBook
         // }
         ImGui::PushFont(Constants::Fonts::gw_font_16);
         ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
-        Utils::DrawMultiColoredText(header, cursor_x, content_max, {}, {});
+        Utils::DrawMultiColoredText(header, cursor_x, work_width, {}, {});
         ImGui::PopStyleColor();
         ImGui::PopFont();
     }
