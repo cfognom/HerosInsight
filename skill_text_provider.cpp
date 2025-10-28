@@ -204,12 +204,6 @@ namespace HerosInsight
 
             auto text_dst_ptr = is_generic ? &provider.generic_descriptions : &decode.build_site;
 
-            text_dst_ptr->BeginWrite();
-            if (is_generic)
-            {
-                decode.param_spans.BeginWrite();
-            }
-
             text_dst_ptr->AppendWriteBuffer(
                 1024,
                 [wstr, is_generic, &decode](std::span<char> &text_buf)
@@ -222,8 +216,8 @@ namespace HerosInsight
             if (is_generic)
             {
                 auto dst_index = GetGenericIndex(skill_id_16, is_concise);
-                decode.param_spans.EndWrite(dst_index);
-                text_dst_ptr->EndWrite(dst_index);
+                decode.param_spans.CommitWrittenToIndex(dst_index);
+                text_dst_ptr->CommitWrittenToIndex(dst_index);
             }
             else
             {
@@ -235,7 +229,7 @@ namespace HerosInsight
                     auto dst_index = GetGenericAttrIndex(skill_id_16, is_concise, attr_lvl);
                     if (!span_id.has_value())
                     {
-                        span_id = text_dst_ptr->EndWrite(dst_index);
+                        span_id = text_dst_ptr->CommitWrittenToIndex(dst_index);
                     }
                     else
                     {
@@ -296,14 +290,14 @@ namespace HerosInsight
             auto skill_id = skill_catcher.skill_id_16;
             auto &decode_proc = skill_catcher.GetParent().GetParent();
             auto &provider = *decode_proc.provider;
-            provider.names.BeginWrite();
-            for (const wchar_t *pwc = wstr; *pwc; ++pwc)
-            {
-                auto wc = *pwc;
-                auto c = wc <= 0x7F ? static_cast<char>(wc) : '?';
-                provider.names.push_back(c);
-            }
-            provider.names.EndWrite(skill_id);
+            provider.names.AppendWriteBuffer(
+                128,
+                [wstr](std::span<char> &text_buf)
+                {
+                    Utils::WStrToStr(wstr, text_buf);
+                }
+            );
+            provider.names.CommitWrittenToIndex(skill_id);
 
             decode_proc.DecrementDecodingCount();
         };
@@ -395,10 +389,9 @@ namespace HerosInsight
             auto generic_str = std::string_view(provider->generic_descriptions.GetIndexed(gen_index));
             for (int8_t attr_lvl = 0; attr_lvl <= 21; ++attr_lvl)
             {
-                auto index = GetGenericAttrIndex(skill_id, is_concise, attr_lvl);
-                auto specific_str = std::string_view(this->build_site.GetIndexed(index));
+                auto gen_attr_index = GetGenericAttrIndex(skill_id, is_concise, attr_lvl);
+                auto specific_str = std::string_view(this->build_site.GetIndexed(gen_attr_index));
 
-                provider->spec_kits.BeginWrite();
                 uint16_t i_gen = 0;
                 size_t i_spe = 0;
                 size_t i_param_span = 0;
@@ -412,13 +405,15 @@ namespace HerosInsight
                         {
                             auto param = GetSkillParam(skill, param_span.param_id);
                             char buffer[4];
-                            std::span<char> str{buffer, sizeof(buffer)};
+                            std::span<char> str(buffer);
                             param.Print(attr_lvl, str);
+                            // Add param replacement to spec_kits
                             provider->spec_kits.emplace_back(
                                 param_span.position,
                                 param_span.size,
                                 std::string_view(buffer, str.size())
                             );
+                            // Step over param
                             i_gen += param_span.size;
                             ++i_param_span;
                             continue;
@@ -441,8 +436,7 @@ namespace HerosInsight
                 }
                 assert(i_gen == generic_str.size());
                 assert(i_spe == specific_str.size());
-                auto spec_kit_index = GetGenericAttrIndex(skill_id, is_concise, attr_lvl);
-                provider->spec_kits.EndWrite(spec_kit_index);
+                provider->spec_kits.CommitWrittenToIndex(gen_attr_index);
             }
         }
 

@@ -527,9 +527,8 @@ namespace HerosInsight::SkillBook
         {
             auto skill_id = static_cast<GW::Constants::SkillID>(i);
             auto &custom_sd = CustomSkillDataModule::GetCustomSkillData(skill_id);
-            prop.BeginWrite();
             std::invoke(std::forward<Func>(func), prop, custom_sd);
-            prop.EndWrite(i);
+            prop.CommitWrittenToIndex(i);
         }
 
         prop.StoreCapacityHint(id);
@@ -1186,8 +1185,12 @@ namespace HerosInsight::SkillBook
 #ifdef _TIMING
                 auto timestamp_filtering = GW::MemoryMgr::GetSkillTimer();
                 auto duration = timestamp_filtering - state_update_start_timestamp;
-                GW::GameThread::Enqueue([=]()
-                                        { Utils::FormatToChat(L"Filtering took {} ms", duration); });
+                GW::GameThread::Enqueue(
+                    [=]()
+                    {
+                        Utils::FormatToChat(L"Filtering took {} ms", duration);
+                    }
+                );
 #endif
 
                 // for (auto &command : parsed_commands)
@@ -2430,7 +2433,7 @@ namespace HerosInsight::SkillBook
     //     SortProp() = default;
     //     SortProp(SkillPropertyID id, CustomSkillData &custom_sd)
     //     {
-    //         FixedArray<SkillProperty, 8> salloc;
+    //         FixedVector<SkillProperty, 8> salloc;
     //         auto props = salloc.ref();
     //         GetSkillProperty(id, custom_sd, props);
 
@@ -2536,8 +2539,8 @@ namespace HerosInsight::SkillBook
     //                     }
 
     //                     constexpr auto buffer_size = 8;
-    //                     FixedArray<SkillProperty, buffer_size> salloc_a;
-    //                     FixedArray<SkillProperty, buffer_size> salloc_b;
+    //                     FixedVector<SkillProperty, buffer_size> salloc_a;
+    //                     FixedVector<SkillProperty, buffer_size> salloc_b;
     //                     auto buffer_a = salloc_a.ref();
     //                     auto buffer_b = salloc_b.ref();
     //                     GetSkillProperty(target, custom_sd_a, buffer_a);

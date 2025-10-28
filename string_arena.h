@@ -5,7 +5,7 @@
 #include <optional>
 #include <span>
 #include <string>
-#include <unordered_map>
+#include <unordered_set>
 
 #include <capacity_hints.h>
 #include <utils.h>
@@ -26,68 +26,57 @@ namespace HerosInsight
         constexpr static bool is_char = std::is_same_v<T, char>;
 
     public:
-        using T_offset = uint32_t;
+        using T_ends = uint32_t;
         using T_span_id = uint16_t;
 
     protected:
-        struct LocalSpan
+        static std::string_view AsStringView(std::span<T> span)
         {
-            uint32_t offset;
-            uint32_t size;
-
-            std::span<T> resolve(std::vector<T> &vec) const
-            {
-#ifdef SAFETY_CHECKS
-                assert(offset + size <= vec.size());
-#endif
-                return std::span<T>(vec.data() + offset, size);
-            }
-
-            std::string_view resolve_as_str(std::vector<T> &vec) const
-            {
-#ifdef SAFETY_CHECKS
-                assert(offset + size <= vec.size());
-#endif
-                const size_t bytes = sizeof(T) * size;
-                return std::string_view((const char *)(vec.data() + offset), bytes);
-            }
-        };
+            return std::string_view((const char *)span.data(), span.size() * sizeof(T));
+        }
 
         struct Hasher
         {
-            size_t operator()(const LocalSpan &span) const
+            size_t operator()(T_span_id index) const
             {
-                return std::hash<std::string_view>{}(span.resolve_as_str(vec));
+                return std::hash<std::string_view>{}(AsStringView(arena.Get(index)));
             }
 
-            std::vector<T> &vec;
+            StringArena &arena;
         };
 
         struct Eq
         {
-            bool operator()(const LocalSpan &a, const LocalSpan &b) const
+            bool operator()(T_span_id a, T_span_id b) const
             {
-                return a.resolve_as_str(vec) == b.resolve_as_str(vec);
+                return AsStringView(arena.Get(a)) == AsStringView(arena.Get(b));
             }
 
-            std::vector<T> &vec;
+            StringArena &arena;
         };
 
-    protected:
-        std::vector<LocalSpan> id_to_span;
-#ifdef SAFETY_CHECKS
-        bool is_writing = false;
-#endif
+        std::vector<T_ends> ends;
+        T_ends GetSpanStart(size_t index) const
+        {
+            if (index == 0)
+                return 0;
+            auto start = ends[index - 1];
+            if constexpr (is_char)
+            {
+                start += 1;
+            }
+            return start;
+        }
 
     public:
-        using deduper = std::unordered_map<LocalSpan, T_span_id, Hasher, Eq>;
+        using deduper = std::unordered_set<T_span_id, Hasher, Eq>;
 
         // The count of strings in the arena
-        size_t SpanCount() const { return id_to_span.size(); }
+        size_t SpanCount() const { return ends.size(); }
 
         void Reserve(size_t n_spans, size_t n_elements)
         {
-            id_to_span.reserve(n_spans);
+            ends.reserve(n_spans);
             this->reserve(n_elements);
         }
 
@@ -100,16 +89,16 @@ namespace HerosInsight
 
         void StoreCapacityHint(const std::string &id)
         {
-            CapacityHints::UpdateHint(id + "_spans", id_to_span.size());
+            CapacityHints::UpdateHint(id + "_spans", ends.size());
             CapacityHints::UpdateHint(id + "_elements", this->size());
         }
 
-        float CalcAvgSpanSize() const { return id_to_span.empty() ? 0.f : (float)this->size() / (float)id_to_span.size(); }
+        float CalcAvgSpanSize() const { return ends.empty() ? 0.f : (float)this->size() / (float)ends.size(); }
 
         void Reset()
         {
             std::vector<T>::clear();
-            id_to_span.clear();
+            ends.clear();
         }
 
         // Deduper is valid until the StringArena is moved!
@@ -118,73 +107,54 @@ namespace HerosInsight
             return deduper(n_buckets, Hasher{*this}, Eq{*this});
         }
 
-        void BeginWrite()
+        // Discards the span being written
+        void DiscardWritten()
         {
-            id_to_span.emplace_back();
-            auto &span = id_to_span.back();
-#ifdef SAFETY_CHECKS
-            assert(!is_writing);
-            is_writing = true;
-            assert(span.offset == 0);
-            assert(span.size == 0);
-#endif
-            auto offset = this->size();
-#ifdef SAFETY_CHECKS
-            assert(offset <= std::numeric_limits<decltype(span.offset)>::max());
-#endif
-            span.offset = static_cast<decltype(span.offset)>(offset);
+            auto new_end = GetSpanStart(ends.size());
+            this->erase(this->begin() + new_end, this->end());
         }
 
         void PopBack()
         {
-            auto &back = id_to_span.back();
-            auto new_size = back.offset;
-            this->erase(this->begin() + new_size, this->end());
-            id_to_span.pop_back();
-#ifdef SAFETY_CHECKS
-            is_writing = false;
-#endif
+            ends.pop_back();
+            DiscardWritten();
         }
 
+        // Returns the size of the span being written
         size_t GetWrittenSize() const
         {
-#ifdef SAFETY_CHECKS
-            assert(is_writing);
-#endif
-            return this->size() - id_to_span.back().offset;
+            auto start = GetSpanStart(ends.size());
+            return this->size() - start;
         }
 
-        T_span_id EndWrite(deduper *deduper = nullptr)
+        // Commits the span being written and returns its id
+        T_span_id CommitWritten(deduper *deduper = nullptr)
         {
-#ifdef SAFETY_CHECKS
-            assert(is_writing);
-            is_writing = false;
-#endif
-
-            auto span_id = id_to_span.size() - 1;
+            auto span_id = ends.size();
+            auto end = this->size();
 #ifdef SAFETY_CHECKS
             assert(span_id <= std::numeric_limits<T_span_id>::max());
+            assert(end <= std::numeric_limits<T_ends>::max());
 #endif
             T_span_id span_id_cast = static_cast<T_span_id>(span_id);
+            T_ends ends_cast = static_cast<T_ends>(end);
 
-            auto &span = id_to_span[span_id];
-            size_t written_size = this->size() - span.offset;
-#ifdef SAFETY_CHECKS
-            assert(written_size <= std::numeric_limits<decltype(span.size)>::max());
-#endif
-            span.size = static_cast<decltype(span.size)>(written_size);
+            ends.push_back(ends_cast);
 
             if (deduper != nullptr)
             {
-                auto it = deduper->find(span);
+                auto it = deduper->find(span_id_cast);
                 if (it == deduper->end())
                 {
-                    deduper->emplace(span, span_id_cast);
+                    // We found no previous occurrence of this string:
+                    deduper->insert(span_id_cast); // Track it
                 }
                 else
                 {
-                    PopBack();
-                    return it->second;
+                    // We found a previous occurrence of this string:
+                    PopBack();                   // Discard the duplicate
+                    auto span_id_existing = *it; // Reuse the old one
+                    return span_id_existing;
                 }
             }
 
@@ -199,13 +169,14 @@ namespace HerosInsight
         // Gets a reference to a string in the arena
         std::span<T> Get(size_t span_id)
         {
-#ifdef SAFETY_CHECKS
-            assert(is_writing == false);
-#endif
-            if (span_id >= id_to_span.size())
-                return std::span<T>();
+            // if (span_id >= ends.size())
+            //     return std::span<T>();
 
-            return id_to_span[span_id].resolve(*this);
+            auto end = ends[span_id];
+            auto start = GetSpanStart(span_id);
+            auto len = end - start;
+            auto span = std::span<T>(this->data() + start, len);
+            return span;
         }
 
         // Writer should modify the span size to the number of elements written
@@ -315,14 +286,9 @@ namespace HerosInsight
             return base::Get(span_id);
         }
 
-        void BeginWrite()
+        T_span_id CommitWrittenToIndex(size_t index)
         {
-            base::BeginWrite();
-        }
-
-        T_span_id EndWrite(size_t index)
-        {
-            auto span_id = base::EndWrite(&deduper);
+            auto span_id = base::CommitWritten(&deduper);
             SetSpanId(index, span_id);
             return span_id;
         }
