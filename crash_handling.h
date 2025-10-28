@@ -35,7 +35,11 @@ namespace HerosInsight::CrashHandling
         mdei.ExceptionPointers = info;
         mdei.ClientPointers = FALSE;
 
-        MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), hFile, MiniDumpWithFullMemory, &mdei, nullptr, nullptr);
+        MiniDumpWriteDump(
+            GetCurrentProcess(), GetCurrentProcessId(), hFile,
+            MiniDumpWithThreadInfo | MiniDumpWithIndirectlyReferencedMemory | MiniDumpWithDataSegs,
+            &mdei, nullptr, nullptr
+        );
 
         CloseHandle(hFile);
 
