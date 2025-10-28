@@ -9,6 +9,8 @@
 #include <constants.h>
 #include <utils.h>
 
+// #define DISABLE_SAFECALL
+
 namespace HerosInsight::CrashHandling
 {
     std::filesystem::path GetTimestampedPath(const char *prefix, const char *ext)
@@ -61,6 +63,9 @@ namespace HerosInsight::CrashHandling
 
     bool SafeCall(std::wstring_view context, void (*fn)(void *data), void *data)
     {
+#ifdef DISABLE_SAFECALL
+        fn(data);
+#else
         __try
         {
             fn(data);
@@ -68,11 +73,9 @@ namespace HerosInsight::CrashHandling
         __except (CrashHandler(GetExceptionInformation()))
         {
             HerosInsight::Utils::FormatToChat(L"HerosInsight: {} exception", context);
-#ifdef _DEBUG
-            __debugbreak();
-#endif
             return false;
         }
+#endif
         return true;
     }
 }
