@@ -211,13 +211,11 @@ namespace HerosInsight::SkillBook
         Description,
         Concise,
 
-        FOOTER_FIRST,
-        Attribute = FOOTER_FIRST,
+        Attribute,
         Profession,
         Campaign,
         Range,
         Parsed,
-        FOOTER_LAST = Parsed,
 
         COUNT,
     };
@@ -468,16 +466,41 @@ namespace HerosInsight::SkillBook
     StringArena<char> prop_bundle_names;
     std::vector<SkillCatalog::T_propset> prop_bundles;
 
+    struct PropBundleSection
+    {
+        uint32_t start_index = 0;
+        uint32_t end_index = 0;
+    };
+
+    PropBundleSection footer_bundle_section;
+
     void SetupPropBundles()
     {
         auto SetupBundle = [&](std::string_view name, SkillCatalog::T_propset propset)
         {
-            prop_bundle_names.BeginWrite();
             prop_bundle_names.append_range(name);
-            prop_bundle_names.EndWrite();
+            prop_bundle_names.CommitWritten();
 
             prop_bundles.push_back(propset);
         };
+
+        struct SectionRecordingScope
+        {
+            SectionRecordingScope(PropBundleSection *dst) : dst(dst)
+            {
+                dst->start_index = static_cast<uint32_t>(prop_bundles.size());
+            }
+            ~SectionRecordingScope()
+            {
+                dst->end_index = static_cast<uint32_t>(prop_bundles.size());
+            }
+
+        private:
+            PropBundleSection *dst;
+        };
+
+        const std::string capacity_hint_key = "prop_bundle_names";
+        prop_bundle_names.ReserveFromHint(capacity_hint_key);
 
         SetupBundle("Any", SkillCatalog::ALL_PROPS);
         SetupBundle("Name", SkillCatalog::MakePropset({SkillTextPropertyID::Name}));
@@ -491,10 +514,16 @@ namespace HerosInsight::SkillBook
         SetupBundle("Overcast", SkillCatalog::MakePropset({SkillTextPropertyID::Overcast}));
         SetupBundle("Adrenaline", SkillCatalog::MakePropset({SkillTextPropertyID::AdrenalineStrikes}));
         SetupBundle("Upkeep", SkillCatalog::MakePropset({SkillTextPropertyID::Upkeep}));
-        SetupBundle("Attribute", SkillCatalog::MakePropset({SkillTextPropertyID::Attribute}));
-        SetupBundle("Profession", SkillCatalog::MakePropset({SkillTextPropertyID::Profession}));
-        SetupBundle("Campaign", SkillCatalog::MakePropset({SkillTextPropertyID::Campaign}));
         SetupBundle("Description", SkillCatalog::MakePropset({SkillTextPropertyID::Description, SkillTextPropertyID::Concise}));
+
+        {
+            SectionRecordingScope section(&footer_bundle_section);
+            SetupBundle("Attribute", SkillCatalog::MakePropset({SkillTextPropertyID::Attribute}));
+            SetupBundle("Profession", SkillCatalog::MakePropset({SkillTextPropertyID::Profession}));
+            SetupBundle("Campaign", SkillCatalog::MakePropset({SkillTextPropertyID::Campaign}));
+        }
+
+        prop_bundle_names.StoreCapacityHint(capacity_hint_key);
     }
 
     struct DoubleWriter
@@ -876,9 +905,14 @@ namespace HerosInsight::SkillBook
             }
         }
 
-        std::string_view GetMetaStr(SkillTextPropertyID prop)
+        std::string_view GetBundleName(size_t bundle_id)
         {
-            return std::string_view(catalog.prop_bundle_names.Get((size_t)prop));
+            return std::string_view(catalog.prop_bundle_names.Get(bundle_id));
+        }
+
+        std::span<uint16_t> GetMetaHL(size_t bundle_id)
+        {
+            return hl_data.GetBundleHL(bundle_id);
         }
 
         std::string_view GetStr(SkillTextPropertyID prop, GW::Constants::SkillID skill_id)
@@ -897,7 +931,11 @@ namespace HerosInsight::SkillBook
             if (prop_ptr == nullptr)
                 return {};
 
-            auto span_id = prop_ptr->GetSpanId((size_t)skill_id);
+            auto span_id_opt = prop_ptr->GetSpanId((size_t)skill_id);
+            if (!span_id_opt.has_value())
+                return {};
+            auto span_id = span_id_opt.value();
+
             return hl_data.GetPropHL((size_t)prop, span_id);
         }
 
@@ -939,7 +977,6 @@ namespace HerosInsight::SkillBook
                     auto skill_id = static_cast<GW::Constants::SkillID>(i);
                     auto &cskill = CustomSkillDataModule::GetCustomSkillData(skill_id);
                     auto attr_lvl = ResolveAttribute(cskill.attribute);
-                    desc.BeginWrite();
                     desc.AppendWriteBuffer(
                         512,
                         [&](std::span<char> &buffer)
@@ -947,7 +984,7 @@ namespace HerosInsight::SkillBook
                             text_provider.MakeDescription(skill_id, is_concise, attr_lvl, buffer);
                         }
                     );
-                    desc.EndWrite(i);
+                    desc.CommitWrittenToIndex(i);
                 }
                 desc.StoreCapacityHint(id);
                 auto prop_id = is_concise ? SkillTextPropertyID::Concise : SkillTextPropertyID::Description;
@@ -1201,8 +1238,12 @@ namespace HerosInsight::SkillBook
 #ifdef _TIMING
                 auto timestamp_commands = GW::MemoryMgr::GetSkillTimer();
                 duration = timestamp_commands - timestamp_filtering;
-                GW::GameThread::Enqueue([=]()
-                                        { Utils::FormatToChat(L"Applying commands took {} ms", duration); });
+                GW::GameThread::Enqueue(
+                    [=]()
+                    {
+                        Utils::FormatToChat(L"Applying commands took {} ms", duration);
+                    }
+                );
 #endif
                 return true;
             };
@@ -1741,114 +1782,54 @@ namespace HerosInsight::SkillBook
 
         void DrawSkillFooter(CustomSkillData &custom_sd, float content_width)
         {
-            // auto &skill = *custom_sd.skill;
-            // auto skill_id = custom_sd.skill_id;
-            // ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
-            // ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
-            // auto content_max = ImGui::GetWindowContentRegionMax().x;
-            // auto cursor_x = ImGui::GetCursorPosX();
+            auto &skill = *custom_sd.skill;
+            auto skill_id = custom_sd.skill_id;
+            ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
+            auto content_max = ImGui::GetWindowContentRegionMax().x;
+            auto cursor_x = ImGui::GetCursorPosX();
 
-            // // auto DrawProp = [&](SkillPropertyID::Type type, std::span<std::string_view> values)
-            // // {
-            // //     FixedArray<char, 32> header_salloc;
-            // //     auto header = header_salloc.ref();
-            // //     GetFormattedHeader(type, header);
-            // //     auto &hl = state.highlighting_map[GetHighlightKey(type)];
-            // //     Utils::DrawMultiColoredText(header, cursor_x, content_max, {}, hl);
+            for (auto bundle_id = footer_bundle_section.start_index; bundle_id < footer_bundle_section.end_index; ++bundle_id)
+            {
+                auto prop_set = catalog.prop_bundles[bundle_id];
+                bool has_drawn_header = false;
+                for (Utils::BitsetIterator it(prop_set); !it.IsDone(); it.Next())
+                {
+                    auto prop_id = (SkillTextPropertyID)it.index;
+                    auto str = GetStr(prop_id, skill_id);
+                    if (str.empty())
+                        continue;
 
-            // //     for (size_t i = 0; i < values.size(); ++i)
-            // //     {
-            // //         auto &value = values[i];
-            // //         ImGui::SameLine();
-            // //         if (i > 0)
-            // //         {
-            // //             ImGui::TextUnformatted(", ");
-            // //             ImGui::SameLine();
-            // //         }
-            // //         Utils::DrawMultiColoredText(value, cursor_x, content_max, {}, hl);
-            // //     }
-            // // };
+                    if (!has_drawn_header)
+                    {
+                        auto meta = GetBundleName(bundle_id);
+                        auto meta_hl = GetMetaHL(bundle_id);
+                        text_drawer.DrawRichText(meta, 0, content_max, meta_hl);
+                        ImGui::SameLine();
+                        text_drawer.DrawRichText(": ", 0, content_max);
+                        ImGui::SameLine();
+                        has_drawn_header = true;
+                    }
+                    auto str_hl = GetHL(prop_id, skill_id);
+                    text_drawer.DrawRichText(str, 0, content_max, str_hl);
+                }
+            }
 
-            // for (size_t i = (size_t)SkillTextPropertyID::FOOTER_FIRST; i <= (size_t)SkillTextPropertyID::FOOTER_LAST; ++i)
-            // {
-            //     auto id = (SkillTextPropertyID)i;
-            //     auto meta =
-            //         auto str = GetStr(id, skill_id);
-            //     auto hl = GetHL(id, skill_id);
-            // }
+            ImGui::PopStyleVar();
+            ImGui::PopStyleColor();
 
-            // if (show_null_stats || !custom_sd.attribute.IsNone())
-            // {
-            //     Utils::RichStringView str{
-            //         .str = custom_sd.GetAttributeStr(),
-            //     };
-            //     DrawProp(SkillPropertyID::Type::Attribute, skill_id, cursor_x, content_max, {&str, 1}, true);
-            // }
-            // if (show_null_stats || skill.profession != GW::Constants::ProfessionByte::None)
-            // {
-            //     Utils::RichStringView str{
-            //         .str = custom_sd.GetProfessionStr(),
-            //     };
-            //     DrawProp(SkillPropertyID::Type::Profession, skill_id, cursor_x, content_max, {&str, 1}, true);
-            // }
-            // if (show_null_stats || true)
-            // {
-            //     Utils::RichStringView str{
-            //         .str = custom_sd.GetCampaignStr(),
-            //     };
-            //     DrawProp(SkillPropertyID::Type::Campaign, skill_id, cursor_x, content_max, {&str, 1}, true);
-            // }
-
-            // ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 5);
-
-            // {
-            //     FixedVector<Utils::Range, 4> ranges;
-            //     custom_sd.GetRanges(ranges);
-            //     FixedArray<char, 256> chars_salloc;
-            //     auto chars = chars_salloc.ref();
-            //     FixedArray<Utils::RichStringView, 8> strs_salloc;
-            //     auto strs = strs_salloc.ref();
-            //     if (show_null_stats || ranges.size() > 0)
-            //     {
-            //         for (auto range : ranges)
-            //         {
-            //             auto start = chars.data_end();
-            //             chars.PushFormat("%d", range);
-            //             auto range_name = Utils::GetRangeStr(range);
-            //             if (range_name)
-            //             {
-            //                 chars.PushFormat(" (%s)", range_name.value());
-            //             }
-            //             auto end = chars.data_end();
-            //             strs.try_push(Utils::RichStringView{
-            //                 .str = std::string_view{start, (size_t)(end - start)},
-            //             });
-            //         }
-            //         DrawProp(SkillPropertyID::Type::Range, skill_id, cursor_x, content_max, strs, true);
-            //     }
-            // }
-
-            // auto attr_lvl = active_state->GetAttribute(custom_sd.attribute);
-            // // auto duration = custom_sd.GetDuration();
-            // for (auto &pd : custom_sd.parsed_data)
-            // {
-            //     auto &hl = active_state->highlighting_map[GetHighlightKey(ParsedToProp(pd.type), skill_id)].data;
-            //     pd.ImGuiRender(attr_lvl, content_max, hl);
-            // }
-
-            // ImGui::PopStyleVar();
-            // ImGui::PopStyleColor();
-
-            // { // Draw skill id
-            //     ImGui::SetWindowFontScale(0.7f);
-            //     const auto id_str = std::to_string((uint32_t)skill.skill_id);
-            //     const auto id_str_size = ImGui::CalcTextSize(id_str.c_str());
-            //     ImGui::SetCursorPosX(content_width - id_str_size.x - 4);
-            //     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 0.3f));
-            //     ImGui::TextUnformatted(id_str.c_str());
-            //     ImGui::PopStyleColor();
-            //     ImGui::SetWindowFontScale(1.f);
-            // }
+            { // Draw skill id
+                ImGui::SetWindowFontScale(0.7f);
+                FixedVector<char, 32> id_str;
+                id_str.AppendIntToChars((uint32_t)skill.skill_id);
+                const auto id_str_size = ImGui::CalcTextSize(id_str.data(), id_str.data_end());
+                ImGui::SetCursorPosX(content_width - id_str_size.x - 4);
+                ImVec4 color(1, 1, 1, 0.3f);
+                ImGui::PushStyleColor(ImGuiCol_Text, color);
+                ImGui::TextUnformatted(id_str.data(), id_str.data_end());
+                ImGui::PopStyleColor();
+                ImGui::SetWindowFontScale(1.f);
+            }
         }
 
         void MakeBookName(std::span<char> buf, size_t book_index)
