@@ -39,7 +39,6 @@ namespace HerosInsight
 
         GW::Constants::Language language;
         IndexedStringArena<char> names;
-        // IndexedStringArena<char> generic_descriptions;
         RichText::RichTextArena generic_descriptions;
         IndexedStringArena<Modification> spec_kits;
 

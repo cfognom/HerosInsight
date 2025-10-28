@@ -51,7 +51,9 @@
 
 #include <GWCA/Packets/StoC.h>
 
+#include <capacity_hints.h>
 #include <constants.h>
+#include <crash_handling.h>
 #include <imgui.h>
 #include <imgui_impl_dx9.h>
 #include <imgui_internal.h>
@@ -322,27 +324,9 @@ static void Shutdown()
     running = false;
 }
 
-template <typename Fn, typename... Args>
-static void SafeCall(std::wstring_view context, Fn &&fn, Args &&...args)
+static void OnRender(void *data)
 {
-    try
-    {
-        std::forward<Fn>(fn)(std::forward<Args>(args)...);
-    }
-    catch (const std::exception &e)
-    {
-        HerosInsight::Utils::FormatToChat(L"{} exception: {}", context, HerosInsight::Utils::StrToWStr(e.what()));
-        Shutdown();
-    }
-    catch (...)
-    {
-        HerosInsight::Utils::FormatToChat(L"{} exception: Unknown", context);
-        Shutdown();
-    }
-}
-
-static void OnRender(GW::Render::Helper helper)
-{
+    auto helper = *static_cast<GW::Render::Helper *>(data);
     auto device = helper.device;
     // This is call from within the game thread and all operation should be done here. (Although, Note that: GW::GameThread::IsInGameThread() == false)
     // You can't freeze this thread, so no blocking operation or at your own risk.
@@ -363,7 +347,10 @@ static void OnRender(GW::Render::Helper helper)
             &game_loop_callback_entry,
             [](GW::HookStatus *)
             {
-                SafeCall(L"Update", HerosInsight::UpdateManager::Update);
+                if (!HerosInsight::CrashHandling::SafeCall(L"Update", &HerosInsight::UpdateManager::Update, nullptr))
+                {
+                    Shutdown();
+                }
             }
         );
         initialized = true;
@@ -395,13 +382,6 @@ static void OnRender(GW::Render::Helper helper)
     }
 }
 
-std::filesystem::path GetDllPath(HMODULE hModule)
-{
-    wchar_t path[MAX_PATH];
-    GetModuleFileNameW(hModule, path, MAX_PATH);
-    return std::filesystem::path(path).parent_path();
-}
-
 static DWORD WINAPI ThreadProc(LPVOID lpModule)
 {
     // This is a new thread so you should only initialize GWCA and setup the hook on the game thread.
@@ -409,16 +389,18 @@ static DWORD WINAPI ThreadProc(LPVOID lpModule)
     // on the game from within the game thread.
 
     HMODULE hModule = static_cast<HMODULE>(lpModule);
-
-    Constants::dll_path = GetDllPath(hModule);
-    Constants::resources_path = Constants::dll_path / "resources";
+    Constants::paths.Init(hModule);
+    HerosInsight::CapacityHints::LoadHints();
 
     GW::Initialize();
 
     GW::Render::SetRenderCallback(
         [](GW::Render::Helper helper)
         {
-            SafeCall(L"Render", OnRender, helper);
+            if (!HerosInsight::CrashHandling::SafeCall(L"Render", &OnRender, &helper))
+            {
+                Shutdown();
+            }
         }
     );
     GW::Render::SetResetCallback(
@@ -442,6 +424,7 @@ static DWORD WINAPI ThreadProc(LPVOID lpModule)
     // practically a short sleep is fine.
     Sleep(16);
     GW::Terminate();
+    HerosInsight::CapacityHints::SaveHints();
 
     FreeLibraryAndExitThread(hModule, EXIT_SUCCESS);
 }

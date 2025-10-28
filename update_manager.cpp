@@ -445,7 +445,7 @@ namespace HerosInsight
         }
     }
 
-    void UpdateManager::Update()
+    void UpdateManager::Update(void *)
     {
         UpdateManager::frame_id++; // We increment frame_id at the beginning of the frame so that any draw updates that happen after this use the same frame_id
         const auto gw_ms = GW::MemoryMgr::GetSkillTimer();

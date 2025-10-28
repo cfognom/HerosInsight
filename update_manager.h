@@ -43,7 +43,7 @@ namespace HerosInsight
 
         static bool TryInitialize();
         static void Terminate();
-        static void Update();
+        static void Update(void *);
         static void Draw(IDirect3DDevice9 *device);
         static ImGuiWindowFlags GetWindowFlags();
         static bool RequestSkillDragging(GW::Constants::SkillID skill_id);
