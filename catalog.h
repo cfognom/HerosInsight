@@ -122,7 +122,7 @@ namespace HerosInsight
             return result;
         }
 
-        IndexedStringArena<char> *props[PROP_COUNT]{};
+        std::array<IndexedStringArena<char> *, PROP_COUNT> props{nullptr};
         StringArena<char> &prop_bundle_names;
         std::span<T_propset> prop_bundles;
 
