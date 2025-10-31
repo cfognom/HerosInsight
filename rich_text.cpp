@@ -339,7 +339,7 @@ namespace HerosInsight::RichText
         // Screen-space bounding box
         ImRect bb = ImRect(
             std::numeric_limits<float>::max(), std::numeric_limits<float>::max(),
-            std::numeric_limits<float>::min(), std::numeric_limits<float>::min()
+            std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest()
         );
 
         size_t n_segments = segments.size();

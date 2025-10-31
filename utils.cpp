@@ -2767,7 +2767,7 @@ namespace HerosInsight::Utils
         // screen space bounding box
         ImRect bb = ImRect(
             std::numeric_limits<float>::max(), std::numeric_limits<float>::max(),
-            std::numeric_limits<float>::min(), std::numeric_limits<float>::min()
+            std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest()
         );
 
         const auto highlight_color = ImGui::GetColorU32(IM_COL32(250, 148, 54, 255));
