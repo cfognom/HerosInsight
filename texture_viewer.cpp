@@ -131,7 +131,7 @@ namespace HerosInsight::TextureViewer
                     loaded_textures.push_back({i, *entry});
             }
             search_start = search_end;
-            if (loaded_textures.size() - clipper.GetCurrentScroll().entry_index < 256)
+            if (loaded_textures.size() - clipper.GetCurrentScroll().item_index < 256)
             {
                 search_end = std::min(search_end + 256, TextureModule::KnownFileIDs::MAX);
                 for (uint32_t i = search_start; i < search_end; i++)
