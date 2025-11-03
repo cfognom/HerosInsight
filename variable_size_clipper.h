@@ -124,9 +124,9 @@ namespace HerosInsight
 
                     // Calculate new scroll_current
                     auto dt = ImGui::GetIO().DeltaTime;
-#ifdef _DEBUG
-                    dt *= 0.1f; // Slow motion scrolling for debugging purposes
-#endif
+                    // #ifdef _DEBUG
+                    //                     dt *= 0.1f; // Slow motion scrolling for debugging purposes
+                    // #endif
                     auto new_distance_to_target = DecayError(distance_to_target, dt);
                     if (new_distance_to_target == 0)
                     {
