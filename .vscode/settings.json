@@ -91,7 +91,8 @@
         "cassert": "cpp",
         "stack": "cpp",
         "cstdarg": "cpp",
-        "utf8": "cpp"
+        "utf8": "cpp",
+        "numbers": "cpp"
     },
     "dotnet.defaultSolution": "disable",
     // "cmake.configureArgs": [

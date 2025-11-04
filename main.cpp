@@ -347,10 +347,7 @@ static void OnRender(void *data)
             &game_loop_callback_entry,
             [](GW::HookStatus *)
             {
-                if (!HerosInsight::CrashHandling::SafeCall(L"Update", &HerosInsight::UpdateManager::Update, nullptr))
-                {
-                    Shutdown();
-                }
+                HerosInsight::CrashHandling::SafeCall(&HerosInsight::UpdateManager::Update, nullptr, &Shutdown);
             }
         );
         initialized = true;
@@ -397,10 +394,7 @@ static DWORD WINAPI ThreadProc(LPVOID lpModule)
     GW::Render::SetRenderCallback(
         [](GW::Render::Helper helper)
         {
-            if (!HerosInsight::CrashHandling::SafeCall(L"Render", &OnRender, &helper))
-            {
-                Shutdown();
-            }
+            HerosInsight::CrashHandling::SafeCall(&OnRender, &helper, &Shutdown);
         }
     );
     GW::Render::SetResetCallback(

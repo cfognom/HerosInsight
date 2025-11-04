@@ -103,6 +103,18 @@ namespace HerosInsight
             AddSize(src.size());
         }
 
+        void AppendString(std::string_view str)
+        {
+            static_assert(std::is_same_v<T, char>, "AppendString is only available for char arrays");
+            AppendRange(std::span<const T>(str));
+        }
+
+        void AppendString(std::wstring_view str)
+        {
+            static_assert(std::is_same_v<T, wchar_t>, "AppendString is only available for char arrays");
+            AppendRange(std::span<const T>(str));
+        }
+
         template <class Writer>
             requires std::invocable<Writer, std::span<T> &>
         void AppendWith(Writer &&op)

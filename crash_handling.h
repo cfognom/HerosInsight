@@ -6,6 +6,7 @@
 #include <string>
 #include <windows.h>
 
+#include <GWCA/Managers/MemoryMgr.h>
 #include <constants.h>
 #include <utils.h>
 
@@ -23,12 +24,12 @@ namespace HerosInsight::CrashHandling
         return Constants::paths.crash() / std::filesystem::path(buf);
     }
 
-    void WriteCrashDump(EXCEPTION_POINTERS *info)
+    std::optional<std::filesystem::path> WriteCrashDump(EXCEPTION_POINTERS *info)
     {
         auto dump_path = GetTimestampedPath("crash", "dmp");
         HANDLE hFile = CreateFileW(dump_path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
         if (hFile == INVALID_HANDLE_VALUE)
-            return;
+            return std::nullopt;
 
         MINIDUMP_EXCEPTION_INFORMATION mdei;
         mdei.ThreadId = GetCurrentThreadId();
@@ -52,21 +53,68 @@ namespace HerosInsight::CrashHandling
             f << "Fault address: " << std::hex << info->ExceptionRecord->ExceptionAddress << std::endl;
         }
 
-        wchar_t msg[512];
-        swprintf(msg, L"HerosInsight has crashed.\n\nA crash report has been saved to:\n%s\n\n"
-                      L"Please send this file to the developer.",
-                 dump_path.c_str());
-        MessageBoxW(nullptr, msg, L"HerosInsight Crash Report", MB_OK | MB_ICONERROR);
+        return dump_path;
     }
 
     LONG WINAPI CrashHandler(EXCEPTION_POINTERS *info)
     {
-        WriteCrashDump(info);
-        return EXCEPTION_EXECUTE_HANDLER; // swallow and exit gracefully
+#ifdef _DEBUG
+        HWND hWnd = GW::MemoryMgr::GetGWWindowHandle();
+    retry:
+        int result = MessageBoxA(
+            hWnd,
+            "HerosInsight has crashed.\n\n"
+            "Abort: Attempt to unhook the mod\n"
+            "Retry: Attempt to break the debugger\n"
+            "Ignore: Pass to GW crash handler",
+            "HerosInsight Crash",
+            MB_ABORTRETRYIGNORE | MB_ICONERROR
+        );
+
+        switch (result)
+        {
+            case IDABORT:
+                return EXCEPTION_EXECUTE_HANDLER;
+
+            case IDRETRY:
+                if (IsDebuggerPresent())
+                    __debugbreak();
+                else
+                    goto retry;
+                return EXCEPTION_EXECUTE_HANDLER;
+
+            case IDIGNORE:
+            default:
+                return EXCEPTION_CONTINUE_SEARCH;
+        }
+#else
+
+        wchar_t msg[1024];
+        SpanWriter<wchar_t> writer(msg);
+        writer.AppendString(L"HerosInsight encountered an error. Game state might be unstable, please restart the game as soon as possible.");
+
+        auto path = WriteCrashDump(info);
+        if (path.has_value())
+        {
+            writer.AppendString(L"\n\nA crash report has been saved to:\n");
+            writer.AppendString(path.value().c_str());
+        }
+        writer.push_back(L'\0');
+
+        MessageBoxW(
+            nullptr,
+            msg,
+            L"HerosInsight Crash",
+            MB_OK | MB_ICONERROR
+        );
+
+        return EXCEPTION_EXECUTE_HANDLER;
+#endif
     }
 
-    bool SafeCall(std::wstring_view context, void (*fn)(void *data), void *data)
+    bool SafeCall(void (*fn)(void *data), void *data, void (*termination_fn)())
     {
+        bool success = true;
 #ifdef DISABLE_SAFECALL
         fn(data);
 #else
@@ -76,10 +124,10 @@ namespace HerosInsight::CrashHandling
         }
         __except (CrashHandler(GetExceptionInformation()))
         {
-            HerosInsight::Utils::FormatToChat(L"HerosInsight: {} exception", context);
-            return false;
+            termination_fn();
+            success = false;
         }
 #endif
-        return true;
+        return success;
     }
 }
