@@ -101,12 +101,7 @@ namespace HerosInsight::CrashHandling
         }
         writer.push_back(L'\0');
 
-        MessageBoxW(
-            nullptr,
-            msg,
-            L"HerosInsight Crash",
-            MB_OK | MB_ICONERROR
-        );
+        MessageBoxW(nullptr, msg, L"HerosInsight Crash", MB_OK | MB_ICONERROR);
 
         return EXCEPTION_EXECUTE_HANDLER;
 #endif
