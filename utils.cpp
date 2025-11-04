@@ -461,15 +461,15 @@ namespace HerosInsight::Utils
         out = out.subspan(0, dst - out.data());
     }
 
-    uint32_t last_message_frame_id = 0;
-    DWORD last_message_timestamp = 0;
-
-    void WriteDebugMessageRaw(const wchar_t *message, GW::Chat::Color color)
+    void WriteMessageRaw(const wchar_t *message, GW::Chat::Color color)
     {
         const auto channel = GW::Chat::Channel::CHANNEL_MODERATOR;
 
+#ifdef _DEBUG
+        static uint32_t last_message_frame_id = 0;
         if (last_message_frame_id != UpdateManager::frame_id)
         {
+            static DWORD last_message_timestamp = 0;
             auto delta_frames = UpdateManager::frame_id - last_message_frame_id;
             last_message_frame_id = UpdateManager::frame_id;
             auto delta_seconds = (float)(UpdateManager::elapsed_ms - last_message_timestamp) / 1000.f;
@@ -477,91 +477,29 @@ namespace HerosInsight::Utils
 
             GW::Chat::SetMessageColor(channel, 0xFF00FF00);
 
-            const auto sep = std::format(L"------------ {} frames, {} seconds ------------", delta_frames, delta_seconds);
-            GW::Chat::WriteChat(GW::Chat::Channel::CHANNEL_MODERATOR, sep.c_str());
+            wchar_t sep_buf[128];
+            auto result = std::format_to_n(sep_buf, std::size(sep_buf) - 1, L"------------ {} frames, {} seconds ------------", delta_frames, delta_seconds);
+            *result.out = L'\0';
+            GW::Chat::WriteChat(channel, sep_buf);
 
             GW::Chat::Color c;
             GW::Chat::GetDefaultColors(channel, nullptr, &c);
             GW::Chat::SetMessageColor(channel, c);
         }
+#endif
 
         if (color)
         {
             GW::Chat::SetMessageColor(channel, color);
         }
 
-        GW::Chat::WriteChat(GW::Chat::Channel::CHANNEL_MODERATOR, message);
+        GW::Chat::WriteChat(channel, message);
 
         if (color)
         {
             GW::Chat::GetDefaultColors(channel, nullptr, &color);
             GW::Chat::SetMessageColor(channel, color);
         }
-    }
-
-    void WriteStringToChatV(GW::Chat::Color color, const wchar_t *format, va_list args)
-    {
-        const size_t bufferSize = 256; // Adjust size as needed
-        wchar_t buffer[bufferSize];
-        const auto last_index = bufferSize - 1;
-
-        int result = vswprintf(buffer, last_index, format, args);
-
-        if (result < 0)
-        {
-            WriteDebugMessageRaw((L"Error formatting string " + std::to_wstring(result) + L", format: " + format).c_str());
-        }
-        else if (result >= last_index)
-        {
-            WriteDebugMessageRaw(L"String too long for buffer");
-        }
-        else
-        {
-            buffer[last_index] = L'\0';
-            // Now buffer contains the formatted string.
-            // You can write it to the chat here.
-            WriteDebugMessageRaw(buffer, color);
-        }
-    }
-    void WriteStringToChat(GW::Chat::Color color, const wchar_t *format, ...)
-    {
-        va_list args;
-        va_start(args, format);
-        WriteStringToChatV(color, format, args);
-        va_end(args);
-    }
-    void WriteStringToChat(const wchar_t *format, ...)
-    {
-        va_list args;
-        va_start(args, format);
-        WriteStringToChatV(NULL, format, args);
-        va_end(args);
-    }
-
-    std::unordered_map<std::wstring, long> debug_message_last_date;
-    void WriteDebugMessage(const wchar_t *message)
-    {
-        const auto period = 1000;
-        const auto key = std::wstring(message);
-        const auto last_date = debug_message_last_date[key];
-        const auto now = GetTickCount();
-        if (now - last_date >= period)
-        {
-            std::wstring time_message = L"(" + std::to_wstring(now) + L") " + message;
-            WriteDebugMessageRaw(time_message.c_str());
-            debug_message_last_date[key] = now;
-        }
-    }
-
-    void WorkingDirectoryToChat()
-    {
-        // Get the current working directory
-        auto p = std::filesystem::current_path();
-        std::string path_str = p.string(); // Convert path to string
-
-        // Convert the path to a wide string and display it
-        std::wstring wpath_str = Utils::StrToWStr(path_str);
-        HerosInsight::Utils::WriteStringToChat(L"Current working directory: '%s'", wpath_str.c_str());
     }
 
     // Divides nom by den, rounding to nearest. If two values are equally close, rounds to even.
@@ -988,7 +926,7 @@ namespace HerosInsight::Utils
             if (source_index < 2)
                 hsr_sources[source_index++] = value;
             else
-                WriteDebugMessageRaw(L"ERROR: Too many HSR sources");
+                WriteMessageRaw(L"ERROR: Too many HSR sources");
         };
 
         for (const auto item_id : Utils::GetAgentWeaponAndOffhandItemIds(agent))

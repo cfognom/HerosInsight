@@ -122,9 +122,9 @@ namespace HerosInsight::PacketReader
         const auto agent_name = Utils::GetAgentName(agent_id);
         const auto color = success ? 0xFF00FF00 : 0xFFFF0000; // green : red
         const auto message = success ? L"CORRECT" : L"WRONG";
-        Utils::WriteStringToChat(
+        Utils::FormatToChat(
             color,
-            L"Calculated %s of '%s'/'%s' was %s. Calculated '%f', Actual '%f'",
+            L"Calculated {} of '{}'/'{}' was {}. Calculated '{}', Actual '{}'",
             property_name, agent_name.c_str(), skill_name.c_str(), message, calc, actual
         );
     }
@@ -651,7 +651,7 @@ namespace HerosInsight::PacketReader
         //     Utils::WriteStringToChat(0xFF00FF00, L"------------ %u frames, %f seconds ------------", delta_frames, delta_seconds);
         // }
 
-        Utils::WriteDebugMessageRaw(message.c_str(), is_related_to_player ? NULL : 0xFFFF0000);
+        Utils::WriteMessageRaw(message.c_str(), is_related_to_player ? NULL : 0xFFFF0000);
     }
 
     void GenericFloatCallback(GW::HookStatus *, const StoC::GenericFloat *packet)
@@ -1079,18 +1079,6 @@ namespace HerosInsight::PacketReader
     uint32_t GetPing()
     {
         return current_ping;
-    }
-
-    void DebugHandler(GW::HookStatus *, const StoC::PacketBase *packet)
-    {
-        auto *int_ptr = reinterpret_cast<const uint32_t *>(packet);
-        auto *float_ptr = reinterpret_cast<const float *>(packet);
-
-        Utils::WriteStringToChat(L"Header=%u: type=%s", packet->header, Utils::GenericValueIDToString(int_ptr[1]).c_str());
-        Utils::WriteStringToChat(L"2: %u/%f", int_ptr[2], float_ptr[2]);
-        Utils::WriteStringToChat(L"3: %u/%f", int_ptr[3], float_ptr[3]);
-        Utils::WriteStringToChat(L"4: %u/%f", int_ptr[4], float_ptr[4]);
-        Utils::WriteStringToChat(L"5: %u/%f", int_ptr[5], float_ptr[5]);
     }
 
     void Initialize()
