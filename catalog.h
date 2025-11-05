@@ -67,6 +67,7 @@ namespace HerosInsight
             std::optional<size_t> meta_prop_id;
             std::string_view text;
             Matcher matcher;
+            bool inverted;
         };
 
         bool ParseFilter(std::string_view source, StringArena<char> &meta_prop_names, Filter &filter);
@@ -233,7 +234,7 @@ namespace HerosInsight
                 size_t i = 0;
                 for (auto index : indices)
                 {
-                    if (found_by_filter[index])
+                    if (found_by_filter[index] ^ filter.inverted)
                         indices[i++] = index;
                 }
                 indices.resize(i);
