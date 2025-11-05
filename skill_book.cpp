@@ -514,6 +514,8 @@ namespace HerosInsight::SkillBook
         SetupBundle("Overcast", SkillCatalog::MakePropset({SkillTextPropertyID::Overcast}));
         SetupBundle("Adrenaline", SkillCatalog::MakePropset({SkillTextPropertyID::AdrenalineStrikes}));
         SetupBundle("Upkeep", SkillCatalog::MakePropset({SkillTextPropertyID::Upkeep}));
+        SetupBundle("Full Description", SkillCatalog::MakePropset({SkillTextPropertyID::Description}));
+        SetupBundle("Concise Description", SkillCatalog::MakePropset({SkillTextPropertyID::Concise}));
         SetupBundle("Description", SkillCatalog::MakePropset({SkillTextPropertyID::Description, SkillTextPropertyID::Concise}));
 
         {
