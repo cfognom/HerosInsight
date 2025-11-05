@@ -463,69 +463,69 @@ namespace HerosInsight::SkillBook
     SkillFracProvider frac_provider;
     RichText::Drawer text_drawer{nullptr, &RichText::DefaultTextImageProvider::Instance(), &frac_provider};
 
-    StringArena<char> prop_bundle_names;
-    std::vector<SkillCatalog::T_propset> prop_bundles;
+    StringArena<char> meta_prop_names;
+    std::vector<SkillCatalog::T_propset> meta_propsets;
 
-    struct PropBundleSection
+    struct MetaPropSection
     {
         uint32_t start_index = 0;
         uint32_t end_index = 0;
     };
 
-    PropBundleSection footer_bundle_section;
+    MetaPropSection footer_meta_section;
 
-    void SetupPropBundles()
+    void SetupMetaProps()
     {
-        auto SetupBundle = [&](std::string_view name, SkillCatalog::T_propset propset)
+        auto SetupMetaProp = [&](std::string_view name, SkillCatalog::T_propset propset)
         {
-            prop_bundle_names.append_range(name);
-            prop_bundle_names.CommitWritten();
+            meta_prop_names.append_range(name);
+            meta_prop_names.CommitWritten();
 
-            prop_bundles.push_back(propset);
+            meta_propsets.push_back(propset);
         };
 
         struct SectionRecordingScope
         {
-            SectionRecordingScope(PropBundleSection *dst) : dst(dst)
+            SectionRecordingScope(MetaPropSection *dst) : dst(dst)
             {
-                dst->start_index = static_cast<uint32_t>(prop_bundles.size());
+                dst->start_index = static_cast<uint32_t>(meta_propsets.size());
             }
             ~SectionRecordingScope()
             {
-                dst->end_index = static_cast<uint32_t>(prop_bundles.size());
+                dst->end_index = static_cast<uint32_t>(meta_propsets.size());
             }
 
         private:
-            PropBundleSection *dst;
+            MetaPropSection *dst;
         };
 
-        const std::string capacity_hint_key = "prop_bundle_names";
-        prop_bundle_names.ReserveFromHint(capacity_hint_key);
+        const std::string capacity_hint_key = "meta_prop_names";
+        meta_prop_names.ReserveFromHint(capacity_hint_key);
 
-        SetupBundle("Any", SkillCatalog::ALL_PROPS);
-        SetupBundle("Name", SkillCatalog::MakePropset({SkillTextPropertyID::Name}));
-        SetupBundle("Type", SkillCatalog::MakePropset({SkillTextPropertyID::Type}));
-        SetupBundle("Tags", SkillCatalog::MakePropset({SkillTextPropertyID::Tag}));
-        SetupBundle("Energy", SkillCatalog::MakePropset({SkillTextPropertyID::Energy}));
-        SetupBundle("Recharge", SkillCatalog::MakePropset({SkillTextPropertyID::Recharge}));
-        SetupBundle("Activation", SkillCatalog::MakePropset({SkillTextPropertyID::Activation}));
-        SetupBundle("Aftercast", SkillCatalog::MakePropset({SkillTextPropertyID::Aftercast}));
-        SetupBundle("Sacrifice", SkillCatalog::MakePropset({SkillTextPropertyID::Sacrifice}));
-        SetupBundle("Overcast", SkillCatalog::MakePropset({SkillTextPropertyID::Overcast}));
-        SetupBundle("Adrenaline", SkillCatalog::MakePropset({SkillTextPropertyID::AdrenalineStrikes}));
-        SetupBundle("Upkeep", SkillCatalog::MakePropset({SkillTextPropertyID::Upkeep}));
-        SetupBundle("Full Description", SkillCatalog::MakePropset({SkillTextPropertyID::Description}));
-        SetupBundle("Concise Description", SkillCatalog::MakePropset({SkillTextPropertyID::Concise}));
-        SetupBundle("Description", SkillCatalog::MakePropset({SkillTextPropertyID::Description, SkillTextPropertyID::Concise}));
+        SetupMetaProp("Any", SkillCatalog::ALL_PROPS);
+        SetupMetaProp("Name", SkillCatalog::MakePropset({SkillTextPropertyID::Name}));
+        SetupMetaProp("Type", SkillCatalog::MakePropset({SkillTextPropertyID::Type}));
+        SetupMetaProp("Tags", SkillCatalog::MakePropset({SkillTextPropertyID::Tag}));
+        SetupMetaProp("Energy", SkillCatalog::MakePropset({SkillTextPropertyID::Energy}));
+        SetupMetaProp("Recharge", SkillCatalog::MakePropset({SkillTextPropertyID::Recharge}));
+        SetupMetaProp("Activation", SkillCatalog::MakePropset({SkillTextPropertyID::Activation}));
+        SetupMetaProp("Aftercast", SkillCatalog::MakePropset({SkillTextPropertyID::Aftercast}));
+        SetupMetaProp("Sacrifice", SkillCatalog::MakePropset({SkillTextPropertyID::Sacrifice}));
+        SetupMetaProp("Overcast", SkillCatalog::MakePropset({SkillTextPropertyID::Overcast}));
+        SetupMetaProp("Adrenaline", SkillCatalog::MakePropset({SkillTextPropertyID::AdrenalineStrikes}));
+        SetupMetaProp("Upkeep", SkillCatalog::MakePropset({SkillTextPropertyID::Upkeep}));
+        SetupMetaProp("Full Description", SkillCatalog::MakePropset({SkillTextPropertyID::Description}));
+        SetupMetaProp("Concise Description", SkillCatalog::MakePropset({SkillTextPropertyID::Concise}));
+        SetupMetaProp("Description", SkillCatalog::MakePropset({SkillTextPropertyID::Description, SkillTextPropertyID::Concise}));
 
         {
-            SectionRecordingScope section(&footer_bundle_section);
-            SetupBundle("Attribute", SkillCatalog::MakePropset({SkillTextPropertyID::Attribute}));
-            SetupBundle("Profession", SkillCatalog::MakePropset({SkillTextPropertyID::Profession}));
-            SetupBundle("Campaign", SkillCatalog::MakePropset({SkillTextPropertyID::Campaign}));
+            SectionRecordingScope section(&footer_meta_section);
+            SetupMetaProp("Attribute", SkillCatalog::MakePropset({SkillTextPropertyID::Attribute}));
+            SetupMetaProp("Profession", SkillCatalog::MakePropset({SkillTextPropertyID::Profession}));
+            SetupMetaProp("Campaign", SkillCatalog::MakePropset({SkillTextPropertyID::Campaign}));
         }
 
-        prop_bundle_names.StoreCapacityHint(capacity_hint_key);
+        meta_prop_names.StoreCapacityHint(capacity_hint_key);
     }
 
     struct DoubleWriter
@@ -828,11 +828,11 @@ namespace HerosInsight::SkillBook
         };
         std::optional<WindowDims> init_dims = std::nullopt;
         Settings settings;
-        SkillCatalog catalog{prop_bundle_names, prop_bundles};
+        SkillCatalog catalog{meta_prop_names, meta_propsets};
         RichText::RichTextArena descs[2]{};
         std::vector<uint16_t> filtered_skills; // skill ids
         CatalogUtils::Query query;
-        CatalogUtils::HLData hl_data{SkillCatalog::PROP_COUNT, prop_bundles.size(), GW::Constants::SkillMax};
+        CatalogUtils::HLData hl_data{SkillCatalog::PROP_COUNT, meta_propsets.size(), GW::Constants::SkillMax};
 
         SkillTextProvider &text_provider = SkillTextProvider::GetInstance(GW::Constants::Language::English);
 
@@ -907,19 +907,19 @@ namespace HerosInsight::SkillBook
             }
         }
 
-        std::string_view GetBundleName(size_t bundle_id)
+        std::string_view GetMetaPropName(size_t meta_prop_id)
         {
-            return std::string_view(catalog.prop_bundle_names.Get(bundle_id));
+            return std::string_view(catalog.meta_prop_names.Get(meta_prop_id));
         }
 
-        std::span<uint16_t> GetMetaHL(size_t bundle_id)
+        std::span<uint16_t> GetMetaHL(size_t meta_prop_id)
         {
-            return hl_data.GetBundleHL(bundle_id);
+            return hl_data.GetMetaPropHL(meta_prop_id);
         }
 
-        std::string_view GetStr(SkillTextPropertyID prop, GW::Constants::SkillID skill_id)
+        std::string_view GetStr(SkillTextPropertyID prop_id, GW::Constants::SkillID skill_id)
         {
-            auto prop_ptr = catalog.GetPropertyPtr(prop);
+            auto prop_ptr = catalog.GetPropertyPtr(prop_id);
             if (prop_ptr == nullptr)
                 return {};
 
@@ -1143,7 +1143,7 @@ namespace HerosInsight::SkillBook
                 query.Clear();
                 auto input_text_view = std::string_view(input_text, strlen(input_text));
                 UpdateScrollTracking(input_text_view);
-                CatalogUtils::ParseQuery(input_text_view, catalog.prop_bundle_names, query);
+                CatalogUtils::ParseQuery(input_text_view, catalog.meta_prop_names, query);
 
                 hl_data.Reset();
                 filtered_skills.clear();
@@ -1268,7 +1268,7 @@ namespace HerosInsight::SkillBook
 
             state_update_start_timestamp = 0;
 
-            CatalogUtils::GetFeedback(query, catalog.prop_bundle_names, feedback);
+            CatalogUtils::GetFeedback(query, catalog.meta_prop_names, feedback);
 
             // if (active_state->filtered_skills.size() > 0)
             // {
@@ -1793,11 +1793,11 @@ namespace HerosInsight::SkillBook
             ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
 
-            for (auto bundle_id = footer_bundle_section.start_index; bundle_id < footer_bundle_section.end_index; ++bundle_id)
+            for (auto i_meta = footer_meta_section.start_index; i_meta < footer_meta_section.end_index; ++i_meta)
             {
-                auto prop_set = catalog.prop_bundles[bundle_id];
+                auto meta_propset = catalog.meta_propsets[i_meta];
                 bool has_drawn_header = false;
-                for (Utils::BitsetIterator it(prop_set); !it.IsDone(); it.Next())
+                for (Utils::BitsetIterator it(meta_propset); !it.IsDone(); it.Next())
                 {
                     auto prop_id = (SkillTextPropertyID)it.index;
                     auto str = GetStr(prop_id, skill_id);
@@ -1806,8 +1806,8 @@ namespace HerosInsight::SkillBook
 
                     if (!has_drawn_header)
                     {
-                        auto meta = GetBundleName(bundle_id);
-                        auto meta_hl = GetMetaHL(bundle_id);
+                        auto meta = GetMetaPropName(i_meta);
+                        auto meta_hl = GetMetaHL(i_meta);
                         text_drawer.DrawRichText(meta, 0, work_width, meta_hl);
                         ImGui::SameLine();
                         text_drawer.DrawRichText(": ", 0, work_width);
@@ -2119,7 +2119,7 @@ namespace HerosInsight::SkillBook
 
         ForceDeckbuilderCallbacks();
 
-        SetupPropBundles();
+        SetupMetaProps();
         FetchStaticProps();
         AddBook(); // Add first book
     }

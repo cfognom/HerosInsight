@@ -81,17 +81,10 @@ namespace HerosInsight
 
         bool ParseFilter(std::string_view source, StringArena<char> &prop_bundles, Filter &filter)
         {
-            { // Skip leading whitespace
-                size_t i = 0;
+            Utils::TryReadSpaces(source);
+            filter.inverted = Utils::TryRead('!', source);
+            Utils::TryReadSpaces(source);
 
-                while (i < source.size() && Utils::IsSpace(source[i]))
-                    ++i;
-
-                if (i == source.size())
-                    return false;
-
-                source = source.substr(i);
-            }
             auto splitter_pos = source.find(':');
             if (splitter_pos != std::string_view::npos)
             {
@@ -101,7 +94,7 @@ namespace HerosInsight
                     auto index = CatalogUtils::BestMatch(target_str, prop_bundles);
                     if (!index.has_value())
                         return false;
-                    filter.bundle_id = index.value();
+                    filter.meta_prop_id = index.value();
                 }
 
                 size_t i = splitter_pos + 1;
@@ -140,7 +133,7 @@ namespace HerosInsight
                     auto index = BestMatch(target_text, prop_bundles);
                     if (!index.has_value())
                         return false;
-                    sort_arg.target_bundle = index.value();
+                    sort_arg.target_meta_prop_id = index.value();
 
                     rem = rem.substr(comma_pos + 1);
                 }
@@ -161,7 +154,7 @@ namespace HerosInsight
             while (p < end)
             {
                 auto stmt_start = p;
-                while (p < end && *p != ';')
+                while (p < end && *p != '&')
                     ++p;
                 auto stmt_end = p;
                 std::string_view stmt(stmt_start, stmt_end - stmt_start);
@@ -275,7 +268,7 @@ namespace HerosInsight
                         else if (kind == 2) out += " and then";
                         if (arg.is_negated) out += " descending by ";
                         else                out += " ascending by ";
-                                            out += prop_bundle_names[arg.target_bundle];
+                                            out += prop_bundle_names[arg.target_meta_prop_id];
                         // clang-format on
                     }
                 }

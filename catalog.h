@@ -23,13 +23,13 @@ namespace HerosInsight
             using PropHLData = std::vector<InstanceHLData>;
 
             std::vector<PropHLData> props;
-            std::vector<InstanceHLData> bundles;
+            std::vector<InstanceHLData> meta_props;
 
-            HLData(size_t prop_count, size_t bundle_count, size_t instance_count) : props(prop_count), bundles(bundle_count)
+            HLData(size_t prop_count, size_t meta_prop_count, size_t instance_count) : props(prop_count), meta_props(meta_prop_count)
             {
-                for (auto &prop : props)
+                for (auto &prop_hl : props)
                 {
-                    prop = PropHLData(instance_count);
+                    prop_hl.resize(instance_count);
                 }
             }
 
@@ -43,7 +43,7 @@ namespace HerosInsight
                     }
                 }
 
-                for (auto &hl : bundles)
+                for (auto &hl : meta_props)
                 {
                     hl.clear();
                 }
@@ -54,9 +54,9 @@ namespace HerosInsight
                 return props[prop_id][span_id];
             }
 
-            InstanceHLData &GetBundleHL(size_t bundle_id)
+            InstanceHLData &GetMetaPropHL(size_t meta_prop_id)
             {
-                return bundles[bundle_id];
+                return meta_props[meta_prop_id];
             }
         };
 
@@ -64,18 +64,18 @@ namespace HerosInsight
 
         struct Filter
         {
-            std::optional<size_t> bundle_id;
+            std::optional<size_t> meta_prop_id;
             std::string_view text;
             Matcher matcher;
         };
 
-        bool ParseFilter(std::string_view source, StringArena<char> &prop_bundles, Filter &filter);
+        bool ParseFilter(std::string_view source, StringArena<char> &meta_prop_names, Filter &filter);
 
         struct SortCommand
         {
             struct Arg
             {
-                size_t target_bundle;
+                size_t target_meta_prop_id;
                 bool is_negated;
             };
 
@@ -98,9 +98,9 @@ namespace HerosInsight
             }
         };
 
-        void ParseQuery(std::string_view source, StringArena<char> &prop_bundles, Query &query);
+        void ParseQuery(std::string_view source, StringArena<char> &meta_prop_names, Query &query);
 
-        void GetFeedback(Query &query, StringArena<char> &prop_bundle_names, std::string &out);
+        void GetFeedback(Query &query, StringArena<char> &meta_prop_names, std::string &out);
     }
 
     template <typename T_prop_id, size_t N_entries>
@@ -123,11 +123,11 @@ namespace HerosInsight
         }
 
         std::array<IndexedStringArena<char> *, PROP_COUNT> props{nullptr};
-        StringArena<char> &prop_bundle_names;
-        std::span<T_propset> prop_bundles;
+        StringArena<char> &meta_prop_names;
+        std::span<T_propset> meta_propsets;
 
-        Catalog(StringArena<char> &prop_bundle_names, std::span<T_propset> prop_bundles)
-            : prop_bundle_names(prop_bundle_names), prop_bundles(prop_bundles) {}
+        Catalog(StringArena<char> &meta_prop_names, std::span<T_propset> meta_props)
+            : meta_prop_names(meta_prop_names), meta_propsets(meta_props) {}
 
         IndexedStringArena<char> *GetPropertyPtr(T_prop_id prop_id)
         {
@@ -146,7 +146,7 @@ namespace HerosInsight
             T_propset footprint_mask;
             for (auto &filter : filters)
             {
-                auto prop_mask = filter.bundle_id.has_value() ? prop_bundles[filter.bundle_id.value()] : ALL_PROPS;
+                auto prop_mask = filter.meta_prop_id.has_value() ? meta_propsets[filter.meta_prop_id.value()] : ALL_PROPS;
                 collision_mask |= footprint_mask & prop_mask;
                 footprint_mask |= prop_mask;
 
@@ -159,20 +159,20 @@ namespace HerosInsight
                     bool is_meta = i_prop == PROP_COUNT;
                     if (is_meta) // Special case for meta properties
                     {
-                        // Iterate the bundle names and check for matches
-                        for (size_t i_bundle = 0; i_bundle < prop_bundle_names.SpanCount(); ++i_bundle)
+                        // Iterate the meta properties and check for name matches
+                        for (size_t i_meta = 0; i_meta < meta_propsets.size(); ++i_meta)
                         {
-                            auto str = std::string_view(prop_bundle_names.Get(i_bundle));
-                            auto &hl = hl_data.GetBundleHL(i_bundle);
+                            auto str = std::string_view(meta_prop_names.Get(i_meta));
+                            auto &hl = hl_data.GetMetaPropHL(i_meta);
                             bool is_match = filter.matcher.Matches(str, &hl);
                             if (!is_match)
                                 continue;
 
-                            auto &bundle_prop_set = prop_bundles[i_bundle];
-                            // Iterate the indices and check which ones have values in this bundle
+                            auto &meta_propset = meta_propsets[i_meta];
+                            // Iterate the indices and check which ones "has values" in this meta property
                             for (auto index : indices)
                             {
-                                for (Utils::BitsetIterator it(bundle_prop_set); !it.IsDone(); it.Next())
+                                for (Utils::BitsetIterator it(meta_propset); !it.IsDone(); it.Next())
                                 {
                                     auto i_prop = it.index;
                                     auto prop_ptr = props[i_prop];
