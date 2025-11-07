@@ -1047,12 +1047,7 @@ namespace HerosInsight::PacketReader
         auto new_value = packet->new_value;
 
         FixedVector<uint32_t, 8> agent_ids;
-        agent_ids.AppendWith(
-            [&](auto &span)
-            {
-                Utils::GetControllableAgentsOfPlayer(span);
-            }
-        );
+        Utils::GetControllableAgentsOfPlayer(agent_ids);
         for (auto agent_id : agent_ids)
         {
             auto &agent_data = CustomAgentDataModule::GetCustomAgentData(agent_id);

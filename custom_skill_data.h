@@ -97,7 +97,7 @@ namespace HerosInsight
             return IsConstant() ? val0 : Utils::LinearAttributeScale(val0, val15, attribute_lvl);
         }
 
-        void Print(int32_t attribute_lvl, std::span<char> &out) const
+        void Print(int32_t attribute_lvl, OutBuf<char> out) const
         {
             auto dst = out.data();
             auto dst_size = out.size();
@@ -105,28 +105,23 @@ namespace HerosInsight
             if (IsConstant() || attribute_lvl != -1)
             {
                 uint32_t value = Resolve(attribute_lvl);
-                auto result = std::to_chars(dst, dst_end, value, 10);
-                assert(result.ec == std::errc());
-                out = std::span<char>(dst, result.ptr - dst);
+                out.AppendIntToChars(value, 10);
             }
             else
             {
-                auto result = std::format_to_n(dst, dst_size, "({}...{})", val0, val15);
-                assert(result.out - dst == result.size);
-                out = std::span<char>(dst, result.out - dst);
+                out.AppendFormat("({}...{})", val0, val15);
             }
         }
 
         void ImGuiRender(int32_t attribute_lvl)
         {
-            char buffer[32];
-            std::span<char> view = buffer;
-            Print(attribute_lvl, view);
+            FixedVector<char, 32> buffer;
+            Print(attribute_lvl, buffer);
 
             if (!IsConstant())
                 ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dynamic_green);
 
-            ImGui::TextUnformatted(view.data(), view.data() + view.size());
+            ImGui::TextUnformatted(buffer.data(), buffer.data_end());
 
             if (!IsConstant())
                 ImGui::PopStyleColor();
@@ -597,13 +592,11 @@ namespace HerosInsight
 
         SkillParam GetSkillParam(uint32_t id) const;
         SkillParam GetParsedSkillParam(std::function<bool(const ParsedSkillData &)> predicate) const;
-        void GetParsedSkillParams(ParsedSkillData::Type type, std::span<ParsedSkillData> &result) const;
-        void GetInitConditions(uint8_t attr_lvl, std::span<SkillEffect> &result) const;
-        void GetEndConditions(uint8_t attr_lvl, std::span<SkillEffect> &result) const;
+        void GetParsedSkillParams(ParsedSkillData::Type type, OutBuf<ParsedSkillData> result) const;
+        void GetInitConditions(uint8_t attr_lvl, OutBuf<SkillEffect> result) const;
+        void GetEndConditions(uint8_t attr_lvl, OutBuf<SkillEffect> result) const;
         std::span<const ParsedSkillData> GetInitParsedData() const;
         std::span<const ParsedSkillData> GetEndParsedData() const;
-
-        void GetOnExpireEffects(CustomAgentData &caster, std::span<SkillEffect> &result) const;
 
         std::string ToString() const;
         std::string_view GetTypeString();
@@ -628,7 +621,7 @@ namespace HerosInsight
         float GetActivation() const;
         float GetAftercast() const;
         Utils::Range GetAoE() const;
-        void GetRanges(std::span<Utils::Range> &out) const;
+        void GetRanges(OutBuf<Utils::Range> out) const;
         uint32_t ResolveBaseDuration(CustomAgentData &custom_ad, std::optional<uint8_t> skill_attr_lvl_override = std::nullopt) const;
 
     private:

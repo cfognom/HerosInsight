@@ -15,7 +15,7 @@ namespace HerosInsight
         IndexedStringArena<char> &GetNames();
         std::string_view GetGenericDescription(GW::Constants::SkillID skill_id, bool is_concise);
         void MakeDescription(GW::Constants::SkillID skill_id, bool is_concise, int8_t attr_lvl, std::span<char> &dst);
-        static void SkillDescriptionToEncStr(const GW::Skill &skill, bool concise, int32_t attr_lvl, std::span<wchar_t> &dst);
+        static void SkillDescriptionToEncStr(const GW::Skill &skill, bool concise, int32_t attr_lvl, std::span<wchar_t> dst);
 
         SkillTextProvider(GW::Constants::Language language);
 

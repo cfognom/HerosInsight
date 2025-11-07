@@ -774,8 +774,7 @@ namespace HerosInsight::SkillBook
             SkillTextPropertyID::Range,
             [](RichText::RichTextArena &dst, CustomSkillData &cskill)
             {
-                Utils::Range buffer[4];
-                std::span<Utils::Range> ranges(buffer);
+                FixedVector<Utils::Range, 4> ranges;
                 cskill.GetRanges(ranges);
                 for (auto range : ranges)
                 {

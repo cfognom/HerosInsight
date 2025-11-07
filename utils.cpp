@@ -1281,18 +1281,8 @@ namespace HerosInsight::Utils
 
         int32_t regen_hp_per_second = 0;
         int32_t degen_hp_per_second = 0;
-        regs.AppendWith(
-            [&](std::span<ParsedSkillData> &span)
-            {
-                custom_sd.GetParsedSkillParams(ParsedSkillData::Type::HealthRegen, span);
-            }
-        );
-        degs.AppendWith(
-            [&](std::span<ParsedSkillData> &span)
-            {
-                custom_sd.GetParsedSkillParams(ParsedSkillData::Type::HealthDegen, span);
-            }
-        );
+        custom_sd.GetParsedSkillParams(ParsedSkillData::Type::HealthRegen, regs);
+        custom_sd.GetParsedSkillParams(ParsedSkillData::Type::HealthDegen, degs);
         for (auto &reg : regs)
         {
             regen_hp_per_second += 2 * reg.param.Resolve(attribute_level);
@@ -3119,12 +3109,7 @@ namespace HerosInsight::Utils
     bool IsControllableAgentOfPlayer(uint32_t agent_id, uint32_t player_number)
     {
         FixedVector<uint32_t, 8> player_agents;
-        player_agents.AppendWith(
-            [=](auto &dst)
-            {
-                GetControllableAgentsOfPlayer(dst, player_number);
-            }
-        );
+        GetControllableAgentsOfPlayer(player_agents, player_number);
 
         for (auto player_agent : player_agents)
         {
@@ -3135,9 +3120,8 @@ namespace HerosInsight::Utils
         return false;
     }
 
-    void GetControllableAgentsOfPlayer(std::span<uint32_t> &out, uint32_t player_number)
+    void GetControllableAgentsOfPlayer(OutBuf<uint32_t> out, uint32_t player_number)
     {
-        SpanWriter<uint32_t> out_writer(out);
         if (!player_number)
             player_number = GW::PlayerMgr::GetPlayerNumber();
 
@@ -3155,16 +3139,15 @@ namespace HerosInsight::Utils
         }
 
         bool success = true;
-        success &= out_writer.try_push(GW::PlayerMgr::GetPlayerAgentId(player_number));
+        success &= out.try_push(GW::PlayerMgr::GetPlayerAgentId(player_number));
 
         for (auto hero : info->heroes)
         {
             if (hero.owner_player_id == player_number)
             {
-                success &= out_writer.try_push(hero.agent_id);
+                success &= out.try_push(hero.agent_id);
             }
         }
-        out = out_writer.WrittenSpan();
         SOFT_ASSERT(success, L"Failed to get controllable agents of player");
     }
 

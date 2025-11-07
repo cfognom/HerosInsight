@@ -15,17 +15,15 @@ namespace HerosInsight
     template <typename Derived, typename T>
     class BufferBase
     {
-        std::size_t len = 0;
-
     protected:
         void push_unchecked(const T &value)
         {
-            Span()[len++] = value;
+            Span()[Len()++] = value;
         }
 
         void push_unchecked(T &&value)
         {
-            Span()[len++] = std::move(value);
+            Span()[Len()++] = std::move(value);
         }
 
     public:
@@ -37,6 +35,16 @@ namespace HerosInsight
         std::span<T> Span()
         {
             return static_cast<Derived *>(this)->Span();
+        }
+
+        std::size_t size() const
+        {
+            return static_cast<const Derived *>(this)->len;
+        }
+
+        std::size_t &Len()
+        {
+            return static_cast<Derived *>(this)->len;
         }
 
         bool try_push(const T &value)
@@ -77,7 +85,7 @@ namespace HerosInsight
         T &emplace_back()
         {
             assert(size() < capacity());
-            return Span()[len++];
+            return Span()[Len()++];
         }
 
         std::span<T> RemainingSpan()
@@ -127,14 +135,14 @@ namespace HerosInsight
         T pop()
         {
             assert(!empty());
-            return std::move(Span()[--len]);
+            return std::move(Span()[--Len()]);
         }
 
         void remove(std::size_t index)
         {
             assert(index < size());
             std::copy(data() + index + 1, data_end(), data() + index);
-            --len;
+            --Len();
         }
 
         void insert(std::size_t index, const T &value)
@@ -143,7 +151,7 @@ namespace HerosInsight
             assert(!full());
             std::copy_backward(data() + index, data_end(), data_end() + 1);
             Span()[index] = value;
-            ++len;
+            ++Len();
         }
 
         T &operator[](std::size_t index)
@@ -208,7 +216,7 @@ namespace HerosInsight
             {
                 throw std::runtime_error("Format failed or output was truncated");
             }
-            len += static_cast<std::size_t>(n);
+            Len() += static_cast<std::size_t>(n);
             return n;
         }
 
@@ -223,7 +231,7 @@ namespace HerosInsight
             {
                 throw std::runtime_error("Format failed or output was truncated");
             }
-            len += static_cast<std::size_t>(n);
+            Len() += static_cast<std::size_t>(n);
             return n;
         }
 
@@ -236,11 +244,6 @@ namespace HerosInsight
         std::size_t remaining() const
         {
             return capacity() - size();
-        }
-
-        std::size_t size() const
-        {
-            return len;
         }
 
         bool empty() const
@@ -256,7 +259,7 @@ namespace HerosInsight
         void SetSize(std::size_t new_size)
         {
             assert(new_size <= capacity());
-            len = new_size;
+            Len() = new_size;
         }
 
         void AddSize(std::size_t add_size)
@@ -290,7 +293,7 @@ namespace HerosInsight
         // Method to clear the buffer
         void clear()
         {
-            len = 0;
+            Len() = 0;
         }
 
         // Iterator support
@@ -329,7 +332,10 @@ namespace HerosInsight
     template <typename T>
     class SpanWriter : public BufferBase<SpanWriter<T>, T>
     {
+        friend class BufferBase<SpanWriter<T>, T>;
+
         std::span<T> span;
+        std::size_t len = 0;
 
     public:
         SpanWriter(std::span<T> span) : span(span) {}
@@ -343,7 +349,10 @@ namespace HerosInsight
     template <typename T, std::size_t N>
     class FixedVector : public BufferBase<FixedVector<T, N>, T>
     {
+        friend class BufferBase<FixedVector<T, N>, T>;
+
         std::array<T, N> array;
+        std::size_t len = 0;
 
     public:
         constexpr FixedVector() = default;
@@ -364,6 +373,25 @@ namespace HerosInsight
         std::span<T> Span()
         {
             return std::span<T>(array.data(), array.size());
+        }
+    };
+
+    template <typename T>
+    class OutBuf : public BufferBase<OutBuf<T>, T>
+    {
+        friend class BufferBase<OutBuf<T>, T>;
+
+        std::span<T> span;
+        size_t &len;
+
+    public:
+        OutBuf(SpanWriter<T> &src) : span(src.Span()), len(src.Len()) {}
+        template <std::size_t N>
+        OutBuf(FixedVector<T, N> &src) : span(src.Span()), len(src.Len()) {}
+
+        std::span<T> Span() const
+        {
+            return span;
         }
     };
 }

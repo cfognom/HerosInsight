@@ -273,8 +273,7 @@ namespace HerosInsight
                             auto &format_catcher = skill_catcher.format_catchers[format_id];
                             format_catcher.format_id = format_id;
 
-                            std::span<wchar_t> enc_str_span = enc_str;
-                            SkillDescriptionToEncStr(skill, is_concise, attr_lvl, enc_str_span);
+                            SkillDescriptionToEncStr(skill, is_concise, attr_lvl, enc_str);
                             ++this->decoding_count;
                             GW::UI::AsyncDecodeStr(enc_str, OnDescDecoded, (void *)&format_catcher, provider->language);
                         }
@@ -404,14 +403,13 @@ namespace HerosInsight
                         if (i_gen == param_span.position)
                         {
                             auto param = GetSkillParam(skill, param_span.param_id);
-                            char buffer[4];
-                            std::span<char> str(buffer);
-                            param.Print(attr_lvl, str);
+                            FixedVector<char, 4> buffer;
+                            param.Print(attr_lvl, buffer);
                             // Add param replacement to spec_kits
                             provider->spec_kits.emplace_back(
                                 param_span.position,
                                 param_span.size,
-                                std::string_view(buffer, str.size())
+                                buffer
                             );
                             // Step over param
                             i_gen += param_span.size;
@@ -642,19 +640,14 @@ From GWCA/TB++ discord
 #define LUT_RANGE L'\x45B'      // "({1:u}...{2:u})"
 #define LUT_ATTRIB L'\x46E';    // "(Attrib: {1:s})"
 
-    void SkillTextProvider::SkillDescriptionToEncStr(const GW::Skill &skill, bool concise, int32_t attr_lvl, std::span<wchar_t> &dst)
+    void SkillTextProvider::SkillDescriptionToEncStr(const GW::Skill &skill, bool concise, int32_t attr_lvl, std::span<wchar_t> dst)
     {
-        SpanWriter<wchar_t> buffer = dst;
+        SpanWriter<wchar_t> buffer(dst);
         auto str_id = concise ? skill.concise : skill.description;
-        buffer.AppendWith(
-            [=](auto &dst)
-            {
-                bool success = GW::UI::UInt32ToEncStr(str_id, dst.data(), dst.size());
-                assert(success);
-                auto len = wcslen(dst.data());
-                dst = dst.subspan(0, len);
-            }
-        );
+
+        bool success = GW::UI::UInt32ToEncStr(str_id, dst.data(), dst.size());
+        assert(success);
+        buffer.Len() = wcslen(dst.data());
 
         bool has_attribute = attr_lvl != -1;
         constexpr uint32_t MAX_VALUE = 0x8000 - 0x100 - 1;
@@ -697,7 +690,6 @@ From GWCA/TB++ discord
             buffer.push_back('\x1');
         }
 
-        dst = buffer.WrittenSpan();
         buffer.push_back('\0');
     }
 }

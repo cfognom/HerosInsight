@@ -3342,33 +3342,29 @@ namespace HerosInsight
         return {0, 0};
     }
 
-    void CustomSkillData::GetParsedSkillParams(ParsedSkillData::Type type, std::span<ParsedSkillData> &result) const
+    void CustomSkillData::GetParsedSkillParams(ParsedSkillData::Type type, OutBuf<ParsedSkillData> result) const
     {
-        SpanWriter<ParsedSkillData> result_writer(result);
         for (const auto &pd : this->parsed_data)
         {
             if (pd.type == type)
-                result_writer.try_push(pd);
+                result.try_push(pd);
         }
-        result = result_writer.WrittenSpan();
     }
 
-    void GetConditionsFromSpan(std::span<const ParsedSkillData> parsed_data, GW::Constants::SkillID source_skill_id, uint8_t attr_lvl, std ::span<SkillEffect> &result)
+    void GetConditionsFromSpan(std::span<const ParsedSkillData> parsed_data, GW::Constants::SkillID source_skill_id, uint8_t attr_lvl, OutBuf<SkillEffect> result)
     {
-        SpanWriter<SkillEffect> result_writer(result);
         bool success = true;
         for (const auto &pd : parsed_data)
         {
             const auto condition_skill_id = pd.GetCondition();
             if (condition_skill_id == GW::Constants::SkillID::No_Skill)
                 continue;
-            success &= result_writer.try_push({condition_skill_id, source_skill_id, pd.param.Resolve(attr_lvl)});
+            success &= result.try_push({condition_skill_id, source_skill_id, pd.param.Resolve(attr_lvl)});
         }
-        result = result_writer.WrittenSpan();
         SOFT_ASSERT(success, L"Failed to push condition");
     }
 
-    void CustomSkillData::GetInitConditions(uint8_t attr_lvl, std::span<SkillEffect> &result) const
+    void CustomSkillData::GetInitConditions(uint8_t attr_lvl, OutBuf<SkillEffect> result) const
     {
         if (!tags.ConditionSource)
             return;
@@ -3628,16 +3624,14 @@ namespace HerosInsight
         return Utils::Range::Null;
     }
 
-    void CustomSkillData::GetRanges(std::span<Utils::Range> &out) const
+    void CustomSkillData::GetRanges(OutBuf<Utils::Range> out) const
     {
-        SpanWriter<Utils::Range> builder = out;
         if (Utils::IsRangeValue(skill->aoe_range))
-            builder.push_back((Utils::Range)skill->aoe_range);
+            out.push_back((Utils::Range)skill->aoe_range);
         if (Utils::IsRangeValue(skill->const_effect))
-            builder.push_back((Utils::Range)skill->const_effect);
+            out.push_back((Utils::Range)skill->const_effect);
         if (skill->bonusScale0 == skill->bonusScale15 && Utils::IsRangeValue(skill->bonusScale0))
-            builder.push_back((Utils::Range)skill->bonusScale0);
-        out = builder.WrittenSpan();
+            out.push_back((Utils::Range)skill->bonusScale0);
     }
 
     uint32_t CustomSkillData::ResolveBaseDuration(CustomAgentData &caster, std::optional<uint8_t> skill_attr_lvl_override) const
@@ -3987,12 +3981,7 @@ namespace HerosInsight
         std::wstring out = L"StaticSkillEffect: ";
 
         FixedVector<char, 64> buffer;
-        buffer.AppendWith(
-            [=](auto &dst)
-            {
-                duration_or_count.Print(-1, dst);
-            }
-        );
+        duration_or_count.Print(-1, buffer);
         auto dur_or_count_string = Utils::StrToWStr(buffer);
 
         if (auto skill_id = std::get_if<GW::Constants::SkillID>(&skill_id_or_removal))
