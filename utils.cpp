@@ -397,6 +397,18 @@ namespace HerosInsight::Utils
         return count;
     }
 
+    std::string ToHumanReadable(float number, std::span<Unit> units)
+    {
+        for (auto &unit : units)
+        {
+            if (number >= unit.value)
+            {
+                return std::format("{:.2f} {}", number / unit.value, unit.name);
+            }
+        }
+        return std::to_string(number);
+    }
+
     std::string UInt32ToBinaryStr(uint32_t value)
     {
         std::bitset<32> bits(value);
@@ -407,6 +419,20 @@ namespace HerosInsight::Utils
     {
         std::wstring wstr(str.begin(), str.end());
         return wstr;
+    }
+
+    void StrToWStr(const char *str, std::span<wchar_t> &out)
+    {
+        wchar_t *dst = out.data();
+        wchar_t *dst_max = out.data() + out.size();
+        while (*str)
+        {
+            assert(dst < dst_max);
+            auto c = *str++;
+            auto wc = static_cast<wchar_t>(c);
+            *dst++ = wc;
+        }
+        out = out.subspan(0, dst - out.data());
     }
 
     std::string WStrToStr(const wchar_t *wstr, const wchar_t *end)

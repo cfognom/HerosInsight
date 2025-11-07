@@ -253,9 +253,33 @@ namespace HerosInsight::Utils
     bool TryReadHexColor(std::string_view &remaining, ImU32 &out);
     size_t ReadWhitespace(std::string_view &remaining);
 
+    struct Unit
+    {
+        float value;
+        std::string_view name;
+    };
+    inline Unit SIPrefix[]{
+        {1000000000000, "T"},
+        {1000000000, "G"},
+        {1000000, "M"},
+        {1000, "k"},
+        {1, ""},
+        {0.001f, "m"},
+        {0.000001f, "μ"},
+        {0.000000001f, "n"},
+    };
+    inline Unit Memory[]{
+        {1024 * 1024 * 1024 * 1024, "TiB"},
+        {1024 * 1024 * 1024, "GiB"},
+        {1024 * 1024, "MiB"},
+        {1024, "KiB"},
+        {1, "B"},
+    };
+    std::string ToHumanReadable(float number, std::span<Unit> units = SIPrefix);
     std::string UInt32ToBinaryStr(uint32_t value);
     std::wstring StrToWStr(std::string_view str);
     std::string WStrToStr(const wchar_t *wstr, const wchar_t *end = nullptr);
+    void StrToWStr(const char *str, std::span<wchar_t> &out);
     void WStrToStr(const wchar_t *wstr, std::span<char> &out);
     bool TryGetDecodedString(std::wstring_view enc_str, std::wstring_view &out);
     std::wstring DecodeString(const wchar_t *enc_str, std::chrono::microseconds timeout = std::chrono::microseconds(200));
@@ -273,6 +297,27 @@ namespace HerosInsight::Utils
 
     template <typename... Args>
     void FormatToChat(const std::wformat_string<Args...> &format_str, Args &&...args)
+    {
+        FormatToChat(NULL, format_str, std::forward<Args>(args)...);
+    }
+
+    template <typename... Args>
+    void FormatToChat(GW::Chat::Color color, const std::format_string<Args...> &format_str, Args &&...args)
+    {
+        static_assert(alignof(wchar_t) >= alignof(char));
+        constexpr size_t n_chars = 1024;
+        wchar_t wbuf[n_chars];
+        char *buf = &((char *)&wbuf[n_chars])[-n_chars];
+        auto result = std::format_to_n(buf, n_chars - 1, format_str, std::forward<Args>(args)...);
+        *result.out = '\0';
+        std::span<wchar_t> wstr(wbuf, n_chars - 1);
+        Utils::StrToWStr(buf, wstr);
+        wbuf[wstr.size()] = '\0';
+        WriteMessageRaw(wbuf, color);
+    }
+
+    template <typename... Args>
+    void FormatToChat(const std::format_string<Args...> &format_str, Args &&...args)
     {
         FormatToChat(NULL, format_str, std::forward<Args>(args)...);
     }
