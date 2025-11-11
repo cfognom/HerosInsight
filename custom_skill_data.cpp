@@ -3372,7 +3372,7 @@ namespace HerosInsight
         GetConditionsFromSpan(GetInitParsedData(), skill_id, attr_lvl, result);
     }
 
-    void CustomSkillData::GetEndConditions(uint8_t attr_lvl, std::span<SkillEffect> &result) const
+    void CustomSkillData::GetEndConditions(uint8_t attr_lvl, OutBuf<SkillEffect> result) const
     {
         if (!tags.ConditionSource)
             return;

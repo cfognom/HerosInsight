@@ -44,7 +44,7 @@ namespace HerosInsight::Utils
 // Checks if the condition is true, if not, writes a message to chat and returns
 #define SOFT_ASSERT(condition, ...) HerosInsight::Utils::SoftAssert((condition), __FILEW__, __LINE__, __VA_ARGS__);
 
-    void WriteMessageRaw(const wchar_t *message, GW::Chat::Color color = NULL);
+    void WriteToChat(const wchar_t *message, GW::Chat::Color color = NULL);
 
     // Checks if the condition is true, if not, writes a formatted message to chat
     template <typename... Args>
@@ -56,7 +56,7 @@ namespace HerosInsight::Utils
             std::wstring file_str(file);
             std::replace(file_str.begin(), file_str.end(), L'\\', L'/'); // Replace '\\' with '/'
             std::wstring message = std::format(L"ASSERT FAILED: {}. File: {}, Line: {}", user_message, file_str, line);
-            WriteMessageRaw(message.c_str(), 0xFFFF0000);
+            WriteToChat(message.c_str(), 0xFFFF0000);
         }
     }
 
@@ -292,7 +292,7 @@ namespace HerosInsight::Utils
         wchar_t buf[1024];
         auto result = std::format_to_n(buf, sizeof(buf) - 1, format_str, std::forward<Args>(args)...);
         *result.out = '\0';
-        WriteMessageRaw(buf, color);
+        WriteToChat(buf, color);
     }
 
     template <typename... Args>
@@ -313,7 +313,7 @@ namespace HerosInsight::Utils
         std::span<wchar_t> wstr(wbuf, n_chars - 1);
         Utils::StrToWStr(buf, wstr);
         wbuf[wstr.size()] = '\0';
-        WriteMessageRaw(wbuf, color);
+        WriteToChat(wbuf, color);
     }
 
     template <typename... Args>

@@ -651,7 +651,7 @@ namespace HerosInsight::PacketReader
         //     Utils::WriteStringToChat(0xFF00FF00, L"------------ %u frames, %f seconds ------------", delta_frames, delta_seconds);
         // }
 
-        Utils::WriteMessageRaw(message.c_str(), is_related_to_player ? NULL : 0xFFFF0000);
+        Utils::WriteToChat(message.c_str(), is_related_to_player ? NULL : 0xFFFF0000);
     }
 
     void GenericFloatCallback(GW::HookStatus *, const StoC::GenericFloat *packet)

@@ -487,7 +487,7 @@ namespace HerosInsight::Utils
         out = out.subspan(0, dst - out.data());
     }
 
-    void WriteMessageRaw(const wchar_t *message, GW::Chat::Color color)
+    void WriteToChat(const wchar_t *message, GW::Chat::Color color)
     {
         const auto channel = GW::Chat::Channel::CHANNEL_MODERATOR;
 
@@ -952,7 +952,7 @@ namespace HerosInsight::Utils
             if (source_index < 2)
                 hsr_sources[source_index++] = value;
             else
-                WriteMessageRaw(L"ERROR: Too many HSR sources");
+                WriteToChat(L"ERROR: Too many HSR sources");
         };
 
         for (const auto item_id : Utils::GetAgentWeaponAndOffhandItemIds(agent))
