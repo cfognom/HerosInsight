@@ -502,7 +502,7 @@ namespace HerosInsight::SkillBook
         const std::string capacity_hint_key = "meta_prop_names";
         meta_prop_names.ReserveFromHint(capacity_hint_key);
 
-        SetupMetaProp("Any", SkillCatalog::ALL_PROPS);
+        SetupMetaProp("Any", SkillCatalog::ALL_PROPS); // Must be first
         SetupMetaProp("Name", SkillCatalog::MakePropset({SkillTextPropertyID::Name}));
         SetupMetaProp("Type", SkillCatalog::MakePropset({SkillTextPropertyID::Type}));
         SetupMetaProp("Tags", SkillCatalog::MakePropset({SkillTextPropertyID::Tag}));
@@ -1218,32 +1218,11 @@ namespace HerosInsight::SkillBook
             {
                 this->catalog.RunQuery(this->query, this->filtered_skills, hl_data);
 
-#ifdef _TIMING
-                auto timestamp_filtering = GW::MemoryMgr::GetSkillTimer();
-                auto duration = timestamp_filtering - state_update_start_timestamp;
-                GW::GameThread::Enqueue(
-                    [=]()
-                    {
-                        Utils::FormatToChat(L"Filtering took {} ms", duration);
-                    }
-                );
-#endif
-
                 // for (auto &command : parsed_commands)
                 // {
                 //     ApplyCommand(command, filtered_skills);
                 // }
 
-#ifdef _TIMING
-                auto timestamp_commands = GW::MemoryMgr::GetSkillTimer();
-                duration = timestamp_commands - timestamp_filtering;
-                GW::GameThread::Enqueue(
-                    [=]()
-                    {
-                        Utils::FormatToChat(L"Applying commands took {} ms", duration);
-                    }
-                );
-#endif
                 return true;
             };
 
@@ -2163,59 +2142,6 @@ namespace HerosInsight::SkillBook
         }
     }
 
-    uint32_t GetHighlightKey(SkillPropertyID::Type target, GW::Constants::SkillID skill_id = GW::Constants::SkillID::No_Skill)
-    {
-        assert((uint32_t)skill_id < 0x10000);
-        assert((uint32_t)target < 0x10000);
-        return (((uint32_t)skill_id) << 16) | (uint32_t)target;
-    }
-
-    template <class _Container>
-    void GetFormattedHeader(const SkillPropertyID::Type type, std::back_insert_iterator<_Container> it)
-    {
-        auto prop_name = SkillPropertyID{type}.ToStr();
-        std::format_to(it, "{}: ", prop_name);
-    }
-
-    void DrawFormattedHeader(const SkillPropertyID::Type type, GW::Constants::SkillID skill_id)
-    {
-        char header[32];
-
-        // FixedString<32> header;
-        // GetFormattedHeader(type, std::back_inserter(header));
-
-        auto window = ImGui::GetCurrentWindow();
-        auto work_width = window->WorkRect.GetWidth();
-        auto cursor_x = ImGui::GetCursorPosX();
-
-        // auto has_header_hl = active_state->highlighting_map[GetHighlightKey(type, skill_id)].did_match_header;
-        // FixedVector<uint16_t, 2> header_hl;
-        // if (has_header_hl)
-        // {
-        //     header_hl.push_back(0);
-        //     header_hl.push_back(header.size() - 1);
-        // }
-        ImGui::PushFont(Constants::Fonts::gw_font_16);
-        ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
-        Utils::DrawMultiColoredText(header, cursor_x, work_width, {}, {});
-        ImGui::PopStyleColor();
-        ImGui::PopFont();
-    }
-
-    void DrawFormattedHeaderTooltip(const SkillPropertyID::Type type, GW::Constants::SkillID skill_id)
-    {
-        if (ImGui::IsItemHovered())
-        {
-            ImGui::BeginTooltip();
-            bool untouched = IsInitialCursorPos();
-            if (untouched)
-            {
-                DrawFormattedHeader(type, skill_id);
-            }
-            ImGui::EndTooltip();
-        }
-    }
-
     enum struct FilterJoin
     {
         None,
@@ -2339,60 +2265,6 @@ namespace HerosInsight::SkillBook
 
     static constexpr std::span<const std::pair<std::string_view, SkillPropertyID::Type>> text_filter_targets = {filter_targets, n_text_filter_targets};
     static constexpr std::span<const std::pair<std::string_view, SkillPropertyID::Type>> number_filter_targets = {filter_targets + n_text_filter_targets, std::size(filter_targets) - n_text_filter_targets};
-
-    std::string_view PopWord(std::string_view &str)
-    {
-        char *p = (char *)str.data();
-        char *end = p + str.size();
-        while (p < end && Utils::IsSpace(*p))
-            ++p;
-
-        char *word_start = p;
-        bool is_alpha = Utils::IsAlpha(*p);
-        ++p;
-        if (is_alpha)
-        {
-            while (p < end && Utils::IsAlpha(*p))
-                ++p;
-        }
-
-        str = std::string_view(p, end - p);
-        return std::string_view(word_start, p - word_start);
-    }
-
-    SkillPropertyID ParseFilterTarget(std::string_view text)
-    {
-        SkillPropertyID target = {};
-
-        // if (TryParseRawFilterTarget(p, end, target))
-        // {
-        //     return target;
-        // }
-
-        auto matcher = Matcher(text, true);
-
-        size_t best_match_weight = std::numeric_limits<size_t>::max();
-        // int32_t best_match_index = -1;
-        for (size_t i = 0; i < std::size(filter_targets); ++i)
-        {
-            auto &pair = filter_targets[i];
-            auto &type = pair.second;
-            auto ident = SkillPropertyID{type, 0}.ToStr();
-
-            bool match = matcher.Matches(ident, nullptr);
-            if (match)
-            {
-                float match_weight = ident.size();
-                if (match_weight < best_match_weight)
-                {
-                    best_match_weight = match_weight;
-                    target.type = type;
-                }
-            }
-        }
-
-        return target;
-    }
 
     std::string_view GetOpDescription(SkillPropertyID target, FilterOperator op)
     {
