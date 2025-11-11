@@ -530,6 +530,16 @@ namespace HerosInsight::Utils
         }
     }
 
+    void WriteToChat(const char *message, GW::Chat::Color color)
+    {
+        constexpr size_t n_chars = 1024;
+        wchar_t wbuf[n_chars];
+        std::span<wchar_t> wstr(wbuf, n_chars - 1);
+        StrToWStr(message, wstr);
+        wbuf[wstr.size()] = '\0';
+        WriteToChat(wbuf, color);
+    }
+
     // Divides nom by den, rounding to nearest. If two values are equally close, rounds to even.
     uint32_t DivHalfToEven(uint32_t nom, uint32_t den)
     {

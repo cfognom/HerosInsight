@@ -45,6 +45,7 @@ namespace HerosInsight::Utils
 #define SOFT_ASSERT(condition, ...) HerosInsight::Utils::SoftAssert((condition), __FILEW__, __LINE__, __VA_ARGS__);
 
     void WriteToChat(const wchar_t *message, GW::Chat::Color color = NULL);
+    void WriteToChat(const char *message, GW::Chat::Color color = NULL);
 
     // Checks if the condition is true, if not, writes a formatted message to chat
     template <typename... Args>
@@ -296,24 +297,18 @@ namespace HerosInsight::Utils
     }
 
     template <typename... Args>
-    void FormatToChat(const std::wformat_string<Args...> &format_str, Args &&...args)
+    void FormatToChat(GW::Chat::Color color, const std::format_string<Args...> &format_str, Args &&...args)
     {
-        FormatToChat(NULL, format_str, std::forward<Args>(args)...);
+        char buf[1024];
+        auto result = std::format_to_n(buf, sizeof(buf) - 1, format_str, std::forward<Args>(args)...);
+        *result.out = '\0';
+        WriteToChat(buf, color);
     }
 
     template <typename... Args>
-    void FormatToChat(GW::Chat::Color color, const std::format_string<Args...> &format_str, Args &&...args)
+    void FormatToChat(const std::wformat_string<Args...> &format_str, Args &&...args)
     {
-        static_assert(alignof(wchar_t) >= alignof(char));
-        constexpr size_t n_chars = 1024;
-        wchar_t wbuf[n_chars];
-        char *buf = &((char *)&wbuf[n_chars])[-n_chars];
-        auto result = std::format_to_n(buf, n_chars - 1, format_str, std::forward<Args>(args)...);
-        *result.out = '\0';
-        std::span<wchar_t> wstr(wbuf, n_chars - 1);
-        Utils::StrToWStr(buf, wstr);
-        wbuf[wstr.size()] = '\0';
-        WriteToChat(wbuf, color);
+        FormatToChat(NULL, format_str, std::forward<Args>(args)...);
     }
 
     template <typename... Args>
