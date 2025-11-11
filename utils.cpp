@@ -421,18 +421,19 @@ namespace HerosInsight::Utils
         return wstr;
     }
 
-    void StrToWStr(const char *str, std::span<wchar_t> &out)
+    bool StrToWStr(const char *str, std::span<wchar_t> &out)
     {
-        wchar_t *dst = out.data();
-        wchar_t *dst_max = out.data() + out.size();
+        SpanWriter<wchar_t> dst_writer(out);
         while (*str)
         {
-            assert(dst < dst_max);
+            if (dst_writer.full())
+                return false;
             auto c = *str++;
             auto wc = static_cast<wchar_t>(c);
-            *dst++ = wc;
+            dst_writer.push_back(wc);
         }
-        out = out.subspan(0, dst - out.data());
+        out = dst_writer.WrittenSpan();
+        return true;
     }
 
     std::string WStrToStr(const wchar_t *wstr, const wchar_t *end)
@@ -473,18 +474,19 @@ namespace HerosInsight::Utils
         return str;
     }
 
-    void WStrToStr(const wchar_t *wstr, std::span<char> &out)
+    bool WStrToStr(const wchar_t *wstr, std::span<char> &out)
     {
-        char *dst = out.data();
-        char *dst_max = out.data() + out.size();
+        SpanWriter<char> dst_writer(out);
         while (*wstr)
         {
-            assert(dst < dst_max);
+            if (dst_writer.full())
+                return false;
             auto wc = *wstr++;
             auto c = wc <= 0x7F ? static_cast<char>(wc) : '?';
-            *dst++ = c;
+            dst_writer.push_back(c);
         }
-        out = out.subspan(0, dst - out.data());
+        out = dst_writer.WrittenSpan();
+        return true;
     }
 
     void WriteToChat(const wchar_t *message, GW::Chat::Color color)

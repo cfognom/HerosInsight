@@ -279,8 +279,8 @@ namespace HerosInsight::Utils
     std::string UInt32ToBinaryStr(uint32_t value);
     std::wstring StrToWStr(std::string_view str);
     std::string WStrToStr(const wchar_t *wstr, const wchar_t *end = nullptr);
-    void StrToWStr(const char *str, std::span<wchar_t> &out);
-    void WStrToStr(const wchar_t *wstr, std::span<char> &out);
+    bool StrToWStr(const char *str, std::span<wchar_t> &out);
+    bool WStrToStr(const wchar_t *wstr, std::span<char> &out);
     bool TryGetDecodedString(std::wstring_view enc_str, std::wstring_view &out);
     std::wstring DecodeString(const wchar_t *enc_str, std::chrono::microseconds timeout = std::chrono::microseconds(200));
     std::wstring StrIDToWStr(uint32_t id);
