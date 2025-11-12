@@ -1327,16 +1327,15 @@ namespace HerosInsight::SkillBook
                 if (text.empty())
                     continue;
                 const auto hl = GetHL(l.id, skill_id);
-                RichText::TextSegment seg_alloc[16];
-                std::span<RichText::TextSegment> seg_span = seg_alloc;
-                text_drawer.MakeTextSegments(text, seg_span, hl);
-                const auto text_width = RichText::CalcTextSegmentsWidth(seg_span);
+                FixedVector<RichText::TextSegment, 16> segments;
+                text_drawer.MakeTextSegments(text, segments, hl);
+                const auto text_width = RichText::CalcTextSegmentsWidth(segments);
                 float start_x = max_pos_x - l.pos_from_right * width_per_stat - text_width;
                 float current_x = std::max(start_x, min_pos_x);
                 const auto ls_text_cursor = ImVec2(current_x, base_pos_y + 4);
                 ImGui::SetCursorPos(ls_text_cursor);
 
-                text_drawer.DrawTextSegments(seg_span, 0, -1);
+                text_drawer.DrawTextSegments(segments, 0, -1);
 
                 current_x += text_width;
                 min_pos_x = current_x + 5;
@@ -1391,10 +1390,9 @@ namespace HerosInsight::SkillBook
 
                     auto name_str = GetStr(SkillTextPropertyID::Name, skill_id);
                     auto name_hl = GetHL(SkillTextPropertyID::Name, skill_id);
-                    RichText::TextSegment seg_alloc[256];
-                    std::span<RichText::TextSegment> seg_span = seg_alloc;
-                    text_drawer.MakeTextSegments(name_str, seg_span, name_hl);
-                    text_drawer.DrawTextSegments(seg_span, wrapping_min, wrapping_max);
+                    FixedVector<RichText::TextSegment, 32> segments;
+                    text_drawer.MakeTextSegments(name_str, segments, name_hl);
+                    text_drawer.DrawTextSegments(segments, wrapping_min, wrapping_max);
 
                     auto size = ImGui::GetItemRectSize();
 
@@ -1411,9 +1409,9 @@ namespace HerosInsight::SkillBook
                         {
                             auto y_pos = name_cursor_ss.y;
                             auto cumulative_width = 0.f;
-                            for (size_t i = 0; i <= seg_span.size(); i++)
+                            for (size_t i = 0; i <= segments.size(); i++)
                             {
-                                auto seg_width = i < seg_span.size() ? seg_span[i].width : std::numeric_limits<float>::max();
+                                auto seg_width = i < segments.size() ? segments[i].width : std::numeric_limits<float>::max();
                                 auto next_cumulative_width = cumulative_width + seg_width;
                                 if (next_cumulative_width > width)
                                 {
@@ -1814,20 +1812,19 @@ namespace HerosInsight::SkillBook
             }
         }
 
-        void MakeBookName(std::span<char> buf, size_t book_index)
+        void MakeBookName(OutBuf<char> name, size_t book_index)
         {
-            SpanWriter<char> name_writer = buf;
-            name_writer.AppendRange(std::string_view("Skill Book (Ctrl + K)"));
+            name.AppendRange(std::string_view("Skill Book (Ctrl + K)"));
             if (book_index > 0)
             {
-                name_writer.AppendFormat(" ({})", book_index);
+                name.AppendFormat(" ({})", book_index);
             }
 
             // Add unique id: Hex-string of pointer to BookState
-            name_writer.AppendRange(std::string_view("###"));
-            name_writer.AppendIntToChars(reinterpret_cast<size_t>(this), 16);
+            name.AppendRange(std::string_view("###"));
+            name.AppendIntToChars(reinterpret_cast<size_t>(this), 16);
 
-            name_writer.push_back('\0');
+            name.push_back('\0');
         }
 
         void Draw(IDirect3DDevice9 *device, size_t book_index)
@@ -1855,10 +1852,10 @@ namespace HerosInsight::SkillBook
                 first_draw = false;
             }
 
-            char name_buf[64];
-            MakeBookName(name_buf, book_index);
+            FixedVector<char, 64> name;
+            MakeBookName(name, book_index);
 
-            if (ImGui::Begin(name_buf, &is_opened, UpdateManager::GetWindowFlags()))
+            if (ImGui::Begin(name.data(), &is_opened, UpdateManager::GetWindowFlags()))
             {
                 DrawDupeButton();
                 DrawCheckboxes();

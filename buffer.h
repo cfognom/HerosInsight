@@ -16,43 +16,25 @@ namespace HerosInsight
     class BufferBase
     {
     protected:
-        void push_unchecked(const T &value)
-        {
-            Span()[Len()++] = value;
-        }
-
-        void push_unchecked(T &&value)
-        {
-            Span()[Len()++] = std::move(value);
-        }
+        Derived &AsDerived() { return *static_cast<Derived *>(this); }
+        const Derived &AsDerived() const { return *static_cast<const Derived *>(this); }
 
     public:
-        std::span<const T> Span() const
+        template <typename... Args>
+        T &emplace_back(Args &&...args)
         {
-            return static_cast<const Derived *>(this)->Span();
+            return *std::construct_at(data() + Len()++, std::forward<Args>(args)...);
         }
-
-        std::span<T> Span()
-        {
-            return static_cast<Derived *>(this)->Span();
-        }
-
-        std::size_t size() const
-        {
-            return static_cast<const Derived *>(this)->len;
-        }
-
-        std::size_t &Len()
-        {
-            return static_cast<Derived *>(this)->len;
-        }
+        size_t &Len() { return AsDerived().len; }
+        std::span<T> Span() { return std::span<T>(data(), capacity()); }
+        size_t size() const { return AsDerived().len; }
 
         bool try_push(const T &value)
         {
             if (size() >= capacity())
                 return false;
 
-            push_unchecked(value);
+            emplace_back(value);
             return true;
         }
 
@@ -61,54 +43,37 @@ namespace HerosInsight
             if (size() >= capacity())
                 return false;
 
-            push_unchecked(std::move(value));
+            emplace_back(std::forward<T>(value));
             return true;
         }
 
         void push_back(const T &value)
         {
             assert(size() < capacity());
-            push_unchecked(value);
+            emplace_back(value);
         }
 
         void push_back(T &&value)
         {
             assert(size() < capacity());
-            push_unchecked(std::move(value));
-        }
-
-        operator std::span<T>() const
-        {
-            return WrittenSpan();
-        }
-
-        T &emplace_back()
-        {
-            assert(size() < capacity());
-            return Span()[Len()++];
-        }
-
-        std::span<T> RemainingSpan()
-        {
-            return std::span<T>(Span().data() + size(), remaining());
+            emplace_back(std::forward<T>(value));
         }
 
         std::span<T> WrittenSpan()
         {
-            return std::span<T>(Span().data(), size());
+            return std::span<T>(data(), size());
         }
 
         std::span<const T> WrittenSpan() const
         {
-            return std::span<const T>(Span().data(), size());
+            return std::span<const T>(data(), size());
         }
 
         void AppendRange(std::span<const T> src)
         {
-            auto dst = RemainingSpan();
-            assert(dst.size() >= src.size());
-            std::copy(src.begin(), src.end(), dst.begin());
-            AddSize(src.size());
+            assert(AvailableCapacity() >= src.size());
+            std::uninitialized_copy_n(src.data(), src.size(), data() + size());
+            Len() += src.size();
         }
 
         void AppendString(std::string_view str)
@@ -123,25 +88,20 @@ namespace HerosInsight
             AppendRange(std::span<const T>(str));
         }
 
-        template <class Writer>
-            requires std::invocable<Writer, std::span<T> &>
-        void AppendWith(Writer &&op)
-        {
-            auto span = RemainingSpan();
-            op(span);
-            AddSize(span.size());
-        }
-
         T pop()
         {
             assert(!empty());
-            return std::move(Span()[--Len()]);
+            size_t index = --Len();
+            return std::move(*(data() + index));
         }
 
         void remove(std::size_t index)
         {
             assert(index < size());
-            std::copy(data() + index + 1, data_end(), data() + index);
+            T *ptr = data() + index;
+            std::destroy_at(ptr);
+            size_t count = size() - index - 1;
+            std::memmove(ptr, ptr + 1, sizeof(T) * count);
             --Len();
         }
 
@@ -149,69 +109,64 @@ namespace HerosInsight
         {
             assert(index <= size());
             assert(!full());
-            std::copy_backward(data() + index, data_end(), data_end() + 1);
-            Span()[index] = value;
+            T *ptr = data() + index;
+            size_t count = size() - index;
+            std::memmove(ptr + 1, ptr, sizeof(T) * count);
+            std::construct_at(ptr, std::forward<T>(value));
             ++Len();
         }
 
         T &operator[](std::size_t index)
         {
             assert(index < size());
-            return Span()[index];
+            return *(data() + index);
         }
 
         const T &operator[](std::size_t index) const
         {
             assert(index < size());
-            return Span()[index];
+            return *(data() + index);
         }
 
-        operator std::span<T>()
-        {
-            return std::span<T>(Span().data(), size());
-        }
-
-        operator std::span<const T>() const
-        {
-            return std::span<const T>(Span().data(), size());
-        }
+        operator std::span<T>() { return std::span<T>(data(), size()); }
+        operator std::span<const T>() const { return std::span<const T>(data(), size()); }
 
         // Conversion operator to std::string_view for FixedArrayRef<char>
         operator std::string_view() const
         {
             static_assert(std::is_same_v<T, char>, "Conversion to std::string_view is only available for char arrays");
-            return std::string_view(Span().data(), size());
+            return std::string_view(data(), size());
         }
 
         template <typename Int>
         void AppendIntToChars(Int value, const int base = 10)
         {
             static_assert(std::is_same_v<T, char>, "AppendIntToChars is only available for char arrays");
-            auto rem = RemainingSpan();
-            auto result = std::to_chars(rem.data(), rem.data() + rem.size(), value, base);
-            size_t added_size = result.ptr - rem.data();
+            auto result = std::to_chars(data() + size(), data() + capacity(), value, base);
             assert(result.ec == std::errc());
-            AddSize(added_size);
+            Len() = result.ptr - data();
         }
 
         template <typename... Args>
         void AppendFormat(const std::format_string<Args...> &format, Args &&...args)
         {
             static_assert(std::is_same_v<T, char>, "Format is only available for char arrays");
-            auto rem = RemainingSpan();
-            auto result = std::format_to_n(rem.begin(), rem.size(), format, std::forward<Args>(args)...);
-            size_t added_size = result.out - rem.begin();
-            assert(added_size == result.size);
-            AddSize(added_size);
+            T *dst = data() + size();
+            size_t n_max = capacity() - size();
+            auto result = std::format_to_n(dst, n_max, format, std::forward<Args>(args)...);
+            size_t n_written = result.out - dst;
+            assert(result.size == n_written); // It was not truncated
+            Len() = result.out - data();
         }
 
+        // DEPRECATED: Use AppendFormat.
         // Returns the number of written chars
         template <typename... Args>
         int PushFormat(const char *format, Args... args)
         {
             static_assert(std::is_same_v<T, char>, "Format is only available for char or wchar_t arrays");
             auto rem_size = capacity() - size();
-            int n = std::snprintf(Span().data() + size(), rem_size, format, args...);
+            int n = std::snprintf(data() + size(), rem_size, format, args...);
             if (n < 0 || static_cast<std::size_t>(n) >= rem_size)
             {
                 throw std::runtime_error("Format failed or output was truncated");
@@ -220,13 +175,14 @@ namespace HerosInsight
             return n;
         }
 
+        // DEPRECATED: Use AppendFormat.
         // Returns the number of written chars
         template <typename... Args>
         int PushFormat(const wchar_t *format, Args... args)
         {
             static_assert(std::is_same_v<T, wchar_t>, "Format is only available for char or wchar_t arrays");
             auto rem_size = capacity() - size();
-            int n = std::swprintf(Span().data() + size(), rem_size, format, args...);
+            int n = std::swprintf(data() + size(), rem_size, format, args...);
             if (n < 0 || static_cast<std::size_t>(n) >= rem_size)
             {
                 throw std::runtime_error("Format failed or output was truncated");
@@ -235,100 +191,39 @@ namespace HerosInsight
             return n;
         }
 
-        // Method to get the capacity
-        std::size_t capacity() const
-        {
-            return Span().size();
-        }
+        size_t capacity() const { return AsDerived().capacity(); }
+        size_t AvailableCapacity() const { return capacity() - size(); }
+        bool empty() const { return size() == 0; }
+        bool full() const { return size() == capacity(); }
 
-        std::size_t remaining() const
-        {
-            return capacity() - size();
-        }
-
-        bool empty() const
-        {
-            return size() == 0;
-        }
-
-        bool full() const
-        {
-            return size() == capacity();
-        }
-
-        void SetSize(std::size_t new_size)
-        {
-            assert(new_size <= capacity());
-            Len() = new_size;
-        }
-
-        void AddSize(std::size_t add_size)
-        {
-            SetSize(size() + add_size);
-        }
-
-        T *data()
-        {
-            return Span().data();
-        }
-
-        // Method to get a pointer to the end of the buffer
-        T *data_end()
-        {
-            return Span().data() + size();
-        }
-
-        // Method to get a const pointer to the end of the buffer
-        const T *data_end() const
-        {
-            return Span().data() + size();
-        }
+        T *data() { return AsDerived().data(); }
+        const T *data() const { return AsDerived().data(); }
+        T *data_end() { return data() + size(); }
+        const T *data_end() const { return data() + size(); }
 
         T &back()
         {
             assert(size() > 0);
-            return WrittenSpan().back();
+            return *(data() + size() - 1);
         }
 
         // Method to clear the buffer
         void clear()
         {
+            std::destroy_n(data(), size());
             Len() = 0;
         }
 
         // Iterator support
-
-        auto begin()
-        {
-            return WrittenSpan().begin();
-        }
-
-        auto end()
-        {
-            return WrittenSpan().end();
-        }
-
-        auto begin() const
-        {
-            return WrittenSpan().begin();
-        }
-
-        auto end() const
-        {
-            return WrittenSpan().end();
-        }
-
-        auto cbegin() const
-        {
-            return WrittenSpan().cbegin();
-        }
-
-        auto cend() const
-        {
-            return WrittenSpan().cend();
-        }
+        auto begin() { return WrittenSpan().begin(); }
+        auto end() { return WrittenSpan().end(); }
+        auto begin() const { return WrittenSpan().begin(); }
+        auto end() const { return WrittenSpan().end(); }
+        auto cbegin() const { return WrittenSpan().cbegin(); }
+        auto cend() const { return WrittenSpan().cend(); }
     };
 
+    // Be careful when using this with types whose constructor and destructor are not trivial: It assumes the span being written to is uninitialized.
     template <typename T>
     class SpanWriter : public BufferBase<SpanWriter<T>, T>
     {
@@ -340,10 +235,9 @@ namespace HerosInsight
     public:
         SpanWriter(std::span<T> span) : span(span) {}
 
-        std::span<T> Span() const
-        {
-            return span;
-        }
+        T *data() { return span.data(); }
+        const T *data() const { return span.data(); }
+        size_t capacity() const { return span.size(); }
     };
 
     template <typename T, std::size_t N>
@@ -351,29 +245,27 @@ namespace HerosInsight
     {
         friend class BufferBase<FixedVector<T, N>, T>;
 
-        std::array<T, N> array;
+        alignas(alignof(T)) char array[N * sizeof(T)];
         std::size_t len = 0;
 
     public:
+        ~FixedVector()
+        {
+            std::destroy_n(data(), len);
+        }
         constexpr FixedVector() = default;
         constexpr FixedVector(std::initializer_list<T> init_list)
         {
             assert(init_list.size() <= N);
             for (const auto &value : init_list)
             {
-                this->push_unchecked(value);
+                this->emplace_back(value);
             }
         }
 
-        std::span<const T> Span() const
-        {
-            return std::span<const T>(array.data(), array.size());
-        }
-
-        std::span<T> Span()
-        {
-            return std::span<T>(array.data(), array.size());
-        }
+        T *data() { return (T *)array; }
+        const T *data() const { return (const T *)array; }
+        size_t capacity() const { return N; }
     };
 
     template <typename T>
@@ -389,9 +281,8 @@ namespace HerosInsight
         template <std::size_t N>
         OutBuf(FixedVector<T, N> &src) : span(src.Span()), len(src.Len()) {}
 
-        std::span<T> Span() const
-        {
-            return span;
-        }
+        T *data() { return span.data(); }
+        const T *data() const { return span.data(); }
+        size_t capacity() const { return span.size(); }
     };
 }

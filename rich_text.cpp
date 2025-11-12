@@ -152,15 +152,13 @@ namespace HerosInsight::RichText
         only_tags = std::span<TextTag>{only_tags.data(), tag_count};
     }
 
-    void Drawer::MakeTextSegments(std::string_view text, std::span<TextSegment> &result, std::span<uint16_t> highlighting, TextSegment::WrapMode first_segment_wrap_mode)
+    void Drawer::MakeTextSegments(std::string_view text, OutBuf<TextSegment> result, std::span<uint16_t> highlighting, TextSegment::WrapMode first_segment_wrap_mode)
     {
         if (text.empty())
         {
-            result = {};
             return;
         }
 
-        SpanWriter<TextSegment> result_builder = result;
         FixedVector<ImU32, 32> color_stack;
         FixedVector<uint32_t, 32> tooltip_stack;
 
@@ -170,8 +168,8 @@ namespace HerosInsight::RichText
 
         auto AddSegment = [&](size_t i_start, size_t i_end, std::optional<TextTag> tag = std::nullopt)
         {
-            auto index = result_builder.size();
-            auto &seg = result_builder.emplace_back();
+            auto index = result.size();
+            auto &seg = result.emplace_back();
 
             seg.text = text.substr(i_start, i_end - i_start);
             if (!color_stack.empty())
@@ -315,8 +313,6 @@ namespace HerosInsight::RichText
                 ++i;
             }
         }
-
-        result = result_builder.WrittenSpan();
     }
 
     void Drawer::DrawTextSegments(std::span<TextSegment> segments, float wrapping_min, float wrapping_max)
@@ -456,10 +452,9 @@ namespace HerosInsight::RichText
 
     void Drawer::DrawRichText(std::string_view text, float wrapping_min, float wrapping_max, std::span<uint16_t> highlighting, TextSegment::WrapMode first_segment_wrap_mode)
     {
-        TextSegment segments[512];
-        std::span<TextSegment> seg_view = segments;
-        MakeTextSegments(text, seg_view, highlighting, first_segment_wrap_mode);
-        DrawTextSegments(seg_view, wrapping_min, wrapping_max);
+        FixedVector<TextSegment, 512> segments;
+        MakeTextSegments(text, segments, highlighting, first_segment_wrap_mode);
+        DrawTextSegments(segments, wrapping_min, wrapping_max);
     }
 
     float CalcTextSegmentsWidth(std::span<TextSegment> segments)

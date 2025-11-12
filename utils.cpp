@@ -1823,9 +1823,8 @@ namespace HerosInsight::Utils
         return agent->allegiance == GW::Constants::Allegiance::Enemy;
     }
 
-    void CollectEnemyPositions(std::span<GW::Vec2f> &positions)
+    void CollectEnemyPositions(OutBuf<GW::Vec2f> positions)
     {
-        SpanWriter<GW::Vec2f> positions_writer = positions;
         const auto *aa = GW::Agents::GetAgentArray();
         if (aa == nullptr)
             return;
@@ -1840,11 +1839,10 @@ namespace HerosInsight::Utils
 
             if (IsFoe(living_agent))
             {
-                if (!positions_writer.try_push({living_agent->pos.x, living_agent->pos.y}))
+                if (!positions.try_push({living_agent->pos.x, living_agent->pos.y}))
                     break;
             }
         }
-        positions = positions_writer.WrittenSpan();
     }
 
     bool CircleOverlap(GW::Vec2f center, float radius, std::span<GW::Vec2f> positions)
@@ -1870,8 +1868,7 @@ namespace HerosInsight::Utils
         if (hero_agent == nullptr)
             return 0.f;
 
-        GW::Vec2f positions_salloc[64];
-        std::span<GW::Vec2f> positions = positions_salloc;
+        FixedVector<GW::Vec2f, 64> positions;
         CollectEnemyPositions(positions);
 
         if (!positions.empty())
