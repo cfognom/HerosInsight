@@ -160,7 +160,7 @@ namespace HerosInsight
 
     FORCE_INLINE bool CharCompare(char a, char b)
     {
-        return a == b || std::tolower(a) == b;
+        return a == b || (a >= 'A' && a <= 'Z' && ((a + 32) == b));
     }
 
     void SkipTags(std::string_view text, size_t &offset)
@@ -278,19 +278,20 @@ namespace HerosInsight
         assert(alloc_size <= 6000 && "Too big stack allocation");
 #endif
         size_t *atom_ends = (size_t *)alloca(alloc_size);
+        size_t atom_ends_length;
 
         size_t size = text.size();
         offset = 0;
         bool did_match = false;
         while (offset < size)
         {
-            std::memset(atom_ends, 0xFF, alloc_size);
-
+            atom_ends_length = 0;
             for (size_t i = 0; i < n_atoms; ++i)
             {
-                if (atoms[i].TryReadMinimum(text, offset) && (atom_ends[i] == std::numeric_limits<size_t>::max() || atom_ends[i] < offset))
+                if (atoms[i].TryReadMinimum(text, offset) && (i >= atom_ends_length || offset > atom_ends[i]))
                 {
                     atom_ends[i] = offset;
+                    atom_ends_length = std::max(atom_ends_length, i + 1);
                 }
                 else // Backtrack
                 {
