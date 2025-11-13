@@ -156,7 +156,7 @@ namespace HerosInsight
                     if (is_generic)
                     {
                         uint8_t param_str_size = i_dst - param_str_pos;
-                        param_spans.emplace_back(param_str_pos, param_str_size, (uint8_t)param_id);
+                        param_spans.Elements().emplace_back(param_str_pos, param_str_size, (uint8_t)param_id);
                     }
                 }
                 else
@@ -406,7 +406,7 @@ namespace HerosInsight
                             FixedVector<char, 4> buffer;
                             param.Print(attr_lvl, buffer);
                             // Add param replacement to spec_kits
-                            provider->spec_kits.emplace_back(
+                            provider->spec_kits.Elements().emplace_back(
                                 param_span.position,
                                 param_span.size,
                                 buffer
@@ -424,7 +424,7 @@ namespace HerosInsight
                             auto [gen_len, spe_len] = MinPrefixDiffLength(generic_str.substr(i_gen), specific_str.substr(i_spe));
                             assert(gen_len < std::numeric_limits<uint8_t>::max());
                             auto replacement = specific_str.substr(i_spe, spe_len);
-                            provider->spec_kits.emplace_back(i_gen, (uint8_t)gen_len, replacement);
+                            provider->spec_kits.Elements().emplace_back(i_gen, (uint8_t)gen_len, replacement);
                             i_gen += gen_len;
                             i_spe += spe_len;
                         }

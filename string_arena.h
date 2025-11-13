@@ -17,7 +17,7 @@
 namespace HerosInsight
 {
     template <typename T>
-    class StringArena : public std::vector<T>
+    class StringArena
     {
         // We use all bytes of T for eq and hashing, so T cannot have any padding etc...
         static_assert(std::has_unique_object_representations_v<T>, "T must have unique object representations");
@@ -55,6 +55,7 @@ namespace HerosInsight
             StringArena &arena;
         };
 
+        std::vector<T> elements;
         std::vector<T_ends> ends;
         T_ends GetSpanStart(size_t index) const
         {
@@ -73,11 +74,12 @@ namespace HerosInsight
 
         // The count of strings in the arena
         size_t SpanCount() const { return ends.size(); }
+        std::vector<T> &Elements() { return elements; }
 
         void Reserve(size_t n_spans, size_t n_elements)
         {
             ends.reserve(n_spans);
-            this->reserve(n_elements);
+            elements.reserve(n_elements);
         }
 
         void ReserveFromHint(const std::string &id)
@@ -90,15 +92,22 @@ namespace HerosInsight
         void StoreCapacityHint(const std::string &id)
         {
             CapacityHints::UpdateHint(id + "_spans", ends.size());
-            CapacityHints::UpdateHint(id + "_elements", this->size());
+            CapacityHints::UpdateHint(id + "_elements", elements.size());
         }
 
-        float CalcAvgSpanSize() const { return ends.empty() ? 0.f : (float)this->size() / (float)ends.size(); }
+        float CalcAvgSpanSize() const { return ends.empty() ? 0.f : (float)elements.size() / (float)ends.size(); }
 
         void Reset()
         {
-            std::vector<T>::clear();
+            elements.clear();
             ends.clear();
+        }
+
+        void Prune(size_t n_spans)
+        {
+            assert(n_spans <= SpanCount());
+            elements.erase(elements.begin() + GetSpanStart(n_spans), elements.end());
+            ends.erase(ends.begin() + n_spans, ends.end());
         }
 
         // Deduper is valid until the StringArena is moved!
@@ -111,7 +120,7 @@ namespace HerosInsight
         void DiscardWritten()
         {
             auto new_end = GetSpanStart(ends.size());
-            this->erase(this->begin() + new_end, this->end());
+            elements.erase(elements.begin() + new_end, elements.end());
         }
 
         void PopBack()
@@ -124,14 +133,14 @@ namespace HerosInsight
         size_t GetWrittenSize() const
         {
             auto start = GetSpanStart(ends.size());
-            return this->size() - start;
+            return elements.size() - start;
         }
 
         // Commits the span being written and returns its id
         T_span_id CommitWritten(deduper *deduper = nullptr)
         {
             auto span_id = ends.size();
-            auto end = this->size();
+            auto end = elements.size();
 #ifdef SAFETY_CHECKS
             assert(span_id <= std::numeric_limits<T_span_id>::max());
             assert(end <= std::numeric_limits<T_ends>::max());
@@ -160,7 +169,7 @@ namespace HerosInsight
 
             if constexpr (is_char)
             {
-                this->push_back('\0');
+                elements.push_back('\0');
             }
 
             return span_id_cast;
@@ -175,8 +184,22 @@ namespace HerosInsight
             auto end = ends[span_id];
             auto start = GetSpanStart(span_id);
             auto len = end - start;
-            auto span = std::span<T>(this->data() + start, len);
+            auto span = std::span<T>(elements.data() + start, len);
             return span;
+        }
+
+        std::span<T> operator[](size_t span_id) { return Get(span_id); }
+
+        std::span<T> back()
+        {
+            assert(!ends.empty());
+            return Get(ends.size() - 1);
+        }
+
+        void push_back(std::span<const T> span)
+        {
+            elements.append_range(span);
+            CommitWritten();
         }
 
         // Writer should modify the span size to the number of elements written
@@ -184,12 +207,92 @@ namespace HerosInsight
             requires std::invocable<Writer, std::span<T> &>
         void AppendWriteBuffer(size_t buf_size, Writer &&writer)
         {
-            const size_t size = this->size();
-            this->resize(size + buf_size);
-            auto buffer_span = std::span<T>(this->data() + size, buf_size);
+            const size_t size = elements.size();
+            elements.resize(size + buf_size);
+            auto buffer_span = std::span<T>(elements.data() + size, buf_size);
             writer(buffer_span);
-            this->resize(size + buffer_span.size());
+            elements.resize(size + buffer_span.size());
         }
+
+        struct iterator
+        {
+            using iterator_category = std::random_access_iterator_tag;
+            ;
+            using difference_type = std::size_t;
+            using value_type = std::span<T>;
+            using reference = value_type; // spans act like views
+            using pointer = void;         // not meaningful for spans
+
+            value_type operator*() const { return arena->Get(index); }
+
+            iterator &operator++()
+            {
+                ++index;
+                return *this;
+            }
+            iterator &operator+=(difference_type offset)
+            {
+                index += offset;
+                return *this;
+            }
+            difference_type operator-(const iterator &other) const { return index - other.index; }
+
+            bool operator==(const iterator &other) const
+            {
+                return arena == other.arena && index == other.index;
+            }
+
+            size_t Index() const { return index; }
+
+        private:
+            friend class StringArena<T>;
+            StringArena *arena;
+            size_t index;
+            iterator(StringArena &arena, size_t index) : arena(&arena), index(index) {}
+        };
+
+        struct const_iterator
+        {
+            using iterator_category = std::random_access_iterator_tag;
+            ;
+            using difference_type = std::size_t;
+            using value_type = std::span<const T>;
+            using reference = value_type;
+            using pointer = void;
+
+            value_type operator*() const { return arena->Get(index); }
+
+            const_iterator &operator++()
+            {
+                ++index;
+                return *this;
+            }
+            const_iterator &operator+=(difference_type offset)
+            {
+                index += offset;
+                return *this;
+            }
+            difference_type operator-(const const_iterator &other) const { return index - other.index; }
+
+            bool operator==(const const_iterator &other) const
+            {
+                return arena == other.arena && index == other.index;
+            }
+
+            size_t Index() const { return index; }
+
+        private:
+            friend class StringArena<T>;
+            const StringArena *arena;
+            size_t index;
+            const_iterator(const StringArena &arena, size_t index) : arena(&arena), index(index) {}
+        };
+        iterator begin() { return iterator(*this, 0); }
+        iterator end() { return iterator(*this, ends.size()); }
+        const_iterator begin() const { return const_iterator(*this, 0); }
+        const_iterator end() const { return const_iterator(*this, ends.size()); }
+        const_iterator cbegin() const { return begin(); }
+        const_iterator cend() const { return end(); }
     };
 
     // A datastructure that can associate ids with a set of unique spans of data.

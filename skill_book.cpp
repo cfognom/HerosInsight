@@ -478,7 +478,7 @@ namespace HerosInsight::SkillBook
     {
         auto SetupMetaProp = [&](std::string_view name, SkillCatalog::T_propset propset)
         {
-            meta_prop_names.append_range(name);
+            meta_prop_names.Elements().append_range(name);
             meta_prop_names.CommitWritten();
 
             meta_propsets.push_back(propset);
@@ -583,7 +583,7 @@ namespace HerosInsight::SkillBook
     }                                                                       \
     else                                                                    \
     {                                                                       \
-        dst.append_range(std::invoke(getter, cskill));                      \
+        dst.Elements().append_range(std::invoke(getter, cskill));           \
     }
 
         FetchX(
@@ -673,7 +673,7 @@ namespace HerosInsight::SkillBook
                 if (dst.GetWrittenSize() > 0)
                 {
                     // Cut off the last ", "
-                    dst.resize(dst.size() - 2);
+                    dst.Elements().resize(dst.Elements().size() - 2);
                 }
             }
         );
@@ -782,7 +782,7 @@ namespace HerosInsight::SkillBook
                     auto range_name = Utils::GetRangeStr(range);
                     if (range_name)
                     {
-                        std::format_to(std::back_inserter(dst), std::string_view(" ({})"), range_name.value());
+                        std::format_to(std::back_inserter(dst.Elements()), std::string_view(" ({})"), range_name.value());
                     }
                 }
             }
@@ -845,12 +845,45 @@ namespace HerosInsight::SkillBook
         struct ScrollTracking
         {
             std::vector<VariableSizeClipper::Position> scroll_positions;
-            uint16_t old_input_text_len = 0;
-            char input_text_history[1024] = {'\0'};
+            StringArena<char> input_text_history;
+            size_t current_index = 0;
 
-            std::string_view GetOldInputText() const
+            ScrollTracking() { input_text_history.push_back(std::string_view("")); }
+
+            void UpdateScrollTracking(std::string_view input_text, VariableSizeClipper &clipper)
             {
-                return std::string_view(input_text_history, old_input_text_len);
+                auto target_scroll = clipper.GetTargetScroll();
+                if (scroll_positions.size() < current_index + 1)
+                    scroll_positions.resize(current_index + 1, target_scroll);
+                scroll_positions[current_index] = target_scroll;
+
+                // Get the range of input_text_history strings that is equal in size to input_text
+                auto it = std::lower_bound(
+                    input_text_history.begin(),
+                    input_text_history.end(),
+                    input_text,
+                    [](auto a, auto b)
+                    {
+                        return a.size() < b.size();
+                    }
+                );
+                current_index = it.Index();
+                if (it == input_text_history.end() ||
+                    std::string_view(*it) != input_text) // Not found
+                {
+                    // Discard diverging history
+                    scroll_positions.resize(current_index);
+                    input_text_history.Prune(current_index);
+                    input_text_history.push_back(input_text);
+                    // Reset scroll
+                    clipper.Reset();
+                }
+                else
+                {
+                    // Restore old scroll
+                    auto old_scoll = scroll_positions[current_index];
+                    clipper.SetScroll(old_scoll);
+                }
             }
         };
         ScrollTracking scroll_tracking;
@@ -1051,37 +1084,6 @@ namespace HerosInsight::SkillBook
             }
         }
 
-        void UpdateScrollTracking(std::string_view input_text)
-        {
-            assert(input_text.size() < sizeof(scroll_tracking.input_text_history));
-            auto old_input_text = this->scroll_tracking.GetOldInputText();
-            size_t common_len = std::mismatch(input_text.begin(), input_text.end(), scroll_tracking.input_text_history).first - input_text.begin();
-            auto target_scroll = clipper.GetTargetScroll();
-            if (common_len < input_text.size())
-            {
-                scroll_tracking.scroll_positions.resize(common_len); // Discard old history
-                auto dst = scroll_tracking.input_text_history + common_len;
-                auto src = input_text.data() + common_len;
-                auto size = input_text.size() - common_len;
-                std::memcpy(dst, src, size);
-                dst[size] = '\0';
-                clipper.Reset();
-            }
-            else
-            {
-                // Restore old scroll
-                if (input_text.size() < scroll_tracking.scroll_positions.size())
-                {
-                    auto old_scroll = scroll_tracking.scroll_positions[input_text.size()];
-                    clipper.SetScroll(old_scroll);
-                }
-            }
-            if (scroll_tracking.scroll_positions.size() < old_input_text.size() + 1)
-                scroll_tracking.scroll_positions.resize(old_input_text.size() + 1, target_scroll); // Save new scroll
-            scroll_tracking.scroll_positions[old_input_text.size()] = target_scroll;               // Overwrite old scroll
-            scroll_tracking.old_input_text_len = input_text.size();
-        }
-
         void DrawAttributeModeSelection()
         {
             auto cursor_before = ImGui::GetCursorPos();
@@ -1141,7 +1143,7 @@ namespace HerosInsight::SkillBook
 
                 query.Clear();
                 auto input_text_view = std::string_view(input_text, strlen(input_text));
-                UpdateScrollTracking(input_text_view);
+                scroll_tracking.UpdateScrollTracking(input_text_view, clipper);
                 CatalogUtils::ParseQuery(input_text_view, catalog.meta_prop_names, query);
 
                 hl_data.Reset();

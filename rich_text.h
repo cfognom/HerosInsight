@@ -148,7 +148,7 @@ namespace HerosInsight::RichText
     {
         void PushText(std::string_view text)
         {
-            this->append_range(text);
+            this->elements.append_range(text);
         }
 
         void PushTag(TextTag tag)
