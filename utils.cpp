@@ -399,14 +399,23 @@ namespace HerosInsight::Utils
 
     std::string ToHumanReadable(float number, std::span<Unit> units)
     {
+        if (units.empty())
+            return std::to_string(number);
+
+        Unit *best_unit = &units[0];
         for (auto &unit : units)
         {
+            if (unit.value == 1.f)
+            {
+                best_unit = &unit;
+            }
             if (number >= unit.value)
             {
-                return std::format("{:.2f} {}", number / unit.value, unit.name);
+                best_unit = &unit;
+                break;
             }
         }
-        return std::to_string(number);
+        return std::format("{:.3g} {}", number / best_unit->value, best_unit->name);
     }
 
     std::string UInt32ToBinaryStr(uint32_t value)
