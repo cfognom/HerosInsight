@@ -146,6 +146,15 @@ namespace HerosInsight::RichText
 
     struct RichTextArena : public IndexedStringArena<char>
     {
+        using base = IndexedStringArena<char>;
+
+        // assign Base → RichTextArena
+        RichTextArena &operator=(const base &b)
+        {
+            base::operator=(b);
+            return *this;
+        }
+
         void PushText(std::string_view text)
         {
             this->elements.append_range(text);

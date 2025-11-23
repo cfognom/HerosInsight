@@ -324,6 +324,29 @@ namespace HerosInsight
 #endif
         }
 
+        IndexedStringArena(const IndexedStringArena &other)
+            : base(other)
+        {
+            index_to_id = other.index_to_id;
+            // Deep copy the deduper
+            deduper.reserve(other.deduper.size());
+            deduper.insert(other.deduper.begin(), other.deduper.end());
+        }
+
+        // Custom copy assignment
+        IndexedStringArena &operator=(const IndexedStringArena &other)
+        {
+            if (this != &other)
+            {
+                base::operator=(other);
+                index_to_id = other.index_to_id;
+                deduper.clear();
+                deduper.reserve(other.deduper.size());
+                deduper.insert(other.deduper.begin(), other.deduper.end());
+            }
+            return *this;
+        }
+
         void ReserveIndices(size_t n_indices)
         {
             if (index_to_id.size() < n_indices)
