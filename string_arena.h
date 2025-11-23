@@ -39,20 +39,20 @@ namespace HerosInsight
         {
             size_t operator()(T_span_id index) const
             {
-                return std::hash<std::string_view>{}(AsStringView(arena.Get(index)));
+                return std::hash<std::string_view>{}(AsStringView(arena->Get(index)));
             }
 
-            StringArena &arena;
+            StringArena *arena;
         };
 
         struct Eq
         {
             bool operator()(T_span_id a, T_span_id b) const
             {
-                return AsStringView(arena.Get(a)) == AsStringView(arena.Get(b));
+                return AsStringView(arena->Get(a)) == AsStringView(arena->Get(b));
             }
 
-            StringArena &arena;
+            StringArena *arena;
         };
 
         std::vector<T> elements;
@@ -113,7 +113,7 @@ namespace HerosInsight
         // Deduper is valid until the StringArena is moved!
         deduper CreateDeduper(size_t n_buckets)
         {
-            return deduper(n_buckets, Hasher{*this}, Eq{*this});
+            return deduper(n_buckets, Hasher{this}, Eq{this});
         }
 
         // Discards the span being written
