@@ -1340,88 +1340,24 @@ namespace HerosInsight::Utils
         return result;
     }
 
-    bool TryGetDecodedString(std::wstring_view enc_str, std::wstring_view &out)
+    std::wstring DecodeString(const wchar_t *enc_str)
     {
-        static std::mutex bookkeeping_mutex;
-        static std::vector<std::wstring> enc_keys;
-        static std::unordered_map<std::wstring_view, std::optional<std::wstring>> enc_to_dec;
+        thread_local std::optional<std::wstring> *result_dst = nullptr;
 
-        size_t index;
-        {
-            std::lock_guard<std::mutex> lock(bookkeeping_mutex);
-            auto it = enc_to_dec.find(enc_str);
-            if (it != enc_to_dec.end())
-            {
-                auto opt = it->second;
-                if (opt.has_value())
-                {
-                    out = opt.value();
-                    return true;
-                }
-                else
-                {
-                    return false;
-                }
-            }
-
-            index = enc_keys.size();
-            enc_keys.push_back(std::wstring(enc_str));
-            enc_to_dec[enc_str] = std::nullopt;
-        }
-
-        auto DecodeCallback = [](void *param, const wchar_t *s)
-        {
-            auto index = reinterpret_cast<size_t>(param);
-            std::lock_guard<std::mutex> lock(bookkeeping_mutex);
-            enc_to_dec[enc_keys[index]] = s;
-        };
-        GW::UI::AsyncDecodeStr(enc_str.data(), DecodeCallback, reinterpret_cast<void *>(index));
-
-        std::lock_guard<std::mutex> lock(bookkeeping_mutex);
-        auto &opt = enc_to_dec[enc_str];
-        if (opt.has_value())
-        {
-            out = opt.value();
-            return true;
-        }
-
-        return false;
-    }
-
-    std::wstring DecodeString(const wchar_t *enc_str, std::chrono::microseconds timeout)
-    {
-        // We need this mutex to guard against GW::UI::AsyncDecodeStr setting the
-        // stack allocated promise after it has been destroyed (we returned early)
-        static std::mutex decode_mutex;
-        static size_t n_timeouts = 0;
-        static std::promise<std::wstring> promise;
-
-        std::future<std::wstring> future;
-        {
-            std::lock_guard<std::mutex> lock(decode_mutex);
-            promise = std::promise<std::wstring>();
-            future = promise.get_future();
-        }
-
+        std::optional<std::wstring> result = std::nullopt;
+        result_dst = &result;
         static auto DecodeCallback = [](void *param, const wchar_t *s)
         {
-            auto n_timeouts_when_started = reinterpret_cast<size_t>(param);
-            std::lock_guard<std::mutex> lock(decode_mutex);
-            if (n_timeouts_when_started == n_timeouts)
-            {
-                promise.set_value(s);
-            }
+            if (result_dst != nullptr)
+                *result_dst = s;
         };
-        GW::UI::AsyncDecodeStr(enc_str, DecodeCallback, reinterpret_cast<void *>(n_timeouts));
+        GW::UI::AsyncDecodeStr(enc_str, DecodeCallback, nullptr);
+        result_dst = nullptr;
 
-        if (future.wait_for(timeout) != std::future_status::ready)
-        {
-            std::lock_guard<std::mutex> lock(decode_mutex);
-            n_timeouts++;
-            return L"DECODE_TIMEOUT";
-        }
-
-        return future.get();
+        if (result.has_value())
+            return result.value();
+        else
+            return L"DECODE_NOT_READY";
     }
 
     std::wstring StrIDToEncStr(uint32_t id)
