@@ -1403,7 +1403,7 @@ namespace HerosInsight::Utils
             future = promise.get_future();
         }
 
-        auto DecodeCallback = [](void *param, const wchar_t *s)
+        static auto DecodeCallback = [](void *param, const wchar_t *s)
         {
             auto n_timeouts_when_started = reinterpret_cast<size_t>(param);
             std::lock_guard<std::mutex> lock(decode_mutex);
