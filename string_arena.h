@@ -23,7 +23,7 @@ namespace HerosInsight
         static_assert(std::has_unique_object_representations_v<T>, "T must have unique object representations");
 
     protected:
-        constexpr static bool is_char = std::is_same_v<T, char>;
+        constexpr static bool is_char = std::is_same_v<T, char> || std::is_same_v<T, wchar_t>;
 
     public:
         using T_ends = uint32_t;
