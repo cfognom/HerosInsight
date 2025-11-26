@@ -122,8 +122,6 @@ namespace HerosInsight::TextureViewer
                 search_end = start_offset;
             }
 
-            ImGui::BeginChild("Texture List");
-
             for (uint32_t i = search_start; i < search_end; i++)
             {
                 auto entry = TextureModule::LoadTextureFromFileId(i); // Get the textures we loaded last frame
@@ -131,29 +129,31 @@ namespace HerosInsight::TextureViewer
                     loaded_textures.push_back({i, *entry});
             }
             search_start = search_end;
-            if (loaded_textures.size() - clipper.GetCurrentScroll().item_index < 256)
+            if (loaded_textures.size() - clipper.GetTargetScroll().item_index < 256)
             {
                 search_end = std::min(search_end + 256, TextureModule::KnownFileIDs::MAX);
                 for (uint32_t i = search_start; i < search_end; i++)
                     TextureModule::LoadTextureFromFileId(i); // Load these for next frame
             }
 
-            const auto avg_height = 100.f;
-
-            auto DrawItem = [&](uint32_t i)
+            if (ImGui::BeginChild("Texture List"))
             {
-                auto &entry = loaded_textures[i];
-                auto file_id = entry.file_id;
-                auto tex = entry.texture;
-                auto desc = TextureModule::GetTextureDesc(tex);
+                const auto avg_height = 100.f;
 
-                ImGui::Text("file_id: %d", file_id);
-                ImGui::Text("Width: %d, Height: %d", desc.Width, desc.Height);
-                ImGui::Image(tex, ImVec2(desc.Width, desc.Height) + ImVec2(2, 2), ImVec2(0, 0), ImVec2(1, 1), ImVec4(1, 1, 1, 1), ImVec4(1, 1, 1, 1));
-            };
+                auto DrawItem = [&](uint32_t i)
+                {
+                    auto &entry = loaded_textures[i];
+                    auto file_id = entry.file_id;
+                    auto tex = entry.texture;
+                    auto desc = TextureModule::GetTextureDesc(tex);
 
-            clipper.Draw(loaded_textures.size(), avg_height, true, DrawItem);
+                    ImGui::Text("file_id: %d", file_id);
+                    ImGui::Text("Width: %d, Height: %d", desc.Width, desc.Height);
+                    ImGui::Image(tex, ImVec2(desc.Width, desc.Height) + ImVec2(2, 2), ImVec2(0, 0), ImVec2(1, 1), ImVec4(1, 1, 1, 1), ImVec4(1, 1, 1, 1));
+                };
 
+                clipper.Draw(loaded_textures.size(), avg_height, true, DrawItem);
+            }
             ImGui::EndChild();
         }
 
