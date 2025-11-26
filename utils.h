@@ -269,7 +269,7 @@ namespace HerosInsight::Utils
         {0.000001f, "μ"},
         {0.000000001f, "n"},
     };
-    inline Unit Memory[]{
+    inline Unit MemoryBytes[]{
         {1024 * 1024 * 1024 * 1024, "TiB"},
         {1024 * 1024 * 1024, "GiB"},
         {1024 * 1024, "MiB"},
