@@ -262,24 +262,6 @@ namespace HerosInsight::Debug
         }
     }
 
-    void SearchForEncodedString()
-    {
-        for (uint32_t i = 0; i < 32000; i++)
-        {
-            auto OnDecoded = [](void *param, const wchar_t *s)
-            {
-                // if (wcscmp(s, L"!!!") != 0)
-                // if (s[0] == L'(' && s[wcslen(s) - 1] == L')')
-                if (wcsstr(s, L"...") != nullptr)
-                {
-                    auto i = (uint32_t)param;
-                    DebugDisplay::PushToDisplay("_DECODED_" + std::to_string(i), s);
-                }
-            };
-            GW::UI::AsyncDecodeStr((wchar_t *)(&i), OnDecoded, (void *)i);
-        }
-    }
-
     void DisplayTargetModifiers(uint32_t item_index)
     {
         auto key_prefix = "item " + std::to_string(item_index) + " mod_id ";
@@ -348,9 +330,7 @@ namespace HerosInsight::Debug
                     break;
             }
             // clang-format on
-            DebugDisplay::PushToDisplay(key, "arg: " + std::to_string(mod.arg()) +
-                                                 "\targ1: " + std::to_string(mod.arg1()) +
-                                                 "\targ2: " + std::to_string(mod.arg2()));
+            DebugDisplay::PushToDisplay(key, "arg: " + std::to_string(mod.arg()) + "\targ1: " + std::to_string(mod.arg1()) + "\targ2: " + std::to_string(mod.arg2()));
         }
     }
 
@@ -1066,13 +1046,7 @@ namespace HerosInsight::Debug
         if (frame)
         {
             auto frame_id = frame->frame_id;
-            Utils::FormatToChat(L"Frame clicked: {}, label: {}, name: {}, msg: {}, type: {}, child_offset_id: {}",
-                frame_id,
-                frame_id_to_label[frame_id],
-                frame_id_to_name[frame_id],
-                static_cast<uint32_t>(msg),
-                frame->type,
-                frame->child_offset_id);
+            Utils::FormatToChat(L"Frame clicked: {}, label: {}, name: {}, msg: {}, type: {}, child_offset_id: {}", frame_id, frame_id_to_label[frame_id], frame_id_to_name[frame_id], static_cast<uint32_t>(msg), frame->type, frame->child_offset_id);
         }
     }
 
