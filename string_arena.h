@@ -97,7 +97,7 @@ namespace HerosInsight
 
         float CalcAvgSpanSize() const { return ends.empty() ? 0.f : (float)elements.size() / (float)ends.size(); }
 
-        void Reset()
+        void clear()
         {
             elements.clear();
             ends.clear();
@@ -375,9 +375,9 @@ namespace HerosInsight
 
         float CalcSpansPerIndex() const { return index_to_id.empty() ? 0.f : this->id_to_span.size() / static_cast<float>(index_to_id.size()); }
 
-        void Reset()
+        void clear()
         {
-            base::Reset();
+            base::clear();
             index_to_id.clear();
             deduper.clear();
         }
