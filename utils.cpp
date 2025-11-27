@@ -1376,14 +1376,11 @@ namespace HerosInsight::Utils
 
     std::wstring StrIDToWStr(uint32_t id)
     {
-        const size_t bufferSize = 256; // Adjust the buffer size as needed
-        wchar_t buffer[bufferSize];
-        if (!GW::UI::UInt32ToEncStr(id, buffer, bufferSize - 1))
+        wchar_t buffer[256];
+        if (!GW::UI::UInt32ToEncStr(id, buffer, std::size(buffer)))
         {
             return L"FAILED_TO_CONVERT";
         }
-
-        buffer[bufferSize - 1] = L'\0';
 
         return DecodeString(buffer);
     }
