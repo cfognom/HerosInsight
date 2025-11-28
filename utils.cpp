@@ -1340,7 +1340,7 @@ namespace HerosInsight::Utils
         return result;
     }
 
-    std::wstring DecodeString(const wchar_t *enc_str)
+    std::optional<std::wstring> TryDecodeString(const wchar_t *enc_str)
     {
         thread_local std::optional<std::wstring> *result_dst = nullptr;
 
@@ -1349,15 +1349,16 @@ namespace HerosInsight::Utils
         static auto DecodeCallback = [](void *param, const wchar_t *s)
         {
             if (result_dst != nullptr)
-                *result_dst = s;
+                result_dst->emplace(s);
         };
         GW::UI::AsyncDecodeStr(enc_str, DecodeCallback, nullptr);
         result_dst = nullptr;
+        return result;
+    }
 
-        if (result.has_value())
-            return result.value();
-        else
-            return L"DECODE_NOT_READY";
+    std::wstring DecodeString(const wchar_t *enc_str)
+    {
+        return TryDecodeString(enc_str).value_or(L"STRING_NOT_READY");
     }
 
     std::wstring StrIDToEncStr(uint32_t id)

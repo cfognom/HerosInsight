@@ -282,6 +282,7 @@ namespace HerosInsight::Utils
     std::string WStrToStr(const wchar_t *wstr, const wchar_t *end = nullptr);
     bool StrToWStr(const char *str, std::span<wchar_t> &out);
     bool WStrToStr(const wchar_t *wstr, std::span<char> &out);
+    std::optional<std::wstring> TryDecodeString(const wchar_t *enc_str);
     std::wstring DecodeString(const wchar_t *enc_str);
     std::wstring StrIDToWStr(uint32_t id);
     std::string StrIDToStr(uint32_t id);
