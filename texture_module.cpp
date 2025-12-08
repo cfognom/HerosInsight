@@ -402,14 +402,14 @@ namespace TextureModule
         return 0;
     }
 
-    IDirect3DTexture9 **GetSkillImage(GW::Constants::SkillID skill_id)
+    IDirect3DTexture9 **GetSkillImage(GW::Constants::SkillID skill_id, bool hd)
     {
         const auto skill = GW::SkillbarMgr::GetSkillConstantData(skill_id);
 
         if (!skill)
             return nullptr;
 
-        auto file_id = skill->icon_file_id;
+        auto file_id = hd ? skill->icon_file_id_2 : skill->icon_file_id_1;
         if (!file_id)
             file_id = GW::SkillbarMgr::GetSkillConstantData(GW::Constants::SkillID::No_Skill)->icon_file_id;
 

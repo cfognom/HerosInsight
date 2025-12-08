@@ -14,7 +14,7 @@ namespace TextureModule
 
     D3DSURFACE_DESC GetTextureDesc(IDirect3DTexture9 *texture);
     IDirect3DTexture9 **LoadTextureFromFileId(uint32_t file_id);
-    IDirect3DTexture9 **GetSkillImage(GW::Constants::SkillID skill_id);
+    IDirect3DTexture9 **GetSkillImage(GW::Constants::SkillID skill_id, bool hd = false);
     IDirect3DTexture9 **GetResourceTexture(const char *filename);
     bool DrawSkill(const GW::Skill &skill, ImVec2 pos, float icon_size, bool as_effect = false, bool as_hovered = false, ImDrawList *draw_list = nullptr);
     void GetImageUVsInAtlas(IDirect3DTexture9 *texture, ImVec2 image_size, uint32_t index, ImVec2 &uv0, ImVec2 &uv1);
@@ -44,7 +44,8 @@ namespace TextureModule
         ImVec2 uv0 = ImVec2(0, 0),
         ImVec2 uv1 = ImVec2(1, 1),
         ImVec4 tint_col = ImVec4(1, 1, 1, 1),
-        ImVec4 border_col = ImVec4(0, 0, 0, 0));
+        ImVec4 border_col = ImVec4(0, 0, 0, 0)
+    );
 
     DrawPacket GetPacket_ImageInAtlas(
         uint32_t file_id,
@@ -54,7 +55,8 @@ namespace TextureModule
         ImVec2 uv0_pixel_offset = ImVec2(0, 0),
         ImVec2 uv1_pixel_offset = ImVec2(0, 0),
         ImVec4 tint_col = ImVec4(1, 1, 1, 1),
-        ImVec4 border_col = ImVec4(0, 0, 0, 0));
+        ImVec4 border_col = ImVec4(0, 0, 0, 0)
+    );
 
     enum struct DamageNumberColor
     {
