@@ -93,7 +93,8 @@
         "cstdarg": "cpp",
         "utf8": "cpp",
         "numbers": "cpp",
-        "numeric": "cpp"
+        "numeric": "cpp",
+        "expected": "cpp"
     },
     "dotnet.defaultSolution": "disable",
     // "cmake.configureArgs": [
