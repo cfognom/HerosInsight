@@ -33,6 +33,7 @@ add_library(HerosInsight SHARED
     custom_skill_data.cpp
     skill_book.cpp
     texture_viewer.cpp
+    encstr_debugger.cpp
     custom_agent_data.h
     custom_agent_data.cpp
     scanner_tool.cpp

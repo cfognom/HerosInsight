@@ -28,6 +28,7 @@ namespace HerosInsight
         static bool enable_ui_debug;
         static bool open_debug;
         static bool open_texture_viewer;
+        static bool open_encstr_debugger;
         static bool open_scanner_tool;
 #endif
         static bool open_main_menu;

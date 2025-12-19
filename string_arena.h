@@ -17,7 +17,7 @@
 namespace HerosInsight
 {
     template <typename T>
-    class StringArena
+    class StringArena // TODO: rename to SpanVector? (A vector of spans of data)
     {
         // We use all bytes of T for eq and hashing, so T cannot have any padding etc...
         static_assert(std::has_unique_object_representations_v<T>, "T must have unique object representations");
@@ -27,7 +27,7 @@ namespace HerosInsight
 
     public:
         using T_ends = uint32_t;
-        using T_span_id = uint16_t;
+        using T_span_id = uint32_t;
 
     protected:
         static std::string_view AsStringView(std::span<T> span)
@@ -303,7 +303,7 @@ namespace HerosInsight
         using base = StringArena<T>;
 
     public:
-        using T_span_id = base::T_span_id;
+        using T_span_id = uint16_t;
         constexpr static T_span_id NULL_SPAN_ID = std::numeric_limits<T_span_id>::max();
 
         std::vector<T_span_id> index_to_id;

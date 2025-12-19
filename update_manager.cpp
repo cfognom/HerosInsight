@@ -14,6 +14,7 @@
 #include <debug_ui.h>
 #include <effect_initiator.h>
 #include <effect_tracking.h>
+#include <encstr_debugger.h>
 #include <hero_ai.h>
 #include <packet_stepper.h>
 #include <party_data.h>
@@ -48,6 +49,7 @@ namespace HerosInsight
     bool UpdateManager::open_debug = true;
     bool UpdateManager::open_scanner_tool = false;
     bool UpdateManager::open_texture_viewer = false;
+    bool UpdateManager::open_encstr_debugger = false;
     bool UpdateManager::unlock_windows = true;
 #else
     bool UpdateManager::unlock_windows = false;
@@ -272,6 +274,7 @@ namespace HerosInsight
                 }
                 ImGui::Checkbox("Debug Display", &UpdateManager::open_debug);
                 ImGui::Checkbox("Texture Viewer", &UpdateManager::open_texture_viewer);
+                ImGui::Checkbox("Encoded String Debugger", &UpdateManager::open_encstr_debugger);
                 ImGui::Checkbox("Scanner Tool", &UpdateManager::open_scanner_tool);
 #endif
                 ImGui::Checkbox("Skill Book", &UpdateManager::open_skill_book);
@@ -424,6 +427,8 @@ namespace HerosInsight
 #ifdef _DEBUG
         if (open_texture_viewer)
             TextureViewer::Draw();
+        if (open_encstr_debugger)
+            HerosInsight::EncstrDebugger::Draw();
         if (enable_ui_debug)
             HerosInsight::DebugUI::Draw(device);
         if (open_debug)
