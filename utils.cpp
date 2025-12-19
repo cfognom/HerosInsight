@@ -2161,6 +2161,7 @@ namespace HerosInsight::Utils
         result += std::format("\tprojectile_animation_1_id: {}\n", skill.projectile_animation_1_id);
         result += std::format("\tprojectile_animation_2_id: {}\n", skill.projectile_animation_2_id);
         result += std::format("\ticon_file_id: {}\n", skill.icon_file_id);
+        result += std::format("\ticon_file_id_reforged: {}\n", skill.icon_file_id_reforged);
         result += std::format("\ticon_file_id_2: {}\n", skill.icon_file_id_2);
         result += std::format("\tname: {}\n", skill.name);
         result += std::format("\tconcise: {}\n", skill.concise);
@@ -2191,19 +2192,6 @@ namespace HerosInsight::Utils
         result += std::format("\tdescription DECODED: {}\n", Utils::StrIDToStr(skill.description));
 
         return result;
-    }
-
-    std::span<GW::Skill> GetSkillSpan()
-    {
-        const auto ptr = GW::SkillbarMgr::GetSkillConstantData((GW::Constants::SkillID)0);
-        if (ptr == nullptr)
-        {
-            return {}; // Return an empty span if ptr is nullptr
-        }
-
-        const auto len = static_cast<uint32_t>(GW::Constants::SkillID::Count);
-
-        return {ptr, len};
     }
 
     // Returns a vector of unique effects sorted by timestamp

@@ -345,8 +345,9 @@ namespace HerosInsight::Debug
         RETURN_FIELD_NAME_AND_OFFSET(description);
         RETURN_FIELD_NAME_AND_OFFSET(concise);
         RETURN_FIELD_NAME_AND_OFFSET(name);
-        RETURN_FIELD_NAME_AND_OFFSET(icon_file_id_2);
         RETURN_FIELD_NAME_AND_OFFSET(icon_file_id);
+        RETURN_FIELD_NAME_AND_OFFSET(icon_file_id_reforged);
+        RETURN_FIELD_NAME_AND_OFFSET(icon_file_id_2);
         RETURN_FIELD_NAME_AND_OFFSET(projectile_animation_2_id);
         RETURN_FIELD_NAME_AND_OFFSET(projectile_animation_1_id);
         RETURN_FIELD_NAME_AND_OFFSET(target_overhead_animation_id);
