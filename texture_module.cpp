@@ -69,6 +69,7 @@
 #include <GWCA/GameEntities/Skill.h>
 
 #include <GWCA/Managers/AgentMgr.h>
+#include <GWCA/Managers/AssetMgr.h>
 #include <GWCA/Managers/ChatMgr.h>
 #include <GWCA/Managers/EffectMgr.h>
 #include <GWCA/Managers/EventMgr.h>
@@ -119,29 +120,17 @@ namespace TextureModule
 
     typedef uint8_t *gw_image_bits; // array of pointers to mipmap images
 
-    typedef RecObj *(__cdecl *FileIdToRecObj_pt)(wchar_t *fileHash, int unk1_1, int unk2_0);
-    FileIdToRecObj_pt FileHashToRecObj_func;
-
-    typedef uint8_t *(__cdecl *GetRecObjectBytes_pt)(RecObj *rec, int *size_out);
-    GetRecObjectBytes_pt ReadFileBuffer_Func;
-
-    typedef uint32_t(__cdecl *DecodeImage_pt)(int size, uint8_t *bytes, gw_image_bits *bits, uint8_t *pallete, GR_FORMAT *format, Vec2i *dims, int *levels);
-    DecodeImage_pt DecodeImage_func;
-
-    typedef void(__cdecl *UnkRecObjBytes_pt)(RecObj *rec, uint8_t *bytes);
-    UnkRecObjBytes_pt FreeFileBuffer_Func;
-
-    typedef void(__cdecl *CloseRecObj_pt)(RecObj *rec);
-    CloseRecObj_pt CloseRecObj_func;
+    typedef BOOL(__cdecl *DecodeImage_pt)(int size, char *bytes, gw_image_bits *bits, uint8_t *pallete, GR_FORMAT *format, Vec2i *dims, int *levels);
+    DecodeImage_pt DecodeImage_Func;
 
     typedef gw_image_bits(__cdecl *AllocateImage_pt)(GR_FORMAT format, Vec2i *destDims, uint32_t levels, uint32_t unk2);
-    AllocateImage_pt AllocateImage_func;
+    AllocateImage_pt AllocateImage_Func;
 
     typedef void(__cdecl *Depalletize_pt)(
         gw_image_bits destBits, uint8_t *destPalette, GR_FORMAT destFormat, int *destMipWidths, gw_image_bits sourceBits, uint8_t *sourcePallete, GR_FORMAT sourceFormat, int *sourceMipWidths, Vec2i *sourceDims, uint32_t sourceLevels,
         uint32_t unk1_0, int *unk2_0
     );
-    Depalletize_pt Depalletize_func;
+    Depalletize_pt Depalletize_Func;
 
     // typedef void(__cdecl *ConvertImage_pt) (uint8_t *destBytes, int *destPallete, uint32_t destFormat, Vec2i *destDims,
     //                                         uint8_t *sourceBytes, int *sourcePallete, uint32_t sourceFormat, Vec2i *sourceDims, float sharpness);
@@ -154,14 +143,7 @@ namespace TextureModule
     // typedef void(__cdecl *GetLevelWidths_pt) (int format, int width, uint32_t levels, int *widths);
     // GetLevelWidths_pt GetLevelWidths_func;
 
-    void FileIdToFileHash(uint32_t file_id, wchar_t *fileHash)
-    {
-        fileHash[0] = static_cast<wchar_t>(((file_id - 1) % 0xff00) + 0x100);
-        fileHash[1] = static_cast<wchar_t>(((file_id - 1) / 0xff00) + 0x100);
-        fileHash[2] = 0;
-    }
-
-    const char *strnstr(char *str, const char *substr, size_t n)
+    char *strnstr(char *str, const char *substr, size_t n)
     {
         char *p = str, *pEnd = str + n;
         size_t substr_len = strlen(substr);
@@ -179,63 +161,50 @@ namespace TextureModule
     }
 
     // OpenImage converts any GW format to ARGB. It is possible to skip conversion if gw format is compatible with D3FMT.
-    uint32_t OpenImage(uint32_t file_id, gw_image_bits *dst_bits, Vec2i &dims, int &levels, GR_FORMAT &format)
+    bool OpenImage(uint32_t file_id, gw_image_bits *dst_bits, Vec2i &dims, int &levels, GR_FORMAT &format)
     {
         int size = 0;
-        uint8_t *pallete = nullptr;
+        uint8_t *palette = nullptr;
         gw_image_bits bits = nullptr;
 
         wchar_t fileHash[4] = {0};
-        FileIdToFileHash(file_id, fileHash);
+        GW::AssetMgr::FileIdToFileHash(file_id, fileHash);
 
-        auto rec = FileHashToRecObj_func(fileHash, 1, 0);
-        if (!rec)
-            return 0;
+        BOOL success = false;
+        { // Read scope
+            auto readable = GW::AssetMgr::TryReadFile(fileHash);
+            if (readable) {
+                GWCA_ASSERT(readable->data != nullptr);
 
-        const auto bytes = ReadFileBuffer_Func(rec, &size);
-        if (!bytes)
-        {
-            CloseRecObj_func(rec);
-            return 0;
-        }
-        int image_size = size;
-        auto image_bytes = bytes;
-        if (memcmp((char *)bytes, "ffna", 4) == 0)
-        {
-            // Model file format; try to find first instance of image from this.
-            const auto found = strnstr((char *)bytes, "ATEX", size);
-            if (!found)
-            {
-                FreeFileBuffer_Func(rec, bytes);
-                CloseRecObj_func(rec);
-                return 0;
+                int image_size = readable->size;
+                auto image_bytes = readable->data;
+
+                if (memcmp((char *)image_bytes, "ffna", 4) == 0) {
+                    // Model file format; try to find first instance of image from this.
+                    auto found = strnstr((char *)image_bytes, "ATEX", size);
+                    if (!found) {
+                        return 0;
+                    }
+                    image_bytes = found;
+                    image_size = *(int *)(found - 4);
+                }
+
+                success = DecodeImage_Func(image_size, image_bytes, &bits, palette, &format, &dims, &levels);
             }
-            image_bytes = (uint8_t *)found;
-            image_size = *(int *)(found - 4);
         }
 
-        uint32_t result = DecodeImage_func(image_size, image_bytes, &bits, pallete, &format, &dims, &levels);
-        if (rec)
-        {
-            FreeFileBuffer_Func(rec, bytes);
-            if (levels > 13)
-                return 0;
-
-            CloseRecObj_func(rec);
-        }
-
-        if (format >= GR_FORMATS || !result)
+        if (format >= GR_FORMATS || !success)
             return 0;
-
+        
         levels = 1;
-
-        *dst_bits = AllocateImage_func(GR_FORMAT_A8R8G8B8, &dims, levels, 0);
-        Depalletize_func((gw_image_bits)dst_bits, nullptr, GR_FORMAT_A8R8G8B8, nullptr, bits, pallete, format, nullptr, &dims, levels, 0, 0);
+        GWCA_ASSERT(levels <= 12); // Depalletize_Func does not support more than 12 levels
+        *dst_bits = AllocateImage_Func(GR_FORMAT_A8R8G8B8, &dims, levels, 0);
+        Depalletize_Func((gw_image_bits)dst_bits, nullptr, GR_FORMAT_A8R8G8B8, nullptr, bits, palette, format, nullptr, &dims, levels, 0, 0);
 
         GW::MemoryMgr::MemFree(bits);
 
-        // todo: free bytes;
-        return result;
+        // todo: free bytes; // Which bytes???
+        return success;
     }
 
     IDirect3DTexture9 *CreateTexture(IDirect3DDevice9 *device, uint32_t file_id, Vec2i &dims)
@@ -248,8 +217,8 @@ namespace TextureModule
         gw_image_bits bits = nullptr;
         int levels;
         GR_FORMAT format;
-        auto ret = OpenImage(file_id, &bits, dims, levels, format);
-        if (!ret || !bits || !dims.x || !dims.y)
+        auto success = OpenImage(file_id, &bits, dims, levels, format);
+        if (!success || !bits || !dims.x || !dims.y)
         {
             if (bits)
             {
@@ -310,37 +279,16 @@ namespace TextureModule
 
         uintptr_t address = 0;
 
-        DecodeImage_func = (DecodeImage_pt)Scanner::ToFunctionStart(Scanner::FindAssertion("GrImage.cpp", "bits || !palette", 0, 0));
+        DecodeImage_Func = (DecodeImage_pt)Scanner::ToFunctionStart(Scanner::FindAssertion("GrImage.cpp", "bits || !palette", 0, 0));
 
-        address = Scanner::FindAssertion("Amet.cpp", "data", 0, 0);
-        if (address)
-        {
-            address = Scanner::FindInRange("\xe8", "x", 0, address + 0xc, address + 0xff);
-            FileHashToRecObj_func = (FileIdToRecObj_pt)Scanner::FunctionFromNearCall(address);
-            address = Scanner::FindInRange("\xe8", "x", 0, address + 1, address + 0xff);
-            ReadFileBuffer_Func = (GetRecObjectBytes_pt)Scanner::FunctionFromNearCall(address);
-        }
-        address = Scanner::Find("\x81\x3a\x41\x4d\x45\x54", "xxxxxx");
-        if (address)
-        {
-            address = Scanner::FindInRange("\xe8", "x", 0, address, address - 0xff);
-            CloseRecObj_func = (CloseRecObj_pt)Scanner::FunctionFromNearCall(address);
-            address = Scanner::FindInRange("\xe8", "x", 0, address - 1, address - 0xff);
-            FreeFileBuffer_Func = (UnkRecObjBytes_pt)Scanner::FunctionFromNearCall(address);
-        }
+        AllocateImage_Func = (AllocateImage_pt)Scanner::ToFunctionStart(Scanner::Find(MemPattern("7c 11 6a 5c")));
 
-        AllocateImage_func = (AllocateImage_pt)Scanner::ToFunctionStart(Scanner::Find("\x7c\x11\x6a\x5c", "xxxx"));
+        address = Scanner::ToFunctionStart(Scanner::Find(MemPattern("83 ?? 04 a8 08 74 1a 85 ?? 75 1d")));
+        Depalletize_Func = (Depalletize_pt)address;
 
-        address = Scanner::ToFunctionStart(Scanner::Find("\x68\xf2\x0c\x00\x00", "xxxxx"));
-        Depalletize_func = (Depalletize_pt)address;
-
-        assert(DecodeImage_func);
-        assert(FileHashToRecObj_func);
-        assert(ReadFileBuffer_Func);
-        assert(CloseRecObj_func);
-        assert(FreeFileBuffer_Func);
-        assert(AllocateImage_func);
-        assert(Depalletize_func);
+        assert(DecodeImage_Func);
+        assert(AllocateImage_Func);
+        assert(Depalletize_Func);
     }
 
     // tasks to be done in the render thread
@@ -390,17 +338,6 @@ namespace TextureModule
         }
         textures_by_file_id.clear();
     }
-    uint32_t FileHashToFileId(const wchar_t *fileHash)
-    {
-        if (!fileHash)
-            return 0;
-        if (((0xff < *fileHash) && (0xff < fileHash[1])) &&
-            ((fileHash[2] == 0 || ((0xff < fileHash[2] && (fileHash[3] == 0))))))
-        {
-            return (*fileHash - 0xff00ff) + (uint32_t)fileHash[1] * 0xff00;
-        }
-        return 0;
-    }
 
     IDirect3DTexture9 **GetSkillImage(GW::Constants::SkillID skill_id, bool hd)
     {
@@ -409,7 +346,7 @@ namespace TextureModule
         if (!skill)
             return nullptr;
 
-        auto file_id = hd ? skill->icon_file_id_2 : skill->icon_file_id_1;
+        auto file_id = hd ? skill->icon_file_id_reforged : skill->icon_file_id;
         if (!file_id)
             file_id = GW::SkillbarMgr::GetSkillConstantData(GW::Constants::SkillID::No_Skill)->icon_file_id;
 
