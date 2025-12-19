@@ -173,16 +173,19 @@ namespace TextureModule
         BOOL success = false;
         { // Read scope
             auto readable = GW::AssetMgr::TryReadFile(fileHash);
-            if (readable) {
+            if (readable)
+            {
                 GWCA_ASSERT(readable->data != nullptr);
 
                 int image_size = readable->size;
                 auto image_bytes = readable->data;
 
-                if (memcmp((char *)image_bytes, "ffna", 4) == 0) {
+                if (memcmp((char *)image_bytes, "ffna", 4) == 0)
+                {
                     // Model file format; try to find first instance of image from this.
                     auto found = strnstr((char *)image_bytes, "ATEX", size);
-                    if (!found) {
+                    if (!found)
+                    {
                         return 0;
                     }
                     image_bytes = found;
@@ -195,7 +198,7 @@ namespace TextureModule
 
         if (format >= GR_FORMATS || !success)
             return 0;
-        
+
         levels = 1;
         GWCA_ASSERT(levels <= 12); // Depalletize_Func does not support more than 12 levels
         *dst_bits = AllocateImage_Func(GR_FORMAT_A8R8G8B8, &dims, levels, 0);
