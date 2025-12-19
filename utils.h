@@ -458,8 +458,6 @@ namespace HerosInsight::Utils
 
     std::string SkillConstantDataToString(GW::Skill &skill);
 
-    std::span<GW::Skill> GetSkillSpan();
-
     uint32_t LinearAttributeScale(uint32_t value0, uint32_t value15, uint32_t attribute_level);
     std::optional<std::pair<uint8_t, uint8_t>> ReverseLinearAttributeScale(uint32_t value0, uint32_t value15, uint32_t value);
     std::span<GW::Attribute> GetAgentAttributeSpan(uint32_t agent_id);
