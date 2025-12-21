@@ -1,6 +1,7 @@
 #include <GWCA/Constants/Skills.h>
 #include <GWCA/GameEntities/Skill.h>
 #include <GWCA/Managers/GameThreadMgr.h>
+#include <GWCA/Managers/RenderMgr.h>
 #include <GWCA/Managers/SkillbarMgr.h>
 #include <GWCA/Managers/UIMgr.h>
 
