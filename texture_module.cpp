@@ -166,7 +166,7 @@ namespace TextureModule
             return nullptr;
         }
 
-        struct AutoFree
+        struct AutoFree // Helper struct that automatically calls MemFree when it goes out of scope
         {
             gw_image_bits &object;
             ~AutoFree()
