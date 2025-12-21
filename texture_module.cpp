@@ -331,12 +331,25 @@ namespace TextureModule
 
         auto gwimg_ptr = new GwImg{file_id};
         textures_by_file_id[file_id] = gwimg_ptr;
+        auto device = GW::Render::GetDevice();
+        if (GW::Render::GetIsInRenderLoop() && device)
+        {
+            auto tex = CreateTexture(device, gwimg_ptr->m_file_id, gwimg_ptr->m_dims);
+            if (tex)
+            {
+                gwimg_ptr->m_tex = tex;
+                return &gwimg_ptr->m_tex;
+            }
+        }
+
         EnqueueDxTask(
             [gwimg_ptr](IDirect3DDevice9 *device)
             {
                 gwimg_ptr->m_tex = CreateTexture(device, gwimg_ptr->m_file_id, gwimg_ptr->m_dims);
+                SOFT_ASSERT(gwimg_ptr->m_tex, L"Failed to create texture for file id {}", gwimg_ptr->m_file_id);
             }
         );
+
         return &gwimg_ptr->m_tex;
     }
     void Terminate()
