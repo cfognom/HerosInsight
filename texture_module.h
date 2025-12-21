@@ -14,7 +14,7 @@ namespace TextureModule
 
     D3DSURFACE_DESC GetTextureDesc(IDirect3DTexture9 *texture);
     IDirect3DTexture9 **LoadTextureFromFileId(uint32_t file_id);
-    IDirect3DTexture9 **GetSkillImage(GW::Constants::SkillID skill_id, bool hd = false);
+    IDirect3DTexture9 **GetSkillImage(GW::Constants::SkillID skill_id);
     IDirect3DTexture9 **GetResourceTexture(const char *filename);
     bool DrawSkill(const GW::Skill &skill, ImVec2 pos, float icon_size, bool as_effect = false, bool as_hovered = false, ImDrawList *draw_list = nullptr);
     void GetImageUVsInAtlas(IDirect3DTexture9 *texture, ImVec2 image_size, uint32_t index, ImVec2 &uv0, ImVec2 &uv1);

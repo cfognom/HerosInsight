@@ -120,14 +120,14 @@ namespace TextureModule
 
     typedef uint8_t *gw_image_bits; // array of pointers to mipmap images
 
-    typedef BOOL(__cdecl *DecodeImage_pt)(int size, char *bytes, gw_image_bits *bits, uint8_t *pallete, GR_FORMAT *format, Vec2i *dims, int *levels);
+    typedef BOOL(__cdecl *DecodeImage_pt)(int size, char *bytes, gw_image_bits *out_bits, uint8_t *pallete, GR_FORMAT *format, Vec2i *dims, int *levels);
     DecodeImage_pt DecodeImage_Func;
 
     typedef gw_image_bits(__cdecl *AllocateImage_pt)(GR_FORMAT format, Vec2i *destDims, uint32_t levels, uint32_t unk2);
     AllocateImage_pt AllocateImage_Func;
 
     typedef void(__cdecl *Depalletize_pt)(
-        gw_image_bits destBits, uint8_t *destPalette, GR_FORMAT destFormat, int *destMipWidths, gw_image_bits sourceBits, uint8_t *sourcePallete, GR_FORMAT sourceFormat, int *sourceMipWidths, Vec2i *sourceDims, uint32_t sourceLevels,
+        gw_image_bits *destBits, uint8_t *destPalette, GR_FORMAT destFormat, int *destMipWidths, gw_image_bits sourceBits, uint8_t *sourcePallete, GR_FORMAT sourceFormat, int *sourceMipWidths, Vec2i *sourceDims, uint32_t sourceLevels,
         uint32_t unk1_0, int *unk2_0
     );
     Depalletize_pt Depalletize_Func;
@@ -160,56 +160,6 @@ namespace TextureModule
         return NULL;
     }
 
-    // OpenImage converts any GW format to ARGB. It is possible to skip conversion if gw format is compatible with D3FMT.
-    bool OpenImage(uint32_t file_id, gw_image_bits *dst_bits, Vec2i &dims, int &levels, GR_FORMAT &format)
-    {
-        int size = 0;
-        uint8_t *palette = nullptr;
-        gw_image_bits bits = nullptr;
-
-        wchar_t fileHash[4] = {0};
-        GW::AssetMgr::FileIdToFileHash(file_id, fileHash);
-
-        BOOL success = false;
-        { // Read scope
-            auto readable = GW::AssetMgr::TryReadFile(fileHash);
-            if (readable)
-            {
-                GWCA_ASSERT(readable->data != nullptr);
-
-                int image_size = readable->size;
-                auto image_bytes = readable->data;
-
-                if (memcmp((char *)image_bytes, "ffna", 4) == 0)
-                {
-                    // Model file format; try to find first instance of image from this.
-                    auto found = strnstr((char *)image_bytes, "ATEX", size);
-                    if (!found)
-                    {
-                        return 0;
-                    }
-                    image_bytes = found;
-                    image_size = *(int *)(found - 4);
-                }
-
-                success = DecodeImage_Func(image_size, image_bytes, &bits, palette, &format, &dims, &levels);
-            }
-        }
-
-        if (format >= GR_FORMATS || !success)
-            return 0;
-
-        levels = 1;
-        GWCA_ASSERT(levels <= 12); // Depalletize_Func does not support more than 12 levels
-        *dst_bits = AllocateImage_Func(GR_FORMAT_A8R8G8B8, &dims, levels, 0);
-        Depalletize_Func((gw_image_bits)dst_bits, nullptr, GR_FORMAT_A8R8G8B8, nullptr, bits, palette, format, nullptr, &dims, levels, 0, 0);
-
-        GW::MemoryMgr::MemFree(bits);
-
-        // todo: free bytes; // Which bytes???
-        return success;
-    }
-
     IDirect3DTexture9 *CreateTexture(IDirect3DDevice9 *device, uint32_t file_id, Vec2i &dims)
     {
         if (!device || !file_id)
@@ -217,54 +167,107 @@ namespace TextureModule
             return nullptr;
         }
 
-        gw_image_bits bits = nullptr;
-        int levels;
-        GR_FORMAT format;
-        auto success = OpenImage(file_id, &bits, dims, levels, format);
-        if (!success || !bits || !dims.x || !dims.y)
+        struct AutoFree
         {
-            if (bits)
+            gw_image_bits &object;
+            ~AutoFree()
             {
-                GW::MemoryMgr::MemFree(bits);
+                GW::MemoryMgr::MemFree(object);
+                object = nullptr;
             }
-            return nullptr;
+        };
+
+        IDirect3DTexture9 *tex = nullptr; // The return value
+        gw_image_bits decoded_image = nullptr;
+        gw_image_bits allocated_image = nullptr;
+        uint8_t *nullptr_palette = nullptr; // We only use a var here to show were the palette goes
+        GR_FORMAT format;
+        int levels = 0;
+        bool decode_success;
+
+        wchar_t fileHash[4] = {0};
+        GW::AssetMgr::FileIdToFileHash(file_id, fileHash);
+
+        { // Read scope
+            auto readable = GW::AssetMgr::TryReadFile(fileHash);
+            if (readable)
+            {
+                GWCA_ASSERT(readable->data != nullptr);
+
+                char *image_bytes = readable->data;
+                uint32_t image_size = readable->size;
+
+                if (memcmp((char *)image_bytes, "ffna", 4) == 0)
+                {
+                    // Model file format; try to find first instance of image from this.
+                    auto found = strnstr((char *)image_bytes, "ATEX", image_size);
+                    if (!found)
+                        return nullptr;
+                    image_bytes = found;
+                    image_size = *(int *)(found - 4);
+                }
+                // Decodes the file data into a malloc'd block 'decoded_image' (we need to free this later)
+                decode_success = DecodeImage_Func(
+                    image_size, image_bytes,                                 // Inputs
+                    &decoded_image, nullptr_palette, &format, &dims, &levels // Outputs
+                );
+                if (decoded_image == nullptr)
+                    return nullptr;
+            }
+        } // File is cleaned up here
+
+        { // Decoded scope
+            AutoFree x{decoded_image};
+
+            if (!decode_success ||
+                format >= GR_FORMATS ||
+                !dims.x || !dims.y ||
+                levels > 13) // Depalletize_Func does not support more than 12 levels
+                return nullptr;
+
+            levels = 1;
+            // Allocates a block of memory for the depalletized image (needs to be freed later)
+            allocated_image = AllocateImage_Func(GR_FORMAT_A8R8G8B8, &dims, levels, 0);
+            if (allocated_image == nullptr)
+                return nullptr;
+
+            Depalletize_Func(&allocated_image, nullptr, GR_FORMAT_A8R8G8B8, nullptr, decoded_image, nullptr_palette, format, nullptr, &dims, levels, 0, 0);
+            GWCA_ASSERT(allocated_image != nullptr);
         }
 
-        // Create a texture: http://msdn.microsoft.com/en-us/library/windows/desktop/bb174363(v=vs.85).aspx
-        IDirect3DTexture9 *tex = nullptr;
-        if (device->CreateTexture(dims.x, dims.y, levels, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &tex, 0) != D3D_OK)
-        {
-            return nullptr;
+        { // Depalletized scope
+            AutoFree x{allocated_image};
+
+            // Create a texture: http://msdn.microsoft.com/en-us/library/windows/desktop/bb174363(v=vs.85).aspx
+            if (device->CreateTexture(dims.x, dims.y, levels, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &tex, 0) != D3D_OK)
+                return nullptr;
+
+            // Lock the texture for writing: http://msdn.microsoft.com/en-us/library/windows/desktop/bb205913(v=vs.85).aspx
+            D3DLOCKED_RECT rect;
+            if (tex->LockRect(0, &rect, 0, D3DLOCK_DISCARD) != D3D_OK)
+            {
+                tex->Release();
+                return nullptr;
+            }
+
+            for (int y = 0; y < dims.y; y++)
+            {
+                auto dst = (uint8_t *)rect.pBits + y * rect.Pitch;
+                auto src = (uint32_t *)allocated_image + y * dims.x;
+                memcpy(dst, src, dims.x * 4);
+                /* for (int x = 0; x < dims.x; ++x) {
+                    uint8_t* destAddr = ((uint8_t*)rect.pBits + y * rect.Pitch + 4 * x);
+
+                    // unsigned int data = 0xFF000000 | (*srcdata >> 24 & 0xFF) | (*srcdata >> 16 & 0xFF00) | (*srcdata >> 8 & 0xFF0000);
+                    // memcpy(destAddr, &data, 4);
+                    memcpy(destAddr, srcdata, 4);
+                    srcdata++;
+                }*/
+            }
+            // Unlock the texture so it can be used.
+            tex->UnlockRect(0);
+            return tex;
         }
-
-        // Lock the texture for writing: http://msdn.microsoft.com/en-us/library/windows/desktop/bb205913(v=vs.85).aspx
-        D3DLOCKED_RECT rect;
-        if (tex->LockRect(0, &rect, 0, D3DLOCK_DISCARD) != D3D_OK)
-        {
-            return nullptr;
-        }
-
-        unsigned int *srcdata = (unsigned int *)bits;
-        for (int y = 0; y < dims.y; y++)
-        {
-            uint8_t *destAddr = ((uint8_t *)rect.pBits + y * rect.Pitch);
-            memcpy(destAddr, srcdata, dims.x * 4);
-            srcdata += dims.x;
-            /* for (int x = 0; x < dims.x; ++x) {
-                uint8_t* destAddr = ((uint8_t*)rect.pBits + y * rect.Pitch + 4 * x);
-
-                // unsigned int data = 0xFF000000 | (*srcdata >> 24 & 0xFF) | (*srcdata >> 16 & 0xFF00) | (*srcdata >> 8 & 0xFF0000);
-                // memcpy(destAddr, &data, 4);
-                memcpy(destAddr, srcdata, 4);
-                srcdata++;
-            }*/
-        }
-
-        GW::MemoryMgr::MemFree(bits);
-
-        // Unlock the texture so it can be used.
-        tex->UnlockRect(0);
-        return tex;
     }
 
     struct GwImg
@@ -329,8 +332,12 @@ namespace TextureModule
 
         auto gwimg_ptr = new GwImg{file_id};
         textures_by_file_id[file_id] = gwimg_ptr;
-        EnqueueDxTask([gwimg_ptr](IDirect3DDevice9 *device)
-                      { gwimg_ptr->m_tex = CreateTexture(device, gwimg_ptr->m_file_id, gwimg_ptr->m_dims); });
+        EnqueueDxTask(
+            [gwimg_ptr](IDirect3DDevice9 *device)
+            {
+                gwimg_ptr->m_tex = CreateTexture(device, gwimg_ptr->m_file_id, gwimg_ptr->m_dims);
+            }
+        );
         return &gwimg_ptr->m_tex;
     }
     void Terminate()
@@ -342,14 +349,15 @@ namespace TextureModule
         textures_by_file_id.clear();
     }
 
-    IDirect3DTexture9 **GetSkillImage(GW::Constants::SkillID skill_id, bool hd)
+    IDirect3DTexture9 **GetSkillImage(GW::Constants::SkillID skill_id)
     {
         const auto skill = GW::SkillbarMgr::GetSkillConstantData(skill_id);
 
         if (!skill)
             return nullptr;
 
-        auto file_id = hd ? skill->icon_file_id_reforged : skill->icon_file_id;
+        bool use_hd = GW::UI::GetPreference(GW::UI::FlagPreference::EnableHDSkillIcons);
+        auto file_id = use_hd ? skill->icon_file_id_reforged : skill->icon_file_id;
         if (!file_id)
             file_id = GW::SkillbarMgr::GetSkillConstantData(GW::Constants::SkillID::No_Skill)->icon_file_id;
 
