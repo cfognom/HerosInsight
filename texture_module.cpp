@@ -486,8 +486,9 @@ namespace TextureModule
         // Draw the skill icon
         auto icon_desc = GetTextureDesc(*skill_icon);
         auto icon_tex_size = ImVec2(icon_desc.Width, icon_desc.Height);
-        OffsetUVsByPixels(icon_tex_size, uv0, ImVec2(3, 3));
-        OffsetUVsByPixels(icon_tex_size, uv1, ImVec2(-3, -3));
+        int32_t uv_offset = ((int32_t)icon_desc.Width * 3) / 64; // 3 when 64px, 6 when 128px ...
+        OffsetUVsByPixels(icon_tex_size, uv0, ImVec2(uv_offset, uv_offset));
+        OffsetUVsByPixels(icon_tex_size, uv1, ImVec2(-uv_offset, -uv_offset));
         draw_list->AddImage(*skill_icon, min, max, uv0, uv1, tint);
 
         // Draw the skill overlay/lens
