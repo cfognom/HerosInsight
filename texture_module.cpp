@@ -88,7 +88,6 @@
 
 #include <constants.h>
 #include <debug_display.h>
-#include <imgui_impl_dx9.h>
 #include <utils.h>
 
 #include "texture_module.h"
@@ -498,8 +497,9 @@ namespace TextureModule
                         // The hover effect texture's colors are premultiplied by alpha
                         // By using D3DBLEND_DESTCOLOR and D3DBLEND_ONE we essentially do: dst = dst + dst * tex
                         // So where the texture is white, the color is multiplied by 2, where it's black, it's unchanged
-                        g_pd3dDevice->SetRenderState(D3DRS_SRCBLEND, D3DBLEND_DESTCOLOR);
-                        g_pd3dDevice->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_ONE);
+                        auto device = GW::Render::GetDevice();
+                        device->SetRenderState(D3DRS_SRCBLEND, D3DBLEND_DESTCOLOR);
+                        device->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_ONE);
                     },
                     nullptr
                 );
@@ -507,8 +507,9 @@ namespace TextureModule
                 draw_list->AddCallback(
                     [](const ImDrawList *parent_list, const ImDrawCmd *cmd)
                     {
-                        g_pd3dDevice->SetRenderState(D3DRS_SRCBLEND, D3DBLEND_SRCALPHA);
-                        g_pd3dDevice->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
+                        auto device = GW::Render::GetDevice();
+                        device->SetRenderState(D3DRS_SRCBLEND, D3DBLEND_SRCALPHA);
+                        device->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
                     },
                     nullptr
                 );
