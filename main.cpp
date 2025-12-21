@@ -386,10 +386,16 @@ static DWORD WINAPI ThreadProc(LPVOID lpModule)
     // on the game from within the game thread.
 
     HMODULE hModule = static_cast<HMODULE>(lpModule);
+
+    bool success = GW::Initialize();
+    if (!success)
+    {
+        MessageBoxA(nullptr, "GWCA failed to initialize.", "Error", MB_OK | MB_ICONERROR);
+        FreeLibraryAndExitThread(hModule, EXIT_FAILURE);
+    }
+
     Constants::paths.Init(hModule);
     HerosInsight::CapacityHints::LoadHints();
-
-    GW::Initialize();
 
     GW::Render::SetRenderCallback(
         [](GW::Render::Helper helper)
