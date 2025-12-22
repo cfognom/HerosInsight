@@ -37,52 +37,48 @@ namespace HerosInsight::MultiBuffer
         }
 
         template <typename... Buffers>
-        auto AssignPointers(void *base, const Buffers &...buffer_specs)
+        void AssignPointers(void *base, Buffers &...buffer_specs)
         {
             assert(base);
-            char *p = reinterpret_cast<char *>(base);
+            uintptr_t p = reinterpret_cast<uintptr_t>(base);
 
-            return std::tuple<typename Buffers::value_type *...>{
+            // Fold expression using comma operator
+            (
                 (
-                    (p = reinterpret_cast<char *>(AlignUp(reinterpret_cast<uintptr_t>(p), alignof(typename Buffers::value_type)))),
-                    (p += sizeof(typename Buffers::value_type) * buffer_specs.count),
-                    reinterpret_cast<typename Buffers::value_type *>(p - sizeof(typename Buffers::value_type) * buffer_specs.count)
-                )...
-            };
+                    // Align p for this buffer type
+                    p = AlignUp(p, alignof(typename Buffers::value_type)),
+
+                    // Assign pointer
+                    buffer_specs.ptr = reinterpret_cast<typename Buffers::value_type *>(p),
+
+                    // Advance p past this buffer
+                    p += sizeof(typename Buffers::value_type) * buffer_specs.count
+                ),
+                ...
+            );
         }
     }
 
     // RAII style heap multibuffer
-    template <typename... Specs>
     struct HeapAllocated
     {
         void *block;
         size_t align;
-        std::tuple<typename Specs::value_type *...> ptrs;
 
-        HeapAllocated(const Specs &...specs)
+        template <typename... Specs>
+        HeapAllocated(Specs &...specs)
         {
             auto [size, align] = Detail::ComputeSizeAndAlignment(specs...);
             this->align = align;
             this->block = ::operator new(size, std::align_val_t(align));
-            this->ptrs = Detail::AssignPointers(block, specs...);
+            Detail::AssignPointers(block, specs...);
         }
 
         ~HeapAllocated()
         {
             ::operator delete(block, std::align_val_t(align));
         }
-
-        template <size_t I>
-        auto &get()
-        {
-            return std::get<I>(ptrs);
-        }
     };
-
-    // Required for some reason
-    template <typename... Specs>
-    HeapAllocated(const Specs &...) -> HeapAllocated<Specs...>;
 
     // Spec for a buffer (type and count)
     template <typename T>
@@ -90,26 +86,11 @@ namespace HerosInsight::MultiBuffer
     {
         using value_type = T;
         size_t count;
+        T *ptr = nullptr;
+        std::span<T> Span() const { return std::span<T>(ptr, count); }
         constexpr Spec(size_t c) : count(c) {}
     };
 
 // Macro to create a multibuffer on the stack
 #define MultiBuffer_alloca(...) HerosInsight::MultiBuffer::Detail::AssignPointers(alloca(HerosInsight::MultiBuffer::Detail::ComputeSizeAndAlignment(__VA_ARGS__).first), __VA_ARGS__);
-}
-
-// Required by the language for structured bindings
-namespace std
-{
-    template <typename... Specs>
-    struct tuple_size<HerosInsight::MultiBuffer::HeapAllocated<Specs...>>
-        : std::integral_constant<size_t, sizeof...(Specs)>
-    {
-    };
-
-    template <size_t I, typename... Specs>
-    struct tuple_element<I, HerosInsight::MultiBuffer::HeapAllocated<Specs...>>
-    {
-        using type =
-            typename std::tuple_element<I, std::tuple<typename Specs::value_type *...>>::type;
-    };
 }
