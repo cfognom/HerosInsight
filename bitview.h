@@ -5,8 +5,12 @@
 
 namespace HerosInsight
 {
-    struct Bitview
+    struct BitView;
+
+    template <typename Derived>
+    class BitViewBase
     {
+    public:
         using word_t = uint64_t;
 
         static constexpr size_t BITS_PER_WORD = sizeof(word_t) * CHAR_BIT;
@@ -29,32 +33,26 @@ namespace HerosInsight
             return CalcWordCount(n_bits) * sizeof(word_t);
         }
 
-#define Bitview_alloca(n_bits, init_val) HerosInsight::Bitview((word_t *)alloca(HerosInsight::Bitview::CalcReqMemSize(n_bits)), n_bits, init_val)
-
-        Bitview() : words(nullptr), bit_offset(0), n_bits(0) {}
-
-        Bitview(word_t *words, size_t n_bits, bool init_val)
-            : Bitview(words, size_t(0), n_bits)
-        {
-            init_bits(init_val);
-#ifdef _DEBUG
-            assert(PopCount() == (init_val ? n_bits : 0));
-#endif
-        }
-
         void SetAll(bool value)
         {
-            auto data = uncompress();
+            if constexpr (std::is_same<Derived, BitView>::value)
+            {
+                auto data = uncompress();
 
-            word_t val = value ? std::numeric_limits<word_t>::max() : 0;
+                word_t val = value ? std::numeric_limits<word_t>::max() : 0;
 
-            if (data.has_partial_head)
-                data.head.Set(value);
+                if (data.has_partial_head)
+                    data.head.Set(value);
 
-            std::memset(data.whole_words.data(), val, data.whole_words.size() * sizeof(word_t));
+                std::memset(data.whole_words.data(), val, data.whole_words.size() * sizeof(word_t));
 
-            if (data.has_partial_tail)
-                data.tail.Set(value);
+                if (data.has_partial_tail)
+                    data.tail.Set(value);
+            }
+            else // For BitArray and BitVector we dont mind if we spill over, since we own all memory
+            {
+                init_bits(value);
+            }
         }
 
         struct reference
@@ -108,33 +106,30 @@ namespace HerosInsight
             word_t mask;
 
             friend struct iterator;
-            friend struct Bitview;
+            friend struct BitViewBase;
         };
 
         reference operator[](size_t index)
         {
-            assert(index < n_bits);
+            assert(index < size());
             return ref_unchecked(index);
         }
+
         bool operator[](size_t index) const
         {
             auto pos = get_bit_pos(index);
-            return (words[pos.word_offset] & (word_t(1) << pos.bit_offset)) != word_t(0);
+            return (data()[pos.word_offset] & (word_t(1) << pos.bit_offset)) != word_t(0);
         }
 
-        word_t *data() const { return words; }
-        size_t WordCount() const { return CalcWordCount(n_bits); }
-        std::span<word_t> Words() const { return std::span<word_t>(words, CalcWordCount(n_bits)); }
-        size_t size() const { return n_bits; }
+        word_t *data() { return as_derived().data(); }
+        const word_t *data() const { return as_derived().data(); }
+        size_t WordCount() const { return CalcWordCount(size()); }
+        std::span<word_t> Words() const { return std::span<word_t>(data(), CalcWordCount(size())); }
+        size_t size() const { return as_derived().size(); }
 
-        Bitview Subview(size_t offset, size_t count) const
-        {
-            assert(offset + count <= n_bits);
-            auto physical_offset = this->bit_offset + offset;
-            auto word_offset = physical_offset / BITS_PER_WORD;
-            auto bit_offset = physical_offset % BITS_PER_WORD;
-            return Bitview(words + word_offset, bit_offset, count);
-        }
+        // We will impl this after the BitView class is defined
+        BitView Subview(size_t offset, size_t count);
+        const BitView Subview(size_t offset, size_t count) const;
 
         size_t PopCount()
         {
@@ -153,24 +148,24 @@ namespace HerosInsight
         // Returns n_bits if there are no more set bits.
         size_t FindNextSetBit(size_t index) const
         {
-            const auto physical_end = this->bit_offset + this->n_bits;
+            const auto physical_end = this->bit_offset() + this->size();
             const auto word_count = CalcWordCount(physical_end);
-            auto physical_index = this->bit_offset + index;
-            auto word_index = physical_index / Bitview::BITS_PER_WORD;
-            auto bit_index = physical_index % Bitview::BITS_PER_WORD;
+            auto physical_index = this->bit_offset() + index;
+            auto word_index = physical_index / BitView::BITS_PER_WORD;
+            auto bit_index = physical_index % BitView::BITS_PER_WORD;
             auto mask = std::numeric_limits<word_t>::max() << bit_index;
-            auto word = this->words[word_index] & mask;
+            auto word = this->data()[word_index] & mask;
             while (word == 0 && ++word_index < word_count)
             {
-                word = this->words[word_index];
+                word = this->data()[word_index];
             }
             auto trailing_zeros = std::countr_zero(word);
-            physical_index = word_index * Bitview::BITS_PER_WORD + trailing_zeros;
-            index = std::min(physical_index, physical_end) - bit_offset;
+            physical_index = word_index * BitView::BITS_PER_WORD + trailing_zeros;
+            index = std::min(physical_index, physical_end) - bit_offset();
             return index;
         }
 
-        bool IsSubsetOf(const Bitview &other) const
+        bool IsSubsetOf(const BitView &other) const
         {
             for (auto index : this->IterSetBits())
             {
@@ -210,7 +205,7 @@ namespace HerosInsight
         };
 
         iterator begin() { return iterator{ref_unchecked(0)}; }
-        iterator end() { return iterator{ref_unchecked(n_bits)}; }
+        iterator end() { return iterator{ref_unchecked(size())}; }
 
         struct IteratorAdapter
         {
@@ -231,10 +226,10 @@ namespace HerosInsight
                 }
 
             private:
-                iterator(const Bitview &bitview, size_t index)
+                iterator(const BitView &bitview, size_t index)
                     : bitview(bitview), index(index) {}
 
-                const Bitview &bitview;
+                const BitView &bitview;
                 size_t index;
 
                 friend struct IteratorAdapter;
@@ -242,55 +237,52 @@ namespace HerosInsight
 
             iterator begin()
             {
-                if (this->bitset.size() == 0)
+                if (this->bitview.size() == 0)
                     return end();
-                auto it = iterator(this->bitset, -1);
+                auto it = iterator(this->bitview, -1);
                 ++it;
                 return it;
             }
             iterator end()
             {
-                return iterator(this->bitset, this->bitset.size());
+                return iterator(this->bitview, this->bitview.size());
             }
 
-            const Bitview &bitset;
+            const Derived &bitview;
         };
 
-        IteratorAdapter IterSetBits() const { return IteratorAdapter{*this}; }
+        IteratorAdapter IterSetBits() const { return IteratorAdapter{as_derived()}; }
 
-    private:
-        Bitview(word_t *words, size_t bit_offset, size_t n_bits)
-            : words(words), bit_offset(bit_offset), n_bits(n_bits)
-        {
-            assert(bit_offset <= MAX_BIT_OFFSET);
-            assert(n_bits <= MAX_LENGTH);
-        }
+    protected:
+        Derived &as_derived() { return *static_cast<Derived *>(this); }
+        const Derived &as_derived() const { return *static_cast<const Derived *>(this); }
 
         // Initializes all bits to value
         // WARNING: This will overwrite any head/tail bits not belonging to this bitview
         void init_bits(bool value)
         {
-            std::memset(words, value ? 0xFF : 0, CalcReqMemSize(n_bits));
+            std::memset(data(), value ? 0xFF : 0, CalcReqMemSize(size()));
         }
 
-        struct BitPosition
+    private:
+        struct BitPos
         {
             size_t word_offset;
             size_t bit_offset;
         };
 
-        inline BitPosition get_bit_pos(size_t index) const
+        inline BitPos get_bit_pos(size_t index) const
         {
-            size_t physical_index = bit_offset + index;
+            size_t physical_index = bit_offset() + index;
             size_t word_offset = physical_index / BITS_PER_WORD;
             size_t bit_offset = physical_index % BITS_PER_WORD;
-            return BitPosition{word_offset, bit_offset};
+            return BitPos{word_offset, bit_offset};
         }
 
         reference ref_unchecked(size_t index)
         {
             auto pos = get_bit_pos(index);
-            return reference(words + pos.word_offset, word_t(1) << pos.bit_offset);
+            return reference(data() + pos.word_offset, word_t(1) << pos.bit_offset);
         }
 
         struct Properties
@@ -304,36 +296,135 @@ namespace HerosInsight
 
         inline Properties uncompress()
         {
-            size_t physical_end = bit_offset + n_bits;
-            bool head_is_tail = physical_end < BITS_PER_WORD; // Head and tail are the same word.
-            size_t end_word_offset = physical_end / BITS_PER_WORD;
-            size_t end_bit_offset = physical_end % BITS_PER_WORD;
-            word_t head_mask = std::numeric_limits<word_t>::max() << bit_offset;        // 1 = included in view.
-            word_t tail_mask = ~(std::numeric_limits<word_t>::max() << end_bit_offset); // 1 = included in view. Not valid if end_offset == 0.
+            const auto end = get_bit_pos(size());
+            const auto start_bit_offset = bit_offset();
+            word_t head_mask = std::numeric_limits<word_t>::max() << start_bit_offset;  // 1 = included in view.
+            word_t tail_mask = ~(std::numeric_limits<word_t>::max() << end.bit_offset); // 1 = included in view. Not valid if end_offset == 0.
 
-            bool has_head_bits = bit_offset > 0;
-            bool has_tail_bits = end_bit_offset > 0;
-            auto span_ptr = this->words + has_head_bits;
-            auto span_len = end_word_offset - has_head_bits;
+            bool has_partial_head = start_bit_offset > 0;
+            bool has_partial_tail = end.bit_offset > 0;
+            auto span_ptr = this->data() + has_partial_head;
+            auto span_len = end.word_offset - has_partial_head;
+
+            bool head_is_tail = end.word_offset == 0; // Head and tail are the same word.
             if (head_is_tail)
             {
                 head_mask &= tail_mask;
-                has_head_bits |= has_tail_bits;
-                has_tail_bits = false;
+                has_partial_head |= has_partial_tail;
+                has_partial_tail = false;
                 span_len = 0;
             }
             return Properties{
-                .has_partial_head = has_head_bits,
-                .has_partial_tail = has_tail_bits,
-                .head = reference(this->words, head_mask),
-                .tail = reference(this->words + end_word_offset, tail_mask),
+                .has_partial_head = has_partial_head,
+                .has_partial_tail = has_partial_tail,
+                .head = reference(this->data(), head_mask),
+                .tail = reference(this->data() + end.word_offset, tail_mask),
                 .whole_words = std::span<word_t>(span_ptr, span_len),
             };
         }
 
-        word_t *const words;
-        const size_t bit_offset : BIT_OFFSET_WIDTH; // The bit-offset into the first word where the view starts
-        const size_t n_bits : LENGTH_WIDTH;
+        size_t bit_offset() const { return as_derived().bit_offset(); }
     };
-    static_assert(sizeof(Bitview) == sizeof(size_t) * 2);
+
+    class BitView : public BitViewBase<BitView>
+    {
+    public:
+        // using base = typename BitViewBase<BitView>;
+        // using word_t = typename base::word_t;
+
+        BitView() : words(nullptr), _bit_offset(0), n_bits(0) {}
+
+        BitView(word_t *words, size_t n_bits, bool init_val)
+            : BitView(words, size_t(0), n_bits)
+        {
+            init_bits(init_val);
+#ifdef _DEBUG
+            assert(PopCount() == (init_val ? n_bits : 0));
+#endif
+        }
+
+        BitView(word_t *words, size_t bit_offset, size_t n_bits)
+            : words(words), _bit_offset(bit_offset), n_bits(n_bits)
+        {
+            assert(bit_offset <= MAX_BIT_OFFSET);
+            assert(n_bits <= MAX_LENGTH);
+        }
+
+        word_t *data() { return words; }
+        const word_t *data() const { return words; }
+        size_t size() const { return n_bits; }
+        size_t bit_offset() const { return _bit_offset; }
+
+    private:
+        word_t *words;
+        size_t _bit_offset : BIT_OFFSET_WIDTH; // The bit-offset into the first word where the view starts
+        size_t n_bits : LENGTH_WIDTH;
+    };
+    static_assert(sizeof(BitView) == sizeof(size_t) * 2);
+
+    template <size_t N>
+    class BitArray : public BitViewBase<BitArray<N>>
+    {
+        friend class BitViewBase<BitArray<N>>;
+
+    public:
+        using base = typename BitViewBase<BitArray<N>>;
+        using word_t = typename base::word_t;
+
+        operator BitView() { return BitView(words.data(), 0, N); }
+
+        word_t *data() { return words.data(); }
+        const word_t *data() const { return words.data(); }
+        size_t size() const { return N; }
+
+    private:
+        size_t bit_offset() const { return 0; }
+
+        std::array<word_t, CalcWordCount(N)> words;
+    };
+
+    class BitVector : public BitViewBase<BitVector>
+    {
+        friend class BitViewBase<BitVector>;
+
+    public:
+        // using base = typename BitViewBase<BitVector>;
+        // using word_t = typename base::word_t;
+
+        operator BitView() { return BitView(words.data(), 0, n_bits); }
+
+        void clear() { words.clear(); }
+        void resize(size_t n_bits, bool value = false)
+        {
+            this->words.resize(CalcWordCount(n_bits), value ? std::numeric_limits<word_t>::max() : word_t(0));
+            this->n_bits = n_bits;
+        }
+        word_t *data() { return words.data(); }
+        const word_t *data() const { return words.data(); }
+        size_t size() const { return n_bits; }
+
+    private:
+        size_t bit_offset() const { return 0; }
+
+        std::vector<word_t> words;
+        size_t n_bits;
+    };
+
+#define BitView_alloca(n_bits, init_val) HerosInsight::BitView((word_t *)alloca(HerosInsight::BitView::CalcReqMemSize(n_bits)), n_bits, init_val)
+
+    template <typename Derived>
+    BitView BitViewBase<Derived>::Subview(size_t offset, size_t count)
+    {
+        assert(offset + count <= size());
+        auto pos = get_bit_pos(this->bit_offset() + offset);
+        return BitView(data() + pos.word_offset, pos.bit_offset, count);
+    }
+
+    template <typename Derived>
+    const BitView BitViewBase<Derived>::Subview(size_t offset, size_t count) const
+    {
+        assert(offset + count <= size());
+        auto pos = get_bit_pos(this->bit_offset() + offset);
+        return BitView(data() + pos.word_offset, pos.bit_offset, count);
+    }
 }
