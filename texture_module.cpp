@@ -188,13 +188,11 @@ namespace TextureModule
         GW::AssetMgr::FileIdToFileHash(file_id, fileHash);
 
         { // Read scope
-            auto readable = GW::AssetMgr::TryReadFile(fileHash);
+            auto readable = GW::AssetMgr::ReadableFile(fileHash);
             if (readable)
             {
-                GWCA_ASSERT(readable->data != nullptr);
-
-                char *image_bytes = readable->data;
-                uint32_t image_size = readable->size;
+                char *image_bytes = readable.data;
+                uint32_t image_size = readable.size;
 
                 if (memcmp((char *)image_bytes, "ffna", 4) == 0)
                 {

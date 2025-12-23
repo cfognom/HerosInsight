@@ -172,11 +172,11 @@ namespace HerosInsight::EncstrDebugger
             if (file_index < files.size())
             {
                 auto &file = files[file_index];
-                auto readable = GW::AssetMgr::TryReadFile(file.path);
+                auto readable = GW::AssetMgr::ReadableFile(file.path);
                 if (readable)
                 {
                     size_t i = file_index * cache->m_stringsPerFile;
-                    for (auto &header : readable->Strings())
+                    for (auto &header : readable.Strings())
                     {
                         assert(*(wchar_t *)&header != L'\0');
                         decoded_strings.Elements().append_range(header.GetStr());
