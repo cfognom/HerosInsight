@@ -129,7 +129,6 @@ namespace HerosInsight
 
         // We will impl this after the BitView class is defined
         BitView Subview(size_t offset, size_t count);
-        const BitView Subview(size_t offset, size_t count) const;
 
         size_t PopCount()
         {
@@ -377,10 +376,13 @@ namespace HerosInsight
         const word_t *data() const { return words.data(); }
         size_t size() const { return N; }
 
+        constexpr BitArray() : BitArray(false) {}
+        constexpr BitArray(bool inital_value) : words{inital_value ? std::numeric_limits<word_t>::max() : 0} {}
+
     private:
         size_t bit_offset() const { return 0; }
 
-        std::array<word_t, CalcWordCount(N)> words;
+        std::array<word_t, base::CalcWordCount(N)> words;
     };
 
     class BitVector : public BitViewBase<BitVector>
@@ -407,21 +409,13 @@ namespace HerosInsight
         size_t bit_offset() const { return 0; }
 
         std::vector<word_t> words;
-        size_t n_bits;
+        size_t n_bits = 0;
     };
 
 #define BitView_alloca(n_bits, init_val) HerosInsight::BitView((word_t *)alloca(HerosInsight::BitView::CalcReqMemSize(n_bits)), n_bits, init_val)
 
     template <typename Derived>
     BitView BitViewBase<Derived>::Subview(size_t offset, size_t count)
-    {
-        assert(offset + count <= size());
-        auto pos = get_bit_pos(this->bit_offset() + offset);
-        return BitView(data() + pos.word_offset, pos.bit_offset, count);
-    }
-
-    template <typename Derived>
-    const BitView BitViewBase<Derived>::Subview(size_t offset, size_t count) const
     {
         assert(offset + count <= size());
         auto pos = get_bit_pos(this->bit_offset() + offset);
