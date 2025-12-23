@@ -144,7 +144,6 @@ namespace HerosInsight::EncstrDebugger
             std::string GetStr() const
             {
                 std::wstring_view wstr(decoded_strings[vec_index]);
-                // ImTextStrToUtf8()
                 return Utils::WStrToStr(wstr.data(), wstr.data() + wstr.size());
             }
         };
