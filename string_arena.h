@@ -23,7 +23,9 @@ namespace HerosInsight
         static_assert(std::has_unique_object_representations_v<T>, "T must have unique object representations");
 
     protected:
-        constexpr static bool is_char = std::is_same_v<T, char> || std::is_same_v<T, wchar_t>;
+        constexpr static bool is_char = std::is_same_v<T, char>;
+        constexpr static bool is_wchar = std::is_same_v<T, wchar_t>;
+        using T_const_view = std::conditional_t<is_char, std::string_view, std::conditional_t<is_wchar, std::wstring_view, std::span<const T>>>;
 
     public:
         using T_ends = uint32_t;
@@ -62,7 +64,7 @@ namespace HerosInsight
             if (index == 0)
                 return 0;
             auto start = ends[index - 1];
-            if constexpr (is_char)
+            if constexpr (is_char || is_wchar)
             {
                 start += 1;
             }
@@ -75,6 +77,7 @@ namespace HerosInsight
         // The count of strings in the arena
         size_t SpanCount() const { return ends.size(); }
         std::vector<T> &Elements() { return elements; }
+        T_const_view Elements() const { return elements; }
 
         void Reserve(size_t n_spans, size_t n_elements)
         {
@@ -167,7 +170,7 @@ namespace HerosInsight
                 }
             }
 
-            if constexpr (is_char)
+            if constexpr (is_char || is_wchar)
             {
                 elements.push_back('\0');
             }
@@ -187,8 +190,21 @@ namespace HerosInsight
             auto span = std::span<T>(elements.data() + start, len);
             return span;
         }
+        // Gets a reference to a string in the arena
+        std::span<const T> Get(size_t span_id) const
+        {
+            // if (span_id >= ends.size())
+            //     return std::span<const T>();
+
+            auto end = ends[span_id];
+            auto start = GetSpanStart(span_id);
+            auto len = end - start;
+            auto span = std::span<const T>(elements.data() + start, len);
+            return span;
+        }
 
         std::span<T> operator[](size_t span_id) { return Get(span_id); }
+        T_const_view operator[](size_t span_id) const { return T_const_view(Get(span_id)); }
 
         std::span<T> back()
         {
@@ -428,7 +444,7 @@ namespace HerosInsight
             info += "Avg Span Size: " + std::to_string(this->CalcAvgSpanSize()) + "\n";
             info += "Spans Per Index: " + std::to_string(this->CalcSpansPerIndex()) + "\n";
 
-            if constexpr (this->is_char)
+            if constexpr (this->is_char || this->is_wchar)
             {
                 struct SortData
                 {
