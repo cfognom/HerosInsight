@@ -2386,8 +2386,8 @@ namespace HerosInsight
     {
         void Initialize()
         {
-            auto skills = Utils::GetSkillSpan();
-            assert(!skills.empty());
+            auto skills = GW::SkillbarMgr::GetSkills();
+            assert(skills.data());
 
             for (auto &skill : skills)
             {
