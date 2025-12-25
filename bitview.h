@@ -418,7 +418,7 @@ namespace HerosInsight
     BitView BitViewBase<Derived>::Subview(size_t offset, size_t count)
     {
         assert(offset + count <= size());
-        auto pos = get_bit_pos(this->bit_offset() + offset);
-        return BitView(data() + pos.word_offset, pos.bit_offset, count);
+        auto pos = this->get_bit_pos(offset);
+        return BitView(this->data() + pos.word_offset, pos.bit_offset, count);
     }
 }
