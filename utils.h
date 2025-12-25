@@ -623,7 +623,7 @@ namespace HerosInsight::Utils
 
     GetSkillFrameResult GetSkillFrame(GW::Constants::SkillID skill_id);
 
-    const std::wstring UIMessageToWString(GW::UI::UIMessage msg);
+    const std::string UIMessageToString(GW::UI::UIMessage msg);
 
     uint32_t GetProfessionMask(uint32_t agent_id);
     bool IsSkillEquipable(GW::Skill &skill, uint32_t agent_id);

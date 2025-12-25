@@ -52,6 +52,7 @@
 #include <imgui_impl_dx9.h>
 
 #include "debug_ui.h"
+#include <string_arena.h>
 #include <update_manager.h>
 
 namespace HerosInsight::DebugUI
@@ -59,9 +60,39 @@ namespace HerosInsight::DebugUI
     GW::HookEntry entry;
     GW::HookEntry creation_entry;
 
+    static StringArena<char> msgs;
     void DebugFrameCallback(GW::HookStatus *status, const GW::UI::Frame *frame, GW::UI::UIMessage msg, void *p1, void *p2)
     {
-        Utils::FormatToChat(L"Frame: {}, UIMessage: {}", frame->frame_id, static_cast<uint32_t>(msg));
+        if (!Utils::IsHoveringFrame(*frame))
+            return;
+
+        switch (msg)
+        {
+            case (GW::UI::UIMessage)(53):
+            case (GW::UI::UIMessage)(44):
+            case (GW::UI::UIMessage)(22):
+            case (GW::UI::UIMessage)(23):
+                return; // Prevent spam
+        }
+
+        msgs.AppendWriteBuffer(
+            1024,
+            [&](std::span<char> &buffer)
+            {
+                // std::string wparam;
+                // if (p1 != nullptr)
+                // {
+                //     for (size_t i = 0; i < 4; ++i)
+                //     {
+                //         std::format_to(std::back_inserter(wparam), "[{}] = {}, ", i, ((uint32_t *)p1)[i]);
+                //     }
+                // }
+                auto result = std::format_to_n(buffer.data(), buffer.size(), "Frame: {}, UIMessage: {}, p1: {}, p2: {}", frame->frame_id, Utils::UIMessageToString(msg), p1, p2);
+                buffer = buffer.subspan(0, result.out - buffer.data());
+            }
+        );
+        msgs.CommitWritten();
+        // Utils::FormatToChat(L"Frame: {}, UIMessage: {}", frame->frame_id, static_cast<uint32_t>(msg));
     }
 
     void DebugCallback(GW::HookStatus *status, GW::UI::UIMessage msg, void *wparam, void *lparam)
@@ -76,7 +107,7 @@ namespace HerosInsight::DebugUI
             case (GW::UI::UIMessage)(0x30000000 | 31):
                 return; // Prevent recursive stack overflow
         }
-        Utils::FormatToChat(L"UIMessage: {}, wparam: {}, lparam: {}", Utils::UIMessageToWString(msg), wparam, lparam);
+        Utils::FormatToChat(L"UIMessage: {}, wparam: {}, lparam: {}", Utils::StrToWStr(Utils::UIMessageToString(msg)), wparam, lparam);
     }
 
     void DebugCreationCallback(GW::UI::CreateUIComponentPacket *packet)
@@ -110,9 +141,11 @@ namespace HerosInsight::DebugUI
     {
         Utils::FormatToChat(L"Enabling UI message logging");
         // GW::UI::RegisterFrameUIMessageCallback(&entry, GW::UI::UIMessage::kMouseClick, DebugFrameCallback, 0x8000);
+        // GW::UI::RegisterFrameUIMessageCallback(&entry, GW::UI::UIMessage::kMouseClick2, DebugFrameCallback, 0x8000);
         ForAllUIMessages(
             [](GW::UI::UIMessage msg)
             {
+                GW::UI::RegisterFrameUIMessageCallback(&entry, msg, DebugFrameCallback, 0x8000);
                 GW::UI::RegisterUIMessageCallback(&entry, msg, DebugCallback);
             }
         );
@@ -122,7 +155,7 @@ namespace HerosInsight::DebugUI
     void DisableUIMessageLogging()
     {
         Utils::FormatToChat(L"Disabling UI message logging");
-        // GW::UI::RemoveFrameUIMessageCallback(&entry);
+        GW::UI::RemoveFrameUIMessageCallback(&entry);
         ForAllUIMessages(
             [](GW::UI::UIMessage msg)
             {
@@ -130,6 +163,28 @@ namespace HerosInsight::DebugUI
             }
         );
         GW::UI::RemoveCreateUIComponentCallback(&creation_entry);
+    }
+
+    void DrawLogWindow()
+    {
+        ImGui::SetNextWindowSize(ImVec2(600, 400), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("FrameCallbacks"))
+        {
+            ImGui::Text("Frame callbacks:");
+            for (auto msg : msgs)
+            {
+                ImGui::TextUnformatted(msg.data(), msg.data() + msg.size());
+            }
+
+            auto cur_scroll = ImGui::GetScrollY();
+            auto max_scroll = ImGui::GetScrollMaxY();
+            bool scroll_to_bottom =
+                cur_scroll >= max_scroll - 1.0f;
+
+            if (scroll_to_bottom)
+                ImGui::SetScrollHereY(1.0f);
+        }
+        ImGui::End();
     }
 
     void Draw(IDirect3DDevice9 *device)
@@ -212,6 +267,8 @@ namespace HerosInsight::DebugUI
                 Utils::DrawOutlineOnFrame(*child, ImColor(255, 0, 0), label);
             }
         }
+
+        DrawLogWindow();
     }
 }
 

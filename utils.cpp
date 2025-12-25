@@ -3334,13 +3334,13 @@ namespace HerosInsight::Utils
         return {GetSkillFrameResult::Error::None, found_frame};
     }
 
-    const std::wstring UIMessageToWString(GW::UI::UIMessage msg)
+    const std::string UIMessageToString(GW::UI::UIMessage msg)
     {
         switch (msg)
         {
 #define X(a)                   \
     case GW::UI::UIMessage::a: \
-        return L#a;
+        return #a;
             X(kNone)
             X(kInitFrame)
             X(kDestroyFrame)
@@ -3447,13 +3447,13 @@ namespace HerosInsight::Utils
         const auto raw = static_cast<uint32_t>(msg);
         if ((raw & 0x30000000) == 0x30000000)
         {
-            return std::format(L"Client to Server (0x30000000 | {})", (raw & ~0x30000000));
+            return std::format("Client to Server (0x30000000 | 0x{:0x})", (raw & ~0x30000000));
         }
         else if ((raw & 0x10000000) == 0x10000000)
         {
-            return std::format(L"Unknown (0x10000000 | {})", (raw & ~0x10000000));
+            return std::format("Unk (0x10000000 | 0x{:0x})", (raw & ~0x10000000));
         }
-        return std::format(L"Unknown ({})", raw);
+        return std::format("Unk (0x{:0x})", raw);
     }
 
     void DebugFrame(GW::UI::Frame &frame, size_t depth)
