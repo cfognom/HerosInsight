@@ -1057,8 +1057,6 @@ namespace HerosInsight::Debug
     {
         // GW::UI::RegisterCreateUIComponentCallback(&debug_hook_entry, OnCreateUIComponent);
         // GW::UI::RegisterFrameUIMessageCallback(&debug_hook_entry, GW::UI::UIMessage::kMouseClick, OnFrameClick);
-
-        // SearchForEncodedString();
     }
 
     void Terminate()
