@@ -292,15 +292,6 @@ namespace HerosInsight
         ImGui::End();
     }
 
-    struct ClickPacket
-    {
-        uint32_t mouse_button; // 0x0 = left, 0x1 = middle, 0x2 = right
-        uint32_t is_doubleclick;
-        uint32_t x_screen_pos;
-        uint32_t y_screen_pos;
-        // uint32_t unk1[20];
-    };
-
     bool UpdateManager::is_dragging_skill = false;
     GW::Constants::SkillID drag_skill_id_request = GW::Constants::SkillID::No_Skill;
 
@@ -375,13 +366,9 @@ namespace HerosInsight
             // SUCCESS
             assert(result.error == Utils::GetSkillFrameResult::Error::None);
 
-            tagPOINT pt;
-            GetCursorPos(&pt);
-            SetCursorPos(pt.x, pt.y); // This is a hack to make GW aware of the mouse position
-
             // clang-format off
             GW::GameThread::Enqueue([frame = result.frame]() {
-                auto packet = ClickPacket{0};
+                auto packet = GW::UI::UIPacket::kMouseClick{0};
                 GW::UI::SendFrameUIMessage(frame, GW::UI::UIMessage::kMouseClick, &packet);
             });
             // clang-format on
