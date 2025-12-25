@@ -144,25 +144,16 @@ namespace HerosInsight::RichText
 
     void ExtractTags(std::string_view text_with_tags, std::span<char> &only_text, std::span<TextTag> &only_tags);
 
-    struct RichTextArena : public IndexedStringArena<char>
+    namespace Helpers
     {
-        using base = IndexedStringArena<char>;
-
-        // assign Base → RichTextArena
-        RichTextArena &operator=(const base &b)
+        inline void PushText(StringArena<char> &dst, std::string_view text)
         {
-            base::operator=(b);
-            return *this;
+            dst.Elements().append_range(text);
         }
 
-        void PushText(std::string_view text)
+        inline void PushTag(StringArena<char> &dst, TextTag tag)
         {
-            this->elements.append_range(text);
-        }
-
-        void PushTag(TextTag tag)
-        {
-            this->AppendWriteBuffer(
+            dst.AppendWriteBuffer(
                 64,
                 [&](std::span<char> &out)
                 {
@@ -171,21 +162,21 @@ namespace HerosInsight::RichText
             );
         }
 
-        void PushColorTag(ImU32 color)
+        inline void PushColorTag(StringArena<char> &dst, ImU32 color)
         {
-            this->PushTag(TextTag(ColorTag{color}));
+            PushTag(dst, TextTag(ColorTag{color}));
         }
 
-        void PushImageTag(uint32_t image_id)
+        inline void PushImageTag(StringArena<char> &dst, uint32_t image_id)
         {
-            PushTag(TextTag(ImageTag{image_id}));
+            PushTag(dst, TextTag(ImageTag{image_id}));
         }
 
-        void PushColoredText(ImU32 color, std::string_view text)
+        inline void PushColoredText(StringArena<char> &dst, ImU32 color, std::string_view text)
         {
-            this->PushTag(TextTag(ColorTag{color}));
-            this->PushText(text);
-            this->PushTag(TextTag(ColorTag{NULL}));
+            PushTag(dst, TextTag(ColorTag{color}));
+            PushText(dst, text);
+            PushTag(dst, TextTag(ColorTag{NULL}));
         }
     };
 
