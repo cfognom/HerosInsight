@@ -209,10 +209,11 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM l
         // - ImGui first (above), if WantCaptureMouse that's it
         // - Toolbox module second (e.g.: minimap), if captured, that's it
         // - otherwise pass to gw
+        case WM_MOUSEMOVE:
+            break;
         case WM_LBUTTONDOWN:
         case WM_LBUTTONDBLCLK:
             is_dragging_passthough = false;
-        case WM_MOUSEMOVE:
         case WM_MOUSEWHEEL:
         {
             if (is_dragging_passthough)
@@ -295,7 +296,7 @@ IDirect3DStateBlock9 *TryPrepareStencil(IDirect3DDevice9 *device)
     }
 
     auto tt_frame = HerosInsight::Utils::GetTooltipFrame();
-    if (tt_frame)
+    if (tt_frame && !ImGui::GetIO().WantCaptureMouse)
     {
         auto rect = HerosInsight::Utils::GetFrameRect(*tt_frame);
         rect.Min.y -= 1.f;
