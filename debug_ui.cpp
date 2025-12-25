@@ -79,15 +79,19 @@ namespace HerosInsight::DebugUI
             1024,
             [&](std::span<char> &buffer)
             {
-                // std::string wparam;
-                // if (p1 != nullptr)
-                // {
-                //     for (size_t i = 0; i < 4; ++i)
-                //     {
-                //         std::format_to(std::back_inserter(wparam), "[{}] = {}, ", i, ((uint32_t *)p1)[i]);
-                //     }
-                // }
-                auto result = std::format_to_n(buffer.data(), buffer.size(), "Frame: {}, UIMessage: {}, p1: {}, p2: {}", frame->frame_id, Utils::UIMessageToString(msg), p1, p2);
+                std::string wparam;
+                if (p1 != nullptr)
+                {
+                    for (size_t i = 0; i < 8; ++i)
+                    {
+                        std::format_to(std::back_inserter(wparam), "[{}] = {}, ", i, ((float *)p1)[i]);
+                    }
+                }
+                auto result = std::format_to_n(
+                    buffer.data(), buffer.size(),
+                    "Frame: {}, UIMessage: {}, p1: {}, p2: {}, wparam: {}",
+                    frame->frame_id, Utils::UIMessageToString(msg), p1, p2, wparam
+                );
                 buffer = buffer.subspan(0, result.out - buffer.data());
             }
         );
@@ -142,10 +146,12 @@ namespace HerosInsight::DebugUI
         Utils::FormatToChat(L"Enabling UI message logging");
         // GW::UI::RegisterFrameUIMessageCallback(&entry, GW::UI::UIMessage::kMouseClick, DebugFrameCallback, 0x8000);
         // GW::UI::RegisterFrameUIMessageCallback(&entry, GW::UI::UIMessage::kMouseClick2, DebugFrameCallback, 0x8000);
+        GW::UI::RegisterFrameUIMessageCallback(&entry, (GW::UI::UIMessage)0x15, DebugFrameCallback, 0x8000);
+        GW::UI::RegisterFrameUIMessageCallback(&entry, (GW::UI::UIMessage)0x34, DebugFrameCallback, 0x8000);
         ForAllUIMessages(
             [](GW::UI::UIMessage msg)
             {
-                GW::UI::RegisterFrameUIMessageCallback(&entry, msg, DebugFrameCallback, 0x8000);
+                // GW::UI::RegisterFrameUIMessageCallback(&entry, msg, DebugFrameCallback, 0x8000);
                 GW::UI::RegisterUIMessageCallback(&entry, msg, DebugCallback);
             }
         );
