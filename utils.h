@@ -632,4 +632,20 @@ namespace HerosInsight::Utils
     GW::UI::Frame *GetDraggedSkillFrame();
 
     void ImGuiDebugLastItemRect();
+
+    template <typename FlagEnum>
+    constexpr bool HasFlag(FlagEnum value, FlagEnum flag)
+        requires std::is_enum_v<FlagEnum>
+    {
+        using U = std::underlying_type_t<FlagEnum>;
+        return (static_cast<U>(value) & static_cast<U>(flag)) != 0;
+    }
+
+    template <typename FlagEnum>
+    constexpr void RemoveFlag(FlagEnum &value, FlagEnum flag)
+        requires std::is_enum_v<FlagEnum>
+    {
+        using U = std::underlying_type_t<FlagEnum>;
+        value = static_cast<FlagEnum>(static_cast<U>(value) & ~static_cast<U>(flag));
+    }
 }
