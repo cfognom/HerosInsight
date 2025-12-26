@@ -143,6 +143,21 @@ namespace HerosInsight
             return count;
         }
 
+        bool Any()
+        {
+            auto data = uncompress();
+            if (data.has_partial_head)
+                if (data.head.GetMaskedWord() != 0)
+                    return true;
+            for (auto word : data.whole_words)
+                if (word != 0)
+                    return true;
+            if (data.has_partial_tail)
+                if (data.tail.GetMaskedWord() != 0)
+                    return true;
+            return false;
+        }
+
         // Finds the index of the next set bit from the specificed index.
         // Returns n_bits if there are no more set bits.
         size_t FindNextSetBit(size_t index) const
