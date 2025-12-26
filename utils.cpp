@@ -282,32 +282,40 @@ namespace HerosInsight::Utils
     }
     bool TryReadInt(std::string_view &remaining, int32_t &out)
     {
-        auto rem = remaining;
-        Utils::TryRead('+', rem);
-        auto result = std::from_chars(rem.data(), rem.data() + rem.size(), out, 10);
+        if (remaining.empty())
+            return false;
+        const char *p = remaining.data();
+        if (*p == '+')
+            ++p;
+        const char *end = remaining.data() + remaining.size();
+        auto result = std::from_chars(p, end, out, 10);
         if (result.ec == std::errc()) // No error
         {
-            size_t len = result.ptr - rem.data();
-            remaining = rem.substr(len);
+            size_t len = result.ptr - remaining.data();
+            remaining = remaining.substr(len);
             return true;
         }
         return false;
     }
     bool TryReadNumber(std::string_view &remaining, double &out)
     {
-        auto rem = remaining;
-        Utils::TryRead('+', rem);
-        auto result = std::from_chars(rem.data(), rem.data() + rem.size(), out);
+        if (remaining.empty())
+            return false;
+        const char *p = remaining.data();
+        if (*p == '+')
+            ++p;
+        const char *end = remaining.data() + remaining.size();
+        auto result = std::from_chars(p, end, out);
         switch (result.ec)
         {
             case std::errc::result_out_of_range:
-                out = rem[0] == '-' ? std::numeric_limits<double>::lowest() : std::numeric_limits<double>::max();
+                out = remaining[0] == '-' ? std::numeric_limits<double>::lowest() : std::numeric_limits<double>::max();
             case std::errc(): // success
             {
-                size_t len = result.ptr - rem.data();
-                if (rem[len - 1] == '.') // We dont count a trailing dot as part of the number
+                size_t len = result.ptr - remaining.data();
+                if (result.ptr[-1] == '.') // We dont count a trailing dot as part of the number
                     --len;
-                remaining = rem.substr(len);
+                remaining = remaining.substr(len);
                 return true;
             }
         }

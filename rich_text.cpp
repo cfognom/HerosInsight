@@ -88,22 +88,60 @@ namespace HerosInsight::RichText
 
     bool FracTag::TryRead(std::string_view &remaining, FracTag &out)
     {
-        auto rem = remaining;
-        if (Utils::TryRead("<frac=", rem))
+        constexpr std::string_view prefix = "<frac=";
+        constexpr std::string_view mid = "/";
+        constexpr std::string_view postfix = ">";
+        constexpr size_t req_size3 = postfix.size();
+        constexpr size_t req_size2 = req_size3 + mid.size() + 1;
+        constexpr size_t req_size1 = req_size2 + prefix.size() + 1;
+
+        size_t rem_size = remaining.size();
+        const char *p = remaining.data();
+        const char *end = remaining.data() + rem_size;
+        if (rem_size < req_size1)
+            return false;
+
+        if (std::memcmp(p, prefix.data(), prefix.size()))
+            return false;
+        p += prefix.size();
+
+        int32_t num;
         {
-            int32_t num, denom;
-            if (Utils::TryReadInt(rem, num) &&
-                Utils::TryRead('/', rem) &&
-                Utils::TryReadInt(rem, denom) &&
-                Utils::TryRead('>', rem))
-            {
-                out.num = num;
-                out.den = denom;
-                remaining = rem;
-                return true;
-            }
+            auto [ptr, ec] = std::from_chars(p, end, num, 10);
+            if (ec != std::errc())
+                return false;
+            rem_size = end - ptr;
+            if (rem_size < req_size2)
+                return false;
+            p = ptr;
         }
-        return false;
+
+        if (*p != mid[0])
+            return false;
+        p += 1;
+
+        int32_t den;
+        {
+            auto [ptr, ec] = std::from_chars(p, end, den, 10);
+            if (ec != std::errc())
+                return false;
+            rem_size = end - ptr;
+            if (rem_size < req_size3)
+                return false;
+            p = ptr;
+        }
+
+        if (*p != postfix[0])
+            return false;
+        p += 1;
+
+        if (num < 0 || den <= 0)
+            return false;
+
+        out.num = num;
+        out.den = den;
+        remaining = std::string_view(p, end - p);
+        return true;
     }
 
     void ExtractTags(std::string_view text_with_tags, std::span<char> &only_text, std::span<TextTag> &only_tags)
