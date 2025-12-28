@@ -897,7 +897,9 @@ namespace HerosInsight::Utils
 
     GW::Item *GetAgentItem(GW::AgentLiving &agent, uint32_t item_index)
     {
-        const auto weapon_id = (*(agent.equip))->item_ids[item_index];
+        auto &item_array = (*(agent.equip))->item_ids;
+        assert(item_index < std::size(item_array));
+        const auto weapon_id = item_array[item_index];
         if (weapon_id == 0)
             return nullptr;
 
