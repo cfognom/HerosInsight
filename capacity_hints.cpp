@@ -53,6 +53,6 @@ size_t HerosInsight::CapacityHints::GetHint(const std::string &id)
 void HerosInsight::CapacityHints::UpdateHint(const std::string &id, size_t capacity)
 {
     auto &stored = hints_map[id];
-    if (stored < capacity)
+    if (capacity > stored)
         stored = capacity;
 }
