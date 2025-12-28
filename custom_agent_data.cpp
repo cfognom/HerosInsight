@@ -133,12 +133,13 @@ namespace HerosInsight
 
     std::optional<uint8_t> CustomAgentData::GetAttribute(AttributeOrTitle id) const
     {
+        assert(!id.IsNone());
         if (id.IsAttribute())
         {
             auto attribute_span = Utils::GetAgentAttributeSpan(agent_id);
             if (!attribute_span.empty())
             {
-                return {attribute_span[(size_t)id.GetAttribute()].level};
+                return attribute_span[(size_t)id.GetAttribute()].level;
             }
         }
         else if (id.IsTitle())
@@ -154,14 +155,10 @@ namespace HerosInsight
                     {
                         auto title_id = id.GetTitle();
                         auto &title_tier = title_tiers.at(titles.at(static_cast<size_t>(title_id)).current_title_tier_index);
-                        return {(uint8_t)(std::min(title_tier.tier_number, 5u) * 3u)};
+                        return (uint8_t)(std::min(title_tier.tier_number, 5u) * 3u);
                     }
                 }
             }
-        }
-        else if (id.IsNone())
-        {
-            return 0;
         }
 
         return attribute_cache.GetAttribute(id);

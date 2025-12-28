@@ -8,7 +8,7 @@ namespace HerosInsight
     {
         uint16_t data[32]; // Each uint16_t has 3 attribute values (We only need 62 bytes, so the last 2 bytes are unused)
 
-        AttributeStore() : data(0) {}
+        AttributeStore() : data(-1) {}
         AttributeStore(uint8_t init_level)
         {
 #ifdef _DEBUG
@@ -39,11 +39,14 @@ namespace HerosInsight
             auto value = level << (inner_index * 5);
             data[word_index] = (data[word_index] & ~mask) | value;
         }
-        uint8_t GetAttribute(AttributeOrTitle id) const
+        std::optional<uint8_t> GetAttribute(AttributeOrTitle id) const
         {
             auto word_index = id.value / 3;
             auto inner_index = id.value % 3;
-            return (data[word_index] >> (inner_index * 5)) & 0x1F;
+            auto value = (data[word_index] >> (inner_index * 5)) & 0x1F;
+            if (value == 0x1F)
+                return std::nullopt;
+            return value;
         }
     };
 }
