@@ -931,7 +931,8 @@ namespace HerosInsight::Utils
 
         for (const auto item_id : Utils::GetAgentWeaponAndOffhandItemIds(agent))
         {
-            const auto item_ptr = GetAgentItem(agent, item_id);
+            // const auto item_ptr = GetAgentItem(agent, item_id);
+            const auto item_ptr = GW::Items::GetItemById(item_id);
             if (item_ptr)
             {
                 const auto &item = *item_ptr;
@@ -988,7 +989,8 @@ namespace HerosInsight::Utils
 
         for (const auto item_id : Utils::GetAgentWeaponAndOffhandItemIds(agent))
         {
-            const auto item_ptr = GetAgentItem(agent, item_id);
+            // const auto item_ptr = GetAgentItem(agent, item_id);
+            const auto item_ptr = GW::Items::GetItemById(item_id);
             if (item_ptr)
             {
                 const auto &item = *item_ptr;
