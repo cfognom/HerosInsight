@@ -8,7 +8,15 @@ namespace HerosInsight
     {
         uint16_t data[32]; // Each uint16_t has 3 attribute values (We only need 62 bytes, so the last 2 bytes are unused)
 
-        AttributeStore() : data{0} {}
+        AttributeStore() : data(0) {}
+        AttributeStore(uint8_t init_level)
+        {
+#ifdef _DEBUG
+            assert(init_level < 64);
+#endif
+            uint16_t filler = init_level | (init_level << 5) | (init_level << 10);
+            std::fill(data, data + std::size(data), filler);
+        }
         AttributeStore(std::span<GW::Attribute> attrs)
         {
             for (const auto &attr : attrs)
