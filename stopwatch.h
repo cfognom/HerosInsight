@@ -24,7 +24,7 @@ namespace HerosInsight
             FixedVector<char, 1024> buffer;
             Measurement main_report(checkpoints.front(), checkpoints.back());
             buffer.AppendFormat(
-                "{} took {}s, {}cyc, thrd_util: {:.2g}",
+                "{} took {}s, {}cyc, thrd_util: {:.0f}",
                 name,
                 Utils::ToHumanReadable(main_report.seconds),
                 Utils::ToHumanReadable(main_report.cycles),
@@ -39,7 +39,7 @@ namespace HerosInsight
                     continue;
 
                 buffer.AppendFormat(
-                    "\n{} - {}: {:.2g}% of cycles, thrd_util: {:.2g}",
+                    "\n{} - {}: {:.0f}% of cycles, thrd_util: {:.0f}",
                     report.name_from,
                     report.name_to,
                     usage * 100.f,
