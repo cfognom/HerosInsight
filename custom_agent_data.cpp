@@ -133,7 +133,6 @@ namespace HerosInsight
 
     std::optional<uint8_t> CustomAgentData::GetAttribute(AttributeOrTitle id) const
     {
-        assert(!id.IsNone());
         if (id.IsAttribute())
         {
             auto attribute_span = Utils::GetAgentAttributeSpan(agent_id);
@@ -159,6 +158,10 @@ namespace HerosInsight
                     }
                 }
             }
+        }
+        else
+        {
+            return std::nullopt;
         }
 
         return attribute_cache.GetAttribute(id);
