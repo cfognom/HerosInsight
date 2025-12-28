@@ -107,6 +107,7 @@ namespace HerosInsight
 
             friend struct iterator;
             friend struct BitViewBase;
+            friend struct BitVector;
         };
 
         reference operator[](size_t index)
@@ -278,7 +279,6 @@ namespace HerosInsight
             std::memset(data(), value ? 0xFF : 0, CalcReqMemSize(size()));
         }
 
-    private:
         struct BitPos
         {
             size_t word_offset;
@@ -413,12 +413,26 @@ namespace HerosInsight
         void clear() { words.clear(); }
         void resize(size_t n_bits, bool value = false)
         {
+            if (n_bits > this->n_bits) // Grow
+            {
+                // When growing, we may need to grow the tail
+                auto data = this->uncompress();
+                if (data.has_partial_tail)
+                {
+                    // All bits that are beyond the new size are set in this mask
+                    auto off_limits_mask = ~data.tail.mask << std::min(n_bits - this->n_bits, BitView::MAX_BIT_OFFSET);
+                    auto mask = ~(data.tail.mask | off_limits_mask); // The newly added bits that we need to set
+                    auto ref = reference(data.tail.word, mask);
+                    ref.Set(value);
+                }
+            }
             this->words.resize(CalcWordCount(n_bits), value ? std::numeric_limits<word_t>::max() : word_t(0));
             this->n_bits = n_bits;
         }
         word_t *data() { return words.data(); }
         const word_t *data() const { return words.data(); }
         size_t size() const { return n_bits; }
+        bool is_empty() const { return n_bits == 0; }
 
     private:
         size_t bit_offset() const { return 0; }
