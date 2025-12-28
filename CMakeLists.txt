@@ -38,7 +38,6 @@ add_library(HerosInsight SHARED
     custom_agent_data.cpp
     scanner_tool.cpp
     attribute_or_title.cpp
-    attribute_store.cpp
     effect_initiator.cpp
     StoC_packets.h
     autovec.h
