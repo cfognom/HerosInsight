@@ -54,9 +54,11 @@ target_precompile_headers(HerosInsight PRIVATE pch.h)
 
 include(gwca)
 include(imgui)
+# include(simdutf)
 target_link_libraries(HerosInsight PRIVATE
     gwca
     imgui
+    # simdutf
 )
 
 add_subdirectory(Injector)
