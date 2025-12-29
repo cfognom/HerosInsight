@@ -185,9 +185,8 @@ namespace HerosInsight::Filtering
         }
         void RunFilters(std::span<Filter> filters, std::vector<typename I::index_type> &items)
         {
-#ifdef _TIMING
             Stopwatch stopwatch("RunFilters");
-#endif
+
             size_t n_filters = filters.size();
             size_t n_items = items.size();
             size_t n_spans = impl.MaxSpanCount();

@@ -6,6 +6,7 @@
 
 namespace HerosInsight
 {
+#ifdef _STOPWATCH
     // TODO: Use barriers to prevent instruction reordering?
     struct Stopwatch
     {
@@ -97,4 +98,12 @@ namespace HerosInsight
         float report_threshold;
         std::vector<CheckpointData> checkpoints;
     };
+
+#else
+    struct Stopwatch
+    {
+        FORCE_INLINE Stopwatch(std::string_view, float _ = 0f) noexcept {}
+        FORCE_INLINE void Checkpoint(std::string &&) noexcept {}
+    }
+#endif
 }

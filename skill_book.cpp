@@ -913,9 +913,8 @@ namespace HerosInsight::SkillBook
 
         void InitDynamicProps(AttributeSource attr_src)
         {
-#ifdef _TIMING
             Stopwatch stopwatch("InitDynamicProps");
-#endif
+
             InitDescriptions(false, attr_src, dynamic_props[SkillProp::Description]);
             InitDescriptions(true, attr_src, dynamic_props[SkillProp::Concise]);
             InitTags(dynamic_props[SkillProp::Tag]);

@@ -5,7 +5,7 @@
 #include <iostream>
 
 // #ifdef _DEBUG
-#define _TIMING 1
+#define _STOPWATCH 1
 // #endif
 
 namespace Constants
