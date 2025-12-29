@@ -600,7 +600,7 @@ namespace HerosInsight::SkillBook
                 };
 
                 // clang-format off
-                if (is_learned)          PushTag("Learned"  , IM_COL32(100, 255, 255, 255));
+                if (is_learned)            PushTag("Learned"  , IM_COL32(100, 255, 255, 255));
                 if (is_unlocked)           PushTag("Unlocked" , IM_COL32(143, 255, 143, 255));
                 if (tags.Temporary)        PushTag("Temporary"                              );
                 if (is_locked)             PushTag("Locked"   , IM_COL32(255, 100, 100, 255));
@@ -1351,12 +1351,14 @@ namespace HerosInsight::SkillBook
                 const auto skill_icon_size = 56;
                 auto icon_cursor_ss = ImGui::GetCursorScreenPos();
                 bool is_learned = Utils::IsSkillLearned(*custom_sd.skill, focused_agent_id);
+                auto instance_type = GW::Map::GetInstanceType();
+                bool is_equipable = is_learned && instance_type == GW::Constants::InstanceType::Outpost;
                 bool is_hovered = ImGui::IsMouseHoveringRect(icon_cursor_ss, icon_cursor_ss + ImVec2(skill_icon_size, skill_icon_size));
                 bool is_effect = custom_sd.tags.EffectOnly;
                 if (TextureModule::DrawSkill(*custom_sd.skill, icon_cursor_ss, skill_icon_size, is_effect, is_hovered) ||
                     TextureModule::DrawSkill(*GW::SkillbarMgr::GetSkillConstantData(GW::Constants::SkillID::No_Skill), icon_cursor_ss, skill_icon_size, is_effect, is_hovered))
                 {
-                    if (is_hovered && is_learned)
+                    if (is_hovered && is_equipable)
                     {
                         ImGui::BeginTooltip();
                         ImGui::TextUnformatted("Click + Drag to equip");
