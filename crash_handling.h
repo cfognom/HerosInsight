@@ -70,7 +70,7 @@ namespace HerosInsight::CrashHandling
         else
         {
             writer.AppendString("\nError code: \"");
-            writer.AppendIntToChars(info->ExceptionRecord->ExceptionCode);
+            writer.AppendIntToChars(info->ExceptionRecord->ExceptionCode, 16);
         }
         writer.push_back('\"');
 
