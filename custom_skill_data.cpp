@@ -92,7 +92,7 @@
 #include <debug_display.h>
 #include <effect_tracking.h>
 #include <skill_book.h>
-#include <skill_text_provider.h>
+#include <text_provider.h>
 #include <utils.h>
 
 #include "custom_skill_data.h"
@@ -359,10 +359,10 @@ namespace HerosInsight
             }
         }
 
-        auto &text_provider = SkillTextProvider::GetInstance(GW::Constants::Language::English);
+        auto &text_provider = Text::GetTextProvider(GW::Constants::Language::English);
         auto name = text_provider.GetName(custom_sd.skill_id);
-        auto full = text_provider.GetGenericDescription(custom_sd.skill_id, false);
-        auto concise = text_provider.GetGenericDescription(custom_sd.skill_id, true);
+        auto full = text_provider.GetRawDescription(custom_sd.skill_id, false);
+        auto concise = text_provider.GetRawDescription(custom_sd.skill_id, true);
 
         if (name == "..." &&
             full == "..." &&
@@ -2121,7 +2121,7 @@ namespace HerosInsight
             }
         }
 
-        auto desc = SkillTextProvider::GetInstance(GW::Constants::Language::English).GetGenericDescription(cskill.skill_id, false);
+        auto desc = Text::GetTextProvider(GW::Constants::Language::English).GetRawDescription(cskill.skill_id, false);
         auto tokenized_desc = TokenizedDesc(desc);
 
         auto tokens = tokenized_desc.tokens;
@@ -2399,6 +2399,11 @@ namespace HerosInsight
             }
         }
 
+        std::span<CustomSkillData> GetSkills()
+        {
+            return custom_skill_datas;
+        }
+
         CustomSkillData &GetCustomSkillData(GW::Constants::SkillID skill_id)
         {
             assert((uint32_t)skill_id < GW::Constants::SkillMax);
@@ -2429,7 +2434,7 @@ namespace HerosInsight
                 if (!base_duration.IsNull() &&
                     cskill.skill->type == GW::Constants::SkillType::Attack)
                 {
-                    auto desc = SkillTextProvider::GetInstance(GW::Constants::Language::English).GetGenericDescription(cskill.skill_id, true);
+                    auto desc = Text::GetTextProvider(GW::Constants::Language::English).GetRawDescription(cskill.skill_id, true);
                     if (desc.contains("nock"))
                     {
                         return {0, 0};
@@ -3091,7 +3096,7 @@ namespace HerosInsight
 
                         case GW::Constants::SkillType::Chant:
                         {
-                            auto desc = SkillTextProvider::GetInstance(GW::Constants::Language::English).GetGenericDescription(skill_id, true);
+                            auto desc = Text::GetTextProvider(GW::Constants::Language::English).GetRawDescription(skill_id, true);
 
                             effect.location = EffectLocation::Caster;
                             effect.radius = Utils::Range::Earshot;

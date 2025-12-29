@@ -3,7 +3,7 @@
 #include <variant>
 
 #include <attribute_or_title.h>
-#include <skill_text_provider.h>
+#include <text_provider.h>
 #include <update_manager.h>
 
 namespace HerosInsight
@@ -636,6 +636,7 @@ namespace HerosInsight
     {
         void Initialize();
 
+        std::span<CustomSkillData> GetSkills();
         CustomSkillData &GetCustomSkillData(GW::Constants::SkillID skill_id);
     }
 }
