@@ -43,8 +43,8 @@ add_library(HerosInsight SHARED
     autovec.h
     packet_stepper.cpp
     matcher.cpp
-    skill_text_provider.cpp
-    catalog.cpp
+    text_provider.cpp
+    filtering.cpp
     rich_text.cpp
     capacity_hints.cpp
 )

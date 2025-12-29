@@ -113,12 +113,6 @@ namespace HerosInsight
 
     bool UpdateManager::TryInitialize()
     {
-        auto &text_provider = HerosInsight::SkillTextProvider::GetInstance(GW::Constants::Language::English); // Init SkillTextProvider
-        if (!text_provider.IsReady())
-        {
-            return false;
-        }
-
 #ifdef _DEBUG
         HerosInsight::Debug::Initialize();
         scanner_tool.Initialize();
