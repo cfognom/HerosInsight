@@ -56,20 +56,34 @@ namespace HerosInsight::CrashHandling
         return dump_path;
     }
 
-    LONG WINAPI CrashHandler(EXCEPTION_POINTERS *info)
+    LONG ErrorPromt(EXCEPTION_POINTERS *info, const std::exception *e)
     {
+        char msg[1024];
+        SpanWriter<char> writer(msg);
+
+        writer.AppendString("HerosInsight encountered an error.");
+        if (e)
+        {
+            writer.AppendString("\nError message: \"");
+            writer.AppendString(e->what());
+        }
+        else
+        {
+            writer.AppendString("\nError code: \"");
+            writer.AppendIntToChars(info->ExceptionRecord->ExceptionCode);
+        }
+        writer.push_back('\"');
+
 #ifdef _DEBUG
+        writer.push_back('\n');
+        writer.AppendString("\nAbort: Attempt to unhook the mod"
+                            "\nRetry: Attempt to break the debugger"
+                            "\nIgnore: Pass to GW crash handler");
+        writer.push_back('\0');
+
         HWND hWnd = GW::MemoryMgr::GetGWWindowHandle();
     retry:
-        int result = MessageBoxA(
-            hWnd,
-            "HerosInsight has crashed.\n\n"
-            "Abort: Attempt to unhook the mod\n"
-            "Retry: Attempt to break the debugger\n"
-            "Ignore: Pass to GW crash handler",
-            "HerosInsight Crash",
-            MB_ABORTRETRYIGNORE | MB_ICONERROR
-        );
+        int result = MessageBoxA(hWnd, msg, "HerosInsight Error", MB_ABORTRETRYIGNORE | MB_ICONERROR);
 
         switch (result)
         {
@@ -88,39 +102,88 @@ namespace HerosInsight::CrashHandling
                 return EXCEPTION_CONTINUE_SEARCH;
         }
 #else
-
-        wchar_t msg[1024];
-        SpanWriter<wchar_t> writer(msg);
-        writer.AppendString(L"HerosInsight encountered an error. Game state might be unstable, please restart the game as soon as possible.");
-
         auto path = WriteCrashDump(info);
+
         if (path.has_value())
         {
-            writer.AppendString(L"\n\nA crash report has been saved to:\n");
-            writer.AppendString(path.value().c_str());
+            auto &path_value = path.value();
+            writer.AppendString("\n\nA crash report has been saved to:\n");
+            writer.AppendString(path_value.string());
         }
-        writer.push_back(L'\0');
+        else
+        {
+            writer.AppendString("\n\nAttempted to write a crash report but failed.");
+        }
+        writer.AppendString("\n\nGame state might be unstable, please restart the game as soon as possible.");
+        writer.push_back('\0');
 
-        MessageBoxW(nullptr, msg, L"HerosInsight Crash", MB_OK | MB_ICONERROR);
+        MessageBoxA(nullptr, msg, "HerosInsight Crash", MB_OK | MB_ICONERROR);
 
         return EXCEPTION_EXECUTE_HANDLER;
 #endif
     }
 
-    bool SafeCall(void (*fn)(void *data), void *data, void (*termination_fn)())
+    inline thread_local EXCEPTION_POINTERS *g_exceptionPointers = nullptr;
+    LONG WINAPI CrashHandler(EXCEPTION_POINTERS *info)
+    {
+        DWORD code = info->ExceptionRecord->ExceptionCode;
+        bool is_cpp_exception = code == 0xE06D7363;
+        bool is_SEH_exception = !is_cpp_exception;
+
+        if (is_cpp_exception)
+        {
+            g_exceptionPointers = info;
+            return EXCEPTION_CONTINUE_SEARCH; // We pass it to the C++ exception handler, where we can get additional info
+        }
+        else
+        {
+            return ErrorPromt(info, nullptr);
+        }
+    }
+
+    bool SafeCallInner(void (*fn)(void *data), void *data)
     {
         bool success = true;
-#ifdef DISABLE_SAFECALL
-        fn(data);
-#else
         __try
         {
             fn(data);
         }
         __except (CrashHandler(GetExceptionInformation()))
         {
-            termination_fn();
             success = false;
+        }
+        return success;
+    }
+
+    bool SafeCall(void (*fn)(void *data), void *data)
+    {
+        bool success = true;
+#ifdef DISABLE_SAFECALL
+        fn(data);
+#else
+        try
+        {
+            SafeCallInner(fn, data);
+        }
+        catch (const std::exception &e)
+        {
+            if (g_exceptionPointers)
+            {
+                auto result = ErrorPromt(g_exceptionPointers, &e);
+                switch (result)
+                {
+                    case EXCEPTION_CONTINUE_SEARCH:
+                        success = true;
+                        break;
+                    case EXCEPTION_EXECUTE_HANDLER:
+                        success = false;
+                        break;
+                }
+            }
+            else
+            {
+                success = false;
+            }
         }
 #endif
         return success;
