@@ -3508,7 +3508,7 @@ namespace HerosInsight::Utils
         return prof_mask;
     }
 
-    bool IsSkillEquipable(GW::Skill &skill, uint32_t agent_id)
+    bool IsSkillLearned(GW::Skill &skill, uint32_t agent_id)
     {
         auto skill_id = skill.skill_id;
         bool is_player = agent_id == GW::Agents::GetControlledCharacterId();
