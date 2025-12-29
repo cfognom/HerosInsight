@@ -85,17 +85,17 @@ namespace HerosInsight
             elements.reserve(n_elements);
         }
 
-        void ReserveFromHint(const std::string &id)
+        void ReserveFromHint(std::string_view id)
         {
-            auto n_spans = CapacityHints::GetHint(id + "_spans");
-            auto n_elements = CapacityHints::GetHint(id + "_elements");
+            auto n_spans = CapacityHints::GetHint(std::format("{}_spans", id));
+            auto n_elements = CapacityHints::GetHint(std::format("{}_elements", id));
             Reserve(n_spans, n_elements);
         }
 
-        void StoreCapacityHint(const std::string &id)
+        void StoreCapacityHint(std::string_view &id)
         {
-            CapacityHints::UpdateHint(id + "_spans", ends.size());
-            CapacityHints::UpdateHint(id + "_elements", elements.size());
+            CapacityHints::UpdateHint(std::format("{}_spans", id), ends.size());
+            CapacityHints::UpdateHint(std::format("{}_elements", id), elements.size());
         }
 
         float CalcAvgSpanSize() const { return ends.empty() ? 0.f : (float)elements.size() / (float)ends.size(); }
@@ -187,11 +187,11 @@ namespace HerosInsight
             auto end = ends[span_id];
             auto start = GetSpanStart(span_id);
             auto len = end - start;
-            auto span = std::span<T>(elements.data() + start, len);
+            std::span<T> span(elements.data() + start, len);
             return span;
         }
         // Gets a reference to a string in the arena
-        std::span<const T> Get(size_t span_id) const
+        T_const_view Get(size_t span_id) const
         {
             // if (span_id >= ends.size())
             //     return std::span<const T>();
@@ -199,12 +199,12 @@ namespace HerosInsight
             auto end = ends[span_id];
             auto start = GetSpanStart(span_id);
             auto len = end - start;
-            auto span = std::span<const T>(elements.data() + start, len);
+            T_const_view span(elements.data() + start, len);
             return span;
         }
 
         std::span<T> operator[](size_t span_id) { return Get(span_id); }
-        T_const_view operator[](size_t span_id) const { return T_const_view(Get(span_id)); }
+        T_const_view operator[](size_t span_id) const { return Get(span_id); }
 
         std::span<T> back()
         {
@@ -212,10 +212,10 @@ namespace HerosInsight
             return Get(ends.size() - 1);
         }
 
-        void push_back(std::span<const T> span)
+        T_span_id push_back(std::span<const T> span, deduper *deduper = nullptr)
         {
             elements.append_range(span);
-            CommitWritten();
+            return CommitWritten(deduper);
         }
 
         // Writer should modify the span size to the number of elements written
@@ -376,16 +376,16 @@ namespace HerosInsight
             base::Reserve(n_spans, n_elements);
         }
 
-        void ReserveFromHint(const std::string &id)
+        void ReserveFromHint(std::string_view id)
         {
-            size_t n_indices = CapacityHints::GetHint(id + "_indices");
+            size_t n_indices = CapacityHints::GetHint(std::format("{}_indices", id));
             ReserveIndices(n_indices);
             base::ReserveFromHint(id);
         }
 
-        void StoreCapacityHint(const std::string &id)
+        void StoreCapacityHint(std::string_view id)
         {
-            CapacityHints::UpdateHint(id + "_indices", index_to_id.size());
+            CapacityHints::UpdateHint(std::format("{}_indices", id), index_to_id.size());
             base::StoreCapacityHint(id);
         }
 
@@ -400,7 +400,7 @@ namespace HerosInsight
 
         std::span<T_span_id> SpanIds() { return index_to_id; }
 
-        std::optional<T_span_id> GetSpanId(size_t index)
+        std::optional<T_span_id> GetSpanId(size_t index) const
         {
             if (index >= index_to_id.size())
                 return std::nullopt;
@@ -420,6 +420,14 @@ namespace HerosInsight
         }
 
         std::span<T> GetIndexed(size_t index)
+        {
+            auto span_id_opt = GetSpanId(index);
+            if (!span_id_opt.has_value())
+                return {};
+            auto span_id = span_id_opt.value();
+            return base::Get(span_id);
+        }
+        base::T_const_view GetIndexed(size_t index) const
         {
             auto span_id_opt = GetSpanId(index);
             if (!span_id_opt.has_value())
