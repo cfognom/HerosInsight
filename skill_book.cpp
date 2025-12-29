@@ -2156,6 +2156,7 @@ namespace HerosInsight::SkillBook
         std::variant<SortCommand> data;
     };
 
+    // TODO: Remove this! We will implement it later
     // Must not contain any whitespace
     static constexpr uint32_t n_text_filter_targets = 7; // Must match the array below
     static constexpr std::pair<std::string_view, SkillPropertyID::Type> filter_targets[] = {
