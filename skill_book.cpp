@@ -914,7 +914,6 @@ namespace HerosInsight::SkillBook
     {
         TextStorage &ts;
         std::unordered_map<SkillProp, SkillsProp> dynamic_props;
-        bool props_dirty = true;
         std::array<SkillsProp *, PROP_COUNT> props;
 
         void InitDynamicProps(AttributeSource attr_src)
@@ -933,7 +932,6 @@ namespace HerosInsight::SkillBook
                 else
                     props[i] = &ts.static_props[i];
             }
-            props_dirty = false;
         }
 
         explicit FilteringAdapter(TextStorage &storage)
@@ -999,6 +997,7 @@ namespace HerosInsight::SkillBook
 
         bool is_opened = true;
         bool filter_dirty = true;
+        bool props_dirty = true;
         bool first_draw = true;
 
         struct ScrollTracking
@@ -1054,10 +1053,11 @@ namespace HerosInsight::SkillBook
 
         void Update()
         {
-            bool filtered_outdated = adapter.props_dirty || filter_dirty;
-            if (adapter.props_dirty)
+            bool filtered_outdated = props_dirty || filter_dirty;
+            if (props_dirty)
             {
                 adapter.InitDynamicProps(this->settings.attr_src);
+                props_dirty = false;
             }
             if (filtered_outdated)
             {
@@ -1148,14 +1148,14 @@ namespace HerosInsight::SkillBook
             {
                 settings.attr_src.type = AttributeSource::Type::Constant;
                 settings.attr_src.value = -1;
-                adapter.props_dirty = true;
+                props_dirty = true;
             }
 
             ImGui::SameLine();
             if (ImGui::RadioButton("Character's", settings.IsCharacters()))
             {
                 settings.attr_src.type = AttributeSource::Type::FromAgent;
-                adapter.props_dirty = true;
+                props_dirty = true;
             }
 
             ImGui::SameLine();
@@ -1163,7 +1163,7 @@ namespace HerosInsight::SkillBook
             {
                 settings.attr_src.type = AttributeSource::Type::Constant;
                 settings.attr_src.value = settings.attr_lvl_slider;
-                adapter.props_dirty = true;
+                props_dirty = true;
             }
 
             if (settings.IsManual())
@@ -1171,7 +1171,7 @@ namespace HerosInsight::SkillBook
                 if (ImGui::SliderInt("Attribute level", &settings.attr_lvl_slider, 0, 21))
                 {
                     settings.attr_src.value = settings.attr_lvl_slider;
-                    adapter.props_dirty = true;
+                    props_dirty = true;
                 }
             }
         }
@@ -1950,7 +1950,7 @@ namespace HerosInsight::SkillBook
                 {
                     // auto attr = AttributeOrTitle((GW::Constants::AttributeByte)p->attribute);
                     // attributes[attr.value] = p->value;
-                    book->adapter.props_dirty = true;
+                    book->props_dirty = true;
                     // book->FetchDescriptions();
                 }
             }
@@ -1964,7 +1964,7 @@ namespace HerosInsight::SkillBook
             {
                 // auto attr = AttributeOrTitle((GW::Constants::TitleID)packet->title_id);
                 // attributes[attr.value] = packet->new_value;
-                book->adapter.props_dirty = true;
+                book->props_dirty = true;
             }
         }
     }
@@ -2011,7 +2011,7 @@ namespace HerosInsight::SkillBook
         focused_agent_id = GW::Agents::GetControlledCharacterId();
         for (auto &book : books)
         {
-            book->adapter.props_dirty = true;
+            book->props_dirty = true;
         }
     }
 
@@ -2022,7 +2022,7 @@ namespace HerosInsight::SkillBook
         {
             for (auto &book : books)
             {
-                book->adapter.props_dirty = true;
+                book->props_dirty = true;
             }
         }
     }
