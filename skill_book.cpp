@@ -1977,11 +1977,10 @@ namespace HerosInsight::SkillBook
         if (agent_id > 0)
         {
             focused_agent_id = agent_id;
-            // for (auto &book : books)
-            // {
-            //     book->FetchTags();
-            //     book->request_state_update = true;
-            // }
+            for (auto &book : books)
+            {
+                book->props_dirty = true;
+            }
         }
     }
 
