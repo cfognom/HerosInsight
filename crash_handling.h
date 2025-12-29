@@ -155,7 +155,7 @@ namespace HerosInsight::CrashHandling
         return success;
     }
 
-    bool SafeCall(void (*fn)(void *data), void *data)
+    bool SafeCall(void (*fn)(void *data), void *data = nullptr)
     {
         bool success = true;
 #ifdef DISABLE_SAFECALL
