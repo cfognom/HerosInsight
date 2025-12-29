@@ -6,6 +6,7 @@
 #include <future>
 #include <iostream>
 #include <optional>
+#include <ranges>
 #include <regex>
 #include <span>
 #include <string>
@@ -14,6 +15,7 @@
 #include <GWCA/GWCA.h>
 
 #include <GWCA/Managers/AgentMgr.h>
+#include <GWCA/Managers/AssetMgr.h>
 #include <GWCA/Managers/CameraMgr.h>
 #include <GWCA/Managers/ChatMgr.h>
 #include <GWCA/Managers/EffectMgr.h>
@@ -85,13 +87,14 @@
 
 #include <StoC_packets.h>
 #include <attribute_or_title.h>
+#include <attribute_store.h>
 #include <capacity_hints.h>
-#include <catalog.h>
 #include <constants.h>
 #include <custom_agent_data.h>
 #include <custom_skill_data.h>
 #include <debug.h>
 #include <debug_display.h>
+#include <filtering.h>
 #include <matcher.h>
 #include <party_data.h>
 #include <rich_text.h>
@@ -105,10 +108,6 @@
 
 // #define ASYNC_FILTERING
 
-#ifdef _DEBUG
-// #define _ARTIFICIAL_DELAY 1
-#endif
-
 bool IsInitialCursorPos()
 {
     auto cr_min = ImGui::GetWindowContentRegionMin();
@@ -121,13 +120,13 @@ namespace HerosInsight::SkillBook
 {
     std::vector<uint16_t> base_skills; // skill ids
 
-    bool TryInitBaseSkills()
-    {
-        bool fail = false;
-        auto &text_provider = SkillTextProvider::GetInstance(GW::Constants::Language::English);
-        if (!text_provider.IsReady())
-            return false;
+    using SkillID = GW::Constants::SkillID;
 
+    void InitBaseSkills()
+    {
+        auto &text_provider = Text::GetTextProvider(GW::Constants::Language::English);
+
+        base_skills.reserve(GW::Constants::SkillMax - 1);
         for (uint16_t i = 1; i < GW::Constants::SkillMax; i++)
         {
             base_skills.push_back(i);
@@ -180,8 +179,6 @@ namespace HerosInsight::SkillBook
             return a < b;
         };
         std::sort(base_skills.begin(), base_skills.end(), Comparer);
-
-        return true;
     }
 
     enum struct AttributeMode : uint32_t
@@ -192,7 +189,7 @@ namespace HerosInsight::SkillBook
         Manual
     };
 
-    enum struct SkillTextPropertyID : uint16_t
+    enum struct SkillProp : uint16_t
     {
         Name,
         Type,
@@ -215,26 +212,48 @@ namespace HerosInsight::SkillBook
         Profession,
         Campaign,
         Range,
-        Parsed,
+        // Parsed,
+        Id,
 
         COUNT,
     };
 
-    constexpr size_t PROP_COUNT = static_cast<size_t>(SkillTextPropertyID::COUNT);
-
-    using SkillCatalog = Catalog<SkillTextPropertyID, GW::Constants::SkillMax>;
+    constexpr size_t PROP_COUNT = static_cast<size_t>(SkillProp::COUNT);
 
     uint32_t focused_agent_id = 0;
-    std::array<int8_t, AttributeOrTitle::Count> attributes = {};
 
-    static constexpr size_t SkillCount = GW::Constants::SkillMax - 1;
-    static constexpr size_t DescriptionCount = SkillCount * 21 * 2;
-
-    size_t GetDescriptionIndex(uint16_t skill_id, int8_t attribute_level, bool is_concise)
+    struct AttributeSource
     {
-        auto page = (attribute_level + 1) * 2 + is_concise;
-        return SkillCount * page + skill_id + 1;
-    }
+        enum struct Type
+        {
+            FromAgent,
+            Constant,
+        };
+
+        AttributeSource() : type(Type::Constant), value(-1) {}
+
+        Type type;
+        size_t value;
+
+        int8_t GetAttrLvl(AttributeOrTitle id) const
+        {
+            switch (this->type)
+            {
+                case Type::FromAgent:
+                {
+                    // auto agent_id = this->value;
+                    auto agent_id = focused_agent_id;
+                    auto custom_agent_data = CustomAgentDataModule::GetCustomAgentData(agent_id);
+                    return custom_agent_data.GetOrEstimateAttribute(id);
+                }
+                default:
+                case Type::Constant:
+                {
+                    return (int8_t)this->value;
+                }
+            }
+        }
+    };
 
     class SkillTooltipProvider : public RichText::TextTooltipProvider
     {
@@ -463,156 +482,92 @@ namespace HerosInsight::SkillBook
     SkillFracProvider frac_provider;
     RichText::Drawer text_drawer{nullptr, &RichText::DefaultTextImageProvider::Instance(), &frac_provider};
 
-    StringArena<char> meta_prop_names;
-    std::vector<SkillCatalog::T_propset> meta_propsets;
+    using Propset = BitArray<PROP_COUNT + 1>; // +1 for meta props
+    constexpr static Propset ALL_PROPS = Propset(true);
+    constexpr static uint16_t INVALID_SPAN = std::numeric_limits<uint16_t>::max();
 
-    struct MetaPropSection
+    struct SkillsProp
     {
-        uint32_t start_index = 0;
-        uint32_t end_index = 0;
+        LoweredTextVector texts;
+        std::array<uint16_t, GW::Constants::SkillMax> skill_to_text;
     };
 
-    MetaPropSection footer_meta_section;
-
-    void SetupMetaProps()
+    struct InitHelper
     {
-        auto SetupMetaProp = [&](std::string_view name, SkillCatalog::T_propset propset)
-        {
-            meta_prop_names.Elements().append_range(name);
-            meta_prop_names.CommitWritten();
-
-            meta_propsets.push_back(propset);
-        };
-
-        struct SectionRecordingScope
-        {
-            SectionRecordingScope(MetaPropSection *dst) : dst(dst)
-            {
-                dst->start_index = static_cast<uint32_t>(meta_propsets.size());
-            }
-            ~SectionRecordingScope()
-            {
-                dst->end_index = static_cast<uint32_t>(meta_propsets.size());
-            }
-
-        private:
-            MetaPropSection *dst;
-        };
-
-        const std::string capacity_hint_key = "meta_prop_names";
-        meta_prop_names.ReserveFromHint(capacity_hint_key);
-
-        SetupMetaProp("Any", SkillCatalog::ALL_PROPS); // Must be first
-        SetupMetaProp("Name", SkillCatalog::MakePropset({SkillTextPropertyID::Name}));
-        SetupMetaProp("Type", SkillCatalog::MakePropset({SkillTextPropertyID::Type}));
-        SetupMetaProp("Tags", SkillCatalog::MakePropset({SkillTextPropertyID::Tag}));
-        SetupMetaProp("Energy", SkillCatalog::MakePropset({SkillTextPropertyID::Energy}));
-        SetupMetaProp("Recharge", SkillCatalog::MakePropset({SkillTextPropertyID::Recharge}));
-        SetupMetaProp("Activation", SkillCatalog::MakePropset({SkillTextPropertyID::Activation}));
-        SetupMetaProp("Aftercast", SkillCatalog::MakePropset({SkillTextPropertyID::Aftercast}));
-        SetupMetaProp("Sacrifice", SkillCatalog::MakePropset({SkillTextPropertyID::Sacrifice}));
-        SetupMetaProp("Overcast", SkillCatalog::MakePropset({SkillTextPropertyID::Overcast}));
-        SetupMetaProp("Adrenaline", SkillCatalog::MakePropset({SkillTextPropertyID::AdrenalineStrikes}));
-        SetupMetaProp("Upkeep", SkillCatalog::MakePropset({SkillTextPropertyID::Upkeep}));
-        SetupMetaProp("Full Description", SkillCatalog::MakePropset({SkillTextPropertyID::Description}));
-        SetupMetaProp("Concise Description", SkillCatalog::MakePropset({SkillTextPropertyID::Concise}));
-        SetupMetaProp("Description", SkillCatalog::MakePropset({SkillTextPropertyID::Description, SkillTextPropertyID::Concise}));
-
-        {
-            SectionRecordingScope section(&footer_meta_section);
-            SetupMetaProp("Attribute", SkillCatalog::MakePropset({SkillTextPropertyID::Attribute}));
-            SetupMetaProp("Profession", SkillCatalog::MakePropset({SkillTextPropertyID::Profession}));
-            SetupMetaProp("Campaign", SkillCatalog::MakePropset({SkillTextPropertyID::Campaign}));
-        }
-
-        meta_prop_names.StoreCapacityHint(capacity_hint_key);
-    }
-
-    struct DoubleWriter
-    {
-        double value;
-
-        void operator()(std::span<char> &dst) const
-        {
-            auto [after, ec] = std::to_chars(dst.data(), dst.data() + dst.size(), value, std::chars_format::general);
-            const bool success = (ec == std::errc());
-#ifdef _DEBUG
-            assert(success);
-#endif
-            auto written_count = success ? after - dst.data() : 0;
-            dst = dst.subspan(0, written_count);
-        }
+        StringArena<char> &dst;
+        size_t skill_id;
+        GW::Constants::SkillID SkillId() const { return static_cast<GW::Constants::SkillID>(skill_id); }
+        GW::Skill &Skill() const { return GW::SkillbarMgr::GetSkills()[skill_id]; }
+        CustomSkillData &CustomSkill() const { return CustomSkillDataModule::GetSkills()[skill_id]; }
     };
 
-    static std::unordered_map<SkillTextPropertyID, RichText::RichTextArena> static_props;
-
-    template <typename Func>
-    void FetchX(SkillTextPropertyID prop_id, Func &&func)
+    void InitProp(SkillsProp &prop, std::string_view hint_key, bool dedupe, auto &&op)
     {
-        auto &prop = static_props[prop_id];
-        prop.Reset();
-        auto id = std::format("prop_{}", (size_t)prop_id);
-        prop.ReserveFromHint(id);
+        auto &arena = prop.texts.arena;
+        arena.clear();
+        arena.ReserveFromHint(hint_key);
 
-        for (size_t i = 1; i < GW::Constants::SkillMax; ++i)
+        std::string deduper_hint_key;
+        StringArena<char>::deduper deduper;
+        if (dedupe)
         {
-            auto skill_id = static_cast<GW::Constants::SkillID>(i);
-            auto &custom_sd = CustomSkillDataModule::GetCustomSkillData(skill_id);
-            std::invoke(std::forward<Func>(func), prop, custom_sd);
-            prop.CommitWrittenToIndex(i);
+            deduper_hint_key = std::format("{}_deduper", hint_key);
+            auto bucket_count = CapacityHints::GetHint(deduper_hint_key);
+            deduper = arena.CreateDeduper(bucket_count);
         }
+        auto p_deduper = dedupe ? &deduper : nullptr;
 
-        prop.StoreCapacityHint(id);
+        auto skills = GW::SkillbarMgr::GetSkills();
+        for (size_t i = 1; i < skills.size(); ++i)
+        {
+            op(InitHelper{arena, i});
+            prop.skill_to_text[i] = arena.CommitWritten(p_deduper);
+        }
+        prop.texts.LowercaseFold();
+
+        if (dedupe)
+        {
+            CapacityHints::UpdateHint(deduper_hint_key, deduper.bucket_count());
+        }
+        arena.StoreCapacityHint(hint_key);
     }
 
-    template <typename MemPtr>
-    void FetchXMember(SkillTextPropertyID prop_id, MemPtr getter, std::optional<uint32_t> icon_id = std::nullopt)
+    void InitDescriptions(bool is_concise, AttributeSource attr_src, SkillsProp &dst_prop)
     {
-        static_assert(std::is_member_function_pointer_v<MemPtr>, "This overload is for member function pointers only.");
+        auto &text_provider = Text::GetTextProvider(GW::Constants::Language::English);
 
-#define ACTUAL_CODE                                                         \
-    if constexpr (std::is_integral_v<Ret> || std::is_floating_point_v<Ret>) \
-    {                                                                       \
-        auto value = static_cast<double>(std::invoke(getter, cskill));      \
-        if (value != 0.0)                                                   \
-        {                                                                   \
-            dst.AppendWriteBuffer(32, DoubleWriter{value});                 \
-            if (icon_id.has_value())                                        \
-                dst.PushImageTag(icon_id.value());                          \
-        }                                                                   \
-    }                                                                       \
-    else                                                                    \
-    {                                                                       \
-        dst.Elements().append_range(std::invoke(getter, cskill));           \
-    }
+        auto hint_key = std::format("skill_descriptions_{}", is_concise ? "concise" : "full");
 
-        FetchX(
-            prop_id,
-            [getter, icon_id](RichText::RichTextArena &dst, CustomSkillData &cskill)
+        InitProp(
+            dst_prop, hint_key, false,
+            [&text_provider, is_concise, attr_src](InitHelper helper)
             {
-                // Try const-qualified call first
-                if constexpr (std::is_invocable_v<MemPtr, const CustomSkillData &>)
-                {
-                    using Ret = std::invoke_result_t<MemPtr, const CustomSkillData &>;
-                    ACTUAL_CODE
-                }
-                else
-                {
-                    // Non-const member function
-                    using Ret = std::invoke_result_t<MemPtr, CustomSkillData &>;
-                    ACTUAL_CODE
-                }
+                auto skill_id = helper.SkillId();
+                auto &skill = helper.Skill();
+                int8_t attr_lvl = attr_src.GetAttrLvl(AttributeOrTitle(skill));
+                helper.dst.AppendWriteBuffer(
+                    512,
+                    [&text_provider, skill_id, is_concise, attr_lvl](std::span<char> &buffer)
+                    {
+                        SpanWriter<char> writer(buffer);
+                        text_provider.MakeDescription(skill_id, is_concise, attr_lvl, writer);
+                        buffer = writer.WrittenSpan();
+                    }
+                );
             }
         );
     }
 
-    void FetchTags()
+    void InitTags(SkillsProp &dst_prop)
     {
-        FetchX(
-            SkillTextPropertyID::Tag,
-            [](RichText::RichTextArena &dst, CustomSkillData &cskill)
+        auto hint_key = "skill_tags";
+        InitProp(
+            dst_prop, hint_key, true,
+            [](InitHelper helper)
             {
-                auto &skill = *cskill.skill;
+                auto &dst = helper.dst;
+                auto &skill = helper.Skill();
+                auto &cskill = helper.CustomSkill();
                 auto &tags = cskill.tags;
                 auto skill_id_to_check = skill.IsPvP() ? skill.skill_id_pvp : skill.skill_id;
 
@@ -624,24 +579,23 @@ namespace HerosInsight::SkillBook
                 {
                     if (color != NULL)
                     {
-                        dst.PushColoredText(color, str);
+                        RichText::Helpers::PushColoredText(dst, color, str);
                     }
                     else
                     {
-                        dst.PushText(str);
+                        RichText::Helpers::PushText(dst, str);
                     }
 
                     if (image_id.has_value())
                     {
-                        dst.PushText(" ");
-                        dst.PushImageTag(image_id.value());
+                        RichText::Helpers::PushImageTag(dst, image_id.value());
                     }
 
-                    dst.PushText(", ");
+                    RichText::Helpers::PushText(dst, ", ");
                 };
 
                 // clang-format off
-                if (is_equipable)          PushTag("Equipable", IM_COL32(100, 255, 255, 255));
+                if (is_equipable)          PushTag("Learned"  , IM_COL32(100, 255, 255, 255));
                 if (is_unlocked)           PushTag("Unlocked" , IM_COL32(143, 255, 143, 255));
                 if (tags.Temporary)        PushTag("Temporary"                              );
                 if (is_locked)             PushTag("Locked"   , IM_COL32(255, 100, 100, 255));
@@ -679,115 +633,320 @@ namespace HerosInsight::SkillBook
         );
     }
 
-    void FetchStaticProps()
+    struct TextStorage
     {
-        FetchTags();
+        std::array<SkillsProp, PROP_COUNT> static_props;
+        // std::unordered_map<, IndexedLoweredTexts> dynamic_props;
 
-        FetchXMember(SkillTextPropertyID::Type, &CustomSkillData::GetTypeString);
-        FetchXMember(SkillTextPropertyID::Attribute, &CustomSkillData::GetAttributeStr);
-        FetchXMember(SkillTextPropertyID::Profession, &CustomSkillData::GetProfessionStr);
-        FetchXMember(SkillTextPropertyID::Campaign, &CustomSkillData::GetCampaignStr);
-        FetchXMember(SkillTextPropertyID::Upkeep, &CustomSkillData::GetUpkeep, RichText::DefaultTextImageProvider::Upkeep);
-        FetchXMember(SkillTextPropertyID::Energy, &CustomSkillData::GetEnergy, RichText::DefaultTextImageProvider::EnergyOrb);
-        FetchXMember(SkillTextPropertyID::AdrenalineStrikes, &CustomSkillData::GetAdrenalineStrikes, RichText::DefaultTextImageProvider::Adrenaline);
-        FetchXMember(SkillTextPropertyID::Overcast, &CustomSkillData::GetOvercast, RichText::DefaultTextImageProvider::Overcast);
-        FetchXMember(SkillTextPropertyID::Sacrifice, &CustomSkillData::GetSacrifice, RichText::DefaultTextImageProvider::Sacrifice);
-        FetchXMember(SkillTextPropertyID::Recharge, &CustomSkillData::GetRecharge, RichText::DefaultTextImageProvider::Recharge);
+        // std::array<LoweredTexts, PROP_COUNT> props;
+        // std::array<std::array<uint16_t, GW::Constants::SkillMax>, PROP_COUNT> mappers{INVALID_SPAN};
+        std::vector<Propset> meta_propsets;
+        LoweredTextVector meta_prop_names;
 
-        auto AppendFraction = [](RichText::RichTextArena &dst, double value)
+        struct MetaPropSection
         {
-            float value_int;
-            float value_fract = std::modf(value, &value_int);
+            uint32_t start_index = 0;
+            uint32_t end_index = 0;
+        };
 
-            std::optional<RichText::FracTag> frac_tag = std::nullopt;
-            if (value_fract == 0.25f)
-                frac_tag = {1, 4};
-            else if (value_fract == 0.5f)
-                frac_tag = {1, 2};
-            else if (value_fract == 0.75f)
-                frac_tag = {3, 4};
+        MetaPropSection footer_meta_section;
 
-            if (frac_tag.has_value())
+        template <typename... Ts>
+        static Propset CreatePropset(Ts... args)
+        {
+            Propset propset;
+            ((propset[static_cast<size_t>(args)] = true), ...);
+            return propset;
+        }
+
+        void SetupMetaProps()
+        {
+            auto SetupMetaProp = [&](std::string_view name, Propset propset)
             {
-                if (value_int > 0.f)
-                    dst.AppendWriteBuffer(32, DoubleWriter{value_int});
-                dst.PushTag(RichText::TextTag(frac_tag.value()));
+                meta_prop_names.arena.push_back(name);
+                meta_propsets.push_back(propset);
+            };
+
+            struct SectionRecordingScope
+            {
+                SectionRecordingScope(MetaPropSection *dst, std::vector<Propset> &meta_propsets) : dst(dst), meta_propsets(meta_propsets)
+                {
+                    dst->start_index = static_cast<uint32_t>(meta_propsets.size());
+                }
+                ~SectionRecordingScope()
+                {
+                    dst->end_index = static_cast<uint32_t>(meta_propsets.size());
+                }
+
+            private:
+                MetaPropSection *dst;
+                std::vector<Propset> &meta_propsets;
+            };
+
+            std::string_view capacity_hint_key = "meta_prop_names";
+            meta_prop_names.arena.ReserveFromHint(capacity_hint_key);
+            meta_propsets.reserve(meta_prop_names.arena.SpanCount());
+
+            SetupMetaProp("Anything", ALL_PROPS); // Must be first
+            SetupMetaProp("Name", CreatePropset(SkillProp::Name));
+            SetupMetaProp("Type", CreatePropset(SkillProp::Type));
+            SetupMetaProp("Tags", CreatePropset(SkillProp::Tag));
+            SetupMetaProp("Energy", CreatePropset(SkillProp::Energy));
+            SetupMetaProp("Recharge", CreatePropset(SkillProp::Recharge));
+            SetupMetaProp("Activation", CreatePropset(SkillProp::Activation));
+            SetupMetaProp("Aftercast", CreatePropset(SkillProp::Aftercast));
+            SetupMetaProp("Sacrifice", CreatePropset(SkillProp::Sacrifice));
+            SetupMetaProp("Overcast", CreatePropset(SkillProp::Overcast));
+            SetupMetaProp("Adrenaline", CreatePropset(SkillProp::AdrenalineStrikes));
+            SetupMetaProp("Upkeep", CreatePropset(SkillProp::Upkeep));
+            SetupMetaProp("Full Description", CreatePropset(SkillProp::Description));
+            SetupMetaProp("Concise Description", CreatePropset(SkillProp::Concise));
+            SetupMetaProp("Description", CreatePropset(SkillProp::Description, SkillProp::Concise));
+
+            {
+                SectionRecordingScope section(&footer_meta_section, meta_propsets);
+                SetupMetaProp("Attribute", CreatePropset(SkillProp::Attribute));
+                SetupMetaProp("Profession", CreatePropset(SkillProp::Profession));
+                SetupMetaProp("Campaign", CreatePropset(SkillProp::Campaign));
+                SetupMetaProp("Range", CreatePropset(SkillProp::Range));
             }
-            else
+
+            SetupMetaProp("Id", CreatePropset(SkillProp::Id));
+
+            meta_prop_names.LowercaseFold();
+            meta_prop_names.arena.StoreCapacityHint(capacity_hint_key);
+        }
+
+        void Initialize()
+        {
+            InitBaseSkills();
+            SetupMetaProps();
+            InitStaticProps();
+        }
+
+        struct DoubleWriter
+        {
+            double value;
+
+            void operator()(std::span<char> &dst) const
             {
-                dst.AppendWriteBuffer(32, DoubleWriter{value});
+                auto [after, ec] = std::to_chars(dst.data(), dst.data() + dst.size(), value, std::chars_format::general);
+                const bool success = (ec == std::errc());
+#ifdef _DEBUG
+                assert(success);
+#endif
+                auto written_count = success ? after - dst.data() : 0;
+                dst = dst.subspan(0, written_count);
             }
         };
 
-        FetchX(
-            SkillTextPropertyID::Adrenaline,
-            [&](RichText::RichTextArena &dst, CustomSkillData &cskill)
+        void InitPropById(SkillProp prop_id, auto &&op)
+        {
+            auto prop_id_val = static_cast<size_t>(prop_id);
+            auto &prop = static_props[prop_id_val];
+
+            auto hint_key = std::format("prop_{}", prop_id_val);
+            InitProp(prop, hint_key, true, op);
+        }
+
+        void InitNames()
+        {
+            auto prop_index = static_cast<size_t>(SkillProp::Name);
+            auto &text_provider = Text::GetTextProvider(GW::Constants::Language::English);
+            auto &names = *text_provider.GetNames();
+            auto &prop = static_props[prop_index];
+            prop.texts = LoweredTextVector(names);
+            std::copy(names.index_to_id.begin(), names.index_to_id.end(), prop.skill_to_text.begin());
+        }
+
+        void InitStaticProps()
+        {
+            InitNames();
+            AttributeSource attr_src;
+            InitDescriptions(false, attr_src, this->static_props[(size_t)SkillProp::Description]);
+            InitDescriptions(true, attr_src, this->static_props[(size_t)SkillProp::Concise]);
+            InitTags(this->static_props[(size_t)SkillProp::Tag]);
+
+            static auto AppendStr = [](StringArena<char> &dst, std::string_view sv)
             {
-                auto adrenaline = cskill.GetAdrenaline();
-                if (adrenaline == 0)
+                dst.Elements().append_range(sv);
+            };
+            static auto AppendInt = [](StringArena<char> &dst, int32_t value, int32_t icon = -1)
+            {
+                if (value == 0)
                     return;
-                uint16_t adrenaline_div = adrenaline / 25;
-                uint16_t adrenaline_rem = adrenaline % 25;
-                if (adrenaline_div > 0)
+
+                dst.AppendWriteBuffer(32, DoubleWriter{(double)value});
+                if (icon >= 0)
+                    RichText::Helpers::PushImageTag(dst, icon);
+            };
+
+            // clang-format off
+            InitPropById(SkillProp::Type,              [](InitHelper h) { AppendStr(h.dst, h.CustomSkill().GetTypeString()); });
+            InitPropById(SkillProp::Attribute,         [](InitHelper h) { AppendStr(h.dst, h.CustomSkill().GetAttributeStr()); });
+            InitPropById(SkillProp::Profession,        [](InitHelper h) { AppendStr(h.dst, h.CustomSkill().GetProfessionStr()); });
+            InitPropById(SkillProp::Campaign,          [](InitHelper h) { AppendStr(h.dst, h.CustomSkill().GetCampaignStr()); });
+            InitPropById(SkillProp::Upkeep,            [](InitHelper h) { AppendInt(h.dst, h.CustomSkill().GetUpkeep(),            RichText::DefaultTextImageProvider::Upkeep); });
+            InitPropById(SkillProp::Energy,            [](InitHelper h) { AppendInt(h.dst, h.CustomSkill().GetEnergy(),            RichText::DefaultTextImageProvider::EnergyOrb); });
+            InitPropById(SkillProp::AdrenalineStrikes, [](InitHelper h) { AppendInt(h.dst, h.CustomSkill().GetAdrenalineStrikes(), RichText::DefaultTextImageProvider::Adrenaline); });
+            InitPropById(SkillProp::Overcast,          [](InitHelper h) { AppendInt(h.dst, h.CustomSkill().GetOvercast(),          RichText::DefaultTextImageProvider::Overcast); });
+            InitPropById(SkillProp::Sacrifice,         [](InitHelper h) { AppendInt(h.dst, h.CustomSkill().GetSacrifice(),         RichText::DefaultTextImageProvider::Sacrifice); });
+            InitPropById(SkillProp::Recharge,          [](InitHelper h) { AppendInt(h.dst, h.CustomSkill().GetRecharge(),          RichText::DefaultTextImageProvider::Recharge); });
+            InitPropById(SkillProp::Id,                [](InitHelper h) { AppendInt(h.dst, h.skill_id); });
+            // clang-format on
+
+            static auto AppendFraction = [](StringArena<char> &dst, double value)
+            {
+                float value_int;
+                float value_fract = std::modf(value, &value_int);
+
+                std::optional<RichText::FracTag> frac_tag = std::nullopt;
+                if (value_fract == 0.25f)
+                    frac_tag = {1, 4};
+                else if (value_fract == 0.5f)
+                    frac_tag = {1, 2};
+                else if (value_fract == 0.75f)
+                    frac_tag = {3, 4};
+
+                if (frac_tag.has_value())
                 {
-                    dst.AppendWriteBuffer(32, DoubleWriter{(double)adrenaline_div});
+                    if (value_int > 0.f)
+                        dst.AppendWriteBuffer(32, DoubleWriter{value_int});
+                    RichText::Helpers::PushTag(dst, RichText::TextTag(frac_tag.value()));
                 }
-                if (adrenaline_rem > 0)
+                else
                 {
-                    dst.PushTag(RichText::TextTag(RichText::FracTag{adrenaline_rem, 25}));
+                    dst.AppendWriteBuffer(32, DoubleWriter{value});
                 }
-                dst.PushImageTag(RichText::DefaultTextImageProvider::Adrenaline); }
-        );
+            };
 
-        FetchX(
-            SkillTextPropertyID::Activation,
-            [&](RichText::RichTextArena &dst, CustomSkillData &cskill)
-            {
-                auto activation = cskill.GetActivation();
-                if (activation == 0.f)
-                    return;
-                AppendFraction(dst, activation);
-                dst.PushImageTag(RichText::DefaultTextImageProvider::Activation);
-            }
-        );
-
-        FetchX(
-            SkillTextPropertyID::Aftercast,
-            [&](RichText::RichTextArena &dst, CustomSkillData &cskill)
-            {
-                auto &skill = *cskill.skill;
-                const bool is_normal_aftercast = (skill.activation > 0 && skill.aftercast == 0.75f) ||
-                                                 (skill.activation == 0 && skill.aftercast == 0);
-                if (skill.aftercast == 0.f && is_normal_aftercast)
-                    return;
-
-                if (!is_normal_aftercast)
-                    dst.PushColorTag(IM_COL32(255, 255, 0, 255));
-                AppendFraction(dst, skill.aftercast);
-                if (!is_normal_aftercast)
-                    dst.PushColorTag(NULL);
-                dst.PushImageTag(RichText::DefaultTextImageProvider::Aftercast);
-            }
-        );
-
-        FetchX(
-            SkillTextPropertyID::Range,
-            [](RichText::RichTextArena &dst, CustomSkillData &cskill)
-            {
-                FixedVector<Utils::Range, 4> ranges;
-                cskill.GetRanges(ranges);
-                for (auto range : ranges)
+            InitPropById(
+                SkillProp::Adrenaline,
+                [&](InitHelper h)
                 {
-                    dst.AppendWriteBuffer(32, DoubleWriter{static_cast<double>(range)});
-                    auto range_name = Utils::GetRangeStr(range);
-                    if (range_name)
+                    auto adrenaline = h.CustomSkill().GetAdrenaline();
+                    if (adrenaline == 0)
+                        return;
+                    uint16_t adrenaline_div = adrenaline / 25;
+                    uint16_t adrenaline_rem = adrenaline % 25;
+                    if (adrenaline_div > 0)
                     {
-                        std::format_to(std::back_inserter(dst.Elements()), std::string_view(" ({})"), range_name.value());
+                        h.dst.AppendWriteBuffer(32, DoubleWriter{(double)adrenaline_div});
+                    }
+                    if (adrenaline_rem > 0)
+                    {
+                        RichText::Helpers::PushTag(h.dst, RichText::TextTag(RichText::FracTag{adrenaline_rem, 25}));
+                    }
+                    RichText::Helpers::PushImageTag(h.dst, RichText::DefaultTextImageProvider::Adrenaline);
+                }
+            );
+
+            InitPropById(
+                SkillProp::Activation,
+                [&](InitHelper h)
+                {
+                    auto activation = h.CustomSkill().GetActivation();
+                    if (activation == 0.f)
+                        return;
+                    AppendFraction(h.dst, activation);
+                    RichText::Helpers::PushImageTag(h.dst, RichText::DefaultTextImageProvider::Activation);
+                }
+            );
+
+            InitPropById(
+                SkillProp::Aftercast,
+                [&](InitHelper h)
+                {
+                    auto &skill = h.Skill();
+                    const bool is_normal_aftercast = (skill.activation > 0 && skill.aftercast == 0.75f) ||
+                                                     (skill.activation == 0 && skill.aftercast == 0);
+                    if (skill.aftercast == 0.f && is_normal_aftercast)
+                        return;
+
+                    if (!is_normal_aftercast)
+                        RichText::Helpers::PushColorTag(h.dst, IM_COL32(255, 255, 0, 255));
+                    AppendFraction(h.dst, skill.aftercast);
+                    if (!is_normal_aftercast)
+                        RichText::Helpers::PushColorTag(h.dst, NULL);
+                    RichText::Helpers::PushImageTag(h.dst, RichText::DefaultTextImageProvider::Aftercast);
+                }
+            );
+
+            InitPropById(
+                SkillProp::Range,
+                [](InitHelper h)
+                {
+                    FixedVector<Utils::Range, 4> ranges;
+                    h.CustomSkill().GetRanges(ranges);
+                    for (size_t i = 0; i < ranges.size(); ++i)
+                    {
+                        auto range = ranges[i];
+                        h.dst.AppendWriteBuffer(
+                            64,
+                            [range](std::span<char> &buffer)
+                            {
+                                SpanWriter<char> writer(buffer);
+                                writer.AppendIntToChars((int)range);
+                                auto range_name = Utils::GetRangeStr(range);
+                                if (range_name.has_value())
+                                {
+                                    writer.AppendFormat(" ({})", range_name.value());
+                                }
+                                buffer = writer.WrittenSpan();
+                            }
+                        );
+
+                        if (i < ranges.size() - 1)
+                            h.dst.Elements().append_range(std::string_view(", "));
                     }
                 }
-            }
-        );
-    }
+            );
+        }
+    };
+    TextStorage text_storage;
+
+    struct FilteringAdapter
+    {
+        TextStorage &ts;
+        std::unordered_map<SkillProp, SkillsProp> dynamic_props;
+        bool props_dirty = true;
+
+        void InitDynamicProps(AttributeSource attr_src)
+        {
+#ifdef _TIMING
+            Stopwatch stopwatch("InitDynamicProps");
+#endif
+            InitDescriptions(false, attr_src, dynamic_props[SkillProp::Description]);
+            InitDescriptions(true, attr_src, dynamic_props[SkillProp::Concise]);
+            InitTags(dynamic_props[SkillProp::Tag]);
+            props_dirty = false;
+        }
+
+        SkillsProp &GetProperty(SkillProp prop)
+        {
+            auto it = dynamic_props.find(prop);
+            if (it != dynamic_props.end())
+                return it->second;
+
+            return ts.static_props[(size_t)prop];
+        }
+
+        explicit FilteringAdapter(TextStorage &storage)
+            : ts(storage)
+        {
+        }
+
+        using index_type = uint16_t;
+        size_t MaxSpanCount() const { return GW::Constants::SkillMax; }
+        size_t PropCount() const { return PROP_COUNT; }
+        size_t MetaCount() const { return ts.meta_propsets.size(); }
+
+        LoweredText GetMetaName(size_t meta) { return ts.meta_prop_names.Get(meta); }
+        BitView GetMetaPropset(size_t meta) const { return ts.meta_propsets[meta]; }
+
+        std::span<index_type> GetItemToSpan(size_t prop) { return GetProperty((SkillProp)prop).skill_to_text; }
+        LoweredTextVector &GetProperty(size_t prop) { return GetProperty((SkillProp)prop).texts; }
+    };
 
     struct BookState;
     std::vector<std::unique_ptr<BookState>> books;
@@ -798,15 +957,14 @@ namespace HerosInsight::SkillBook
     }
     struct BookState
     {
-        BookState()
-        {
-            FetchProperties();
-        }
-
         struct Settings
         {
-            AttributeMode attribute_mode = AttributeMode::Generic;
-            int attr_lvl_slider = 0;
+            // AttributeMode attribute_mode = AttributeMode::Generic;
+            AttributeSource attr_src;
+            int attr_lvl_slider = 12;
+            bool IsGeneric() const { return attr_src.type == AttributeSource::Type::Constant && attr_src.value == -1; }
+            bool IsCharacters() const { return attr_src.type == AttributeSource::Type::FromAgent; }
+            bool IsManual() const { return attr_src.type == AttributeSource::Type::Constant && attr_src.value != -1; }
 
             bool include_pve_only_skills = true;
             bool include_temporary_skills = false;
@@ -827,19 +985,15 @@ namespace HerosInsight::SkillBook
         };
         std::optional<WindowDims> init_dims = std::nullopt;
         Settings settings;
-        SkillCatalog catalog{meta_prop_names, meta_propsets};
-        RichText::RichTextArena descs[2]{};
+        FilteringAdapter adapter{text_storage};
+        Filtering::Device<FilteringAdapter> filter_device{adapter};
+        Filtering::Query query;
         std::vector<uint16_t> filtered_skills; // skill ids
-        CatalogUtils::Query query;
-        CatalogUtils::HLData hl_data{SkillCatalog::PROP_COUNT, meta_propsets.size(), GW::Constants::SkillMax};
 
-        SkillTextProvider &text_provider = SkillTextProvider::GetInstance(GW::Constants::Language::English);
+        Text::Provider &text_provider = Text::GetTextProvider(GW::Constants::Language::English);
 
         bool is_opened = true;
-        bool skills_dirty = true;
-        bool request_state_update = true; // Set this to attempt to apply the pending state
-        bool attrs_changed = false;
-        bool state_update_in_progress = false;
+        bool filter_dirty = true;
         bool first_draw = true;
 
         struct ScrollTracking
@@ -892,141 +1046,22 @@ namespace HerosInsight::SkillBook
         std::string feedback;
 
         VariableSizeClipper clipper{};
-        std::future<bool> update_filter_future = std::future<bool>();
-        std::atomic<bool> cancel_state_update = false;
-
-        void Duplicate(BookState &other)
-        {
-            other.settings = settings;
-        }
-
-        int8_t ResolveAttribute(AttributeOrTitle attr) const
-        {
-            // clang-format off
-            switch (settings.attribute_mode) {
-                case AttributeMode::Generic: return -1;
-                case AttributeMode::Manual: return settings.attr_lvl_slider;
-                case AttributeMode::Characters:
-                    if (attr.IsNone())
-                        return 0;
-                    return attributes[attr.value];
-
-                default:
-                    SOFT_ASSERT(false, L"Invalid attribute mode");
-                    return -1;
-            }
-            // clang-format on
-        };
 
         void Update()
         {
-            if (request_state_update)
+            bool filtered_outdated = adapter.props_dirty || filter_dirty;
+            if (adapter.props_dirty)
             {
-                request_state_update = false;
-                if (update_filter_future.valid())
-                {
-                    // Cancel the previous update
-                    cancel_state_update.store(true);
-                    update_filter_future.get();
-                }
-                state_update_in_progress = true;
+                adapter.InitDynamicProps(this->settings.attr_src);
             }
-
-            if (state_update_in_progress)
+            if (filtered_outdated)
             {
-                bool success = TryUpdateQuery();
-                state_update_in_progress = !success;
+                UpdateQuery();
             }
+            filter_dirty = false;
         }
 
-        std::string_view GetMetaPropName(size_t meta_prop_id)
-        {
-            return std::string_view(catalog.meta_prop_names.Get(meta_prop_id));
-        }
-
-        std::span<uint16_t> GetMetaHL(size_t meta_prop_id)
-        {
-            return hl_data.GetMetaPropHL(meta_prop_id);
-        }
-
-        std::string_view GetStr(SkillTextPropertyID prop_id, GW::Constants::SkillID skill_id)
-        {
-            auto prop_ptr = catalog.GetPropertyPtr(prop_id);
-            if (prop_ptr == nullptr)
-                return {};
-
-            auto chars = prop_ptr->GetIndexed((size_t)skill_id);
-            return std::string_view(chars);
-        }
-
-        std::span<uint16_t> GetHL(SkillTextPropertyID prop, GW::Constants::SkillID skill_id)
-        {
-            auto prop_ptr = catalog.GetPropertyPtr(prop);
-            if (prop_ptr == nullptr)
-                return {};
-
-            auto span_id_opt = prop_ptr->GetSpanId((size_t)skill_id);
-            if (!span_id_opt.has_value())
-                return {};
-            auto span_id = span_id_opt.value();
-
-            return hl_data.GetPropHL((size_t)prop, span_id);
-        }
-
-        void FetchProperties()
-        {
-            assert(!static_props.empty());
-            for (auto &[prop_id, prop] : static_props)
-            {
-                catalog.SetPropertyPtr(prop_id, &prop);
-            }
-            FetchNames();
-            FetchDescriptions();
-        }
-
-        void FetchTags()
-        {
-            auto &prop = static_props[SkillTextPropertyID::Tag];
-            this->catalog.SetPropertyPtr(SkillTextPropertyID::Tag, &prop);
-        }
-
-        void FetchNames()
-        {
-            auto &text_provider = SkillTextProvider::GetInstance(GW::Constants::Language::English);
-            auto names_ptr = &text_provider.GetNames();
-            this->catalog.SetPropertyPtr(SkillTextPropertyID::Name, names_ptr);
-        }
-
-        void FetchDescriptions()
-        {
-            assert(text_provider.IsReady());
-            for (auto is_concise : {false, true})
-            {
-                auto &desc = descs[is_concise];
-                auto id = is_concise ? "skill_descriptions" : "skill_concise_descriptions";
-                desc.Reset();
-                desc.ReserveFromHint(id);
-                for (size_t i = 1; i < GW::Constants::SkillMax; ++i)
-                {
-                    auto skill_id = static_cast<GW::Constants::SkillID>(i);
-                    auto &cskill = CustomSkillDataModule::GetCustomSkillData(skill_id);
-                    auto attr_lvl = ResolveAttribute(cskill.attribute);
-                    desc.AppendWriteBuffer(
-                        512,
-                        [&](std::span<char> &buffer)
-                        {
-                            text_provider.MakeDescription(skill_id, is_concise, attr_lvl, buffer);
-                        }
-                    );
-                    desc.CommitWrittenToIndex(i);
-                }
-                desc.StoreCapacityHint(id);
-                auto prop_id = is_concise ? SkillTextPropertyID::Concise : SkillTextPropertyID::Description;
-                catalog.SetPropertyPtr(prop_id, &desc);
-            }
-        }
-
-        // Draw's a button to duplicate the current book
+        // Draws a button to duplicate the current book
         void DrawDupeButton()
         {
             auto window = ImGui::GetCurrentWindow();
@@ -1043,6 +1078,7 @@ namespace HerosInsight::SkillBook
             if (ImGui::Button("##DupeButton", button_size))
             {
                 auto book = AddBook();
+                book->settings = settings;
                 book->init_dims = {window->Pos + ImVec2(16, 16), window->Size};
             }
             if (ImGui::IsItemHovered())
@@ -1066,11 +1102,11 @@ namespace HerosInsight::SkillBook
             {
                 ImGui::Columns(2, nullptr, false);
 
-                skills_dirty |= ImGui::Checkbox("Include PvE-only skills", &settings.include_pve_only_skills);
-                skills_dirty |= ImGui::Checkbox("Include Temporary skills", &settings.include_temporary_skills);
-                skills_dirty |= ImGui::Checkbox("Include NPC skills", &settings.include_npc_skills);
-                skills_dirty |= ImGui::Checkbox("Include Archived skills", &settings.include_archived_skills);
-                skills_dirty |= ImGui::Checkbox("Include Disguises", &settings.include_disguises);
+                filter_dirty |= ImGui::Checkbox("Include PvE-only skills", &settings.include_pve_only_skills);
+                filter_dirty |= ImGui::Checkbox("Include Temporary skills", &settings.include_temporary_skills);
+                filter_dirty |= ImGui::Checkbox("Include NPC skills", &settings.include_npc_skills);
+                filter_dirty |= ImGui::Checkbox("Include Archived skills", &settings.include_archived_skills);
+                filter_dirty |= ImGui::Checkbox("Include Disguises", &settings.include_disguises);
 
                 ImGui::NextColumn();
 
@@ -1078,7 +1114,7 @@ namespace HerosInsight::SkillBook
                 ImGui::Checkbox("Show null stats", &settings.show_null_stats);
                 ImGui::Checkbox("Snap to skill", &settings.snap_to_skill);
                 ImGui::Checkbox("Prefer concise descriptions", &settings.prefer_concise_descriptions);
-                skills_dirty |= ImGui::Checkbox("Limit to character's professions", &settings.limit_to_characters_professions);
+                filter_dirty |= ImGui::Checkbox("Limit to character's professions", &settings.limit_to_characters_professions);
 
                 ImGui::Columns(1);
             }
@@ -1092,87 +1128,47 @@ namespace HerosInsight::SkillBook
             ImGui::SameLine();
             ImGui::SetCursorPosY(cursor_before.y);
 
-            if (ImGui::RadioButton("(0...15)", settings.attribute_mode == AttributeMode::Generic))
+            if (ImGui::RadioButton("(0...15)", settings.IsGeneric()))
             {
-                settings.attribute_mode = AttributeMode::Generic;
-                request_state_update = true;
-                FetchDescriptions();
+                settings.attr_src.type = AttributeSource::Type::Constant;
+                settings.attr_src.value = -1;
+                adapter.props_dirty = true;
             }
 
             ImGui::SameLine();
-            if (ImGui::RadioButton("Character's", settings.attribute_mode == AttributeMode::Characters))
+            if (ImGui::RadioButton("Character's", settings.IsCharacters()))
             {
-                settings.attribute_mode = AttributeMode::Characters;
-                request_state_update = true;
-                FetchDescriptions();
+                settings.attr_src.type = AttributeSource::Type::FromAgent;
+                adapter.props_dirty = true;
             }
 
             ImGui::SameLine();
-            if (ImGui::RadioButton("Manual", settings.attribute_mode == AttributeMode::Manual))
+            if (ImGui::RadioButton("Manual", settings.IsManual()))
             {
-                settings.attribute_mode = AttributeMode::Manual;
-                request_state_update = true;
-                FetchDescriptions();
+                settings.attr_src.type = AttributeSource::Type::Constant;
+                settings.attr_src.value = settings.attr_lvl_slider;
+                adapter.props_dirty = true;
             }
 
-            if (settings.attribute_mode == AttributeMode::Manual)
+            if (settings.IsManual())
             {
                 if (ImGui::SliderInt("Attribute level", &settings.attr_lvl_slider, 0, 21))
                 {
-                    request_state_update = true;
-                    FetchDescriptions();
+                    settings.attr_src.value = settings.attr_lvl_slider;
+                    adapter.props_dirty = true;
                 }
             }
         }
 
-        DWORD state_update_start_timestamp = 0;
-        bool TryUpdateQuery()
+        void InitFilterList()
         {
-#ifdef ASYNC_FILTERING
-            if (!update_filter_future.valid())
-#endif
-            {
-                if (state_update_start_timestamp == 0)
-                    state_update_start_timestamp = GW::MemoryMgr::GetSkillTimer();
-
-                if (base_skills.empty())
-                {
-                    if (!TryInitBaseSkills())
-                        return false;
-                }
-
-                query.Clear();
-                auto input_text_view = std::string_view(input_text, strlen(input_text));
-                scroll_tracking.UpdateScrollTracking(input_text_view, clipper);
-                CatalogUtils::ParseQuery(input_text_view, catalog.meta_prop_names, query);
-
-                hl_data.Reset();
-                filtered_skills.clear();
-
-                if (settings.attribute_mode == AttributeMode::Characters)
-                {
-                    auto custom_ad = CustomAgentDataModule::GetCustomAgentData(focused_agent_id);
-                    for (uint32_t i = 0; i < attributes.size(); i++)
-                    {
-                        auto attr_lvl = custom_ad.GetAttribute((AttributeOrTitle)i).value_or(0);
-                        attributes[i] = attr_lvl;
-                    }
-                }
-            }
-
             uint32_t prof_mask;
             if (settings.limit_to_characters_professions)
             {
                 prof_mask = Utils::GetProfessionMask(focused_agent_id);
             }
 
-#ifdef _ARTIFICIAL_DELAY
-            // Artificially fail 64 times to test long delays
-            static uint32_t artificial_fail_counter = 0;
-            if ((++artificial_fail_counter % 64) != 0)
-                return false;
-#endif
-
+            filtered_skills.clear();
             for (auto skill_id_16 : base_skills)
             {
                 const auto skill_id = static_cast<GW::Constants::SkillID>(skill_id_16);
@@ -1215,40 +1211,24 @@ namespace HerosInsight::SkillBook
 
                 filtered_skills.push_back(static_cast<uint16_t>(skill_id));
             }
-
-            auto filter_task = [this]()
-            {
-                this->catalog.RunQuery(this->query, this->filtered_skills, hl_data);
-
-                // for (auto &command : parsed_commands)
-                // {
-                //     ApplyCommand(command, filtered_skills);
-                // }
-
-                return true;
-            };
-
-#ifdef ASYNC_FILTERING
-            update_filter_future = std::async(std::launch::async, filter_task);
-            return false;
         }
-        else
+
+        void UpdateQuery()
         {
-            bool is_ready = update_filter_future.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready;
-            if (!is_ready)
-                return false;
+            auto input_text_view = std::string_view(input_text, strlen(input_text));
+            scroll_tracking.UpdateScrollTracking(input_text_view, clipper);
+            filter_device.ParseQuery(input_text_view, query);
 
-            assert(update_filter_future.valid());
-            bool success = update_filter_future.get();
-#else
-            bool success = filter_task();
-#endif
-            if (!success)
-                return false;
+            InitFilterList();
 
-            state_update_start_timestamp = 0;
+            this->filter_device.RunQuery(this->query, this->filtered_skills);
 
-            CatalogUtils::GetFeedback(query, catalog.meta_prop_names, feedback);
+            // for (auto &command : parsed_commands)
+            // {
+            //     ApplyCommand(command, filtered_skills);
+            // }
+
+            filter_device.GetFeedback(query, feedback);
 
             // if (active_state->filtered_skills.size() > 0)
             // {
@@ -1277,8 +1257,6 @@ namespace HerosInsight::SkillBook
             //     //     clipper.Reset();
             //     // }
             // }
-
-            return true;
         }
 
         void DrawSkillStats(const GW::Skill &skill)
@@ -1307,30 +1285,29 @@ namespace HerosInsight::SkillBook
 
             struct Layout
             {
-                SkillTextPropertyID id;
+                SkillProp id;
                 size_t atlas_index;
                 size_t pos_from_right;
             };
 
             Layout layout[]{
-                {SkillTextPropertyID::Overcast, 10, 4},
-                {SkillTextPropertyID::Sacrifice, 7, 4},
-                {SkillTextPropertyID::Upkeep, 0, 4},
-                {SkillTextPropertyID::Energy, 1, 3},
-                {settings.use_precise_adrenaline ? SkillTextPropertyID::Adrenaline : SkillTextPropertyID::AdrenalineStrikes, 3, 3},
-                {SkillTextPropertyID::Activation, 2, 2},
-                {SkillTextPropertyID::Recharge, 1, 1},
-                {SkillTextPropertyID::Aftercast, 2, 0},
+                {SkillProp::Overcast, 10, 4},
+                {SkillProp::Sacrifice, 7, 4},
+                {SkillProp::Upkeep, 0, 4},
+                {SkillProp::Energy, 1, 3},
+                {settings.use_precise_adrenaline ? SkillProp::Adrenaline : SkillProp::AdrenalineStrikes, 3, 3},
+                {SkillProp::Activation, 2, 2},
+                {SkillProp::Recharge, 1, 1},
+                {SkillProp::Aftercast, 2, 0},
             };
 
             for (const auto &l : layout)
             {
-                const auto text = GetStr(l.id, skill_id);
-                if (text.empty())
+                auto r = filter_device.CalcItemResult(query, (size_t)l.id, (size_t)skill_id);
+                if (r.text.empty())
                     continue;
-                const auto hl = GetHL(l.id, skill_id);
                 FixedVector<RichText::TextSegment, 16> segments;
-                text_drawer.MakeTextSegments(text, segments, hl);
+                text_drawer.MakeTextSegments(r.text, segments, r.hl);
                 const auto text_width = RichText::CalcTextSegmentsWidth(segments);
                 float start_x = max_pos_x - l.pos_from_right * width_per_stat - text_width;
                 float current_x = std::max(start_x, min_pos_x);
@@ -1357,7 +1334,6 @@ namespace HerosInsight::SkillBook
             { // Draw skill icon
                 const auto skill_icon_size = 56;
                 auto icon_cursor_ss = ImGui::GetCursorScreenPos();
-                auto result = Utils::GetSkillFrame(custom_sd.skill_id);
                 bool is_equipable = Utils::IsSkillEquipable(*custom_sd.skill, focused_agent_id);
                 bool is_hovered = ImGui::IsMouseHoveringRect(icon_cursor_ss, icon_cursor_ss + ImVec2(skill_icon_size, skill_icon_size));
                 bool is_effect = custom_sd.tags.EffectOnly;
@@ -1390,10 +1366,10 @@ namespace HerosInsight::SkillBook
                     auto name_color = custom_sd.tags.Archived ? Constants::GWColors::skill_dull_gray : Constants::GWColors::header_beige;
                     ImGui::PushStyleColor(ImGuiCol_Text, name_color);
 
-                    auto name_str = GetStr(SkillTextPropertyID::Name, skill_id);
-                    auto name_hl = GetHL(SkillTextPropertyID::Name, skill_id);
+                    auto r = filter_device.CalcItemResult(query, (size_t)SkillProp::Name, (size_t)skill_id);
+                    // auto name_hl = GetHL(SkillProp::Name, skill_id);
                     FixedVector<RichText::TextSegment, 32> segments;
-                    text_drawer.MakeTextSegments(name_str, segments, name_hl);
+                    text_drawer.MakeTextSegments(r.text, segments, r.hl);
                     text_drawer.DrawTextSegments(segments, wrapping_min, wrapping_max);
 
                     auto size = ImGui::GetItemRectSize();
@@ -1443,16 +1419,16 @@ namespace HerosInsight::SkillBook
                 }
 
                 { // Draw skill type
-                    auto str = GetStr(SkillTextPropertyID::Type, skill_id);
-                    auto hl = GetHL(SkillTextPropertyID::Type, skill_id);
-                    text_drawer.DrawRichText(str, wrapping_min, wrapping_max, hl);
+                    auto r = filter_device.CalcItemResult(query, (size_t)SkillProp::Type, (size_t)skill_id);
+                    // auto hl = GetHL(SkillProp::Type, skill_id);
+                    text_drawer.DrawRichText(r.text, wrapping_min, wrapping_max, r.hl);
                 }
 
                 { // Draw skill tags
-                    auto str = GetStr(SkillTextPropertyID::Tag, skill_id);
-                    auto hl = GetHL(SkillTextPropertyID::Tag, skill_id);
+                    auto r = filter_device.CalcItemResult(query, (size_t)SkillProp::Tag, (size_t)skill_id);
+                    // auto hl = GetHL(SkillProp::Tag, skill_id);
                     ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
-                    text_drawer.DrawRichText(str, wrapping_min, wrapping_max, hl);
+                    text_drawer.DrawRichText(r.text, wrapping_min, wrapping_max, r.hl);
                     ImGui::PopStyleColor();
                 }
 
@@ -1667,7 +1643,7 @@ namespace HerosInsight::SkillBook
                 [](ImGuiInputTextCallbackData *data)
                 {
                     auto &book = *static_cast<BookState *>(data->UserData);
-                    book.request_state_update = true;
+                    book.filter_dirty = true;
 
                     return 0;
                 },
@@ -1683,28 +1659,28 @@ namespace HerosInsight::SkillBook
                 DrawFilterTooltip();
             }
 
-            if (state_update_start_timestamp)
-            {
-                DWORD now_timestamp = GW::MemoryMgr::GetSkillTimer();
-                float elapsed_sec = (float)(now_timestamp - state_update_start_timestamp) / 1000.0f;
+            // if (state_update_start_timestamp)
+            // {
+            //     DWORD now_timestamp = GW::MemoryMgr::GetSkillTimer();
+            //     float elapsed_sec = (float)(now_timestamp - state_update_start_timestamp) / 1000.0f;
 
-                if (elapsed_sec > 0.2f)
-                {
-                    // Draw spinning arrow
-                    auto packet = TextureModule::GetPacket_ImageInAtlas(
-                        TextureModule::KnownFileIDs::UI_SkillStatsIcons,
-                        ImVec2(23, 23),
-                        ImVec2(16, 16),
-                        3,
-                        ImVec2(0, 0),
-                        ImVec2(0, 0),
-                        ImColor(0.95f, 0.6f, 0.2f)
-                    );
-                    auto rads = 2.f * elapsed_sec * 6.28f;
-                    auto draw_list = ImGui::GetWindowDrawList();
-                    packet.AddToDrawList(draw_list, ImVec2(pos.x + 20, pos.y), rads);
-                }
-            }
+            //     if (elapsed_sec > 0.2f)
+            //     {
+            //         // Draw spinning arrow
+            //         auto packet = TextureModule::GetPacket_ImageInAtlas(
+            //             TextureModule::KnownFileIDs::UI_SkillStatsIcons,
+            //             ImVec2(23, 23),
+            //             ImVec2(16, 16),
+            //             3,
+            //             ImVec2(0, 0),
+            //             ImVec2(0, 0),
+            //             ImColor(0.95f, 0.6f, 0.2f)
+            //         );
+            //         auto rads = 2.f * elapsed_sec * 6.28f;
+            //         auto draw_list = ImGui::GetWindowDrawList();
+            //         packet.AddToDrawList(draw_list, ImVec2(pos.x + 20, pos.y), rads);
+            //     }
+            // }
 
             if (!feedback.empty())
             {
@@ -1719,17 +1695,15 @@ namespace HerosInsight::SkillBook
             auto tt_provider = SkillTooltipProvider(skill_id);
             text_drawer.tooltip_provider = &tt_provider;
 
-            auto type = settings.prefer_concise_descriptions ? SkillTextPropertyID::Concise : SkillTextPropertyID::Description;
-            auto alt_type = settings.prefer_concise_descriptions ? SkillTextPropertyID::Description : SkillTextPropertyID::Concise;
+            auto type = settings.prefer_concise_descriptions ? SkillProp::Concise : SkillProp::Description;
+            auto alt_type = settings.prefer_concise_descriptions ? SkillProp::Description : SkillProp::Concise;
 
-            auto main_desc = GetStr(type, skill_id);
-            auto alt_desc = GetStr(alt_type, skill_id);
-            auto main_hl = GetHL(type, skill_id);
-            auto alt_hl = GetHL(alt_type, skill_id);
+            auto main_r = filter_device.CalcItemResult(query, (size_t)type, (size_t)skill_id);
+            auto alt_r = filter_device.CalcItemResult(query, (size_t)alt_type, (size_t)skill_id);
 
-            text_drawer.DrawRichText(main_desc, 0, work_width, main_hl);
+            text_drawer.DrawRichText(main_r.text, 0, work_width, main_r.hl);
 
-            bool draw_alt = alt_hl.size() > main_hl.size();
+            bool draw_alt = alt_r.hl.size() > main_r.hl.size();
             if (!draw_alt)
             {
                 // auto len = std::min(main_hl.size(), alt_hl.size());
@@ -1760,7 +1734,7 @@ namespace HerosInsight::SkillBook
                 // ImGui::SameLine(0, 0);
                 // auto wrapping_min = ImGui::GetCursorPosX();
 
-                text_drawer.DrawRichText(alt_desc, 0, work_width, alt_hl);
+                text_drawer.DrawRichText(alt_r.text, 0, work_width, alt_r.hl);
             }
         }
 
@@ -1771,29 +1745,29 @@ namespace HerosInsight::SkillBook
             ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
 
-            for (auto i_meta = footer_meta_section.start_index; i_meta < footer_meta_section.end_index; ++i_meta)
+            auto &section = adapter.ts.footer_meta_section;
+            for (auto i_meta = section.start_index; i_meta < section.end_index; ++i_meta)
             {
-                auto meta_propset = catalog.meta_propsets[i_meta];
+                auto meta_propset = adapter.GetMetaPropset(i_meta);
                 bool has_drawn_header = false;
-                for (Utils::BitsetIterator it(meta_propset); !it.IsDone(); it.Next())
+                for (auto prop : meta_propset.IterSetBits())
                 {
-                    auto prop_id = (SkillTextPropertyID)it.index;
-                    auto str = GetStr(prop_id, skill_id);
-                    if (str.empty())
+                    auto r = filter_device.CalcItemResult(query, (size_t)prop, (size_t)skill_id);
+                    if (r.text.empty())
                         continue;
 
                     if (!has_drawn_header)
                     {
-                        auto meta = GetMetaPropName(i_meta);
-                        auto meta_hl = GetMetaHL(i_meta);
-                        text_drawer.DrawRichText(meta, 0, work_width, meta_hl);
+                        auto r = filter_device.CalcMetaResult(query, i_meta);
+                        // auto meta_hl = GetMetaHL(i_meta);
+                        text_drawer.DrawRichText(r.text, 0, work_width, r.hl);
                         ImGui::SameLine();
                         text_drawer.DrawRichText(": ", 0, work_width);
                         ImGui::SameLine();
                         has_drawn_header = true;
                     }
-                    auto str_hl = GetHL(prop_id, skill_id);
-                    text_drawer.DrawRichText(str, 0, work_width, str_hl);
+                    // auto str_hl = GetHL(prop, skill_id);
+                    text_drawer.DrawRichText(r.text, 0, work_width, r.hl);
                 }
             }
 
@@ -1802,13 +1776,12 @@ namespace HerosInsight::SkillBook
 
             { // Draw skill id
                 ImGui::SetWindowFontScale(0.7f);
-                FixedVector<char, 32> id_str;
-                id_str.AppendIntToChars((uint32_t)skill.skill_id);
-                const auto id_str_size = ImGui::CalcTextSize(id_str.data(), id_str.data_end());
+                auto r = filter_device.CalcItemResult(query, (size_t)SkillProp::Id, (size_t)skill_id);
+                const auto id_str_size = ImGui::CalcTextSize(r.text.data(), r.text.data() + r.text.size());
                 ImGui::SetCursorPosX(work_width - id_str_size.x - 4);
                 ImVec4 color(1, 1, 1, 0.3f);
                 ImGui::PushStyleColor(ImGuiCol_Text, color);
-                ImGui::TextUnformatted(id_str.data(), id_str.data_end());
+                text_drawer.DrawRichText(r.text, 0, work_width, r.hl);
                 ImGui::PopStyleColor();
                 ImGui::SetWindowFontScale(1.f);
             }
@@ -1872,74 +1845,67 @@ namespace HerosInsight::SkillBook
 
                 if (ImGui::BeginChild("SkillList"))
                 {
-                    if (!text_provider.IsReady())
-                    {
-                        ImGui::Text("Loading...");
-                    }
-                    else
-                    {
-                        auto est_item_height = 128.f;
-                        // auto est_item_height = 1.f;
+                    auto est_item_height = 128.f;
+                    // auto est_item_height = 1.f;
 
-                        auto draw_list = ImGui::GetWindowDrawList();
+                    auto draw_list = ImGui::GetWindowDrawList();
 
-                        auto DrawItem = [&](uint32_t i)
+                    auto DrawItem = [&](uint32_t i)
+                    {
+                        const auto skill_id = static_cast<GW::Constants::SkillID>(filtered_skills[i]);
+                        auto &custom_sd = CustomSkillDataModule::GetCustomSkillData(skill_id);
+
+                        const auto initial_screen_cursor = ImGui::GetCursorScreenPos();
+                        const auto initial_cursor = ImGui::GetCursorPos();
+                        const auto window = ImGui::GetCurrentWindow();
+                        const auto work_width = window->WorkRect.GetWidth();
+
+                        DrawSkillHeader(custom_sd);
+                        DrawDescription(skill_id, work_width);
+                        ImGui::Spacing();
+                        DrawSkillFooter(custom_sd, work_width);
+                        auto final_screen_cursor = ImGui::GetCursorScreenPos();
+
+                        auto entry_screen_max = final_screen_cursor;
+                        entry_screen_max.x += work_width;
+
+                        if (ImGui::IsWindowHovered() && ImGui::IsMouseHoveringRect(initial_screen_cursor, entry_screen_max))
                         {
-                            const auto skill_id = static_cast<GW::Constants::SkillID>(filtered_skills[i]);
-                            auto &custom_sd = CustomSkillDataModule::GetCustomSkillData(skill_id);
-
-                            const auto initial_screen_cursor = ImGui::GetCursorScreenPos();
-                            const auto initial_cursor = ImGui::GetCursorPos();
-                            const auto window = ImGui::GetCurrentWindow();
-                            const auto work_width = window->WorkRect.GetWidth();
-
-                            DrawSkillHeader(custom_sd);
-                            DrawDescription(skill_id, work_width);
-                            ImGui::Spacing();
-                            DrawSkillFooter(custom_sd, work_width);
-                            auto final_screen_cursor = ImGui::GetCursorScreenPos();
-
-                            auto entry_screen_max = final_screen_cursor;
-                            entry_screen_max.x += work_width;
-
-                            if (ImGui::IsWindowHovered() && ImGui::IsMouseHoveringRect(initial_screen_cursor, entry_screen_max))
+                            bool ctrl_down = ImGui::GetIO().KeyCtrl;
+                            if (ctrl_down)
                             {
-                                bool ctrl_down = ImGui::GetIO().KeyCtrl;
-                                if (ctrl_down)
+                                ImGui::BeginTooltip();
+                                if (IsInitialCursorPos())
                                 {
-                                    ImGui::BeginTooltip();
-                                    if (IsInitialCursorPos())
-                                    {
-                                        ImGui::TextUnformatted("Ctrl + Click to open wiki!");
-                                    }
-                                    ImGui::EndTooltip();
+                                    ImGui::TextUnformatted("Ctrl + Click to open wiki!");
                                 }
-
-                                if (ImGui::IsMouseClicked(0))
-                                {
-                                    if (ctrl_down)
-                                    {
-                                        auto name_str = GetStr(SkillTextPropertyID::Name, skill_id);
-                                        Utils::OpenWikiPage(name_str);
-                                    }
-                                    else
-                                    {
-                                        if (Utils::IsSkillEquipable(*custom_sd.skill, focused_agent_id))
-                                        {
-                                            UpdateManager::RequestSkillDragging(skill_id);
-                                        }
-                                    }
-                                }
-#ifdef _DEBUG
-                                Debug::SetHoveredSkill(skill_id);
-#endif
+                                ImGui::EndTooltip();
                             }
 
-                            ImGui::Separator();
-                        };
+                            if (ImGui::IsMouseClicked(0))
+                            {
+                                if (ctrl_down)
+                                {
+                                    auto r = filter_device.CalcItemResult(query, (size_t)SkillProp::Name, (size_t)skill_id);
+                                    Utils::OpenWikiPage(r.text);
+                                }
+                                else
+                                {
+                                    if (Utils::IsSkillEquipable(*custom_sd.skill, focused_agent_id))
+                                    {
+                                        UpdateManager::RequestSkillDragging(skill_id);
+                                    }
+                                }
+                            }
+#ifdef _DEBUG
+                            Debug::SetHoveredSkill(skill_id);
+#endif
+                        }
 
-                        clipper.Draw(n_skills, est_item_height, settings.snap_to_skill, DrawItem);
-                    }
+                        ImGui::Separator();
+                    };
+
+                    clipper.Draw(n_skills, est_item_height, settings.snap_to_skill, DrawItem);
                 }
                 ImGui::EndChild();
             }
@@ -1953,21 +1919,21 @@ namespace HerosInsight::SkillBook
     constexpr GW::UI::UIMessage kSelectHeroMessage = (GW::UI::UIMessage)(0x10000000 | 432);
     constexpr GW::UI::UIMessage kChangeProfession = (GW::UI::UIMessage)(0x10000000 | 78);
 
-    void AttributeUpdateCallback(GW::HookStatus *, const GW::Packet::StoC::PacketBase *packet)
+    void AttributeUpdatedCallback(GW::HookStatus *, const GW::Packet::StoC::PacketBase *packet)
     {
         const auto p = reinterpret_cast<const GW::Packet::StoC::AttributeUpdatePacket *>(packet);
         auto packet_agent_id = p->agent_id;
 
-        for (auto &book : books)
+        if (packet_agent_id == focused_agent_id)
         {
-            if (book->settings.attribute_mode == AttributeMode::Characters)
+            for (auto &book : books)
             {
-                if (packet_agent_id == focused_agent_id)
+                if (book->settings.IsCharacters())
                 {
                     // auto attr = AttributeOrTitle((GW::Constants::AttributeByte)p->attribute);
                     // attributes[attr.value] = p->value;
-                    book->attrs_changed = true;
-                    book->FetchDescriptions();
+                    book->adapter.props_dirty = true;
+                    // book->FetchDescriptions();
                 }
             }
         }
@@ -1976,30 +1942,28 @@ namespace HerosInsight::SkillBook
     {
         for (auto &book : books)
         {
-            if (book->settings.attribute_mode == AttributeMode::Characters)
+            if (book->settings.IsCharacters())
             {
                 // auto attr = AttributeOrTitle((GW::Constants::TitleID)packet->title_id);
                 // attributes[attr.value] = packet->new_value;
-                book->attrs_changed = true;
+                book->adapter.props_dirty = true;
             }
         }
     }
 
-    void LoadHeroSkillsCallback(GW::HookStatus *, GW::UI::UIMessage msg, void *wparam, void *lparam)
+    void LoadAgentSkillsCallback(GW::HookStatus *, GW::UI::UIMessage msg, void *wparam, void *lparam)
     {
         // This is called whenever a new set of skills are loaded in the deckbuilder
-        assert(msg == kLoadHeroSkillsMessage);
 
         auto agent_id = (uint32_t)wparam;
         if (agent_id > 0)
         {
             focused_agent_id = agent_id;
-            FetchTags(); // Why this here?
-            for (auto &book : books)
-            {
-                book->FetchTags();
-                book->request_state_update = true;
-            }
+            // for (auto &book : books)
+            // {
+            //     book->FetchTags();
+            //     book->request_state_update = true;
+            // }
         }
     }
 
@@ -2007,7 +1971,6 @@ namespace HerosInsight::SkillBook
     {
         // This is called whenever the user selects a hero in either the deckbuilder or the inventory,
         // but it doesn't come with any params/info
-        assert(msg == kSelectHeroMessage);
 
         auto db = GW::UI::GetFrameByLabel(L"DeckBuilder");
         if (!db)
@@ -2030,21 +1993,18 @@ namespace HerosInsight::SkillBook
         focused_agent_id = GW::Agents::GetControlledCharacterId();
         for (auto &book : books)
         {
-            book->request_state_update = true;
+            book->adapter.props_dirty = true;
         }
     }
 
-    void ChangeProfessionCallback(GW::HookStatus *, GW::UI::UIMessage msg, void *wparam, void *lparam)
+    void ProfessionUpdatedCallback(GW::HookStatus *, GW::UI::UIMessage msg, void *wparam, void *lparam)
     {
-        auto p = (uint32_t *)wparam;
-        auto agent_id = p[0];
-        if (agent_id == focused_agent_id)
+        auto p = (GW::UI::UIPacket::kProfessionUpdated *)wparam;
+        if (p->agent_id == focused_agent_id)
         {
-            // auto primary = p[1];
-            // auto secondary = p[2];
             for (auto &book : books)
             {
-                book->request_state_update = true;
+                book->adapter.props_dirty = true;
             }
         }
     }
@@ -2086,18 +2046,17 @@ namespace HerosInsight::SkillBook
 
     void Initialize()
     {
-        GW::StoC::RegisterPacketCallback(&attribute_update_entry, GAME_SMSG_AGENT_UPDATE_ATTRIBUTE, AttributeUpdateCallback);
+        GW::StoC::RegisterPacketCallback(&attribute_update_entry, GAME_SMSG_AGENT_UPDATE_ATTRIBUTE, AttributeUpdatedCallback);
         GW::StoC::RegisterPacketCallback<GW::Packet::StoC::UpdateTitle>(&attribute_update_entry, TitleUpdateCallback);
 
-        GW::UI::RegisterUIMessageCallback(&select_hero_entry, kLoadHeroSkillsMessage, LoadHeroSkillsCallback);
-        GW::UI::RegisterUIMessageCallback(&select_hero_entry, kSelectHeroMessage, SelectHeroCallback);
+        GW::UI::RegisterUIMessageCallback(&select_hero_entry, GW::UI::UIMessage::kLoadAgentSkills, LoadAgentSkillsCallback);
+        GW::UI::RegisterUIMessageCallback(&select_hero_entry, GW::UI::UIMessage::kSelectHeroPane, SelectHeroCallback);
         GW::UI::RegisterUIMessageCallback(&select_hero_entry, GW::UI::UIMessage::kMapLoaded, MapLoadedCallback);
-        GW::UI::RegisterUIMessageCallback(&select_hero_entry, kChangeProfession, ChangeProfessionCallback);
+        GW::UI::RegisterUIMessageCallback(&select_hero_entry, GW::UI::UIMessage::kProfessionUpdated, ProfessionUpdatedCallback);
 
         ForceDeckbuilderCallbacks();
 
-        SetupMetaProps();
-        FetchStaticProps();
+        text_storage.Initialize();
         AddBook(); // Add first book
     }
 
@@ -2105,10 +2064,10 @@ namespace HerosInsight::SkillBook
     {
         GW::StoC::RemoveCallbacks(&attribute_update_entry);
 
-        GW::UI::RemoveUIMessageCallback(&select_hero_entry, kLoadHeroSkillsMessage);
-        GW::UI::RemoveUIMessageCallback(&select_hero_entry, kSelectHeroMessage);
+        GW::UI::RemoveUIMessageCallback(&select_hero_entry, GW::UI::UIMessage::kLoadAgentSkills);
+        GW::UI::RemoveUIMessageCallback(&select_hero_entry, GW::UI::UIMessage::kSelectHeroPane);
         GW::UI::RemoveUIMessageCallback(&select_hero_entry, GW::UI::UIMessage::kMapLoaded);
-        GW::UI::RemoveUIMessageCallback(&select_hero_entry, kChangeProfession);
+        GW::UI::RemoveUIMessageCallback(&select_hero_entry, GW::UI::UIMessage::kProfessionUpdated);
     }
 
     void FormatActivation(char *buffer, uint32_t len, float value)
