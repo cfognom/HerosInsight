@@ -189,29 +189,34 @@ namespace HerosInsight::SkillBook
         Manual
     };
 
+    // The order they are listed in here is also the order the properties are filtered by.
+    // This order has big impacts in the filtering speed.
+    // The filtering device works by trying to confirm if an item matches the filter, if so it can discard it for further processing.
+    // It therefore makes sense to try to put properties which are likely to match first,
+    // and also similar properties far away from each other. Since if, for example, no matches were found in the description,
+    // it is unlikely any will be found in the concise description.
     enum struct SkillProp : uint16_t
     {
-        Name,
-        Type,
-        Tag,
-
-        Upkeep,
-        Energy,
-        AdrenalineStrikes,
-        Adrenaline,
-        Overcast,
-        Sacrifice,
-        Activation,
-        Recharge,
-        Aftercast,
-
         Description,
-        Concise,
-
+        Type,
         Attribute,
         Profession,
         Campaign,
+        Tag,
         Range,
+        Name,
+
+        Energy,
+        Recharge,
+        Activation,
+        AdrenalineStrikes,
+        Sacrifice,
+        Overcast,
+        Adrenaline,
+        Aftercast,
+        Upkeep,
+
+        Concise,
         // Parsed,
         Id,
 
