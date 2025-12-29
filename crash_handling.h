@@ -163,7 +163,7 @@ namespace HerosInsight::CrashHandling
 #else
         try
         {
-            SafeCallInner(fn, data);
+            success = SafeCallInner(fn, data);
         }
         catch (const std::exception &e)
         {
