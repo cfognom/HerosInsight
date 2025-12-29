@@ -224,28 +224,37 @@ namespace HerosInsight::Filtering
                             if (!filter.matcher.Match(str, 0))
                                 continue;
 
+                            // The filter matched against this meta name, now we need to find out which items "have it"
+
                             BitView meta_propset = impl.GetMetaPropset(i_meta);
-                            // Iterate the items and check which ones "has values" in this meta property
-                            for (auto index : unconfirmed_match.IterSetBits())
+                            for (auto prop_id : meta_propset.IterSetBits())
                             {
-                                auto item = items[index];
-                                for (auto i_prop : meta_propset.IterSetBits())
+                                if (prop_id == n_props)
+                                    continue;
+                                auto &prop = impl.GetProperty(prop_id);
+                                auto item_to_span = impl.GetItemToSpan(prop_id);
+                                // Iterate the items and check which ones "has values" in this property
+                                bool all_confirmed = true;
+                                for (auto index : unconfirmed_match.IterSetBits())
                                 {
-                                    auto &prop = impl.GetProperty(i_prop);
-                                    auto span_id = impl.GetItemToSpan(i_prop)[item];
+                                    auto item = items[index];
+                                    auto span_id = item_to_span[item];
                                     auto str = prop.Get(span_id);
                                     if (!str.text.empty())
                                     {
                                         unconfirmed_match[index] = false;
-                                        break;
+                                        continue;
                                     }
+                                    all_confirmed = false;
                                 }
+                                if (all_confirmed)
+                                    goto next_filter;
                             }
                         }
                     }
                     else // Non-meta
                     {
-                        LoweredTextVector &prop = impl.GetProperty(prop_id);
+                        auto &prop = impl.GetProperty(prop_id);
                         auto item_to_span = impl.GetItemToSpan(prop_id);
 
                         // std::bitset<N_entries> span_ids; // Worst case size
@@ -257,7 +266,8 @@ namespace HerosInsight::Filtering
                         // Iterate the unconfirmed items and mark which spans we use
                         for (auto index : unconfirmed_match.IterSetBits())
                         {
-                            auto span_id = item_to_span[items[index]];
+                            auto item = items[index];
+                            auto span_id = item_to_span[item];
                             marked_spans[span_id] = true;
                         }
                         stopwatch.Checkpoint(std::format("prop_{} marking", prop_id));
@@ -265,7 +275,7 @@ namespace HerosInsight::Filtering
                         // Iterate marked spans and unmark those that don't match
                         for (auto span_id : marked_spans.IterSetBits())
                         {
-                            LoweredText str = prop.Get(span_id);
+                            auto str = prop.Get(span_id);
 
                             if (!filter.matcher.Match(str, 0))
                                 marked_spans[span_id] = false;
@@ -273,17 +283,23 @@ namespace HerosInsight::Filtering
                         stopwatch.Checkpoint(std::format("prop_{} matching", prop_id));
 
                         // Iterate the items and record which ones' spans matched
+                        bool all_confirmed = true;
                         for (auto index : unconfirmed_match.IterSetBits())
                         {
-                            auto span_id = item_to_span[items[index]];
+                            auto item = items[index];
+                            auto span_id = item_to_span[item];
                             bool is_match = marked_spans[span_id];
                             if (is_match)
+                            {
                                 unconfirmed_match[index] = false;
+                                continue;
+                            }
+                            all_confirmed = false;
                         }
                         stopwatch.Checkpoint(std::format("prop_{} checking", prop_id));
+                        if (all_confirmed)
+                            goto next_filter;
                     }
-                    if (!unconfirmed_match.Any())
-                        goto next_filter;
                 }
 
                 {

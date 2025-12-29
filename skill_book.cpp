@@ -910,6 +910,7 @@ namespace HerosInsight::SkillBook
         TextStorage &ts;
         std::unordered_map<SkillProp, SkillsProp> dynamic_props;
         bool props_dirty = true;
+        std::array<SkillsProp *, PROP_COUNT> props;
 
         void InitDynamicProps(AttributeSource attr_src)
         {
@@ -918,16 +919,16 @@ namespace HerosInsight::SkillBook
             InitDescriptions(false, attr_src, dynamic_props[SkillProp::Description]);
             InitDescriptions(true, attr_src, dynamic_props[SkillProp::Concise]);
             InitTags(dynamic_props[SkillProp::Tag]);
+            for (size_t i = 0; i < PROP_COUNT; ++i)
+            {
+                auto prop_id = (SkillProp)i;
+                auto it = dynamic_props.find(prop_id);
+                if (it != dynamic_props.end())
+                    props[i] = &it->second;
+                else
+                    props[i] = &ts.static_props[i];
+            }
             props_dirty = false;
-        }
-
-        SkillsProp &GetProperty(SkillProp prop)
-        {
-            auto it = dynamic_props.find(prop);
-            if (it != dynamic_props.end())
-                return it->second;
-
-            return ts.static_props[(size_t)prop];
         }
 
         explicit FilteringAdapter(TextStorage &storage)
@@ -943,8 +944,8 @@ namespace HerosInsight::SkillBook
         LoweredText GetMetaName(size_t meta) { return ts.meta_prop_names.Get(meta); }
         BitView GetMetaPropset(size_t meta) const { return ts.meta_propsets[meta]; }
 
-        std::span<index_type> GetItemToSpan(size_t prop) { return GetProperty((SkillProp)prop).skill_to_text; }
-        LoweredTextVector &GetProperty(size_t prop) { return GetProperty((SkillProp)prop).texts; }
+        std::span<index_type> GetItemToSpan(size_t prop) { return props[prop]->skill_to_text; }
+        LoweredTextVector &GetProperty(size_t prop) { return props[prop]->texts; }
     };
 
     struct BookState;
