@@ -55,6 +55,17 @@ namespace HerosInsight
             }
         }
 
+        void Flip()
+        {
+            auto data = uncompress();
+            if (data.has_partial_head)
+                data.head.SetMaskedWord(~*data.head.word);
+            for (auto &word : data.whole_words)
+                word = ~word;
+            if (data.has_partial_tail)
+                data.tail.SetMaskedWord(~*data.tail.word);
+        }
+
         struct reference
         {
             void Set(bool value)
@@ -101,6 +112,7 @@ namespace HerosInsight
                 : word(word), mask(bit) {}
 
             word_t GetMaskedWord() const { return *word & mask; }
+            void SetMaskedWord(word_t value) { *word = (*word & ~mask) | (value & mask); }
 
             word_t *word;
             word_t mask;
