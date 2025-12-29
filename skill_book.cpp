@@ -762,10 +762,10 @@ namespace HerosInsight::SkillBook
         void InitStaticProps()
         {
             InitNames();
-            AttributeSource attr_src;
-            InitDescriptions(false, attr_src, this->static_props[(size_t)SkillProp::Description]);
-            InitDescriptions(true, attr_src, this->static_props[(size_t)SkillProp::Concise]);
-            InitTags(this->static_props[(size_t)SkillProp::Tag]);
+            // AttributeSource attr_src;
+            // InitDescriptions(false, attr_src, this->static_props[(size_t)SkillProp::Description]);
+            // InitDescriptions(true, attr_src, this->static_props[(size_t)SkillProp::Concise]);
+            // InitTags(this->static_props[(size_t)SkillProp::Tag]);
 
             static auto AppendStr = [](StringArena<char> &dst, std::string_view sv)
             {
