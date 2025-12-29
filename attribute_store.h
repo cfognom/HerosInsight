@@ -1,6 +1,7 @@
 #pragma once
 
 #include <attribute_or_title.h>
+#include <utils.h>
 
 namespace HerosInsight
 {
@@ -33,9 +34,11 @@ namespace HerosInsight
 
         void SetAttribute(AttributeOrTitle id, uint8_t level)
         {
-#ifdef _DEBUG
-            assert(level < 64);
-#endif
+            if (level > 63)
+            {
+                SOFT_ASSERT(false, L"Level must be between 0 and 63");
+                level = 63;
+            }
             auto word_index = id.value / 3;
             auto inner_index = id.value % 3;
             auto mask = 0x1F << (inner_index * 5);
