@@ -1066,6 +1066,17 @@ namespace HerosInsight::SkillBook
             filter_dirty = false;
         }
 
+        void CopyStateFrom(const BookState &other)
+        {
+            settings = other.settings;
+            query = other.query;
+            filtered_skills = other.filtered_skills;
+            feedback = other.feedback;
+            scroll_tracking = other.scroll_tracking;
+            clipper.SetScroll(other.clipper.GetTargetScroll());
+            std::copy(other.input_text, other.input_text + 1024, input_text);
+        }
+
         // Draws a button to duplicate the current book
         void DrawDupeButton()
         {
@@ -1083,12 +1094,12 @@ namespace HerosInsight::SkillBook
             if (ImGui::Button("##DupeButton", button_size))
             {
                 auto book = AddBook();
-                book->settings = settings;
+                book->CopyStateFrom(*this);
                 book->init_dims = {window->Pos + ImVec2(16, 16), window->Size};
             }
             if (ImGui::IsItemHovered())
             {
-                ImGui::SetTooltip("Open new book");
+                ImGui::SetTooltip("Duplicate book");
             }
             const auto center = window->Pos + button_pos + button_size / 2;
             const auto plus_radius = button_side * 0.3f;
