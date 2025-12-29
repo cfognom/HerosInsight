@@ -425,7 +425,7 @@ namespace HerosInsight::RichText
 
                 if (seg.is_highlighted)
                 {
-                    auto min_aligned = ImFloor(min);
+                    auto min_aligned = ImFloor(ImVec2(min.x, min.y + 2));
                     auto max_aligned = ImFloor(max);
                     draw_list->AddRectFilled(min_aligned, max_aligned, highlight_color);
                     ImGui::PushStyleColor(ImGuiCol_Text, highlight_text_color);
