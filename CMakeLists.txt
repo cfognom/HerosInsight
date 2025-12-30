@@ -36,7 +36,6 @@ add_library(HerosInsight SHARED
     encstr_debugger.cpp
     custom_agent_data.h
     custom_agent_data.cpp
-    scanner_tool.cpp
     attribute_or_title.cpp
     effect_initiator.cpp
     StoC_packets.h

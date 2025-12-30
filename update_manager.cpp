@@ -44,10 +44,8 @@ namespace HerosInsight
     float UpdateManager::render_delta_seconds = 0.0f;
 
 #ifdef _DEBUG
-    ScannerTool UpdateManager::scanner_tool;
     bool UpdateManager::enable_ui_debug = false;
     bool UpdateManager::open_debug = true;
-    bool UpdateManager::open_scanner_tool = false;
     bool UpdateManager::open_texture_viewer = false;
     bool UpdateManager::open_encstr_debugger = false;
     bool UpdateManager::unlock_windows = true;
@@ -115,7 +113,6 @@ namespace HerosInsight
     {
 #ifdef _DEBUG
         HerosInsight::Debug::Initialize();
-        scanner_tool.Initialize();
 #endif
         TextureModule::Initialize();
         HerosInsight::PacketReader::Initialize();
@@ -269,7 +266,6 @@ namespace HerosInsight
                 ImGui::Checkbox("Debug Display", &UpdateManager::open_debug);
                 ImGui::Checkbox("Texture Viewer", &UpdateManager::open_texture_viewer);
                 ImGui::Checkbox("Encoded String Debugger", &UpdateManager::open_encstr_debugger);
-                ImGui::Checkbox("Scanner Tool", &UpdateManager::open_scanner_tool);
 #endif
                 ImGui::Checkbox("Skill Book", &UpdateManager::open_skill_book);
                 ImGui::Checkbox("Damage Display", &UpdateManager::open_damage);
@@ -414,8 +410,6 @@ namespace HerosInsight
             HerosInsight::DebugUI::Draw(device);
         if (open_debug)
             HerosInsight::DebugDisplay::Draw(device);
-        if (open_scanner_tool)
-            scanner_tool.DrawImGui();
 #endif
         if (open_skill_book)
             HerosInsight::SkillBook::Draw(device);

@@ -7,7 +7,6 @@
 #include <GWCA/Utilities/Hooker.h>
 #include <cstdint>
 
-#include "scanner_tool.h"
 #include <utils.h>
 
 namespace HerosInsight
@@ -29,7 +28,6 @@ namespace HerosInsight
         static bool open_debug;
         static bool open_texture_viewer;
         static bool open_encstr_debugger;
-        static bool open_scanner_tool;
 #endif
         static bool open_main_menu;
         static bool open_damage;
@@ -48,10 +46,5 @@ namespace HerosInsight
         static void Draw(IDirect3DDevice9 *device);
         static ImGuiWindowFlags GetWindowFlags();
         static bool RequestSkillDragging(GW::Constants::SkillID skill_id);
-
-    private:
-#ifdef _DEBUG
-        static ScannerTool scanner_tool;
-#endif
     };
 }
