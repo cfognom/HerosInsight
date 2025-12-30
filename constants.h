@@ -4,10 +4,6 @@
 #include <imgui.h>
 #include <iostream>
 
-// #ifdef _DEBUG
-#define _STOPWATCH 1
-// #endif
-
 namespace Constants
 {
     struct Paths : public std::array<std::filesystem::path, 4>

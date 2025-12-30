@@ -27,3 +27,5 @@
 #include "enum_as_int.h"
 
 // #define EXPERIMENTAL_FEATURES
+
+#define _STOPWATCH
