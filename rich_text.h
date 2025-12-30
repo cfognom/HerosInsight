@@ -123,7 +123,7 @@ namespace HerosInsight::RichText
 
     struct TextSegment
     {
-        enum struct WrapMode
+        enum struct WrapMode : uint8_t
         {
             Null,
             Disallow,
@@ -137,6 +137,7 @@ namespace HerosInsight::RichText
         std::optional<ImU32> color = std::nullopt;
         std::optional<uint16_t> tooltip_id = std::nullopt;
         bool is_highlighted = false;
+        bool has_hidden_hl = false;
         WrapMode wrap_mode = WrapMode::Null;
 
         float CalcWidth(TextImageProvider *image_provider, TextFracProvider *frac_provider) const;

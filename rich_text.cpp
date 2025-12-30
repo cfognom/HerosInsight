@@ -200,6 +200,7 @@ namespace HerosInsight::RichText
         FixedVector<uint32_t, 32> tooltip_stack;
 
         bool is_currently_highlighted = false;
+        bool has_hidden_hl = false;
         size_t i_hl = 0;
         size_t i_hl_change = highlighting.empty() ? std::numeric_limits<size_t>::max() : highlighting[0];
 
@@ -214,29 +215,32 @@ namespace HerosInsight::RichText
             if (!tooltip_stack.empty())
                 seg.tooltip_id = tooltip_stack.back();
             seg.is_highlighted = is_currently_highlighted;
+            seg.has_hidden_hl = has_hidden_hl;
+            has_hidden_hl = false;
 
             if (index == 0)
             {
                 seg.wrap_mode = first_segment_wrap_mode;
             }
+            else if (seg.text.empty())
+            {
+                seg.wrap_mode = TextSegment::WrapMode::Disallow;
+            }
+            else if (text[i_start] == '\n')
+            {
+                seg.wrap_mode = TextSegment::WrapMode::Force;
+            }
             else
             {
-                if (text[i_start] == '\n')
-                {
-                    seg.wrap_mode = TextSegment::WrapMode::Force;
-                }
-                else
-                {
-                    auto &prev_seg = result[index - 1];
-                    bool prev_is_visible = std::holds_alternative<ImageTag>(prev_seg.tag) ||
-                                           std::holds_alternative<FracTag>(prev_seg.tag) ||
-                                           (prev_seg.text.back() != ' ');
-                    bool is_visible = std::holds_alternative<ImageTag>(seg.tag) ||
-                                      std::holds_alternative<FracTag>(seg.tag) ||
-                                      (seg.text.front() != ' ');
-                    bool can_wrap = !prev_is_visible && is_visible;
-                    seg.wrap_mode = can_wrap ? TextSegment::WrapMode::Allow : TextSegment::WrapMode::Disallow;
-                }
+                auto &prev_seg = result[index - 1];
+                bool prev_is_visible = std::holds_alternative<ImageTag>(prev_seg.tag) ||
+                                       std::holds_alternative<FracTag>(prev_seg.tag) ||
+                                       (prev_seg.text.back() != ' ');
+                bool is_visible = std::holds_alternative<ImageTag>(seg.tag) ||
+                                  std::holds_alternative<FracTag>(seg.tag) ||
+                                  (seg.text.front() != ' ');
+                bool can_wrap = !prev_is_visible && is_visible;
+                seg.wrap_mode = can_wrap ? TextSegment::WrapMode::Allow : TextSegment::WrapMode::Disallow;
             }
 
             if (tag.has_value())
@@ -295,12 +299,14 @@ namespace HerosInsight::RichText
 
             if (is_hl_change)
             {
+                bool was_highlighted = is_currently_highlighted;
                 do
                 {
                     ++i_hl;
                     i_hl_change = i_hl < highlighting.size() ? highlighting[i_hl] : std::numeric_limits<size_t>::max();
                 } while (i_hl_change <= i);
                 is_currently_highlighted = (i_hl & 1) == 1;
+                has_hidden_hl = !was_highlighted && !is_currently_highlighted;
             }
 
             if (has_tag)
@@ -350,6 +356,10 @@ namespace HerosInsight::RichText
                 ++i;
             }
         }
+        if (has_hidden_hl)
+        {
+            AddSegment(text.size(), text.size());
+        }
     }
 
     void Drawer::DrawTextSegments(std::span<TextSegment> segments, float wrapping_min, float wrapping_max)
@@ -385,7 +395,7 @@ namespace HerosInsight::RichText
             for (size_t i = i_rem; i < n_segments; ++i)
             {
                 auto &seg = segments[i];
-                if (used_width > 0.f) // We only allow wrapping if we are not direactly at the start
+                if (used_width > 0.f) // We only allow wrapping if we are not directly at the start
                 {
                     if (seg.wrap_mode == TextSegment::WrapMode::Force)
                     {
@@ -424,10 +434,17 @@ namespace HerosInsight::RichText
 
                 if (seg.is_highlighted)
                 {
-                    auto min_aligned = ImFloor(ImVec2(min.x, min.y + 2));
+                    auto min_aligned = ImFloor(ImVec2(min.x, min.y + 1));
                     auto max_aligned = ImFloor(max);
                     draw_list->AddRectFilled(min_aligned, max_aligned, highlight_color);
                     ImGui::PushStyleColor(ImGuiCol_Text, highlight_text_color);
+                }
+
+                if (seg.has_hidden_hl)
+                {
+                    auto min_aligned = ImFloor(ImVec2(min.x, min.y + 1));
+                    auto max_aligned = ImFloor(ImVec2(min.x + 1, max.y));
+                    draw_list->AddRectFilled(min_aligned, max_aligned, highlight_color);
                 }
 
                 // Draw segment content
