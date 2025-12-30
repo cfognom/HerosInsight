@@ -102,8 +102,8 @@ namespace HerosInsight
 #else
     struct Stopwatch
     {
-        FORCE_INLINE Stopwatch(std::string_view, float _ = 0f) noexcept {}
+        FORCE_INLINE Stopwatch(std::string_view, float = 0.f) noexcept {}
         FORCE_INLINE void Checkpoint(std::string &&) noexcept {}
-    }
+    };
 #endif
 }
