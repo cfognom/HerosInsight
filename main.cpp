@@ -305,52 +305,59 @@ IDirect3DStateBlock9 *TryPrepareStencil(IDirect3DDevice9 *device)
     return HerosInsight::Utils::PrepareStencilHoles(device, holes);
 }
 
-static GW::HookEntry game_loop_callback_entry;
+GW::HookEntry game_loop_callback_entry;
 static void Shutdown()
 {
-    HWND hWnd = GW::MemoryMgr::GetGWWindowHandle();
+    GW::GameThread::RemoveGameThreadCallback(&game_loop_callback_entry);
+    HerosInsight::UpdateManager::Terminate();
 
+    HWND hWnd = GW::MemoryMgr::GetGWWindowHandle();
     ImGui_ImplDX9_Shutdown();
     ImGui::DestroyContext();
     SetWindowLongPtr(hWnd, GWL_WNDPROC, OldWndProc);
-
-    HerosInsight::UpdateManager::Terminate();
-    GW::GameThread::RemoveGameThreadCallback(&game_loop_callback_entry);
     GW::DisableHooks();
     running = false;
 }
 
+// bool hooks_enabled = false;
+bool is_modding_allowed = false;
+// void OnRenderDormant(GW::Render::Helper helper)
+// {
+//     bool was_modding_allowed = is_modding_allowed;
+//     is_modding_allowed = HerosInsight::Utils::IsModdingAllowed();
+
+//     if (is_modding_allowed && !was_modding_allowed)
+//     {
+//         hooks_enabled = true;
+//     }
+// }
+
+static void CheckIfModdingIsAllowed()
+{
+    // if (!GW::Map::GetIsMapLoaded())
+    //     return;
+    bool was_modding_allowed = is_modding_allowed;
+    is_modding_allowed = HerosInsight::Utils::IsModdingAllowed();
+
+    // if (is_modding_allowed && !was_modding_allowed)
+    // {
+    //     hooks_enabled = true;
+    // }
+    if (!is_modding_allowed)
+    {
+        GW::Chat::WriteChat(GW::Chat::CHANNEL_MODERATOR, L"HerosInsight: You have entered a zone where modding is not allowed. HerosInsight has been terminated automatically.");
+        Shutdown();
+    }
+}
+
 static void OnRender(void *data)
 {
+    CheckIfModdingIsAllowed();
+    if (!is_modding_allowed)
+        return;
+
     auto helper = *static_cast<GW::Render::Helper *>(data);
     auto device = helper.device;
-    // This is call from within the game thread and all operation should be done here. (Although, Note that: GW::GameThread::IsInGameThread() == false)
-    // You can't freeze this thread, so no blocking operation or at your own risk.
-    if (!OldWndProc)
-    {
-        HWND hWnd = GW::MemoryMgr::GetGWWindowHandle();
-        OldWndProc = SetWindowLongPtr(hWnd, GWL_WNDPROC, reinterpret_cast<long>(SafeWndProc));
-        ImGui::CreateContext();
-        ImGui_ImplDX9_Init(hWnd, device);
-    }
-    static bool initialized = false;
-    if (!initialized)
-    {
-        if (!HerosInsight::UpdateManager::TryInitialize())
-            return;
-
-        GW::GameThread::RegisterGameThreadCallback(
-            &game_loop_callback_entry,
-            [](GW::HookStatus *)
-            {
-                if (!HerosInsight::CrashHandling::SafeCall(&HerosInsight::UpdateManager::Update))
-                {
-                    Shutdown();
-                }
-            }
-        );
-        initialized = true;
-    }
 
     ImGui_ImplDX9_NewFrame();
 
@@ -378,6 +385,54 @@ static void OnRender(void *data)
     }
 }
 
+static void OnUpdate(void *data)
+{
+    HerosInsight::UpdateManager::Update();
+}
+
+static void Initialize(void *data)
+{
+    // This is call from within the game thread and all operation should be done here. (Although, Note that: GW::GameThread::IsInGameThread() == false)
+    // You can't freeze this thread, so no blocking operation or at your own risk.
+
+    auto helper = *static_cast<GW::Render::Helper *>(data);
+    auto device = helper.device;
+
+    HWND hWnd = GW::MemoryMgr::GetGWWindowHandle();
+    OldWndProc = SetWindowLongPtr(hWnd, GWL_WNDPROC, reinterpret_cast<long>(SafeWndProc));
+    ImGui::CreateContext();
+    ImGui_ImplDX9_Init(hWnd, device);
+    HerosInsight::UpdateManager::Initialize();
+
+    GW::GameThread::RegisterGameThreadCallback(
+        &game_loop_callback_entry,
+        [](GW::HookStatus *)
+        {
+            if (!HerosInsight::CrashHandling::SafeCall(&OnUpdate))
+            {
+                Shutdown();
+            }
+        }
+    );
+
+    GW::Render::SetRenderCallback(
+        [](GW::Render::Helper helper)
+        {
+            if (!HerosInsight::CrashHandling::SafeCall(&OnRender, &helper))
+            {
+                Shutdown();
+            }
+        }
+    );
+
+    GW::Render::SetResetCallback(
+        [](GW::Render::Helper helper)
+        {
+            ImGui_ImplDX9_InvalidateDeviceObjects();
+        }
+    );
+}
+
 static DWORD WINAPI ThreadProc(LPVOID lpModule)
 {
     // This is a new thread so you should only initialize GWCA and setup the hook on the game thread.
@@ -399,16 +454,7 @@ static DWORD WINAPI ThreadProc(LPVOID lpModule)
     GW::Render::SetRenderCallback(
         [](GW::Render::Helper helper)
         {
-            if (!HerosInsight::CrashHandling::SafeCall(&OnRender, &helper))
-            {
-                Shutdown();
-            }
-        }
-    );
-    GW::Render::SetResetCallback(
-        [](GW::Render::Helper helper)
-        {
-            ImGui_ImplDX9_InvalidateDeviceObjects();
+            Initialize(&helper); // We temporarily set the render callback to the initialize function, since all initialization must happen in the game thread ???
         }
     );
 

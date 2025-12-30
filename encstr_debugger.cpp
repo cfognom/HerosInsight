@@ -226,7 +226,7 @@ namespace HerosInsight::EncstrDebugger
         ImGui::SetNextWindowPos(ImVec2(600, 100), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(400, 600), ImGuiCond_FirstUseEver);
 
-        if (ImGui::Begin("Encoded String Debugger", &UpdateManager::open_encstr_debugger, UpdateManager::GetWindowFlags()))
+        if (ImGui::Begin("Encoded String Debugger", &UpdateManager::open_encstr_debugger))
         {
             DrawEncStrBuilder();
             ImGui::Separator();

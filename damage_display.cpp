@@ -55,13 +55,15 @@
 #include <update_manager.h>
 #include <utils.h>
 
+#include "damage_display.h"
+
 namespace HerosInsight::DamageDisplay
 {
     void Draw(IDirect3DDevice9 *device)
     {
         ImGui::SetNextWindowPos(ImVec2(600, 400), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(200, 200), ImGuiCond_FirstUseEver);
-        if (ImGui::Begin("Damage Display", &UpdateManager::open_damage, UpdateManager::GetWindowFlags()))
+        if (ImGui::Begin("Damage Display", &enabled))
         {
             const int max_heroes = 9;
             const int bar_spacing = 10;

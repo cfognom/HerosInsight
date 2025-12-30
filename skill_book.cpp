@@ -1918,7 +1918,7 @@ namespace HerosInsight::SkillBook
             FixedVector<char, 64> name;
             MakeBookName(name, book_index);
 
-            if (ImGui::Begin(name.data(), &is_opened, UpdateManager::GetWindowFlags()))
+            if (ImGui::Begin(name.data(), &is_opened))
             {
                 DrawDupeButton();
                 DrawCheckboxes();
@@ -2008,9 +2008,6 @@ namespace HerosInsight::SkillBook
 
     GW::HookEntry attribute_update_entry;
     GW::HookEntry select_hero_entry;
-    constexpr GW::UI::UIMessage kLoadHeroSkillsMessage = (GW::UI::UIMessage)(0x10000000 | 395);
-    constexpr GW::UI::UIMessage kSelectHeroMessage = (GW::UI::UIMessage)(0x10000000 | 432);
-    constexpr GW::UI::UIMessage kChangeProfession = (GW::UI::UIMessage)(0x10000000 | 78);
 
     void AttributeUpdatedCallback(GW::HookStatus *, const GW::Packet::StoC::PacketBase *packet)
     {
@@ -2136,7 +2133,7 @@ namespace HerosInsight::SkillBook
         }
     }
 
-    void Initialize()
+    void Enable()
     {
         GW::StoC::RegisterPacketCallback(&attribute_update_entry, GAME_SMSG_AGENT_UPDATE_ATTRIBUTE, AttributeUpdatedCallback);
         GW::StoC::RegisterPacketCallback<GW::Packet::StoC::UpdateTitle>(&attribute_update_entry, TitleUpdateCallback);
@@ -2145,6 +2142,21 @@ namespace HerosInsight::SkillBook
         GW::UI::RegisterUIMessageCallback(&select_hero_entry, GW::UI::UIMessage::kSelectHeroPane, SelectHeroCallback);
         GW::UI::RegisterUIMessageCallback(&select_hero_entry, GW::UI::UIMessage::kMapLoaded, MapLoadedCallback);
         GW::UI::RegisterUIMessageCallback(&select_hero_entry, GW::UI::UIMessage::kProfessionUpdated, ProfessionUpdatedCallback);
+    }
+
+    void Disable()
+    {
+        GW::StoC::RemoveCallbacks(&attribute_update_entry);
+
+        GW::UI::RemoveUIMessageCallback(&select_hero_entry, GW::UI::UIMessage::kLoadAgentSkills);
+        GW::UI::RemoveUIMessageCallback(&select_hero_entry, GW::UI::UIMessage::kSelectHeroPane);
+        GW::UI::RemoveUIMessageCallback(&select_hero_entry, GW::UI::UIMessage::kMapLoaded);
+        GW::UI::RemoveUIMessageCallback(&select_hero_entry, GW::UI::UIMessage::kProfessionUpdated);
+    }
+
+    void Initialize()
+    {
+        Enable();
 
         ForceDeckbuilderCallbacks();
 
@@ -2156,12 +2168,7 @@ namespace HerosInsight::SkillBook
     {
         CancelSkillDragging();
 
-        GW::StoC::RemoveCallbacks(&attribute_update_entry);
-
-        GW::UI::RemoveUIMessageCallback(&select_hero_entry, GW::UI::UIMessage::kLoadAgentSkills);
-        GW::UI::RemoveUIMessageCallback(&select_hero_entry, GW::UI::UIMessage::kSelectHeroPane);
-        GW::UI::RemoveUIMessageCallback(&select_hero_entry, GW::UI::UIMessage::kMapLoaded);
-        GW::UI::RemoveUIMessageCallback(&select_hero_entry, GW::UI::UIMessage::kProfessionUpdated);
+        Disable();
     }
 
     void FormatActivation(char *buffer, uint32_t len, float value)

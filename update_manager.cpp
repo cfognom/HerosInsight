@@ -52,7 +52,9 @@ namespace HerosInsight
 #endif
     bool UpdateManager::open_skill_book = false;
     bool UpdateManager::open_main_menu = true;
+#ifdef EXPERIMENTAL_FEATURES
     bool UpdateManager::open_damage = true;
+#endif
 
     enum struct GameState
     {
@@ -107,16 +109,20 @@ namespace HerosInsight
         }
     }
 
-    bool UpdateManager::TryInitialize()
+    void UpdateManager::Initialize()
     {
 #ifdef _DEBUG
         HerosInsight::Debug::Initialize();
 #endif
         TextureModule::Initialize();
+
+#ifdef EXPERIMENTAL_FEATURES
         HerosInsight::PacketReader::Initialize();
         HerosInsight::PacketStepper::Initialize();
         HerosInsight::EffectInitiator::Initialize();
         HerosInsight::EnergyDisplay::Initialize();
+#endif
+
         HerosInsight::CustomAgentDataModule::Initialize();
         HerosInsight::CustomSkillDataModule::Initialize();
         HerosInsight::SkillBook::Initialize();
@@ -126,7 +132,6 @@ namespace HerosInsight
             GW::RegisterLogHandler(&LogHandler, &log_context);
         }
         GW::Chat::WriteChat(GW::Chat::CHANNEL_MODERATOR, L"HerosInsight: Initialized");
-        return true;
     }
 
     void UpdateManager::Terminate()
@@ -143,18 +148,6 @@ namespace HerosInsight
         GW::Chat::WriteChat(GW::Chat::CHANNEL_MODERATOR, L"HerosInsight: Terminated");
     }
 
-    ImGuiWindowFlags UpdateManager::GetWindowFlags()
-    {
-        ImGuiWindowFlags flags = 0 //
-                                   //  | ImGuiWindowFlags_NoFocusOnAppearing
-            /**/;
-        // if (!UpdateManager::unlock_windows)
-        // {
-        //     flags |= ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
-        // }
-        return flags;
-    }
-
     void OnUpdate()
     {
         assert(game_state != GameState::Null);
@@ -166,15 +159,21 @@ namespace HerosInsight
             if (game_state == GameState::InExplorable)
             {
                 // Entered explorable
+
+#ifdef EXPERIMENTAL_FEATURES
                 HerosInsight::PartyDataModule::Initialize();
+#endif
             }
 
             if (prev_game_state == GameState::InExplorable)
             {
                 // Exited explorable
+
+#ifdef EXPERIMENTAL_FEATURES
                 HerosInsight::PartyDataModule::Terminate();
                 HerosInsight::EffectTracking::Reset();
                 HerosInsight::WorldSpaceUI::Reset();
+#endif
             }
         }
 
@@ -189,7 +188,9 @@ namespace HerosInsight
         if (UpdateManager::open_skill_book)
             HerosInsight::SkillBook::Update();
 
+#ifdef EXPERIMENTAL_FEATURES
         HerosInsight::EnergyDisplay::Update();
+#endif
 
         if (game_state != GameState::Observing)
         {
@@ -197,10 +198,11 @@ namespace HerosInsight
 
             if (game_state == GameState::InExplorable)
             {
-                // HerosInsight::HeroAI::Update();
+#ifdef EXPERIMENTAL_FEATURES
                 HerosInsight::PartyDataModule::Update();
                 HerosInsight::EffectTracking::Update();
                 HerosInsight::WorldSpaceUI::Update();
+#endif
             }
             else if (game_state == GameState::InOutpost)
             {
@@ -266,8 +268,10 @@ namespace HerosInsight
                 ImGui::Checkbox("Encoded String Debugger", &UpdateManager::open_encstr_debugger);
 #endif
                 ImGui::Checkbox("Skill Book", &UpdateManager::open_skill_book);
-                ImGui::Checkbox("Damage Display", &UpdateManager::open_damage);
+#ifdef EXPERIMENTAL_FEATURES
+                ImGui::Checkbox("Damage Display", &DamageDisplay::enabled);
                 ImGui::TextUnformatted("Settings");
+#endif
 #ifdef _DEBUG
                 ImGui::TextUnformatted("Debug Info");
                 ImGui::TextUnformatted("Alt + End => Terminate addon");
@@ -308,8 +312,10 @@ namespace HerosInsight
         if (game_state == GameState::InExplorable)
         {
             HerosInsight::WorldSpaceUI::Draw(device);
-            if (open_damage)
+#ifdef EXPERIMENTAL_FEATURES
+            if (DamageDisplay::enabled)
                 HerosInsight::DamageDisplay::Draw(device);
+#endif
         }
 
 #ifdef _DEBUG
@@ -334,7 +340,7 @@ namespace HerosInsight
         }
     }
 
-    void UpdateManager::Update(void *)
+    void UpdateManager::Update()
     {
         UpdateManager::frame_id++; // We increment frame_id at the beginning of the frame so that any draw updates that happen after this use the same frame_id
         const auto gw_ms = GW::MemoryMgr::GetSkillTimer();

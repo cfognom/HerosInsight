@@ -112,7 +112,7 @@ namespace HerosInsight::TextureViewer
         ImGui::SetNextWindowSize(ImVec2(400, 600), ImGuiCond_FirstUseEver);
 
         static VariableSizeClipper clipper{};
-        if (ImGui::Begin("Texture Viewer", &UpdateManager::open_texture_viewer, UpdateManager::GetWindowFlags()))
+        if (ImGui::Begin("Texture Viewer", &UpdateManager::open_texture_viewer))
         {
             if (ImGui::InputInt("Start Offset", &start_offset))
             {

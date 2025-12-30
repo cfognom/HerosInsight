@@ -30,18 +30,18 @@ namespace HerosInsight
         static bool open_encstr_debugger;
 #endif
         static bool open_main_menu;
-        static bool open_damage;
         static bool open_skill_book;
+#ifdef EXPERIMENTAL_FEATURES
+        static bool open_damage;
+#endif
 
         inline static std::tuple<bool *, char, char> key_bindings[] = {
             {&open_skill_book, VK_CONTROL, 'K'},
         };
 
-        static bool TryInitialize();
+        static void Initialize();
         static void Terminate();
-        static void Update(void *);
+        static void Update();
         static void Draw(IDirect3DDevice9 *device);
-        static ImGuiWindowFlags GetWindowFlags();
-        static bool RequestSkillDragging(GW::Constants::SkillID skill_id);
     };
 }
