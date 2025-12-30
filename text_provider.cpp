@@ -387,8 +387,8 @@ namespace HerosInsight::Text
                 case GWStringPiece::Type::CharPluralOnly:
                     if (plurality != Plurality::Plural)
                         continue;
-                    str_piece = std::string_view((char *)&piece.value, 1);
-                    break;
+                    dst.push_back((char)piece.value);
+                    continue;
 
                 case GWStringPiece::Type::Substitution:
                 {
