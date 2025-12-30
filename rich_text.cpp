@@ -50,8 +50,7 @@ namespace HerosInsight::RichText
         auto packet = GetImagePacket(tag.id);
         auto window = ImGui::GetCurrentWindow();
         auto draw_list = window->DrawList;
-        auto y_offset = -packet.size.y * 0.1f;
-        pos = ImFloor(ImVec2(pos.x, pos.y + y_offset));
+        pos = ImFloor(ImVec2(pos));
         packet.AddToDrawList(draw_list, pos);
 
 // #define DEBUG_POS

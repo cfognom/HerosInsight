@@ -369,11 +369,14 @@ void AddFonts(ImGuiIO &io)
     // io.Fonts->AddFontFromFileTTF((res_path / "friz-quadrata-std-medium-5870338ec7ef8.otf").string().c_str(), 14.0f, NULL, io.Fonts->GetGlyphRangesDefault());
     Constants::Fonts::gw_font_20 = io.Fonts->AddFontFromFileTTF((res_path / "Font.ttf").string().c_str(), 20.f, NULL, io.Fonts->GetGlyphRangesDefault());
     Constants::Fonts::skill_name_font = Constants::Fonts::gw_font_20;
-    Constants::Fonts::skill_thick_font_18 = io.Fonts->AddFontFromFileTTF((res_path / "friz-quadrata-std-bold-587034a220f9f.otf").string().c_str(), 18.0f, NULL, io.Fonts->GetGlyphRangesDefault());
-    Constants::Fonts::skill_thick_font_16 = io.Fonts->AddFontFromFileTTF((res_path / "friz-quadrata-std-bold-587034a220f9f.otf").string().c_str(), 16.0f, NULL, io.Fonts->GetGlyphRangesDefault());
-    Constants::Fonts::skill_thick_font_15 = io.Fonts->AddFontFromFileTTF((res_path / "friz-quadrata-std-bold-587034a220f9f.otf").string().c_str(), 15.0f, NULL, io.Fonts->GetGlyphRangesDefault());
-    Constants::Fonts::skill_thick_font_12 = io.Fonts->AddFontFromFileTTF((res_path / "friz-quadrata-std-bold-587034a220f9f.otf").string().c_str(), 12.0f, NULL, io.Fonts->GetGlyphRangesDefault());
-    Constants::Fonts::skill_thick_font_9 = io.Fonts->AddFontFromFileTTF((res_path / "friz-quadrata-std-bold-587034a220f9f.otf").string().c_str(), 9.0f, NULL, io.Fonts->GetGlyphRangesDefault());
+
+    ImFontConfig config;
+    config.GlyphOffset.y = 2;
+    Constants::Fonts::skill_thick_font_18 = io.Fonts->AddFontFromFileTTF((res_path / "friz-quadrata-std-bold-587034a220f9f.otf").string().c_str(), 18.0f, &config, io.Fonts->GetGlyphRangesDefault());
+    Constants::Fonts::skill_thick_font_16 = io.Fonts->AddFontFromFileTTF((res_path / "friz-quadrata-std-bold-587034a220f9f.otf").string().c_str(), 16.0f, &config, io.Fonts->GetGlyphRangesDefault());
+    Constants::Fonts::skill_thick_font_15 = io.Fonts->AddFontFromFileTTF((res_path / "friz-quadrata-std-bold-587034a220f9f.otf").string().c_str(), 15.0f, &config, io.Fonts->GetGlyphRangesDefault());
+    Constants::Fonts::skill_thick_font_12 = io.Fonts->AddFontFromFileTTF((res_path / "friz-quadrata-std-bold-587034a220f9f.otf").string().c_str(), 12.0f, &config, io.Fonts->GetGlyphRangesDefault());
+    Constants::Fonts::skill_thick_font_9 = io.Fonts->AddFontFromFileTTF((res_path / "friz-quadrata-std-bold-587034a220f9f.otf").string().c_str(), 9.0f, &config, io.Fonts->GetGlyphRangesDefault());
 }
 
 void InvertDefaultStyleColors()
