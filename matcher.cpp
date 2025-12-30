@@ -1,3 +1,7 @@
+#include <ranges>
+
+#include <bitview.h>
+#include <multibuffer.h>
 #include <rich_text.h>
 #include <utils.h>
 
@@ -5,131 +9,127 @@
 
 namespace HerosInsight
 {
-    Matcher::Matcher(std::string_view source, bool start_insensitive)
+    FORCE_INLINE bool CharCompare(char a, char b)
+    {
+        return a == b || (a >= 'A' && a <= 'Z' && ((a + 32) == b));
+    }
+
+    FORCE_INLINE bool IsBoundary(std::string_view text, size_t offset)
+    {
+        if (offset == 0 || offset == text.size())
+            return true;
+        if (Utils::IsAlpha(text[offset]))
+            return !Utils::IsAlpha(text[offset - 1]);
+        if (Utils::IsDigit(text[offset]))
+            return !Utils::IsDigit(text[offset - 1]);
+        if (text[offset - 1] != text[offset])
+            return true;
+        return false;
+    }
+
+    Matcher::Matcher(std::string_view source)
     {
         using Type = Matcher::Atom::Type;
+        using Location = Matcher::Atom::Location;
+        using PostCheck = Matcher::Atom::PostCheck;
 
-        if (start_insensitive)
-        {
-            this->atoms.push_back({Type::ZeroOrMoreExcept, {}});
-            this->atoms.push_back({Type::WordStart, {}});
-        }
+        auto location = Location::Anywhere;
 
         auto rem = source;
-        while (rem.size())
+        for (; !rem.empty(); location = (Location)0)
         {
-            auto rem_tmp = rem;
-            if ((rem_tmp.data() == source.data() || Utils::TryReadSpaces(rem_tmp)))
+            while (true)
             {
-                bool success = true;
-                Matcher::Atom atom;
-                if (Utils::TryRead("....", rem_tmp))
-                    atom = {Type::ZeroOrMoreExcept, {}};
-                else if (Utils::TryRead("...", rem_tmp))
-                    atom = {Type::ZeroOrMoreExcept, ".:"};
-                else if (Utils::TryRead("..", rem_tmp))
-                    atom = {Type::ZeroOrMoreExcept, ".,:;"};
-                else
-                    success = false;
+                bool has_leading_spaces = Utils::TryReadSpaces(rem);
+                bool has_dot2 = Utils::TryRead("..", rem);
+                bool has_dot3 = has_dot2 && Utils::TryRead('.', rem);
 
-                if (success && (rem_tmp.empty() || Utils::TryReadSpaces(rem_tmp)))
+                Location new_location;
+                if (has_dot3)
                 {
-                    this->atoms.push_back(atom);
-                    rem = rem_tmp;
-                    continue;
+                    location = std::max(location, Location::Anywhere);
+                }
+                else if (has_dot2)
+                {
+                    location = std::max(location, Location::WithinSentence);
+                }
+                else if (has_leading_spaces)
+                {
+                    location = std::max(location, Location::WithinNextWord);
+                }
+                else
+                {
+                    location = std::max(location, Location::WithinWord);
+                    if (rem.empty())
+                        goto super_break;
+                    break;
                 }
             }
 
-            if (Utils::TryReadSpaces(rem))
-            {
-                this->atoms.push_back({Type::OneOrMoreSpaces, {}});
-                continue;
-            }
-
-            if (Utils::TryRead('#', rem))
-            {
-                this->atoms.push_back({Type::Number, {}});
-                continue;
-            }
-
-            // if (Utils::TryRead(':', rem))
+            // if (Utils::TryRead("???", rem))
             // {
-            //     this->atoms.push_back({Type::ExactString, ":"});
-            //     this->atoms.push_back({Type::ZeroOrMoreExcept, {}});
+            //     this->atoms.push_back(Matcher::Atom(Type::ZeroOrMoreWildcard, location));
             //     continue;
             // }
 
-            if ((rem.size() <= 3 || rem[3] != '.') &&
-                Utils::TryRead("...", rem))
+            // if (Utils::TryRead("??", rem))
+            // {
+            //     this->atoms.push_back(Matcher::Atom(Type::Wildcard, location));
+            //     this->atoms.push_back(Matcher::Atom(Type::ZeroOrMoreWildcard, location));
+            //     continue;
+            // }
+
+            // if (Utils::TryRead('?', rem))
+            // {
+            //     this->atoms.push_back(Matcher::Atom(Type::Wildcard, location));
+            //     continue;
+            // }
+
+            if (Utils::TryRead('#', rem))
             {
-                this->atoms.push_back({Type::ZeroOrMoreNonSpace, {}});
+                auto &atom = this->atoms.emplace_back(Type::AnyDigit, location);
+                atom.post_check = PostCheck::ValidNum;
                 continue;
             }
 
-            if ((rem.size() <= 2 || rem[2] != '.') &&
-                Utils::TryRead("..", rem))
             {
-                this->atoms.push_back({Type::ZeroOrMoreAlpha, {}});
-                continue;
-            }
+                auto rem_restore = rem;
 
-            if (Utils::IsDigit(rem[0]) || rem[0] == '-' || rem[0] == '+')
-            {
-                double value;
-                if (Utils::TryReadNumber(rem, value))
+                PostCheck post_check = PostCheck::ValidNum;
+                if (Utils::TryRead('<', rem))
                 {
-                    this->atoms.push_back({Type::NumberEqual, value});
+                    post_check |= PostCheck::NumLess;
+                }
+                else if (Utils::TryRead('>', rem))
+                {
+                    post_check |= PostCheck::NumGreater;
+                }
+                else
+                {
+                    post_check |= PostCheck::NumEqual;
+                }
+
+                if (Utils::TryRead('=', rem))
+                {
+                    post_check |= PostCheck::NumEqual;
+                }
+
+                double num;
+                if (Utils::TryReadNumber(rem, num))
+                {
+                    double denom;
+                    if (Utils::TryRead('/', rem) &&
+                        Utils::TryReadNumber(rem, denom))
+                    {
+                        num /= denom;
+                    }
+                    auto &atom = this->atoms.emplace_back(Type::AnyDigit, location);
+                    atom.post_check = post_check;
+                    atom.num = num;
                     continue;
                 }
-            }
 
-            Type type = Type::NumberLessThan;
-            switch (rem[0])
-            {
-                case '>':
-                    type = Type::NumberGreaterThan;
-                case '<':
-                {
-                    auto rem_tmp = rem.substr(1);
-                    if (Utils::TryRead('=', rem_tmp))
-                    {
-                        ++(*(uint8_t *)&type);
-                    }
-                    double value;
-                    if (Utils::TryReadNumber(rem_tmp, value))
-                    {
-                        this->atoms.push_back({type, value});
-                        rem = rem_tmp;
-                        continue;
-                    }
-                }
-            }
-
-            if (Utils::TryRead('"', rem))
-            {
-                size_t i = 0;
-                while (i < rem.size() && rem[0] != '"')
-                    ++i;
-                auto str = rem.substr(0, i);
-                if (!str.empty())
-                    this->atoms.push_back({Type::ExactString, str});
-                rem = rem.substr(i + 1); // +1 to skip "
-                continue;
-            }
-
-            if (Utils::IsAlpha(rem[0]))
-            {
-                size_t i = 0;
-                do
-                {
-                    ++i;
-                } while (i < rem.size() && Utils::IsAlpha(rem[i]));
-                auto str = rem.substr(0, i);
-                this->atoms.push_back({Type::String, str});
-                // this->atoms.push_back({Type::ZeroOrMoreNonSpace, {}});
-                this->atoms.push_back({Type::ZeroOrMoreExcept, ".,:;"});
-                rem = rem.substr(i);
-                continue;
+                rem = rem_restore;
             }
 
             if (!Utils::IsSpace(rem[0]))
@@ -138,29 +138,33 @@ namespace HerosInsight
                 do
                 {
                     ++i;
-                } while (i < rem.size() && !Utils::IsSpace(rem[i]) && !Utils::IsAlpha(rem[i]));
+                } while (i < rem.size() && !Utils::IsSpace(rem[i]) && !Utils::IsDigit(rem[i]) && rem[i] != '.');
                 auto str = rem.substr(0, i);
-                this->atoms.push_back({Type::ExactString, str});
+                auto &atom = this->atoms.emplace_back(Type::String, location, str);
+                atom.post_check = PostCheck::CaseSubset;
                 rem = rem.substr(i);
                 continue;
             }
         }
+    super_break:
 
-        this->is_degenerate = true;
-        for (const auto &atom : this->atoms)
+        auto values = atoms | std::views::transform(&Atom::src_str);
+        this->strings = LoweredTextVector(values);
+        for (size_t i = 0; i < atoms.size(); ++i)
         {
-            bool is_zero_or_more = Type::ZEROORMORE_START <= atom.type && atom.type <= Type::ZEROORMORE_END;
-            if (!is_zero_or_more)
+            auto &atom = atoms[i];
+            atom.needle = this->strings[i];
+
+            // Optimization: When the atom requires to be a case subset
+            // but there are no upper-case letters in the needle, we can skip the case check
+            // ("nothing" is a subset of "anything")
+            if (Utils::HasFlag(atom.post_check, PostCheck::CaseSubset) &&
+                !atom.needle.uppercase.Any())
             {
-                this->is_degenerate = false;
-                break;
+                Utils::RemoveFlag(atom.post_check, PostCheck::CaseSubset);
             }
         }
-    }
-
-    FORCE_INLINE bool CharCompare(char a, char b)
-    {
-        return a == b || (a >= 'A' && a <= 'Z' && ((a + 32) == b));
+        work_mem.resize(atoms.size());
     }
 
     void SkipTags(std::string_view text, size_t &offset)
@@ -214,382 +218,291 @@ namespace HerosInsight
         return success;
     }
 
-    bool Matcher::Matches(std::string_view text, std::vector<uint16_t> *matches)
+    size_t FindNextWord(std::string_view text, size_t offset)
     {
-        if (this->is_degenerate)
+        offset = text.find(' ', offset);
+        if (offset == std::string::npos)
+            return std::string::npos; // failed
+        offset = text.find_first_not_of(' ', offset);
+        if (offset == std::string::npos)
+            return std::string::npos; // failed
+        return offset;
+    }
+
+    bool IsSubstring(LoweredText text, LoweredText sub, size_t offset)
+    {
+        if (offset + sub.text.size() > text.text.size())
+            return false;
+        return text.text.substr(offset, sub.text.size()) == sub.text &&
+               sub.uppercase.IsSubsetOf(text.uppercase.Subview(offset, sub.text.size()));
+    }
+
+    size_t FindAnyNumber()
+    {
+        return std::string::npos;
+    }
+
+    size_t FindPrefixedWord(LoweredText haystack, LoweredText prefix, size_t offset)
+    {
+        while (true)
+        {
+            offset = haystack.text.find(prefix.text, offset);
+            if (offset == std::string::npos)
+            {
+                return std::string::npos; // failed
+            }
+
+            if ((offset > 0 && haystack.text[offset - 1] != ' ') ||
+                !prefix.uppercase.IsSubsetOf(haystack.uppercase.Subview(offset, prefix.text.size())))
+            {
+                ++offset;
+                continue; // failed but try again
+            }
+
+            return offset;
+        }
+    }
+
+    size_t CalcLimit(Matcher::Atom atom, LoweredText text, size_t offset)
+    {
+        using Location = Matcher::Atom::Location;
+
+        size_t search_space_max;
+        switch (atom.location)
+        {
+            case Location::WithinNextWord:
+                search_space_max = FindNextWord(text.text, offset);
+                search_space_max = text.text.find(' ', search_space_max);
+                break;
+            case Location::WithinWord:
+                search_space_max = text.text.find(' ');
+                break;
+            case Location::WithinSentence:
+                search_space_max = text.text.find('.');
+                break;
+            case Location::Anywhere:
+            default:
+                return text.text.size();
+        }
+        return std::min(search_space_max, text.text.size());
+    }
+
+    struct FindResult
+    {
+        size_t begin;
+        size_t end;
+
+        bool Success() const
+        {
+            return begin != std::string::npos;
+        }
+
+        size_t Len() const { return end - begin; }
+    };
+
+    size_t Find(Matcher::Atom &atom, LoweredText haystack, size_t offset)
+    {
+        using Type = Matcher::Atom::Type;
+
+        switch (atom.type)
+        {
+            case Type::AnyNonSpace:
+                offset = haystack.text.find_first_not_of(' ', offset);
+                break;
+            case Type::String:
+                offset = haystack.text.find(atom.needle.text, offset);
+                break;
+            case Type::AnyDigit:
+                offset = haystack.text.find_first_of("0123456789", offset);
+                break;
+                // case Type::Number:
+                // {
+                //     r.begin = haystack.text.find(needle.text, offset);
+                //     size_t alt_begin = 0;
+                //     switch (atom.num)
+                //     {
+                //         case 0.25:
+                //             alt_begin = haystack.text.find("<1/4>", r.begin + 1);
+                //             break;
+                //         case 0.5:
+                //             alt_begin = haystack.text.find("<1/2>", r.begin + 1);
+                //             break;
+                //         case 0.75:
+                //             alt_begin = haystack.text.find("<3/4>", r.begin + 1);
+                //             break;
+                //     }
+                // }
+        }
+
+        return offset;
+    }
+
+    bool PostChecks(Matcher::Atom &atom, LoweredText haystack, size_t offset, size_t &end_out)
+    {
+        if (atom.location >= Matcher::Atom::Location::WithinNextWord)
+        {
+            if (!IsBoundary(haystack.text, offset))
+                return false;
+        }
+
+        if (Utils::HasFlag(atom.post_check, Matcher::Atom::PostCheck::CaseSubset))
+        {
+            if (!atom.needle.uppercase.IsSubsetOf(haystack.uppercase.Subview(offset, atom.needle.text.size())))
+                return false;
+        }
+
+        if (Utils::HasFlag(atom.post_check, Matcher::Atom::PostCheck::ValidNum))
+        {
+            if (offset > 0)
+            {
+                if (Utils::IsDigit(haystack.text[offset - 1]))
+                    return false;
+
+                if (haystack.text[offset - 1] == '.' &&
+                    offset > 1 &&
+                    Utils::IsDigit(haystack.text[offset - 2]))
+                    return false;
+            }
+
+            auto haystack_endptr = haystack.text.data() + haystack.text.size();
+            double value;
+            constexpr size_t tag_prefix_len = std::string_view("<frac=").size();
+            std::string_view rem;
+            RichText::FracTag tag;
+            if (offset >= tag_prefix_len &&
+                (rem = haystack.text.substr(offset - tag_prefix_len), RichText::FracTag::TryRead(rem, tag)))
+            {
+                value = (double)tag.num / (double)tag.den;
+            }
+            else
+            {
+                auto [ptr, ec] = std::from_chars(haystack.text.data() + offset, haystack_endptr, value);
+                if (ec != std::errc())
+                    return false;
+                auto num_end = ptr - haystack.text.data();
+                rem = haystack.text.substr(num_end);
+                if (RichText::FracTag::TryRead(rem, tag))
+                {
+                    value += (double)tag.num / (double)tag.den;
+                }
+            }
+
+            if (Utils::HasFlag(atom.post_check, Matcher::Atom::PostCheck::NumChecks))
+            {
+                bool num_in_range = false;
+                // clang-format off
+                if (Utils::HasFlag(atom.post_check, Matcher::Atom::PostCheck::NumEqual  )) num_in_range |= value == atom.num;
+                if (Utils::HasFlag(atom.post_check, Matcher::Atom::PostCheck::NumLess   )) num_in_range |= value <  atom.num;
+                if (Utils::HasFlag(atom.post_check, Matcher::Atom::PostCheck::NumGreater)) num_in_range |= value >  atom.num;
+                // clang-format on
+                if (!num_in_range)
+                    return false;
+            }
+
+            end_out = rem.data() - haystack.text.data();
+        }
+
+        return true;
+    }
+
+    bool Matcher::Match(LoweredText text, size_t offset)
+    {
+        auto n_atoms = atoms.size();
+
+        for (size_t i = 0; i < n_atoms; ++i)
+        {
+            work_mem[i].begin = 0;
+        }
+
+        size_t match_end;
+        for (size_t i = 0; i < n_atoms; ++i)
+        {
+            work_mem[i].limit = CalcLimit(atoms[i], text, offset);
+        backtrack:
+            auto &atom = atoms[i];
+            auto &mrec = work_mem[i];
+            while (true)
+            {
+                if (offset < mrec.begin)
+                {
+                    offset = mrec.begin;
+                }
+                else
+                {
+                    offset = Find(atom, text, offset);
+                    if (offset == std::string::npos)
+                        return false;
+                    mrec.begin = offset;
+                }
+
+                if (offset >= mrec.limit)
+                {
+                    if (i == 0)
+                        return std::string::npos;
+                    --i;
+                    offset = mrec.begin + 1;
+                    goto backtrack;
+                }
+                match_end = offset + atom.needle.text.size();
+                if (PostChecks(atom, text, offset, match_end))
+                {
+                    mrec.end = match_end;
+                    break;
+                }
+                offset = offset + 1;
+            }
+
+            offset = match_end;
+        }
+
+        return true;
+    }
+
+    bool Matcher::Matches(LoweredText text, std::vector<uint16_t> &matches)
+    {
+        if (atoms.empty())
             return true;
 
-        const size_t n_atoms = this->atoms.size();
-
-        // Do a quick check if a match is even possible
         size_t offset = 0;
-        for (const auto &atom : this->atoms)
+        bool matched = false;
+        while (offset < text.text.size())
         {
-            switch (atom.type)
+            if (!Match(text, offset))
+                return matched;
+
+            matched = true;
+
+            for (auto &record : work_mem)
             {
-                case Atom::Type::String:
-                {
-                    auto req_str = std::get<std::string_view>(atom.value);
-                    auto it = search(text.begin() + offset, text.end(), req_str.begin(), req_str.end(), CharCompare);
-
-                    if (it == text.end())
-                        return false;
-                    offset = it - text.begin() + req_str.size();
-                    break;
-                }
-
-                case Atom::Type::ExactString:
-                {
-                    auto req_str = std::get<std::string_view>(atom.value);
-                    offset = text.find(req_str, offset); // Hopefully uses SIMD
-                    if (offset == std::string_view::npos)
-                        return false;
-                    offset += req_str.size();
-                    break;
-                }
-
-                case Atom::Type::NumberEqual:
-                case Atom::Type::NumberGreaterThan:
-                case Atom::Type::NumberGreaterThanOrEqual:
-                case Atom::Type::NumberLessThan:
-                case Atom::Type::NumberLessThanOrEqual:
-                {
-                    constexpr std::string_view digits = "0123456789";
-                    offset = text.find_first_of(digits, offset);
-                    if (offset == std::string_view::npos)
-                        return false;
-                    offset += 1;
-                    break;
-                }
-
-                    // case Atom::Type::OneOrMoreSpaces: // Probably not worth the extra cost
-                    // {
-                    //     offset = text.find(' ', offset);
-                    //     if (offset == std::string_view::npos)
-                    //         return false;
-                    //     ++offset;
-                    //     break;
-                    // }
+                matches.push_back(record.begin);
+                matches.push_back(record.end);
             }
+            offset = work_mem.back().end + 1;
         }
-
-        const size_t alloc_size = n_atoms * sizeof(size_t);
-#ifdef _DEBUG
-        assert(alloc_size <= 6000 && "Too big stack allocation");
-#endif
-        size_t *atom_ends = (size_t *)alloca(alloc_size);
-        size_t atom_ends_length;
-
-        size_t size = text.size();
-        offset = 0;
-        bool did_match = false;
-        while (offset < size)
-        {
-            atom_ends_length = 0;
-            for (size_t i = 0; i < n_atoms; ++i)
-            {
-                if (atoms[i].TryReadMinimum(text, offset) && (i >= atom_ends_length || offset > atom_ends[i]))
-                {
-                    atom_ends[i] = offset;
-                    atom_ends_length = std::max(atom_ends_length, i + 1);
-                }
-                else // Backtrack
-                {
-                    if (offset == size)
-                        return did_match;
-
-                    while (true)
-                    {
-                        if (i == 0)
-                            return did_match;
-
-                        --i;
-
-                        offset = atom_ends[i];
-
-                        // This branch is not needed, but it's a common case and helps speed up the execution
-                        if (atoms[i].type == Atom::Type::ZeroOrMoreExcept &&
-                            std::get<std::string_view>(atoms[i].value).empty() &&
-                            offset < size)
-                        {
-                            ++offset;
-                            atom_ends[i] = offset;
-                            break;
-                        }
-
-                        if (atoms[i].TryReadMore(text, offset))
-                        {
-                            atom_ends[i] = offset;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            did_match = true;
-
-            if (matches)
-            {
-                size_t atom_start = 0;
-                size_t atom_end;
-                size_t atom_end_successful = -1;
-                for (size_t i = 0; i < n_atoms; ++i)
-                {
-                    auto &atom = atoms[i];
-                    atom_end = atom_ends[i];
-
-                    if (atom.type < Atom::Type::REPEATING_START)
-                    {
-                        size_t size = atom_end - atom_start;
-                        if (size > 0)
-                        {
-                            bool can_merge = false;
-                            if (atom_end_successful != -1)
-                            {
-                                // Check if there is only spaces or tags between last match and current
-                                std::string_view between(text.data() + atom_end_successful, atom_start - atom_end_successful);
-                                RichText::TextTag dummy_tag;
-                                while (Utils::TryRead(' ', between) ||
-                                       RichText::TextTag::TryRead(between, dummy_tag))
-                                    ;
-
-                                can_merge = between.empty();
-                            }
-                            if (can_merge)
-                            {
-                                matches->back() = (uint16_t)atom_end;
-                            }
-                            else
-                            {
-                                matches->push_back((uint16_t)atom_start);
-                                matches->push_back((uint16_t)atom_end);
-                            }
-
-                            atom_end_successful = atom_end;
-                        }
-                    }
-
-                    atom_start = atom_end;
-                }
-            }
-        }
-
-        return did_match;
-    }
-
-    FORCE_INLINE bool Matcher::Atom::TryReadMinimum(std::string_view text, size_t &offset)
-    {
-        size_t size = text.size();
-        bool case_insensitive = false;
-        if (offset < text.size() && text[offset] == '<')
-            SkipTags(text, offset);
-        switch (type)
-        {
-            case Atom::Type::WordStart:
-            {
-                if (offset == 0)
-                    return true;
-                if (!Utils::IsAlpha(text[offset - 1]))
-                    return true;
-                return false;
-            }
-
-                // clang-format off
-            case Atom::Type::OneOrMoreExcept:
-            {
-                auto except = std::get<std::string_view>(this->value);
-                return TryReadAnyExcept(text, offset, except);
-            }
-            case Atom::Type::OneOrMoreNonSpace: return TryReadNonSpace(text, offset);
-            case Atom::Type::OneOrMoreSpaces:   return TryReadSpace(text, offset);
-            case Atom::Type::OneOrMoreAlpha:    return TryReadAlpha(text, offset);
-                // clang-format on
-
-            case Atom::Type::ZeroOrMoreExcept:
-            case Atom::Type::ZeroOrMoreNonSpace:
-            case Atom::Type::ZeroOrMoreSpaces:
-            case Atom::Type::ZeroOrMoreAlpha:
-            {
-                return true;
-            }
-
-            case Atom::Type::String:
-                case_insensitive = true;
-            case Atom::Type::ExactString:
-            {
-                auto req_str = std::get<std::string_view>(this->value);
-                size_t req_size = req_str.size();
-                if (offset + req_size > size)
-                    return false;
-
-                const char *required = req_str.data();
-                const char *actual = &text[offset];
-                const char *end = actual + req_size;
-
-                while (actual < end)
-                {
-                    bool success = *actual == *required || (case_insensitive && std::tolower(*actual) == *required);
-                    if (!success)
-                        return false;
-                    ++actual;
-                    ++required;
-                }
-                offset += req_size;
-                return true;
-            }
-
-            case Atom::Type::Number:
-            case Atom::Type::NumberEqual:
-            case Atom::Type::NumberLessThan:
-            case Atom::Type::NumberLessThanOrEqual:
-            case Atom::Type::NumberGreaterThan:
-            case Atom::Type::NumberGreaterThanOrEqual:
-            {
-                if (offset >= size)
-                    return false;
-                if (offset > 0)
-                {
-                    char before_char = text[offset - 1];
-                    if ((Utils::IsDigit(before_char) || before_char == '-' || before_char == '+'))
-                        return false;
-                }
-                auto rem = text.substr(offset);
-                double value, value2;
-                bool is_negative = false;
-                bool is_dual = false;
-                if (Utils::TryRead('-', rem))
-                {
-                    is_negative = true;
-                }
-                else
-                {
-                    Utils::TryRead('+', rem);
-                }
-                bool success;
-                if (Utils::TryRead('(', rem))
-                {
-                    is_dual = true;
-                    success = Utils::TryReadNumber(rem, value) &&
-                              Utils::TryRead("...", rem) &&
-                              Utils::TryReadNumber(rem, value2) &&
-                              Utils::TryRead(')', rem);
-                }
-                else
-                {
-                    success = Utils::TryReadNumber(rem, value);
-                    RichText::FracTag frac_tag;
-                    if (RichText::FracTag::TryRead(rem, frac_tag))
-                    {
-                        auto frac = (double)frac_tag.num / (double)frac_tag.den;
-                        value = success ? value + frac : frac;
-                        success = true;
-                    }
-                    success &= rem.empty() || !Utils::IsAlpha(rem[0]);
-                }
-                if (!success)
-                    return false;
-                if (is_negative)
-                {
-                    value = -value;
-                    if (is_dual)
-                        value2 = -value2;
-                }
-
-                success = true;
-                if (type != Atom::Type::Number)
-                {
-                    auto req_value = std::get<double>(this->value);
-                    // clang-format off
-                    switch (type)
-                    {
-                        case Atom::Type::NumberEqual:              success = value == req_value || (is_dual && value2 == req_value); break;
-                        case Atom::Type::NumberLessThan:           success = value <  req_value || (is_dual && value2 <  req_value); break;
-                        case Atom::Type::NumberLessThanOrEqual:    success = value <= req_value || (is_dual && value2 <= req_value); break;
-                        case Atom::Type::NumberGreaterThan:        success = value >  req_value || (is_dual && value2 >  req_value); break;
-                        case Atom::Type::NumberGreaterThanOrEqual: success = value >= req_value || (is_dual && value2 >= req_value); break;
-                    }
-                    // clang-format on
-                }
-                if (success)
-                    offset = rem.data() - text.data();
-                return success;
-            }
-
-            default:
-            {
-#ifdef _DEBUG
-                SOFT_ASSERT(false, L"Unhandled atom type");
-#endif
-                return false;
-            }
-        }
-    }
-
-    FORCE_INLINE bool Matcher::Atom::TryReadMore(std::string_view text, size_t &offset)
-    {
-        if (offset < text.size() && text[offset] == '<')
-            SkipTags(text, offset);
-        switch (type)
-        {
-            case Atom::Type::ZeroOrMoreExcept:
-            case Atom::Type::OneOrMoreExcept:
-                return TryReadAnyExcept(text, offset, std::get<std::string_view>(value));
-            case Atom::Type::ZeroOrMoreNonSpace:
-            case Atom::Type::OneOrMoreNonSpace:
-                return TryReadNonSpace(text, offset);
-            case Atom::Type::ZeroOrMoreSpaces:
-            case Atom::Type::OneOrMoreSpaces:
-                return TryReadSpace(text, offset);
-            case Atom::Type::ZeroOrMoreAlpha:
-            case Atom::Type::OneOrMoreAlpha:
-                return TryReadAlpha(text, offset);
-
-            default:
-                return false;
-        }
+        return matched;
     }
 
     std::string Matcher::Atom::ToString() const
     {
         switch (type)
         {
-            case Atom::Type::String:
-                return std::format("String: '{}'", std::get<std::string_view>(value));
-            case Atom::Type::ExactString:
-                return std::format("ExactString: '{}'", std::get<std::string_view>(value));
+                // case Atom::Type::PrefixedWord:
+                //     return std::format("String: '{}'", std::get<std::string_view>(value));
+                // case Atom::Type::ExactString:
+                //     return std::format("ExactString: '{}'", std::get<std::string_view>(value));
 
-            case Atom::Type::NumberEqual:
-                return std::format("Number = '{}'", std::get<double>(value));
-            case Atom::Type::NumberLessThan:
-                return std::format("Number < '{}'", std::get<double>(value));
-            case Atom::Type::NumberLessThanOrEqual:
-                return std::format("Number <= '{}'", std::get<double>(value));
-            case Atom::Type::NumberGreaterThan:
-                return std::format("Number > '{}'", std::get<double>(value));
-            case Atom::Type::NumberGreaterThanOrEqual:
-                return std::format("Number >= '{}'", std::get<double>(value));
-            case Atom::Type::Number:
-                return "Number";
-
-            case Atom::Type::WordStart:
-                return "WordStart";
-            case Atom::Type::ZeroOrMoreExcept:
-                return std::format("ZeroOrMoreExcept: '{}'", std::get<std::string_view>(value));
-            case Atom::Type::ZeroOrMoreNonSpace:
-                return "ZeroOrMoreNonSpace";
-            case Atom::Type::ZeroOrMoreSpaces:
-                return "ZeroOrMoreSpaces";
-            case Atom::Type::ZeroOrMoreAlpha:
-                return "ZeroOrMoreAlpha";
-
-            case Atom::Type::OneOrMoreExcept:
-                return "OneOrMoreAnything";
-            case Atom::Type::OneOrMoreNonSpace:
-                return "OneOrMoreNonSpace";
-            case Atom::Type::OneOrMoreSpaces:
-                return "OneOrMoreSpaces";
-            case Atom::Type::OneOrMoreAlpha:
-                return "OneOrMoreAlpha";
+                // case Atom::Type::NumberEqual:
+                //     return std::format("Number = '{}'", std::get<double>(value));
+                // case Atom::Type::NumberLessThan:
+                //     return std::format("Number < '{}'", std::get<double>(value));
+                // case Atom::Type::NumberLessThanOrEqual:
+                //     return std::format("Number <= '{}'", std::get<double>(value));
+                // case Atom::Type::NumberGreaterThan:
+                //     return std::format("Number > '{}'", std::get<double>(value));
+                // case Atom::Type::NumberGreaterThanOrEqual:
+                //     return std::format("Number >= '{}'", std::get<double>(value));
+                // case Atom::Type::Number:
+                //     return "Number";
 
             default:
                 return "Unknown";
