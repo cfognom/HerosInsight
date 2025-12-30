@@ -139,6 +139,12 @@ namespace HerosInsight
             return elements.size() - start;
         }
 
+        std::span<T> GetPendingSpan()
+        {
+            auto start = GetSpanStart(ends.size());
+            return std::span<T>(elements.data() + start, elements.size() - start);
+        }
+
         // Commits the span being written and returns its id
         T_span_id CommitWritten(deduper *deduper = nullptr)
         {
