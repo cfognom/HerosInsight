@@ -3569,4 +3569,17 @@ namespace HerosInsight::Utils
         ImU32 col = IM_COL32(255, 0, 0, 255); // red outline
         window->DrawList->AddRect(r.Min, r.Max, col);
     }
+
+    bool IsModdingAllowed()
+    {
+        auto map_id = GW::Map::GetMapID();
+        if (map_id == GW::Constants::MapID::None)
+            return false;
+
+        auto info = GW::Map::GetMapInfo(map_id);
+        if (info == nullptr || info->GetIsPvP() || info->GetIsGuildHall())
+            return false;
+
+        return true;
+    }
 }

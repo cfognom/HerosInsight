@@ -648,4 +648,6 @@ namespace HerosInsight::Utils
         using U = std::underlying_type_t<FlagEnum>;
         value = static_cast<FlagEnum>(static_cast<U>(value) & ~static_cast<U>(flag));
     }
+
+    bool IsModdingAllowed();
 }
