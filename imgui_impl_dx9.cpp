@@ -19,7 +19,9 @@
 //  2018-02-06: Inputs: Added mapping for ImGuiKey_Space.
 
 #include <constants.h>
+
 #include "imgui.h"
+
 #include "imgui_impl_dx9.h"
 
 // DirectX
