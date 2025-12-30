@@ -319,43 +319,8 @@ static void Shutdown()
     running = false;
 }
 
-// bool hooks_enabled = false;
-bool is_modding_allowed = false;
-// void OnRenderDormant(GW::Render::Helper helper)
-// {
-//     bool was_modding_allowed = is_modding_allowed;
-//     is_modding_allowed = HerosInsight::Utils::IsModdingAllowed();
-
-//     if (is_modding_allowed && !was_modding_allowed)
-//     {
-//         hooks_enabled = true;
-//     }
-// }
-
-static void CheckIfModdingIsAllowed()
-{
-    // if (!GW::Map::GetIsMapLoaded())
-    //     return;
-    bool was_modding_allowed = is_modding_allowed;
-    is_modding_allowed = HerosInsight::Utils::IsModdingAllowed();
-
-    // if (is_modding_allowed && !was_modding_allowed)
-    // {
-    //     hooks_enabled = true;
-    // }
-    if (!is_modding_allowed)
-    {
-        GW::Chat::WriteChat(GW::Chat::CHANNEL_MODERATOR, L"HerosInsight: You have entered a zone where modding is not allowed. HerosInsight has been terminated automatically.");
-        Shutdown();
-    }
-}
-
 static void OnRender(void *data)
 {
-    CheckIfModdingIsAllowed();
-    if (!is_modding_allowed)
-        return;
-
     auto helper = *static_cast<GW::Render::Helper *>(data);
     auto device = helper.device;
 
@@ -374,6 +339,39 @@ static void OnRender(void *data)
         old_state->Apply();
         old_state->Release();
     }
+}
+
+static void OnUpdate(void *data)
+{
+    HerosInsight::UpdateManager::Update();
+}
+
+static void OnRender_CheckPermission(void *data)
+{
+    static bool is_modding_allowed = false;
+    if (GW::Map::GetIsMapLoaded())
+    {
+        is_modding_allowed = HerosInsight::Utils::IsModdingAllowed();
+
+        static bool hooks_enabled = false;
+        if (is_modding_allowed && !hooks_enabled)
+        {
+            GW::EnableHooks();
+            hooks_enabled = true;
+        }
+        else if (!is_modding_allowed && hooks_enabled)
+        {
+            GW::Chat::WriteChat(GW::Chat::CHANNEL_MODERATOR, L"HerosInsight: You have entered a zone where modding is not allowed. HerosInsight has been disabled automatically.");
+            GW::DisableHooks();
+            GW::EnableRenderHooks();
+            hooks_enabled = false;
+        }
+    }
+
+    if (is_modding_allowed)
+    {
+        OnRender(data);
+    }
 
     if (!HerosInsight::UpdateManager::open_main_menu
 #ifdef _DEBUG
@@ -383,11 +381,6 @@ static void OnRender(void *data)
     {
         Shutdown();
     }
-}
-
-static void OnUpdate(void *data)
-{
-    HerosInsight::UpdateManager::Update();
 }
 
 static void Initialize(void *data)
@@ -418,7 +411,7 @@ static void Initialize(void *data)
     GW::Render::SetRenderCallback(
         [](GW::Render::Helper helper)
         {
-            if (!HerosInsight::CrashHandling::SafeCall(&OnRender, &helper))
+            if (!HerosInsight::CrashHandling::SafeCall(&OnRender_CheckPermission, &helper))
             {
                 Shutdown();
             }
@@ -447,6 +440,7 @@ static DWORD WINAPI ThreadProc(LPVOID lpModule)
         MessageBoxA(nullptr, "GWCA failed to initialize.", "Error", MB_OK | MB_ICONERROR);
         FreeLibraryAndExitThread(hModule, EXIT_FAILURE);
     }
+    GW::EnableRenderHooks();
 
     Constants::paths.Init(hModule);
     HerosInsight::CapacityHints::LoadHints();
