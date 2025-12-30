@@ -602,8 +602,6 @@ namespace HerosInsight::Utils
 
     bool GetIsPet(uint32_t agent_id);
 
-    bool IsOvercast(GW::AgentLiving &agent);
-
     ImRect GetFrameRect(const GW::UI::Frame &frame);
     bool IsHoveringFrame(const GW::UI::Frame &frame);
     void ForEachChildFrame(const GW::UI::Frame &parent_frame, std::function<void(GW::UI::Frame &)> func);

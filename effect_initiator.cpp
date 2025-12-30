@@ -183,7 +183,7 @@ namespace HerosInsight::EffectInitiator
                     case GW::Constants::SkillID::Stone_Daggers:
                     {
                         // These skills only cause effects if the caster is overcast
-                        if (Utils::IsOvercast(caster_living))
+                        if (caster_living.GetIsOvercast())
                             break;
                         continue;
                     }

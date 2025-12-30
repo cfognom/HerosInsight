@@ -3241,13 +3241,6 @@ namespace HerosInsight::Utils
         return is_pet;
     }
 
-    bool IsOvercast(GW::AgentLiving &agent)
-    {
-        auto overcast_lower_bound = *(float *)&agent.h0118;
-        bool is_overcast = overcast_lower_bound < 1.f;
-        return is_overcast;
-    }
-
     ImRect GetFrameRect(const GW::UI::Frame &frame)
     {
         const auto root = GW::UI::GetRootFrame();
