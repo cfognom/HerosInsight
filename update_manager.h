@@ -37,9 +37,6 @@ namespace HerosInsight
             {&open_skill_book, VK_CONTROL, 'K'},
         };
 
-        static bool is_dragging_skill;
-        static bool unlock_windows;
-
         static bool TryInitialize();
         static void Terminate();
         static void Update(void *);

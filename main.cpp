@@ -196,7 +196,6 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM l
     // This second switch is used to determine whether we need to forward the input to Guild Wars.
     //
 
-    bool is_dragging_passthough = HerosInsight::UpdateManager::is_dragging_skill;
     bool is_up = false;
     switch (Message)
     {
@@ -213,12 +212,8 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM l
             break;
         case WM_LBUTTONDOWN:
         case WM_LBUTTONDBLCLK:
-            is_dragging_passthough = false;
         case WM_MOUSEWHEEL:
         {
-            if (is_dragging_passthough)
-                break;
-
             if (!right_mouse_down && io.WantCaptureMouse)
                 return true;
             break;

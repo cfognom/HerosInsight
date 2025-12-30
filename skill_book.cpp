@@ -951,6 +951,79 @@ namespace HerosInsight::SkillBook
         LoweredTextVector &GetProperty(size_t prop) { return props[prop]->texts; }
     };
 
+    bool is_dragging = false;
+    std::atomic<GW::Constants::SkillID> skill_id_to_drag = GW::Constants::SkillID::No_Skill;
+    void RequestSkillDragging(GW::Constants::SkillID skill_id)
+    {
+        GW::Constants::SkillID expected = GW::Constants::SkillID::No_Skill;
+        skill_id_to_drag.compare_exchange_strong(expected, skill_id);
+    }
+    void CancelSkillDragging()
+    {
+        if (!is_dragging)
+            return;
+
+        is_dragging = false;
+
+        // Because GW did not receive the mouse down event when we started dragging it will ignore the mouse up event.
+        // A workaround is to simulate a right click to cancel the drag.
+        INPUT inputs[2] = {};
+        ZeroMemory(inputs, sizeof(inputs));
+        inputs[0].type = INPUT_MOUSE;
+        inputs[0].mi.dwFlags = MOUSEEVENTF_RIGHTDOWN;
+        inputs[1].type = INPUT_MOUSE;
+        inputs[1].mi.dwFlags = MOUSEEVENTF_RIGHTUP;
+        SendInput(2, inputs, sizeof(INPUT));
+    }
+    void UpdateSkillDragging()
+    {
+        if (is_dragging && ImGui::IsMouseReleased(0))
+        {
+            CancelSkillDragging();
+        }
+
+        if (skill_id_to_drag == GW::Constants::SkillID::No_Skill)
+            return; // No skill to drag
+
+        auto result = Utils::GetSkillFrame(skill_id_to_drag);
+
+        static auto CancelDragRequest = []()
+        {
+            skill_id_to_drag.store(GW::Constants::SkillID::No_Skill);
+        };
+
+        switch (result.error)
+        {
+            case Utils::GetSkillFrameResult::Error::SkillAndAttributesNotOpened:
+                GW::GameThread::Enqueue(
+                    []()
+                    {
+                        // Try to open "Skills and Attributes"
+                        if (!GW::UI::Keypress(GW::UI::ControlAction_OpenSkillsAndAttributes))
+                        {
+                            // If we can't open "Skills and Attributes" we have to cancel the request
+                            CancelDragRequest();
+                        }
+                    }
+                );
+                return; // Mission failed, we'll get them next time
+
+            case Utils::GetSkillFrameResult::Error::None:
+                // Success!
+                GW::GameThread::Enqueue(
+                    [frame = result.frame]()
+                    {
+                        auto packet = GW::UI::UIPacket::kMouseClick{0};
+                        GW::UI::SendFrameUIMessage(frame, GW::UI::UIMessage::kMouseClick, &packet);
+                    }
+                );
+                is_dragging = true;
+                [[fallthrough]];
+            default:
+                CancelDragRequest();
+        }
+    }
+
     struct BookState;
     std::vector<std::unique_ptr<BookState>> books;
     BookState *AddBook()
@@ -1340,7 +1413,7 @@ namespace HerosInsight::SkillBook
             ImGui::EndGroup();
         }
 
-        void DrawSkillHeader(CustomSkillData &custom_sd)
+        void DrawSkillHeader(CustomSkillData &custom_sd, bool is_equipable)
         {
             ImGui::BeginGroup(); // Whole header
 
@@ -1350,9 +1423,6 @@ namespace HerosInsight::SkillBook
             { // Draw skill icon
                 const auto skill_icon_size = 56;
                 auto icon_cursor_ss = ImGui::GetCursorScreenPos();
-                bool is_learned = Utils::IsSkillLearned(*custom_sd.skill, focused_agent_id);
-                auto instance_type = GW::Map::GetInstanceType();
-                bool is_equipable = is_learned && instance_type == GW::Constants::InstanceType::Outpost;
                 bool is_hovered = ImGui::IsMouseHoveringRect(icon_cursor_ss, icon_cursor_ss + ImVec2(skill_icon_size, skill_icon_size));
                 bool is_effect = custom_sd.tags.EffectOnly;
                 if (TextureModule::DrawSkill(*custom_sd.skill, icon_cursor_ss, skill_icon_size, is_effect, is_hovered) ||
@@ -1868,6 +1938,8 @@ namespace HerosInsight::SkillBook
 
                     auto draw_list = ImGui::GetWindowDrawList();
 
+                    auto instance_type = GW::Map::GetInstanceType();
+
                     auto DrawItem = [&](uint32_t i)
                     {
                         const auto skill_id = static_cast<GW::Constants::SkillID>(filtered_skills[i]);
@@ -1878,7 +1950,10 @@ namespace HerosInsight::SkillBook
                         const auto window = ImGui::GetCurrentWindow();
                         const auto work_width = window->WorkRect.GetWidth();
 
-                        DrawSkillHeader(custom_sd);
+                        bool is_learned = Utils::IsSkillLearned(*custom_sd.skill, focused_agent_id);
+                        bool is_equipable = is_learned && instance_type == GW::Constants::InstanceType::Outpost;
+
+                        DrawSkillHeader(custom_sd, is_equipable);
                         DrawDescription(skill_id, work_width);
                         ImGui::Spacing();
                         DrawSkillFooter(custom_sd, work_width);
@@ -1909,9 +1984,9 @@ namespace HerosInsight::SkillBook
                                 }
                                 else
                                 {
-                                    if (Utils::IsSkillLearned(*custom_sd.skill, focused_agent_id))
+                                    if (is_equipable)
                                     {
-                                        UpdateManager::RequestSkillDragging(skill_id);
+                                        RequestSkillDragging(skill_id);
                                     }
                                 }
                             }
@@ -2079,6 +2154,8 @@ namespace HerosInsight::SkillBook
 
     void Terminate()
     {
+        CancelSkillDragging();
+
         GW::StoC::RemoveCallbacks(&attribute_update_entry);
 
         GW::UI::RemoveUIMessageCallback(&select_hero_entry, GW::UI::UIMessage::kLoadAgentSkills);
@@ -2448,6 +2525,8 @@ namespace HerosInsight::SkillBook
         {
             book->Update();
         }
+
+        UpdateSkillDragging();
     };
 
     void Draw(IDirect3DDevice9 *device)

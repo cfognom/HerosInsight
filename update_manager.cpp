@@ -48,9 +48,7 @@ namespace HerosInsight
     bool UpdateManager::open_debug = true;
     bool UpdateManager::open_texture_viewer = false;
     bool UpdateManager::open_encstr_debugger = false;
-    bool UpdateManager::unlock_windows = true;
 #else
-    bool UpdateManager::unlock_windows = false;
 #endif
     bool UpdateManager::open_skill_book = false;
     bool UpdateManager::open_main_menu = true;
@@ -150,10 +148,10 @@ namespace HerosInsight
         ImGuiWindowFlags flags = 0 //
                                    //  | ImGuiWindowFlags_NoFocusOnAppearing
             /**/;
-        if (!UpdateManager::unlock_windows)
-        {
-            flags |= ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
-        }
+        // if (!UpdateManager::unlock_windows)
+        // {
+        //     flags |= ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
+        // }
         return flags;
     }
 
@@ -270,7 +268,6 @@ namespace HerosInsight
                 ImGui::Checkbox("Skill Book", &UpdateManager::open_skill_book);
                 ImGui::Checkbox("Damage Display", &UpdateManager::open_damage);
                 ImGui::TextUnformatted("Settings");
-                ImGui::Checkbox("Unlock Windows", &UpdateManager::unlock_windows);
 #ifdef _DEBUG
                 ImGui::TextUnformatted("Debug Info");
                 ImGui::TextUnformatted("Alt + End => Terminate addon");
@@ -280,92 +277,6 @@ namespace HerosInsight
             }
         }
         ImGui::End();
-    }
-
-    bool UpdateManager::is_dragging_skill = false;
-    GW::Constants::SkillID drag_skill_id_request = GW::Constants::SkillID::No_Skill;
-
-    bool UpdateManager::RequestSkillDragging(GW::Constants::SkillID skill_id)
-    {
-        if (game_state != GameState::InOutpost)
-            return false;
-
-        if (!GW::UI::GetFrameArray() ||
-            is_dragging_skill ||
-            !(GW::Constants::SkillID::No_Skill < skill_id && skill_id < GW::Constants::SkillID::Count) ||
-            drag_skill_id_request != GW::Constants::SkillID::No_Skill)
-            return false;
-
-        drag_skill_id_request = skill_id;
-        return true;
-    }
-
-    void UpdateSkillDragging()
-    {
-        if (UpdateManager::is_dragging_skill && ImGui::IsMouseReleased(0))
-        {
-            UpdateManager::is_dragging_skill = false;
-
-            // Because GW did not receive the mouse down event when we started dragging it will ignore the mouse up event.
-            // A workaround is to simulate a right click to cancel the drag.
-            INPUT inputs[2] = {};
-            ZeroMemory(inputs, sizeof(inputs));
-            inputs[0].type = INPUT_MOUSE;
-            inputs[0].mi.dwFlags = MOUSEEVENTF_RIGHTDOWN;
-            inputs[1].type = INPUT_MOUSE;
-            inputs[1].mi.dwFlags = MOUSEEVENTF_RIGHTUP;
-            SendInput(2, inputs, sizeof(INPUT));
-
-            return;
-        }
-
-        if (drag_skill_id_request == GW::Constants::SkillID::No_Skill)
-            return; // No skill to drag
-
-        if (!GW::SkillbarMgr::GetIsSkillLearnt(drag_skill_id_request))
-        {
-            drag_skill_id_request = GW::Constants::SkillID::No_Skill;
-            return; // Skill not learnt
-        }
-
-        auto result = Utils::GetSkillFrame(drag_skill_id_request);
-
-        switch (result.error) // Handle recoverable errors
-        {
-            case Utils::GetSkillFrameResult::Error::SkillAndAttributesNotOpened:
-            {
-                // clang-format off
-                GW::GameThread::Enqueue([]() {
-                    // Try to open "Skills and Attributes"
-                    if (!GW::UI::Keypress(GW::UI::ControlAction_OpenSkillsAndAttributes))
-                    {
-                        // If we can't open "Skills and Attributes" we have to clear the request
-                        drag_skill_id_request = GW::Constants::SkillID::No_Skill;
-                    }
-                });
-                // clang-format on
-                return; // Mission failed, we'll get them next time
-            }
-        }
-
-        // Clear the request, from here on we will either succeed or fail, no retries
-        drag_skill_id_request = GW::Constants::SkillID::No_Skill;
-
-        if (!result.error)
-        {
-            // SUCCESS
-            assert(result.error == Utils::GetSkillFrameResult::Error::None);
-
-            // clang-format off
-            GW::GameThread::Enqueue([frame = result.frame]() {
-                auto packet = GW::UI::UIPacket::kMouseClick{0};
-                GW::UI::SendFrameUIMessage(frame, GW::UI::UIMessage::kMouseClick, &packet);
-            });
-            // clang-format on
-
-            UpdateManager::is_dragging_skill = true;
-        }
-        return;
     }
 
     void UpdateManager::Draw(IDirect3DDevice9 *device)
@@ -413,8 +324,6 @@ namespace HerosInsight
 #endif
         if (open_skill_book)
             HerosInsight::SkillBook::Draw(device);
-
-        UpdateSkillDragging();
 
         DrawMenu();
 
