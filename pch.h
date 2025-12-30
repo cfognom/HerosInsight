@@ -26,6 +26,9 @@
 
 #include "enum_as_int.h"
 
-// #define EXPERIMENTAL_FEATURES
+#define RELEASE_BUILD
 
+#ifndef RELEASE_BUILD
+#define EXPERIMENTAL_FEATURES
 #define _STOPWATCH
+#endif
