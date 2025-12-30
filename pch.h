@@ -26,9 +26,16 @@
 
 #include "enum_as_int.h"
 
-#define RELEASE_BUILD
+// #define RELEASE_BUILD
 
-#ifndef RELEASE_BUILD
-#define EXPERIMENTAL_FEATURES
+#ifdef RELEASE_BUILD
+
+#define ENABLE_SAFECALL
+
+#else
+
+// #define EXPERIMENTAL_FEATURES
 #define _STOPWATCH
+// #define ENABLE_SAFECALL
+
 #endif
