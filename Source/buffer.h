@@ -148,9 +148,8 @@ namespace HerosInsight
         }
 
         template <typename... Args>
-        void AppendFormat(const std::format_string<Args...> &format, Args &&...args)
+        void AppendFormat(const std::basic_format_string<T, std::type_identity_t<Args>...> &format, Args &&...args)
         {
-            static_assert(std::is_same_v<T, char>, "Format is only available for char arrays");
             T *dst = data() + size();
             size_t n_max = capacity() - size();
             auto result = std::format_to_n(dst, n_max, format, std::forward<Args>(args)...);

@@ -56,32 +56,33 @@ namespace HerosInsight::CrashHandling
 
     LONG ErrorPromt(EXCEPTION_POINTERS *info, const std::exception *e)
     {
-        char msg[1024];
-        SpanWriter<char> writer(msg);
+        wchar_t msg[1024];
+        SpanWriter<wchar_t> writer(msg);
 
-        writer.AppendString("HerosInsight encountered an error.");
+        writer.AppendString(L"HerosInsight encountered an error.");
         if (e)
         {
-            writer.AppendString("\nError message: \"");
-            writer.AppendString(e->what());
+            writer.AppendString(L"\nError message: \"");
+            auto what = e->what();
+            std::wstring error_msg(what, what + strlen(what));
+            writer.AppendString(error_msg);
+            writer.push_back(L'\"');
         }
         else
         {
-            writer.AppendString("\nError code: \"");
-            writer.AppendIntToChars(info->ExceptionRecord->ExceptionCode, 16);
+            writer.AppendFormat(L"\nError code: \"{}\"", info->ExceptionRecord->ExceptionCode);
         }
-        writer.push_back('\"');
 
 #ifdef _DEBUG
-        writer.push_back('\n');
-        writer.AppendString("\nAbort: Attempt to unhook the mod"
-                            "\nRetry: Attempt to break the debugger"
-                            "\nIgnore: Pass to GW crash handler");
-        writer.push_back('\0');
+        writer.push_back(L'\n');
+        writer.AppendString(L"\nAbort: Attempt to unhook the mod"
+                            L"\nRetry: Attempt to break the debugger"
+                            L"\nIgnore: Pass to GW crash handler");
+        writer.push_back(L'\0');
 
         HWND hWnd = GW::MemoryMgr::GetGWWindowHandle();
     retry:
-        int result = MessageBoxA(hWnd, msg, "HerosInsight Error", MB_ABORTRETRYIGNORE | MB_ICONERROR);
+        int result = MessageBoxW(hWnd, msg, L"HerosInsight Error", MB_ABORTRETRYIGNORE | MB_ICONERROR);
 
         switch (result)
         {
@@ -105,17 +106,17 @@ namespace HerosInsight::CrashHandling
         if (path.has_value())
         {
             auto &path_value = path.value();
-            writer.AppendString("\n\nA crash report has been saved to:\n");
-            writer.AppendString(path_value.string());
+            writer.AppendString(L"\n\nA crash report has been saved to:\n");
+            writer.AppendString(path_value.c_str());
         }
         else
         {
-            writer.AppendString("\n\nAttempted to write a crash report but failed.");
+            writer.AppendString(L"\n\nAttempted to write a crash report but failed.");
         }
-        writer.AppendString("\n\nGame state might be unstable, please restart the game as soon as possible.");
-        writer.push_back('\0');
+        writer.AppendString(L"\n\nGame state might be unstable, please restart the game as soon as possible.");
+        writer.push_back(L'\0');
 
-        MessageBoxA(nullptr, msg, "HerosInsight Crash", MB_OK | MB_ICONERROR);
+        MessageBoxW(nullptr, msg, L"HerosInsight Crash", MB_OK | MB_ICONERROR);
 
         return EXCEPTION_EXECUTE_HANDLER;
 #endif

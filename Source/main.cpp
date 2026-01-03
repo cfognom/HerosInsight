@@ -437,7 +437,7 @@ static DWORD WINAPI ThreadProc(LPVOID lpModule)
     bool success = GW::Initialize();
     if (!success)
     {
-        MessageBoxA(nullptr, "GWCA failed to initialize.", "Error", MB_OK | MB_ICONERROR);
+        MessageBoxW(nullptr, L"GWCA failed to initialize.", L"Error", MB_OK | MB_ICONERROR);
         FreeLibraryAndExitThread(hModule, EXIT_FAILURE);
     }
     GW::EnableRenderHooks();
