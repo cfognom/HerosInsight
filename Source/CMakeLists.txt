@@ -65,3 +65,13 @@ add_custom_command(
             $<TARGET_FILE_DIR:HerosInsight>/resources
     COMMENT "Copying resources folder to output directory"
 )
+
+# Source/CMakeLists.txt
+set(OUTPUT_DIR "${CMAKE_BINARY_DIR}/$<CONFIG>/package/cache/bin")
+
+set_target_properties(HerosInsight PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${OUTPUT_DIR}" # .dll goes here
+    LIBRARY_OUTPUT_DIRECTORY "${OUTPUT_DIR}" # .so / .dll cross-platform
+    ARCHIVE_OUTPUT_DIRECTORY "${OUTPUT_DIR}" # .lib
+    PDB_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>/pdb"
+)
