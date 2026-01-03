@@ -1,11 +1,10 @@
 include_guard()
 
-include(FetchContent)
-
 # Define the path to the local cached copy
-set(GWCA_LOCAL_PATH "${CMAKE_SOURCE_DIR}/GWCA_BACKUP/gwca-src")
+set(GWCA_LOCAL_PATH "${CMAKE_SOURCE_DIR}/Source/GWCA_BACKUP/gwca-src")
 
 # # Attempt to fetch the repository
+# include(FetchContent)
 # FetchContent_Declare(
 #     gwca
 #     GIT_REPOSITORY https://github.com/gwdevhub/gwca
