@@ -1048,7 +1048,7 @@ namespace HerosInsight::SkillBook
             bool include_archived_skills = false;
             bool include_disguises = false;
 
-            bool use_precise_adrenaline = false;
+            bool use_exact_adrenaline = false;
             bool prefer_concise_descriptions = false;
             bool limit_to_characters_professions = false;
             bool show_null_stats = false;
@@ -1199,7 +1199,7 @@ namespace HerosInsight::SkillBook
 
                 ImGui::NextColumn();
 
-                ImGui::Checkbox("Show precise adrenaline", &settings.use_precise_adrenaline);
+                ImGui::Checkbox("Show exact adrenaline", &settings.use_exact_adrenaline);
                 ImGui::Checkbox("Show null stats", &settings.show_null_stats);
                 ImGui::Checkbox("Snap to skill", &settings.snap_to_skill);
                 ImGui::Checkbox("Prefer concise descriptions", &settings.prefer_concise_descriptions);
@@ -1384,7 +1384,7 @@ namespace HerosInsight::SkillBook
                 {SkillProp::Sacrifice, 7, 4},
                 {SkillProp::Upkeep, 0, 4},
                 {SkillProp::Energy, 1, 3},
-                {settings.use_precise_adrenaline ? SkillProp::Adrenaline : SkillProp::AdrenalineStrikes, 3, 3},
+                {settings.use_exact_adrenaline ? SkillProp::Adrenaline : SkillProp::AdrenalineStrikes, 3, 3},
                 {SkillProp::Activation, 2, 2},
                 {SkillProp::Recharge, 1, 1},
                 {SkillProp::Aftercast, 2, 0},
