@@ -1200,7 +1200,7 @@ namespace HerosInsight::SkillBook
                 ImGui::NextColumn();
 
                 ImGui::Checkbox("Show exact adrenaline", &settings.use_exact_adrenaline);
-                ImGui::Checkbox("Show null stats", &settings.show_null_stats);
+                // ImGui::Checkbox("Show null stats", &settings.show_null_stats);
                 ImGui::Checkbox("Snap to skill", &settings.snap_to_skill);
                 ImGui::Checkbox("Prefer concise descriptions", &settings.prefer_concise_descriptions);
                 filter_dirty |= ImGui::Checkbox("Limit to character's professions", &settings.limit_to_characters_professions);
