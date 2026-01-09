@@ -58,12 +58,9 @@ namespace Constants
 
     namespace Fonts
     {
-        inline ImFont *gw_font_14;
         inline ImFont *gw_font_16;
-        inline ImFont *gw_font_20;
         inline ImFont *skill_name_font;
-        inline ImFont *skill_thick_font_18;
-        inline ImFont *skill_thick_font_16;
+        inline ImFont *big_font;
         inline ImFont *skill_thick_font_15;
         inline ImFont *skill_thick_font_12;
         inline ImFont *skill_thick_font_9;

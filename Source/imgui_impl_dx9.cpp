@@ -365,22 +365,12 @@ IMGUI_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg, WPARAM wPa
 
 struct GWFontConfig
 {
-    GW::TextMgr::StyleId styleId;
-    GW::TextMgr::BlitFontFlags blitFlags;
-    int32_t advanceAdjustment;
-    uint32_t glyphPadding;
-    ImVec2 glyphOffset;
-    uint32_t color;
-
-    GWFontConfig()
-        : styleId((GW::TextMgr::StyleId)0),
-          blitFlags((GW::TextMgr::BlitFontFlags)0),
-          advanceAdjustment(0),
-          glyphPadding(0),
-          glyphOffset(0, 0),
-          color(0xffffffff)
-    {
-    }
+    uint32_t fontIndex = 0;
+    GW::TextMgr::BlitFontFlags blitFlags = (GW::TextMgr::BlitFontFlags)0;
+    uint32_t glyphPadding = 0;
+    int32_t advanceAdjustment = 0;
+    ImVec2 glyphOffset = ImVec2(0, 0);
+    uint32_t color = 0xffffffff;
 };
 
 struct FontBlitCommand
@@ -397,11 +387,11 @@ struct FontBlitCommand
 };
 std::vector<FontBlitCommand> font_blit_commands;
 
-ImFont *CreateGWFont(GWFontConfig &cfg)
+ImFont *CreateGWFont(GWFontConfig cfg)
 {
     auto &io = ImGui::GetIO();
 
-    GW::TextMgr::FontHandle fontHandle(cfg.styleId);
+    GW::TextMgr::FontHandle fontHandle(cfg.fontIndex);
     auto font = fontHandle.font;
 
     auto padding = cfg.glyphPadding;
@@ -415,33 +405,46 @@ ImFont *CreateGWFont(GWFontConfig &cfg)
     auto &command = font_blit_commands.emplace_back();
     command.config = cfg;
     command.imFont = imFont;
-    for (wchar_t ch = L'\x20'; ch < L'\x7e'; ++ch)
+
+    auto EnqueueRange = [&](wchar_t begin, wchar_t end)
     {
-        auto glyph = GW::TextMgr::GetGlyphByChar(font, ch);
-        uint32_t glyph_offset_x, glyph_width;
-        if (glyph)
+        for (wchar_t ch = begin; ch < end; ++ch)
         {
-            glyph_offset_x = std::numeric_limits<uint32_t>::max();
-            glyph_width = 0;
-            for (size_t i = 0; i < 4; ++i)
+            auto glyph = GW::TextMgr::GetGlyphByChar(font, ch);
+            uint32_t glyph_offset_x, glyph_width;
+            if (glyph)
             {
-                // GW uses 4 collision lanes for each glyph to achieve nice kerning, but imgui uses only one: We take max of all lanes
-                glyph_offset_x = std::min(glyph_offset_x, glyph->metrics.lane_start[i]);
-                glyph_width = std::max(glyph_width, glyph->metrics.lane_width[i]);
+                glyph_offset_x = std::numeric_limits<uint32_t>::max();
+                glyph_width = 0;
+                for (size_t i = 0; i < 4; ++i)
+                {
+                    // GW uses 4 collision lanes for each glyph to achieve nice kerning, but imgui uses only one: We take max of all lanes
+                    glyph_offset_x = std::min(glyph_offset_x, glyph->metrics.lane_start[i]);
+                    glyph_width = std::max(glyph_width, glyph->metrics.lane_width[i]);
+                }
             }
+            else
+            {
+                glyph_offset_x = 0;
+                glyph_width = font->advance_unit;
+            }
+            uint32_t padded_width = glyph_width + padding * 2;
+            uint32_t advance = padded_width + cfg.advanceAdjustment;
+            auto id = io.Fonts->AddCustomRectFontGlyph(imFont, ch, padded_width, padded_height, advance, cfg.glyphOffset);
+            auto &g = command.glyphs.emplace_back();
+            g.ch = ch;
+            g.dst_rect = id;
+            g.x_offset = glyph_offset_x;
         }
-        else
-        {
-            glyph_offset_x = 0;
-            glyph_width = font->advance_unit;
-        }
-        uint32_t padded_width = glyph_width + padding * 2;
-        uint32_t advance = padded_width + cfg.advanceAdjustment;
-        auto id = io.Fonts->AddCustomRectFontGlyph(imFont, ch, padded_width, padded_height, advance, cfg.glyphOffset);
-        auto &g = command.glyphs.emplace_back();
-        g.ch = ch;
-        g.dst_rect = id;
-        g.x_offset = glyph_offset_x;
+    };
+    auto defaultGlyphRanges = io.Fonts->GetGlyphRangesDefault();
+    auto r = defaultGlyphRanges;
+    while (*r)
+    {
+        auto begin = *r++;
+        assert(*r);
+        auto end = *r++;
+        EnqueueRange(begin, end);
     }
 
     return imFont;
@@ -450,24 +453,30 @@ ImFont *CreateGWFont(GWFontConfig &cfg)
 void AddFonts(ImGuiIO &io)
 {
     auto res_path = Constants::paths.resources();
-    GWFontConfig cfg;
-    cfg.glyphPadding = 1;
-    cfg.advanceAdjustment = -2;
-    cfg.glyphOffset = ImVec2(-1, 0);
     // First font is used by default
-    Constants::Fonts::gw_font_16 = CreateGWFont(cfg);
-    // Constants::Fonts::gw_font_16 = CreateGWFont(30, 16);
-    // Constants::Fonts::gw_font_16 = io.Fonts->AddFontFromFileTTF((res_path / "Font.ttf").string().c_str(), 16.0f, NULL, io.Fonts->GetGlyphRangesDefault());
-    Constants::Fonts::gw_font_14 = io.Fonts->AddFontFromFileTTF((res_path / "Font.ttf").string().c_str(), 14.0f, NULL, io.Fonts->GetGlyphRangesDefault());
-    // io.Fonts->AddFontFromFileTTF((res_path / "friz-quadrata-std-medium-5870338ec7ef8.otf").string().c_str(), 14.0f, NULL, io.Fonts->GetGlyphRangesDefault());
-    Constants::Fonts::gw_font_20 = io.Fonts->AddFontFromFileTTF((res_path / "Font.ttf").string().c_str(), 20.f, NULL, io.Fonts->GetGlyphRangesDefault());
-    Constants::Fonts::skill_name_font = Constants::Fonts::gw_font_20;
+    Constants::Fonts::gw_font_16 = CreateGWFont(GWFontConfig{
+        .glyphPadding = 1,
+        .advanceAdjustment = -1,
+        .glyphOffset = ImVec2(-1, 0),
+    });
+    Constants::Fonts::skill_thick_font_15 = CreateGWFont(GWFontConfig{
+        .fontIndex = 1,
+    });
+    Constants::Fonts::skill_name_font = CreateGWFont(GWFontConfig{
+        .fontIndex = 3,
+        .glyphPadding = 1,
+        .advanceAdjustment = -1,
+        .glyphOffset = ImVec2(-1, 0),
+    });
+    Constants::Fonts::big_font = CreateGWFont(GWFontConfig{
+        .fontIndex = 4,
+        .glyphPadding = 1,
+        .advanceAdjustment = -1,
+        .glyphOffset = ImVec2(-1, 0),
+    });
 
     ImFontConfig config;
     config.GlyphOffset.y = 2;
-    Constants::Fonts::skill_thick_font_18 = io.Fonts->AddFontFromFileTTF((res_path / "friz-quadrata-std-bold-587034a220f9f.otf").string().c_str(), 18.0f, &config, io.Fonts->GetGlyphRangesDefault());
-    Constants::Fonts::skill_thick_font_16 = io.Fonts->AddFontFromFileTTF((res_path / "friz-quadrata-std-bold-587034a220f9f.otf").string().c_str(), 16.0f, &config, io.Fonts->GetGlyphRangesDefault());
-    Constants::Fonts::skill_thick_font_15 = io.Fonts->AddFontFromFileTTF((res_path / "friz-quadrata-std-bold-587034a220f9f.otf").string().c_str(), 15.0f, &config, io.Fonts->GetGlyphRangesDefault());
     Constants::Fonts::skill_thick_font_12 = io.Fonts->AddFontFromFileTTF((res_path / "friz-quadrata-std-bold-587034a220f9f.otf").string().c_str(), 12.0f, &config, io.Fonts->GetGlyphRangesDefault());
     Constants::Fonts::skill_thick_font_9 = io.Fonts->AddFontFromFileTTF((res_path / "friz-quadrata-std-bold-587034a220f9f.otf").string().c_str(), 9.0f, &config, io.Fonts->GetGlyphRangesDefault());
 }
@@ -569,7 +578,7 @@ static void BlitGWGlyphs(uint32_t *pixels, uint32_t width, uint32_t height)
     for (auto &com : font_blit_commands)
     {
         auto padding = com.config.glyphPadding;
-        GW::TextMgr::FontHandle fontHandle(com.config.styleId);
+        GW::TextMgr::FontHandle fontHandle(com.config.fontIndex);
         auto font = fontHandle.font;
         auto blitWidth = font->glyphWidth + padding * 2;
         auto blitHeight = font->glyphHeight + padding * 2;

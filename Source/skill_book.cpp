@@ -365,7 +365,7 @@ namespace HerosInsight::SkillBook
 #define BIG_FONT Constants::Fonts::skill_thick_font_15
 #define SMALL_FONT Constants::Fonts::skill_thick_font_9
 
-        static constexpr GW::Vec2f SLASH_SIZE{13, 15};
+        static constexpr GW::Vec2f SLASH_SIZE{15, 16};
         static constexpr GW::Vec2f SLASH_NUMERATOR_MAX{5, 7};
         static constexpr GW::Vec2f SLASH_DENOMINATOR_MIN{7, 5};
 

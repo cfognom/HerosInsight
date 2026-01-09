@@ -234,7 +234,7 @@ namespace HerosInsight
                 auto str = std::to_string(wheel_display);
                 auto text_size = ImGui::CalcTextSize(str.c_str());
                 auto text_pos = ImVec2(window_pos.x + window_size.x / 2 - text_size.x / 2, window_pos.y + window_size.y / 2 - text_size.y / 2);
-                ImGui::PushFont(Constants::Fonts::skill_thick_font_18);
+                ImGui::PushFont(Constants::Fonts::skill_name_font);
                 draw_list->AddText(text_pos, IM_COL32(0, 255, 0, 255), str.c_str());
                 ImGui::PopFont();
             }
