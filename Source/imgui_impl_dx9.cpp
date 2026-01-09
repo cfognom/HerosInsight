@@ -18,6 +18,8 @@
 //  2018-02-06: Inputs: Honoring the io.WantSetMousePos by repositioning the mouse (when using navigation and ImGuiConfigFlags_NavEnableSetMousePos is set).
 //  2018-02-06: Inputs: Added mapping for ImGuiKey_Space.
 
+#include <GWCA/Managers/TextMgr.h>
+
 #include <constants.h>
 
 #include "imgui.h"
@@ -117,7 +119,8 @@ void ImGui_ImplDX9_RenderDrawData(ImDrawData *draw_data)
                 (uint8_t)(vtx_src->col >> IM_COL32_A_SHIFT),
                 (uint8_t)(vtx_src->col >> IM_COL32_R_SHIFT),
                 (uint8_t)(vtx_src->col >> IM_COL32_G_SHIFT),
-                (uint8_t)(vtx_src->col >> IM_COL32_B_SHIFT));
+                (uint8_t)(vtx_src->col >> IM_COL32_B_SHIFT)
+            );
             vtx_dst->uv[0] = vtx_src->uv.x;
             vtx_dst->uv[1] = vtx_src->uv.y;
             vtx_dst++;
@@ -245,27 +248,27 @@ static bool ImGui_ImplWin32_UpdateMouseCursor()
         LPTSTR win32_cursor = IDC_ARROW;
         switch (imgui_cursor)
         {
-        case ImGuiMouseCursor_Arrow:
-            win32_cursor = IDC_ARROW;
-            break;
-        case ImGuiMouseCursor_TextInput:
-            win32_cursor = IDC_IBEAM;
-            break;
-        case ImGuiMouseCursor_ResizeAll:
-            win32_cursor = IDC_SIZEALL;
-            break;
-        case ImGuiMouseCursor_ResizeEW:
-            win32_cursor = IDC_SIZEWE;
-            break;
-        case ImGuiMouseCursor_ResizeNS:
-            win32_cursor = IDC_SIZENS;
-            break;
-        case ImGuiMouseCursor_ResizeNESW:
-            win32_cursor = IDC_SIZENESW;
-            break;
-        case ImGuiMouseCursor_ResizeNWSE:
-            win32_cursor = IDC_SIZENWSE;
-            break;
+            case ImGuiMouseCursor_Arrow:
+                win32_cursor = IDC_ARROW;
+                break;
+            case ImGuiMouseCursor_TextInput:
+                win32_cursor = IDC_IBEAM;
+                break;
+            case ImGuiMouseCursor_ResizeAll:
+                win32_cursor = IDC_SIZEALL;
+                break;
+            case ImGuiMouseCursor_ResizeEW:
+                win32_cursor = IDC_SIZEWE;
+                break;
+            case ImGuiMouseCursor_ResizeNS:
+                win32_cursor = IDC_SIZENS;
+                break;
+            case ImGuiMouseCursor_ResizeNESW:
+                win32_cursor = IDC_SIZENESW;
+                break;
+            case ImGuiMouseCursor_ResizeNWSE:
+                win32_cursor = IDC_SIZENWSE;
+                break;
         }
         ::SetCursor(::LoadCursor(NULL, win32_cursor));
     }
@@ -292,79 +295,169 @@ IMGUI_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg, WPARAM wPa
     ImGuiIO &io = ImGui::GetIO();
     switch (msg)
     {
-    case WM_LBUTTONDOWN:
-    case WM_LBUTTONDBLCLK:
-    case WM_RBUTTONDOWN:
-    case WM_RBUTTONDBLCLK:
-    case WM_MBUTTONDOWN:
-    case WM_MBUTTONDBLCLK:
-    {
-        int button = 0;
-        if (msg == WM_LBUTTONDOWN || msg == WM_LBUTTONDBLCLK)
-            button = 0;
-        if (msg == WM_RBUTTONDOWN || msg == WM_RBUTTONDBLCLK)
-            button = 1;
-        if (msg == WM_MBUTTONDOWN || msg == WM_MBUTTONDBLCLK)
-            button = 2;
-        if (!ImGui::IsAnyMouseDown() && ::GetCapture() == NULL)
-            ::SetCapture(hwnd);
-        io.MouseDown[button] = true;
-        return 0;
-    }
-    case WM_LBUTTONUP:
-    case WM_RBUTTONUP:
-    case WM_MBUTTONUP:
-    {
-        int button = 0;
-        if (msg == WM_LBUTTONUP)
-            button = 0;
-        if (msg == WM_RBUTTONUP)
-            button = 1;
-        if (msg == WM_MBUTTONUP)
-            button = 2;
-        io.MouseDown[button] = false;
-        if (!ImGui::IsAnyMouseDown() && ::GetCapture() == hwnd)
-            ::ReleaseCapture();
-        return 0;
-    }
-    case WM_MOUSEWHEEL:
-        io.MouseWheel += GET_WHEEL_DELTA_WPARAM(wParam) > 0 ? +1.0f : -1.0f;
-        return 0;
-    case WM_MOUSEHWHEEL:
-        io.MouseWheelH += GET_WHEEL_DELTA_WPARAM(wParam) > 0 ? +1.0f : -1.0f;
-        return 0;
-    case WM_MOUSEMOVE:
-        io.MousePos.x = (signed short)(lParam);
-        io.MousePos.y = (signed short)(lParam >> 16);
-        return 0;
-    case WM_KEYDOWN:
-    case WM_SYSKEYDOWN:
-        if (wParam < 256)
-            io.KeysDown[wParam] = 1;
-        return 0;
-    case WM_KEYUP:
-    case WM_SYSKEYUP:
-        if (wParam < 256)
-            io.KeysDown[wParam] = 0;
-        return 0;
-    case WM_CHAR:
-        // You can also use ToAscii()+GetKeyboardState() to retrieve characters.
-        if (wParam > 0 && wParam < 0x10000)
-            io.AddInputCharacter((unsigned short)wParam);
-        return 0;
-    case WM_SETCURSOR:
-        if (LOWORD(lParam) == HTCLIENT && ImGui_ImplWin32_UpdateMouseCursor())
-            return 1;
-        return 0;
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONDBLCLK:
+        case WM_RBUTTONDOWN:
+        case WM_RBUTTONDBLCLK:
+        case WM_MBUTTONDOWN:
+        case WM_MBUTTONDBLCLK:
+        {
+            int button = 0;
+            if (msg == WM_LBUTTONDOWN || msg == WM_LBUTTONDBLCLK)
+                button = 0;
+            if (msg == WM_RBUTTONDOWN || msg == WM_RBUTTONDBLCLK)
+                button = 1;
+            if (msg == WM_MBUTTONDOWN || msg == WM_MBUTTONDBLCLK)
+                button = 2;
+            if (!ImGui::IsAnyMouseDown() && ::GetCapture() == NULL)
+                ::SetCapture(hwnd);
+            io.MouseDown[button] = true;
+            return 0;
+        }
+        case WM_LBUTTONUP:
+        case WM_RBUTTONUP:
+        case WM_MBUTTONUP:
+        {
+            int button = 0;
+            if (msg == WM_LBUTTONUP)
+                button = 0;
+            if (msg == WM_RBUTTONUP)
+                button = 1;
+            if (msg == WM_MBUTTONUP)
+                button = 2;
+            io.MouseDown[button] = false;
+            if (!ImGui::IsAnyMouseDown() && ::GetCapture() == hwnd)
+                ::ReleaseCapture();
+            return 0;
+        }
+        case WM_MOUSEWHEEL:
+            io.MouseWheel += GET_WHEEL_DELTA_WPARAM(wParam) > 0 ? +1.0f : -1.0f;
+            return 0;
+        case WM_MOUSEHWHEEL:
+            io.MouseWheelH += GET_WHEEL_DELTA_WPARAM(wParam) > 0 ? +1.0f : -1.0f;
+            return 0;
+        case WM_MOUSEMOVE:
+            io.MousePos.x = (signed short)(lParam);
+            io.MousePos.y = (signed short)(lParam >> 16);
+            return 0;
+        case WM_KEYDOWN:
+        case WM_SYSKEYDOWN:
+            if (wParam < 256)
+                io.KeysDown[wParam] = 1;
+            return 0;
+        case WM_KEYUP:
+        case WM_SYSKEYUP:
+            if (wParam < 256)
+                io.KeysDown[wParam] = 0;
+            return 0;
+        case WM_CHAR:
+            // You can also use ToAscii()+GetKeyboardState() to retrieve characters.
+            if (wParam > 0 && wParam < 0x10000)
+                io.AddInputCharacter((unsigned short)wParam);
+            return 0;
+        case WM_SETCURSOR:
+            if (LOWORD(lParam) == HTCLIENT && ImGui_ImplWin32_UpdateMouseCursor())
+                return 1;
+            return 0;
     }
     return 0;
+}
+
+struct GWFontConfig
+{
+    GW::TextMgr::StyleId styleId;
+    GW::TextMgr::BlitFontFlags blitFlags;
+    int32_t advanceAdjustment;
+    uint32_t glyphPadding;
+    ImVec2 glyphOffset;
+    uint32_t color;
+
+    GWFontConfig()
+        : styleId((GW::TextMgr::StyleId)0),
+          blitFlags((GW::TextMgr::BlitFontFlags)0),
+          advanceAdjustment(0),
+          glyphPadding(0),
+          glyphOffset(0, 0),
+          color(0xffffffff)
+    {
+    }
+};
+
+struct FontBlitCommand
+{
+    struct Glyph
+    {
+        wchar_t ch;
+        int dst_rect;
+        uint32_t x_offset;
+    };
+    GWFontConfig config;
+    ImFont *imFont;
+    std::vector<Glyph> glyphs;
+};
+std::vector<FontBlitCommand> font_blit_commands;
+
+ImFont *CreateGWFont(GWFontConfig &cfg)
+{
+    auto &io = ImGui::GetIO();
+
+    GW::TextMgr::FontHandle fontHandle(cfg.styleId);
+    auto font = fontHandle.font;
+
+    auto padding = cfg.glyphPadding;
+    uint32_t padded_height = font->glyphHeight + padding * 2;
+
+    ImFontConfig config;
+    config.SizePixels = padded_height;
+    auto imFont = io.Fonts->AddFontDefault(&config);
+    imFont->FallbackAdvanceX = font->advance_unit;
+
+    auto &command = font_blit_commands.emplace_back();
+    command.config = cfg;
+    command.imFont = imFont;
+    for (wchar_t ch = L'\x20'; ch < L'\x7e'; ++ch)
+    {
+        auto glyph = GW::TextMgr::GetGlyphByChar(font, ch);
+        uint32_t glyph_offset_x, glyph_width;
+        if (glyph)
+        {
+            glyph_offset_x = std::numeric_limits<uint32_t>::max();
+            glyph_width = 0;
+            for (size_t i = 0; i < 4; ++i)
+            {
+                // GW uses 4 collision lanes for each glyph to achieve nice kerning, but imgui uses only one: We take max of all lanes
+                glyph_offset_x = std::min(glyph_offset_x, glyph->metrics.lane_start[i]);
+                glyph_width = std::max(glyph_width, glyph->metrics.lane_width[i]);
+            }
+        }
+        else
+        {
+            glyph_offset_x = 0;
+            glyph_width = font->advance_unit;
+        }
+        uint32_t padded_width = glyph_width + padding * 2;
+        uint32_t advance = padded_width + cfg.advanceAdjustment;
+        auto id = io.Fonts->AddCustomRectFontGlyph(imFont, ch, padded_width, padded_height, advance, cfg.glyphOffset);
+        auto &g = command.glyphs.emplace_back();
+        g.ch = ch;
+        g.dst_rect = id;
+        g.x_offset = glyph_offset_x;
+    }
+
+    return imFont;
 }
 
 void AddFonts(ImGuiIO &io)
 {
     auto res_path = Constants::paths.resources();
+    GWFontConfig cfg;
+    cfg.glyphPadding = 1;
+    cfg.advanceAdjustment = -2;
+    cfg.glyphOffset = ImVec2(-1, 0);
     // First font is used by default
-    Constants::Fonts::gw_font_16 = io.Fonts->AddFontFromFileTTF((res_path / "Font.ttf").string().c_str(), 16.0f, NULL, io.Fonts->GetGlyphRangesDefault());
+    Constants::Fonts::gw_font_16 = CreateGWFont(cfg);
+    // Constants::Fonts::gw_font_16 = CreateGWFont(30, 16);
+    // Constants::Fonts::gw_font_16 = io.Fonts->AddFontFromFileTTF((res_path / "Font.ttf").string().c_str(), 16.0f, NULL, io.Fonts->GetGlyphRangesDefault());
     Constants::Fonts::gw_font_14 = io.Fonts->AddFontFromFileTTF((res_path / "Font.ttf").string().c_str(), 14.0f, NULL, io.Fonts->GetGlyphRangesDefault());
     // io.Fonts->AddFontFromFileTTF((res_path / "friz-quadrata-std-medium-5870338ec7ef8.otf").string().c_str(), 14.0f, NULL, io.Fonts->GetGlyphRangesDefault());
     Constants::Fonts::gw_font_20 = io.Fonts->AddFontFromFileTTF((res_path / "Font.ttf").string().c_str(), 20.f, NULL, io.Fonts->GetGlyphRangesDefault());
@@ -448,6 +541,71 @@ void ImGui_ImplDX9_Shutdown()
     g_hWnd = 0;
 }
 
+uint32_t ARGB4444ToARGB8888(uint16_t px)
+{
+    uint8_t a = (px >> 12) & 0xF; // high 4 bits
+    uint8_t r = (px >> 8) & 0xF;
+    uint8_t g = (px >> 4) & 0xF;
+    uint8_t b = px & 0xF;
+
+    // expand 4-bit to 8-bit
+    a = a * 0x11; // 0xF → 0xFF
+    r = r * 0x11;
+    g = g * 0x11;
+    b = b * 0x11;
+
+    return (a << 24) | (r << 16) | (g << 8) | b;
+}
+
+static void BlitGWGlyphs(uint32_t *pixels, uint32_t width, uint32_t height)
+{
+    auto &io = ImGui::GetIO();
+
+    std::vector<uint8_t> glyphDataBuffer;
+    std::vector<uint16_t> blitDataBuffer;
+
+    GW::TextMgr::Ptr2D atlasDataPtr{pixels, width};
+
+    for (auto &com : font_blit_commands)
+    {
+        auto padding = com.config.glyphPadding;
+        GW::TextMgr::FontHandle fontHandle(com.config.styleId);
+        auto font = fontHandle.font;
+        auto blitWidth = font->glyphWidth + padding * 2;
+        auto blitHeight = font->glyphHeight + padding * 2;
+        auto blitSize = blitWidth * blitHeight;
+        GW::TextMgr::Dims glyphDims{blitWidth, blitHeight};
+        glyphDataBuffer.resize(blitSize);
+        blitDataBuffer.resize(blitSize);
+        GW::TextMgr::Ptr2D glyphDataPtr{glyphDataBuffer.data(), blitWidth};
+        GW::TextMgr::Ptr2D blitDataPtr{blitDataBuffer.data(), blitWidth};
+
+        for (auto &g : com.glyphs)
+        {
+            std::memset(glyphDataBuffer.data(), 0, blitSize * sizeof(decltype(glyphDataBuffer)::value_type));
+            // std::memset(blitDataBuffer.data(), 0, blitSize * sizeof(decltype(blitDataBuffer)::value_type));
+            auto encGlyph = GW::TextMgr::GetGlyphByChar(font, g.ch);
+            GW::TextMgr::DecodeGlyph(font, encGlyph, glyphDataPtr.Index(padding, padding));
+
+            auto rect = io.Fonts->GetCustomRectByIndex(g.dst_rect);
+            auto slotPtr = atlasDataPtr.Index(rect->X, rect->Y);
+
+            uint32_t color = 0xFFFFFFFF;
+            GW::TextMgr::BlitFontARBG4444(font, blitDataPtr, glyphDataBuffer.data(), glyphDims, color, com.config.blitFlags);
+
+            for (int y = 0; y < rect->Height; y++)
+            {
+                for (int x = 0; x < rect->Width; x++)
+                {
+                    auto blittedValue = *blitDataPtr.Index(x + g.x_offset, y).data;
+                    auto dstPx = slotPtr.Index(x, y).data;
+                    *dstPx = ARGB4444ToARGB8888(blittedValue);
+                }
+            }
+        }
+    }
+}
+
 static bool ImGui_ImplDX9_CreateFontsTexture()
 {
     // Build texture atlas
@@ -455,6 +613,9 @@ static bool ImGui_ImplDX9_CreateFontsTexture()
     unsigned char *pixels;
     int width, height, bytes_per_pixel;
     io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height, &bytes_per_pixel);
+    assert(bytes_per_pixel == 4);
+
+    BlitGWGlyphs((uint32_t *)pixels, width, height);
 
     // Upload texture to graphics system
     g_FontTexture = NULL;
