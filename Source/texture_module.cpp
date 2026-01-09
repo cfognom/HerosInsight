@@ -159,27 +159,21 @@ namespace TextureModule
         return NULL;
     }
 
-    IDirect3DTexture9 *CreateTexture(IDirect3DDevice9 *device, uint32_t file_id, Vec2i &dims)
+    struct AutoFree // Helper struct that automatically calls MemFree when it goes out of scope
     {
-        if (!device || !file_id)
+        gw_image_bits &object;
+        ~AutoFree()
         {
-            return nullptr;
+            GW::MemoryMgr::MemFree(object);
+            object = nullptr;
         }
+    };
 
-        struct AutoFree // Helper struct that automatically calls MemFree when it goes out of scope
-        {
-            gw_image_bits &object;
-            ~AutoFree()
-            {
-                GW::MemoryMgr::MemFree(object);
-                object = nullptr;
-            }
-        };
-
-        IDirect3DTexture9 *tex = nullptr; // The return value
+    gw_image_bits DecodeImage(uint32_t file_id, Vec2i &dims)
+    {
         gw_image_bits decoded_image = nullptr;
-        gw_image_bits allocated_image = nullptr;
-        uint8_t *nullptr_palette = nullptr; // We only use a var here to show were the palette goes
+        gw_image_bits allocated_image = nullptr; // The return
+        uint8_t *nullptr_palette = nullptr;      // We only use a var here to show were the palette goes
         GR_FORMAT format;
         int levels = 0;
         bool decode_success;
@@ -231,40 +225,51 @@ namespace TextureModule
             Depalletize_Func(&allocated_image, nullptr, GR_FORMAT_A8R8G8B8, nullptr, decoded_image, nullptr_palette, format, nullptr, &dims, levels, 0, 0);
             GWCA_ASSERT(allocated_image != nullptr);
         }
+        return allocated_image;
+    }
 
-        { // Depalletized scope
-            AutoFree x{allocated_image};
-
-            // Create a texture: http://msdn.microsoft.com/en-us/library/windows/desktop/bb174363(v=vs.85).aspx
-            if (device->CreateTexture(dims.x, dims.y, levels, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &tex, 0) != D3D_OK)
-                return nullptr;
-
-            // Lock the texture for writing: http://msdn.microsoft.com/en-us/library/windows/desktop/bb205913(v=vs.85).aspx
-            D3DLOCKED_RECT rect;
-            if (tex->LockRect(0, &rect, 0, D3DLOCK_DISCARD) != D3D_OK)
-            {
-                tex->Release();
-                return nullptr;
-            }
-
-            for (int y = 0; y < dims.y; y++)
-            {
-                auto dst = (uint8_t *)rect.pBits + y * rect.Pitch;
-                auto src = (uint32_t *)allocated_image + y * dims.x;
-                memcpy(dst, src, dims.x * 4);
-                /* for (int x = 0; x < dims.x; ++x) {
-                    uint8_t* destAddr = ((uint8_t*)rect.pBits + y * rect.Pitch + 4 * x);
-
-                    // unsigned int data = 0xFF000000 | (*srcdata >> 24 & 0xFF) | (*srcdata >> 16 & 0xFF00) | (*srcdata >> 8 & 0xFF0000);
-                    // memcpy(destAddr, &data, 4);
-                    memcpy(destAddr, srcdata, 4);
-                    srcdata++;
-                }*/
-            }
-            // Unlock the texture so it can be used.
-            tex->UnlockRect(0);
-            return tex;
+    IDirect3DTexture9 *CreateTexture(IDirect3DDevice9 *device, uint32_t file_id, Vec2i &dims)
+    {
+        if (!device || !file_id)
+        {
+            return nullptr;
         }
+
+        IDirect3DTexture9 *tex = nullptr; // The return value
+        gw_image_bits decoded_image = nullptr;
+        gw_image_bits allocated_image = DecodeImage(file_id, dims);
+        AutoFree x{allocated_image};
+        int levels = 1;
+
+        // Create a texture: http://msdn.microsoft.com/en-us/library/windows/desktop/bb174363(v=vs.85).aspx
+        if (device->CreateTexture(dims.x, dims.y, levels, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &tex, 0) != D3D_OK)
+            return nullptr;
+
+        // Lock the texture for writing: http://msdn.microsoft.com/en-us/library/windows/desktop/bb205913(v=vs.85).aspx
+        D3DLOCKED_RECT rect;
+        if (tex->LockRect(0, &rect, 0, D3DLOCK_DISCARD) != D3D_OK)
+        {
+            tex->Release();
+            return nullptr;
+        }
+
+        for (int y = 0; y < dims.y; y++)
+        {
+            auto dst = (uint8_t *)rect.pBits + y * rect.Pitch;
+            auto src = (uint32_t *)allocated_image + y * dims.x;
+            memcpy(dst, src, dims.x * 4);
+            /* for (int x = 0; x < dims.x; ++x) {
+                uint8_t* destAddr = ((uint8_t*)rect.pBits + y * rect.Pitch + 4 * x);
+
+                // unsigned int data = 0xFF000000 | (*srcdata >> 24 & 0xFF) | (*srcdata >> 16 & 0xFF00) | (*srcdata >> 8 & 0xFF0000);
+                // memcpy(destAddr, &data, 4);
+                memcpy(destAddr, srcdata, 4);
+                srcdata++;
+            }*/
+        }
+        // Unlock the texture so it can be used.
+        tex->UnlockRect(0);
+        return tex;
     }
 
     struct GwImg
