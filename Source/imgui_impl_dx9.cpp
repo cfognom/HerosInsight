@@ -18,9 +18,11 @@
 //  2018-02-06: Inputs: Honoring the io.WantSetMousePos by repositioning the mouse (when using navigation and ImGuiConfigFlags_NavEnableSetMousePos is set).
 //  2018-02-06: Inputs: Added mapping for ImGuiKey_Space.
 
+#include <GWCA/Managers/AssetMgr.h>
 #include <GWCA/Managers/TextMgr.h>
 
 #include <constants.h>
+#include <rich_text.h>
 
 #include "imgui.h"
 
@@ -377,13 +379,25 @@ struct FontBlitCommand
 {
     struct Glyph
     {
-        wchar_t ch;
-        int dst_rect;
+        ImWchar ch;
+        int dstRect;
         uint32_t x_offset;
+    };
+    struct IconFile
+    {
+        struct Mapping
+        {
+            int dstRect;
+            int atlasIndex;
+        };
+        uint32_t gwImageFileId;
+        GW::Dims iconDims;
+        std::vector<Mapping> mappings;
     };
     GWFontConfig config;
     ImFont *imFont;
     std::vector<Glyph> glyphs;
+    std::vector<IconFile> icons;
 };
 std::vector<FontBlitCommand> font_blit_commands;
 
@@ -406,9 +420,9 @@ ImFont *CreateGWFont(GWFontConfig cfg)
     command.config = cfg;
     command.imFont = imFont;
 
-    auto EnqueueRange = [&](wchar_t begin, wchar_t end)
+    auto EnqueueRange = [&](ImWchar begin, ImWchar end)
     {
-        for (wchar_t ch = begin; ch < end; ++ch)
+        for (ImWchar ch = begin; ch < end; ++ch)
         {
             auto glyph = GW::TextMgr::GetGlyphByChar(font, ch);
             uint32_t glyph_offset_x, glyph_width;
@@ -433,7 +447,7 @@ ImFont *CreateGWFont(GWFontConfig cfg)
             auto id = io.Fonts->AddCustomRectFontGlyph(imFont, ch, padded_width, padded_height, advance, cfg.glyphOffset);
             auto &g = command.glyphs.emplace_back();
             g.ch = ch;
-            g.dst_rect = id;
+            g.dstRect = id;
             g.x_offset = glyph_offset_x;
         }
     };
@@ -445,6 +459,23 @@ ImFont *CreateGWFont(GWFontConfig cfg)
         assert(*r);
         auto end = *r++;
         EnqueueRange(begin, end);
+    }
+
+    ImWchar customCh = 0xE000;
+
+    { // Add custom icons
+        GW::Dims iconSize(16, 16);
+        auto &entry = command.icons.emplace_back();
+        entry.gwImageFileId = TextureModule::KnownFileIDs::UI_SkillStatsIcons;
+        entry.iconDims = iconSize;
+
+        for (size_t atlas_index = 0; atlas_index <= 10; ++atlas_index)
+        {
+            auto id = io.Fonts->AddCustomRectFontGlyph(imFont, customCh++, iconSize.width, iconSize.height, iconSize.width, ImVec2(0, 0));
+            auto &mapping = entry.mappings.emplace_back();
+            mapping.atlasIndex = atlas_index;
+            mapping.dstRect = id;
+        }
     }
 
     return imFont;
@@ -573,7 +604,7 @@ static void BlitGWGlyphs(uint32_t *pixels, uint32_t width, uint32_t height)
     std::vector<uint8_t> glyphDataBuffer;
     std::vector<uint16_t> blitDataBuffer;
 
-    GW::TextMgr::Ptr2D atlasDataPtr{pixels, width};
+    GW::Ptr2D atlasDataPtr{pixels, width};
 
     for (auto &com : font_blit_commands)
     {
@@ -583,11 +614,11 @@ static void BlitGWGlyphs(uint32_t *pixels, uint32_t width, uint32_t height)
         auto blitWidth = font->glyphWidth + padding * 2;
         auto blitHeight = font->glyphHeight + padding * 2;
         auto blitSize = blitWidth * blitHeight;
-        GW::TextMgr::Dims glyphDims{blitWidth, blitHeight};
+        GW::Dims glyphDims{blitWidth, blitHeight};
         glyphDataBuffer.resize(blitSize);
         blitDataBuffer.resize(blitSize);
-        GW::TextMgr::Ptr2D glyphDataPtr{glyphDataBuffer.data(), blitWidth};
-        GW::TextMgr::Ptr2D blitDataPtr{blitDataBuffer.data(), blitWidth};
+        GW::Ptr2D glyphDataPtr{glyphDataBuffer.data(), blitWidth};
+        GW::Ptr2D blitDataPtr{blitDataBuffer.data(), blitWidth};
 
         for (auto &g : com.glyphs)
         {
@@ -596,7 +627,7 @@ static void BlitGWGlyphs(uint32_t *pixels, uint32_t width, uint32_t height)
             auto encGlyph = GW::TextMgr::GetGlyphByChar(font, g.ch);
             GW::TextMgr::DecodeGlyph(font, encGlyph, glyphDataPtr.Index(padding, padding));
 
-            auto rect = io.Fonts->GetCustomRectByIndex(g.dst_rect);
+            auto rect = io.Fonts->GetCustomRectByIndex(g.dstRect);
             auto slotPtr = atlasDataPtr.Index(rect->X, rect->Y);
 
             uint32_t color = 0xFFFFFFFF;
@@ -610,6 +641,25 @@ static void BlitGWGlyphs(uint32_t *pixels, uint32_t width, uint32_t height)
                     auto dstPx = slotPtr.Index(x, y).data;
                     *dstPx = ARGB4444ToARGB8888(blittedValue);
                 }
+            }
+        }
+
+        for (auto &entry : com.icons)
+        {
+            GW::AssetMgr::DecodedImage decoded(entry.gwImageFileId);
+            assert(decoded.image);
+            GW::Ptr2D<uint32_t> decodedPtr{(uint32_t *)decoded.image, decoded.dims.width};
+            ImVec2 uv0, uv1;
+            for (auto &mapping : entry.mappings)
+            {
+                auto rect = io.Fonts->GetCustomRectByIndex(mapping.dstRect);
+                auto slotPtr = atlasDataPtr.Index(rect->X, rect->Y);
+                TextureModule::GetImageUVsInAtlas(decoded.dims, entry.iconDims, mapping.atlasIndex, uv0, uv1);
+                auto srcPtr = decodedPtr.Index(
+                    std::round(uv0.x * decoded.dims.width),
+                    std::round(uv0.y * decoded.dims.height)
+                );
+                srcPtr.CopyTo(slotPtr, entry.iconDims);
             }
         }
     }
