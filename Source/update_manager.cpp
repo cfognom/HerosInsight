@@ -114,7 +114,6 @@ namespace HerosInsight
 #ifdef _DEBUG
         HerosInsight::Debug::Initialize();
 #endif
-        TextureModule::Initialize();
 
 #ifdef EXPERIMENTAL_FEATURES
         HerosInsight::PacketReader::Initialize();

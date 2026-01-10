@@ -94,155 +94,23 @@
 
 namespace TextureModule
 {
-    class RecObj;
-
-    struct Vec2i
-    {
-        int x = 0;
-        int y = 0;
-    };
-
-    typedef enum : uint32_t
-    {
-        GR_FORMAT_A8R8G8B8 = 0, // raw?
-        GR_FORMAT_UNK = 0x4,    //.bmp,...
-        GR_FORMAT_DXT1 = 0xF,
-        GR_FORMAT_DXT2,
-        GR_FORMAT_DXT3,
-        GR_FORMAT_DXT4,
-        GR_FORMAT_DXT5,
-        GR_FORMAT_DXTA,
-        GR_FORMAT_DXTL,
-        GR_FORMAT_DXTN,
-        GR_FORMATS
-    } GR_FORMAT;
-
-    typedef uint8_t *gw_image_bits; // array of pointers to mipmap images
-
-    typedef BOOL(__cdecl *DecodeImage_pt)(int size, char *bytes, gw_image_bits *out_bits, uint8_t *pallete, GR_FORMAT *format, Vec2i *dims, int *levels);
-    DecodeImage_pt DecodeImage_Func;
-
-    typedef gw_image_bits(__cdecl *AllocateImage_pt)(GR_FORMAT format, Vec2i *destDims, uint32_t levels, uint32_t unk2);
-    AllocateImage_pt AllocateImage_Func;
-
-    typedef void(__cdecl *Depalletize_pt)(
-        gw_image_bits *destBits, uint8_t *destPalette, GR_FORMAT destFormat, int *destMipWidths, gw_image_bits sourceBits, uint8_t *sourcePallete, GR_FORMAT sourceFormat, int *sourceMipWidths, Vec2i *sourceDims, uint32_t sourceLevels,
-        uint32_t unk1_0, int *unk2_0
-    );
-    Depalletize_pt Depalletize_Func;
-
-    // typedef void(__cdecl *ConvertImage_pt) (uint8_t *destBytes, int *destPallete, uint32_t destFormat, Vec2i *destDims,
-    //                                         uint8_t *sourceBytes, int *sourcePallete, uint32_t sourceFormat, Vec2i *sourceDims, float sharpness);
-    // ConvertImage_pt ConvertImage_func;
-
-    // typedef uint8_t*(__cdecl *ConvertToRaw_pt) (uint8_t *sourceBits, int *sourcePallete, uint32_t sourceFormat, Vec2i *sourceDims,
-    //     Vec2i *maybeDestDims, uint32_t levelsProvided, uint32_t levelsRequested, float sharpness);
-    // ConvertUnk_pt ConvertUnk_func;
-
-    // typedef void(__cdecl *GetLevelWidths_pt) (int format, int width, uint32_t levels, int *widths);
-    // GetLevelWidths_pt GetLevelWidths_func;
-
-    char *strnstr(char *str, const char *substr, size_t n)
-    {
-        char *p = str, *pEnd = str + n;
-        size_t substr_len = strlen(substr);
-
-        if (0 == substr_len)
-            return str; // the empty string is contained everywhere.
-
-        pEnd -= (substr_len - 1);
-        for (; p < pEnd; ++p)
-        {
-            if (0 == strncmp(p, substr, substr_len))
-                return p;
-        }
-        return NULL;
-    }
-
-    struct AutoFree // Helper struct that automatically calls MemFree when it goes out of scope
-    {
-        gw_image_bits &object;
-        ~AutoFree()
-        {
-            GW::MemoryMgr::MemFree(object);
-            object = nullptr;
-        }
-    };
-
-    gw_image_bits DecodeImage(uint32_t file_id, Vec2i &dims)
-    {
-        gw_image_bits decoded_image = nullptr;
-        gw_image_bits allocated_image = nullptr; // The return
-        uint8_t *nullptr_palette = nullptr;      // We only use a var here to show were the palette goes
-        GR_FORMAT format;
-        int levels = 0;
-        bool decode_success;
-
-        wchar_t fileHash[4] = {0};
-        GW::AssetMgr::FileIdToFileHash(file_id, fileHash);
-
-        { // Read scope
-            auto readable = GW::AssetMgr::ReadableFile(fileHash);
-            if (readable)
-            {
-                char *image_bytes = readable.data;
-                uint32_t image_size = readable.size;
-
-                if (memcmp((char *)image_bytes, "ffna", 4) == 0)
-                {
-                    // Model file format; try to find first instance of image from this.
-                    auto found = strnstr((char *)image_bytes, "ATEX", image_size);
-                    if (!found)
-                        return nullptr;
-                    image_bytes = found;
-                    image_size = *(int *)(found - 4);
-                }
-                // Decodes the file data into a malloc'd block 'decoded_image' (we need to free this later)
-                decode_success = DecodeImage_Func(
-                    image_size, image_bytes,                                 // Inputs
-                    &decoded_image, nullptr_palette, &format, &dims, &levels // Outputs
-                );
-                if (decoded_image == nullptr)
-                    return nullptr;
-            }
-        } // File is cleaned up here
-
-        { // Decoded scope
-            AutoFree x{decoded_image};
-
-            if (!decode_success ||
-                format >= GR_FORMATS ||
-                !dims.x || !dims.y ||
-                levels > 13) // Depalletize_Func does not support more than 12 levels
-                return nullptr;
-
-            levels = 1;
-            // Allocates a block of memory for the depalletized image (needs to be freed later)
-            allocated_image = AllocateImage_Func(GR_FORMAT_A8R8G8B8, &dims, levels, 0);
-            if (allocated_image == nullptr)
-                return nullptr;
-
-            Depalletize_Func(&allocated_image, nullptr, GR_FORMAT_A8R8G8B8, nullptr, decoded_image, nullptr_palette, format, nullptr, &dims, levels, 0, 0);
-            GWCA_ASSERT(allocated_image != nullptr);
-        }
-        return allocated_image;
-    }
-
-    IDirect3DTexture9 *CreateTexture(IDirect3DDevice9 *device, uint32_t file_id, Vec2i &dims)
+    IDirect3DTexture9 *CreateTexture(IDirect3DDevice9 *device, uint32_t file_id, GW::Dims &dims)
     {
         if (!device || !file_id)
         {
             return nullptr;
         }
 
-        IDirect3DTexture9 *tex = nullptr; // The return value
-        gw_image_bits decoded_image = nullptr;
-        gw_image_bits allocated_image = DecodeImage(file_id, dims);
-        AutoFree x{allocated_image};
-        int levels = 1;
+        GW::AssetMgr::DecodedImage decoded(file_id);
+        auto image = decoded.image;
+        dims = decoded.dims;
+        if (!image)
+            return nullptr;
 
         // Create a texture: http://msdn.microsoft.com/en-us/library/windows/desktop/bb174363(v=vs.85).aspx
-        if (device->CreateTexture(dims.x, dims.y, levels, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &tex, 0) != D3D_OK)
+        IDirect3DTexture9 *tex = nullptr; // The return value
+        int levels = 1;
+        if (device->CreateTexture(dims.width, dims.height, levels, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &tex, 0) != D3D_OK)
             return nullptr;
 
         // Lock the texture for writing: http://msdn.microsoft.com/en-us/library/windows/desktop/bb205913(v=vs.85).aspx
@@ -253,11 +121,11 @@ namespace TextureModule
             return nullptr;
         }
 
-        for (int y = 0; y < dims.y; y++)
+        for (int y = 0; y < dims.height; y++)
         {
             auto dst = (uint8_t *)rect.pBits + y * rect.Pitch;
-            auto src = (uint32_t *)allocated_image + y * dims.x;
-            memcpy(dst, src, dims.x * 4);
+            auto src = (uint32_t *)image + y * dims.width;
+            memcpy(dst, src, dims.width * 4);
             /* for (int x = 0; x < dims.x; ++x) {
                 uint8_t* destAddr = ((uint8_t*)rect.pBits + y * rect.Pitch + 4 * x);
 
@@ -275,29 +143,11 @@ namespace TextureModule
     struct GwImg
     {
         uint32_t m_file_id = 0;
-        Vec2i m_dims;
+        GW::Dims m_dims;
         IDirect3DTexture9 *m_tex = nullptr;
     };
 
     std::map<uint32_t, GwImg *> textures_by_file_id;
-
-    void Initialize()
-    {
-        using namespace GW;
-
-        uintptr_t address = 0;
-
-        DecodeImage_Func = (DecodeImage_pt)Scanner::ToFunctionStart(Scanner::FindAssertion("GrImage.cpp", "bits || !palette", 0, 0));
-
-        AllocateImage_Func = (AllocateImage_pt)Scanner::ToFunctionStart(Scanner::Find(MemPattern("7c 11 6a 5c")));
-
-        address = Scanner::ToFunctionStart(Scanner::Find(MemPattern("83 ?? 04 a8 08 74 1a 85 ?? 75 1d")));
-        Depalletize_Func = (Depalletize_pt)address;
-
-        assert(DecodeImage_Func);
-        assert(AllocateImage_Func);
-        assert(Depalletize_Func);
-    }
 
     // tasks to be done in the render thread
     std::queue<std::function<void(IDirect3DDevice9 *)>> dx_jobs;
@@ -382,7 +232,7 @@ namespace TextureModule
     struct ResourcesImg
     {
         std::string m_filename;
-        Vec2i m_dims;
+        GW::Dims m_dims;
         IDirect3DTexture9 *m_tex = nullptr;
     };
 
@@ -416,8 +266,8 @@ namespace TextureModule
             D3DXIMAGE_INFO image_info;
             auto result = D3DXGetImageInfoFromFileA(full_path_str.c_str(), &image_info);
             assert(result == D3D_OK);
-            img_ptr->m_dims.x = static_cast<float>(image_info.Width);
-            img_ptr->m_dims.y = static_cast<float>(image_info.Height);
+            img_ptr->m_dims.width = static_cast<float>(image_info.Width);
+            img_ptr->m_dims.height = static_cast<float>(image_info.Height);
 
             result = D3DXCreateTextureFromFileExA(
                 device,
@@ -497,7 +347,7 @@ namespace TextureModule
         // Draw the skill overlay/lens
         auto overlay_desc = GetTextureDesc(*skill_overlays);
         auto overlay_tex_size = ImVec2(overlay_desc.Width, overlay_desc.Height);
-        GetImageUVsInAtlas(*skill_overlays, ImVec2(56, 56), overlay_index, uv0, uv1);
+        GetImageUVsInAtlas(*skill_overlays, GW::Dims(56, 56), overlay_index, uv0, uv1);
         // OffsetUVsByPixels(overlay_tex_size, uv0, ImVec2(0, 0));
         OffsetUVsByPixels(overlay_tex_size, uv1, ImVec2(0, -1));
         draw_list->AddImage(*skill_overlays, min, max, uv0, uv1, tint);
@@ -555,7 +405,7 @@ namespace TextureModule
                 // auto type_icon_tex_size = ImVec2(type_icon_desc.Width, type_icon_desc.Height);
                 auto min_ur = min + ImVec2(icon_size * 0.42f, 0);
                 auto max_ur = max + ImVec2(0, -icon_size * 0.42f);
-                GetImageUVsInAtlas(*skill_type_icons, ImVec2(32, 32), offset, uv0, uv1);
+                GetImageUVsInAtlas(*skill_type_icons, GW::Dims(32, 32), offset, uv0, uv1);
                 draw_list->AddImage(*skill_type_icons, min_ur, max_ur, uv0, uv1, tint);
             }
         }
@@ -566,18 +416,16 @@ namespace TextureModule
         return true;
     }
 
-    void GetImageUVsInAtlas(IDirect3DTexture9 *texture, ImVec2 image_size, uint32_t index, ImVec2 &uv0, ImVec2 &uv1)
+    void GetImageUVsInAtlas(GW::Dims atlas_size, GW::Dims image_size, uint32_t index, ImVec2 &uv0, ImVec2 &uv1)
     {
-        if (texture == nullptr || image_size.x == 0 || image_size.y == 0)
+        if (image_size.width == 0 || image_size.height == 0)
         {
             uv0 = ImVec2(0, 0);
             uv1 = ImVec2(1, 1);
             return;
         }
-        D3DSURFACE_DESC desc;
-        texture->GetLevelDesc(0, &desc);
-        float cols = desc.Width / image_size.x;
-        float rows = desc.Height / image_size.y;
+        float cols = (float)atlas_size.width / image_size.width;
+        float rows = (float)atlas_size.height / image_size.height;
         auto n_cols = static_cast<uint32_t>(cols);
         if (cols == 0 ||
             rows == 0 ||
@@ -591,6 +439,19 @@ namespace TextureModule
         auto col = index % n_cols;
         uv0 = ImVec2(col / cols, row / rows);
         uv1 = ImVec2((col + 1) / cols, (row + 1) / rows);
+    }
+
+    void GetImageUVsInAtlas(IDirect3DTexture9 *texture, GW::Dims image_size, uint32_t index, ImVec2 &uv0, ImVec2 &uv1)
+    {
+        if (texture == nullptr)
+        {
+            uv0 = ImVec2(0, 0);
+            uv1 = ImVec2(1, 1);
+            return;
+        }
+        D3DSURFACE_DESC desc;
+        texture->GetLevelDesc(0, &desc);
+        GetImageUVsInAtlas(GW::Dims(desc.Width, desc.Height), image_size, index, uv0, uv1);
     }
 
     void OffsetUVsByPixels(ImVec2 source_texture_size, ImVec2 &uv, ImVec2 offset)
@@ -629,7 +490,7 @@ namespace TextureModule
         D3DSURFACE_DESC desc;
         (*packet.tex)->GetLevelDesc(0, &desc);
         auto atlas_size = ImVec2(desc.Width, desc.Height);
-        TextureModule::GetImageUVsInAtlas(*packet.tex, atlas_image_size, atlas_index, packet.uv0, packet.uv1);
+        TextureModule::GetImageUVsInAtlas(*packet.tex, GW::Dims(atlas_image_size.x, atlas_image_size.y), atlas_index, packet.uv0, packet.uv1);
         TextureModule::OffsetUVsByPixels(atlas_size, packet.uv0, uv0_pixel_offset);
         TextureModule::OffsetUVsByPixels(atlas_size, packet.uv1, uv1_pixel_offset);
 
@@ -701,7 +562,7 @@ namespace TextureModule
         auto DrawDigit = [&](uint32_t atlas_index)
         {
             ImVec2 uv0, uv1;
-            TextureModule::GetImageUVsInAtlas(atlas, number_size, atlas_index, uv0, uv1);
+            TextureModule::GetImageUVsInAtlas(atlas, GW::Dims(atlas_size.x, atlas_size.y), atlas_index, uv0, uv1);
             uv0 += uv_offsets;
             uv1 -= uv_offsets;
             auto min = ImVec2(ss_cursor.x, ss_cursor.y);
