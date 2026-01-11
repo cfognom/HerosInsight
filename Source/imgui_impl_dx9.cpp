@@ -372,6 +372,7 @@ struct GWFontConfig
     uint32_t glyphPadding = 0;
     int32_t advanceAdjustment = 0;
     ImVec2 glyphOffset = ImVec2(0, 0);
+    ImVec2 iconOffset = ImVec2(0, 0);
     uint32_t color = 0xffffffff;
 };
 
@@ -471,7 +472,7 @@ ImFont *CreateGWFont(GWFontConfig cfg)
 
         for (size_t atlas_index = 0; atlas_index <= 10; ++atlas_index)
         {
-            auto id = io.Fonts->AddCustomRectFontGlyph(imFont, customCh++, iconSize.width, iconSize.height, iconSize.width, ImVec2(0, 0));
+            auto id = io.Fonts->AddCustomRectFontGlyph(imFont, customCh++, iconSize.width, iconSize.height, iconSize.width, cfg.iconOffset);
             auto &mapping = entry.mappings.emplace_back();
             mapping.atlasIndex = atlas_index;
             mapping.dstRect = id;
@@ -489,9 +490,11 @@ void AddFonts(ImGuiIO &io)
         .glyphPadding = 1,
         .advanceAdjustment = -1,
         .glyphOffset = ImVec2(-1, 0),
+        .iconOffset = ImVec2(0, -1),
     });
     Constants::Fonts::skill_thick_font_15 = CreateGWFont(GWFontConfig{
         .fontIndex = 1,
+        .iconOffset = ImVec2(0, -2),
     });
     Constants::Fonts::skill_name_font = CreateGWFont(GWFontConfig{
         .fontIndex = 3,

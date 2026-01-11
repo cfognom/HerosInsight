@@ -485,7 +485,7 @@ namespace HerosInsight::SkillBook
         }
     };
     SkillFracProvider frac_provider;
-    RichText::Drawer text_drawer{nullptr, &RichText::DefaultTextImageProvider::Instance(), &frac_provider};
+    RichText::Drawer text_drawer{nullptr, &frac_provider};
 
     using Propset = BitArray<PROP_COUNT + 1>; // +1 for meta props
     constexpr static Propset ALL_PROPS = Propset(true);
@@ -580,7 +580,7 @@ namespace HerosInsight::SkillBook
                 bool is_learned = Utils::IsSkillLearned(skill, focused_agent_id);
                 bool is_locked = tags.Unlockable && !is_unlocked;
 
-                auto PushTag = [&](std::string_view str, ImU32 color = NULL, std::optional<size_t> image_id = std::nullopt)
+                auto PushTag = [&](std::string_view str, ImU32 color = NULL, std::string_view icon = {})
                 {
                     if (color != NULL)
                     {
@@ -591,9 +591,9 @@ namespace HerosInsight::SkillBook
                         RichText::Helpers::PushText(dst, str);
                     }
 
-                    if (image_id.has_value())
+                    if (!icon.empty())
                     {
-                        RichText::Helpers::PushImageTag(dst, image_id.value());
+                        RichText::Helpers::PushText(dst, icon);
                     }
 
                     RichText::Helpers::PushText(dst, ", ");
@@ -617,7 +617,7 @@ namespace HerosInsight::SkillBook
 
                 if (tags.DeveloperSkill)   PushTag("Developer Skill");
                 if (tags.EnvironmentSkill) PushTag("Environment Skill");
-                if (tags.MonsterSkill)     PushTag("Monster Skill ", NULL, RichText::DefaultTextImageProvider::MonsterSkull);
+                if (tags.MonsterSkill)     PushTag("Monster Skill", NULL, RichText::Icons::MonsterSkull);
                 if (tags.SpiritAttack)     PushTag("Spirit Attack");
                 
                 if (tags.Maintained)       PushTag("Maintained");
@@ -776,14 +776,16 @@ namespace HerosInsight::SkillBook
             {
                 dst.Elements().append_range(sv);
             };
-            static auto AppendInt = [](StringArena<char> &dst, int32_t value, int32_t icon = -1)
+            static auto AppendInt = [](StringArena<char> &dst, int32_t value, std::string_view icon = {})
             {
                 if (value == 0)
                     return;
 
                 dst.AppendWriteBuffer(32, DoubleWriter{(double)value});
-                if (icon >= 0)
-                    RichText::Helpers::PushImageTag(dst, icon);
+                if (!icon.empty())
+                {
+                    RichText::Helpers::PushText(dst, icon);
+                }
             };
 
             // clang-format off
@@ -791,12 +793,12 @@ namespace HerosInsight::SkillBook
             InitPropById(SkillProp::Attribute,         [](InitHelper h) { AppendStr(h.dst, h.CustomSkill().GetAttributeStr()); });
             InitPropById(SkillProp::Profession,        [](InitHelper h) { AppendStr(h.dst, h.CustomSkill().GetProfessionStr()); });
             InitPropById(SkillProp::Campaign,          [](InitHelper h) { AppendStr(h.dst, h.CustomSkill().GetCampaignStr()); });
-            InitPropById(SkillProp::Upkeep,            [](InitHelper h) { AppendInt(h.dst, h.CustomSkill().GetUpkeep(),            RichText::DefaultTextImageProvider::Upkeep); });
-            InitPropById(SkillProp::Energy,            [](InitHelper h) { AppendInt(h.dst, h.CustomSkill().GetEnergy(),            RichText::DefaultTextImageProvider::EnergyOrb); });
-            InitPropById(SkillProp::AdrenalineStrikes, [](InitHelper h) { AppendInt(h.dst, h.CustomSkill().GetAdrenalineStrikes(), RichText::DefaultTextImageProvider::Adrenaline); });
-            InitPropById(SkillProp::Overcast,          [](InitHelper h) { AppendInt(h.dst, h.CustomSkill().GetOvercast(),          RichText::DefaultTextImageProvider::Overcast); });
-            InitPropById(SkillProp::Sacrifice,         [](InitHelper h) { AppendInt(h.dst, h.CustomSkill().GetSacrifice(),         RichText::DefaultTextImageProvider::Sacrifice); });
-            InitPropById(SkillProp::Recharge,          [](InitHelper h) { AppendInt(h.dst, h.CustomSkill().GetRecharge(),          RichText::DefaultTextImageProvider::Recharge); });
+            InitPropById(SkillProp::Upkeep,            [](InitHelper h) { AppendInt(h.dst, h.CustomSkill().GetUpkeep(),            RichText::Icons::Upkeep); });
+            InitPropById(SkillProp::Energy,            [](InitHelper h) { AppendInt(h.dst, h.CustomSkill().GetEnergy(),            RichText::Icons::EnergyOrb); });
+            InitPropById(SkillProp::AdrenalineStrikes, [](InitHelper h) { AppendInt(h.dst, h.CustomSkill().GetAdrenalineStrikes(), RichText::Icons::Adrenaline); });
+            InitPropById(SkillProp::Overcast,          [](InitHelper h) { AppendInt(h.dst, h.CustomSkill().GetOvercast(),          RichText::Icons::Overcast); });
+            InitPropById(SkillProp::Sacrifice,         [](InitHelper h) { AppendInt(h.dst, h.CustomSkill().GetSacrifice(),         RichText::Icons::Sacrifice); });
+            InitPropById(SkillProp::Recharge,          [](InitHelper h) { AppendInt(h.dst, h.CustomSkill().GetRecharge(),          RichText::Icons::Recharge); });
             InitPropById(SkillProp::Id,                [](InitHelper h) { AppendInt(h.dst, h.skill_id); });
             // clang-format on
 
@@ -842,7 +844,7 @@ namespace HerosInsight::SkillBook
                     {
                         RichText::Helpers::PushTag(h.dst, RichText::TextTag(RichText::FracTag{adrenaline_rem, 25}));
                     }
-                    RichText::Helpers::PushImageTag(h.dst, RichText::DefaultTextImageProvider::Adrenaline);
+                    RichText::Helpers::PushText(h.dst, RichText::Icons::Adrenaline);
                 }
             );
 
@@ -854,7 +856,7 @@ namespace HerosInsight::SkillBook
                     if (activation == 0.f)
                         return;
                     AppendFraction(h.dst, activation);
-                    RichText::Helpers::PushImageTag(h.dst, RichText::DefaultTextImageProvider::Activation);
+                    RichText::Helpers::PushText(h.dst, RichText::Icons::Activation);
                 }
             );
 
@@ -873,7 +875,7 @@ namespace HerosInsight::SkillBook
                     AppendFraction(h.dst, skill.aftercast);
                     if (!is_normal_aftercast)
                         RichText::Helpers::PushColorTag(h.dst, NULL);
-                    RichText::Helpers::PushImageTag(h.dst, RichText::DefaultTextImageProvider::Aftercast);
+                    RichText::Helpers::PushColoredText(h.dst, IM_COL32(77, 84, 179, 255), RichText::Icons::Activation);
                 }
             );
 

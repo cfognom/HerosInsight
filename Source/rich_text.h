@@ -17,11 +17,6 @@ namespace HerosInsight::RichText
         int32_t id; // -1 = close tooltip
     };
 
-    struct ImageTag
-    {
-        uint32_t id;
-    };
-
     struct FracTag
     {
         uint16_t num;
@@ -41,14 +36,12 @@ namespace HerosInsight::RichText
         {
             Color,
             Tooltip,
-            Image,
             Frac,
         };
 
         TextTag() = default;
         TextTag(ColorTag color_tag) : type(Type::Color), color_tag(color_tag) {};
         TextTag(TooltipTag tooltip_tag) : type(Type::Tooltip), tooltip_tag(tooltip_tag) {};
-        TextTag(ImageTag image_tag) : type(Type::Image), image_tag(image_tag) {};
         TextTag(FracTag frac_tag) : type(Type::Frac), frac_tag(frac_tag) {};
 
         Type type;
@@ -59,7 +52,6 @@ namespace HerosInsight::RichText
         {
             ColorTag color_tag;
             TooltipTag tooltip_tag;
-            ImageTag image_tag;
             FracTag frac_tag;
         };
 
@@ -74,37 +66,19 @@ namespace HerosInsight::RichText
         static std::string_view Find(std::string_view text, TextTag &out);
     };
 
-    class TextImageProvider
+    namespace Icons
     {
-    public:
-        virtual ~TextImageProvider() = default;
-
-        virtual void DrawImage(ImVec2 pos, ImageTag tag) = 0;
-        virtual float CalcWidth(ImageTag tag) = 0;
-    };
-
-    class DefaultTextImageProvider : public TextImageProvider
-    {
-    public:
-        enum Id : uint32_t
-        {
-            Upkeep,
-            EnergyOrb,
-            Activation,
-            Aftercast,
-            Recharge,
-            Adrenaline,
-            MonsterSkull,
-            Sacrifice,
-            Overcast,
-
-            COUNT,
-        };
-
-        static DefaultTextImageProvider &Instance();
-        void DrawImage(ImVec2 pos, ImageTag tag) override;
-        float CalcWidth(ImageTag tag) override;
-    };
+        inline static std::string_view Upkeep = (const char *)u8"\uE000";
+        inline static std::string_view EnergyOrb = (const char *)u8"\uE001";
+        inline static std::string_view Activation = (const char *)u8"\uE002";
+        inline static std::string_view Recharge = (const char *)u8"\uE003";
+        inline static std::string_view Adrenaline = (const char *)u8"\uE004";
+        inline static std::string_view MonsterSkull = (const char *)u8"\uE005";
+        inline static std::string_view HealthUpkeep = (const char *)u8"\uE006";
+        inline static std::string_view Sacrifice = (const char *)u8"\uE007";
+        inline static std::string_view StarOrb = (const char *)u8"\uE009";
+        inline static std::string_view Overcast = (const char *)u8"\uE00a";
+    }
 
     class TextTooltipProvider
     {
@@ -132,7 +106,7 @@ namespace HerosInsight::RichText
         };
 
         std::string_view text;
-        std::variant<std::monostate, ImageTag, FracTag> tag;
+        std::variant<std::monostate, FracTag> tag;
         float width;
         std::optional<ImU32> color = std::nullopt;
         std::optional<uint16_t> tooltip_id = std::nullopt;
@@ -140,7 +114,7 @@ namespace HerosInsight::RichText
         bool has_hidden_hl = false;
         WrapMode wrap_mode = WrapMode::Null;
 
-        float CalcWidth(TextImageProvider *image_provider, TextFracProvider *frac_provider) const;
+        float CalcWidth(TextFracProvider *frac_provider) const;
     };
 
     void ExtractTags(std::string_view text_with_tags, std::span<char> &only_text, std::span<TextTag> &only_tags);
@@ -168,11 +142,6 @@ namespace HerosInsight::RichText
             PushTag(dst, TextTag(ColorTag{color}));
         }
 
-        inline void PushImageTag(StringArena<char> &dst, uint32_t image_id)
-        {
-            PushTag(dst, TextTag(ImageTag{image_id}));
-        }
-
         inline void PushColoredText(StringArena<char> &dst, ImU32 color, std::string_view text)
         {
             PushTag(dst, TextTag(ColorTag{color}));
@@ -184,7 +153,6 @@ namespace HerosInsight::RichText
     struct Drawer
     {
         TextTooltipProvider *tooltip_provider = nullptr;
-        TextImageProvider *image_provider = nullptr;
         TextFracProvider *frac_provider = nullptr;
 
         void MakeTextSegments(std::string_view text, OutBuf<TextSegment> result, std::span<uint16_t> highlighting = {}, TextSegment::WrapMode first_segment_wrap_mode = TextSegment::WrapMode::Disallow);

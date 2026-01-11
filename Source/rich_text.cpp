@@ -5,73 +5,9 @@
 
 namespace HerosInsight::RichText
 {
-    TextureModule::DrawPacket GetImagePacket(uint32_t id)
+    float TextSegment::CalcWidth(TextFracProvider *frac_provider) const
     {
-        using Id = DefaultTextImageProvider::Id;
-
-        std::optional<uint32_t> stats_atlas_index = std::nullopt;
-        // clang-format off
-        switch (id)
-        {
-            case Id::Upkeep:       stats_atlas_index = 0;  break;
-            case Id::EnergyOrb:    stats_atlas_index = 1;  break;
-            case Id::Aftercast:
-            case Id::Activation:   stats_atlas_index = 2;  break;
-            case Id::Recharge:     stats_atlas_index = 3;  break;
-            case Id::Adrenaline:   stats_atlas_index = 4;  break;
-            case Id::MonsterSkull: stats_atlas_index = 5;  break;
-            case Id::Sacrifice:    stats_atlas_index = 7;  break;
-            case Id::Overcast:     stats_atlas_index = 10; break;
-        }
-        // clang-format on
-
-        if (stats_atlas_index.has_value())
-        {
-            const auto size = ImVec2(16, 16);
-            auto packet = TextureModule::GetPacket_ImageInAtlas(TextureModule::KnownFileIDs::UI_SkillStatsIcons, size, size, stats_atlas_index.value());
-            if (id == Id::Aftercast)
-            {
-                packet.tint_col = ImVec4(0.3f, 0.33f, 0.7f, 1.f);
-            }
-            return packet;
-        }
-
-        assert(false && "Unknown image id");
-        return TextureModule::DrawPacket{};
-    }
-
-    DefaultTextImageProvider &DefaultTextImageProvider::Instance()
-    {
-        static DefaultTextImageProvider instance;
-        return instance;
-    }
-    void DefaultTextImageProvider::DrawImage(ImVec2 pos, ImageTag tag)
-    {
-        auto packet = GetImagePacket(tag.id);
-        auto window = ImGui::GetCurrentWindow();
-        auto draw_list = window->DrawList;
-        pos = ImFloor(ImVec2(pos));
-        packet.AddToDrawList(draw_list, pos);
-
-// #define DEBUG_POS
-#ifdef DEBUG_POS
-        draw_list->AddRect(pos, ImVec2(pos.x + packet.size.x, pos.y + packet.size.y), 0xFF0000FF);
-#endif
-    }
-    float DefaultTextImageProvider::CalcWidth(ImageTag tag)
-    {
-        auto packet = GetImagePacket(tag.id);
-        return packet.size.x;
-    }
-
-    float TextSegment::CalcWidth(TextImageProvider *image_provider, TextFracProvider *frac_provider) const
-    {
-        if (auto image_tag = std::get_if<ImageTag>(&tag))
-        {
-            assert(image_provider != nullptr);
-            return image_provider->CalcWidth(*image_tag);
-        }
-        else if (auto frac_tag = std::get_if<FracTag>(&tag))
+        if (auto frac_tag = std::get_if<FracTag>(&tag))
         {
             assert(frac_provider != nullptr);
             return frac_provider->CalcWidth(*frac_tag);
@@ -233,11 +169,9 @@ namespace HerosInsight::RichText
             else
             {
                 auto &prev_seg = result[index - 1];
-                bool prev_is_visible = std::holds_alternative<ImageTag>(prev_seg.tag) ||
-                                       std::holds_alternative<FracTag>(prev_seg.tag) ||
+                bool prev_is_visible = std::holds_alternative<FracTag>(prev_seg.tag) ||
                                        (prev_seg.text.back() != ' ');
-                bool is_visible = std::holds_alternative<ImageTag>(seg.tag) ||
-                                  std::holds_alternative<FracTag>(seg.tag) ||
+                bool is_visible = std::holds_alternative<FracTag>(seg.tag) ||
                                   (seg.text.front() != ' ');
                 bool can_wrap = !prev_is_visible && is_visible;
                 seg.wrap_mode = can_wrap ? TextSegment::WrapMode::Allow : TextSegment::WrapMode::Disallow;
@@ -248,12 +182,6 @@ namespace HerosInsight::RichText
                 auto tag_val = tag.value();
                 switch (tag_val.type)
                 {
-                    case TextTag::Type::Image:
-                    {
-                        seg.tag = tag_val.image_tag;
-                        seg.width = image_provider->CalcWidth(tag_val.image_tag);
-                        break;
-                    }
                     case TextTag::Type::Frac:
                     {
                         seg.tag = tag_val.frac_tag;
@@ -314,7 +242,6 @@ namespace HerosInsight::RichText
                 i = rem.data() - text.data();
                 switch (tag.type)
                 {
-                    case TextTag::Type::Image:
                     case TextTag::Type::Frac:
                     {
                         AddSegment(i_start, i, tag);
@@ -453,11 +380,6 @@ namespace HerosInsight::RichText
                     ImU32 text_color = ImGui::GetColorU32(ImGuiCol_Text);
                     draw_list->AddText(min, text_color, seg.text.data(), seg.text.data() + seg.text.size());
                 }
-                else if (auto image_tag = std::get_if<ImageTag>(&seg.tag))
-                {
-                    assert(image_provider != nullptr);
-                    image_provider->DrawImage(min, *image_tag);
-                }
                 else if (auto frac_tag = std::get_if<FracTag>(&seg.tag))
                 {
                     assert(frac_provider != nullptr);
@@ -544,10 +466,6 @@ namespace HerosInsight::RichText
                     to_copy = "</t>";
                 else
                     result = std::format_to_n(out.data(), out.size(), "<t={}>", tooltip_tag.id);
-                break;
-
-            case Type::Image:
-                result = std::format_to_n(out.data(), out.size(), "<img={}>", image_tag.id);
                 break;
 
             case Type::Frac:
@@ -637,20 +555,6 @@ namespace HerosInsight::RichText
                      Utils::TryReadInt(rem, tag.id) &&
                      Utils::TryRead('>', rem))
             {
-                remaining = rem;
-                return true;
-            }
-        }
-        else if (Utils::TryRead("img=", rem))
-        {
-            assert(!is_closing);
-            int32_t id;
-            if (Utils::TryReadInt(rem, id) &&
-                Utils::TryRead('>', rem))
-            {
-                auto &tag = out.image_tag;
-                out.type = TextTag::Type::Image;
-                tag.id = id;
                 remaining = rem;
                 return true;
             }
