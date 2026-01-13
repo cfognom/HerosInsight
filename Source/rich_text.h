@@ -10,11 +10,16 @@ namespace HerosInsight::RichText
     struct ColorTag
     {
         ImU32 color; // 0 = pop color
+
+        static bool TryRead(std::string_view &remaining, ColorTag &out);
     };
 
     struct TooltipTag
     {
         int32_t id; // -1 = close tooltip
+
+        static bool TryRead(std::string_view &remaining, TooltipTag &out);
+        static std::string_view Find(std::string_view text, TooltipTag &out);
     };
 
     struct FracTag
@@ -28,6 +33,7 @@ namespace HerosInsight::RichText
         }
 
         static bool TryRead(std::string_view &remaining, FracTag &out);
+        static std::string_view Find(std::string_view text, FracTag &out);
     };
 
     struct TextTag
@@ -61,7 +67,7 @@ namespace HerosInsight::RichText
                    type == Type::Tooltip;
         }
 
-        void ToChars(std::span<char> &out) const;
+        void ToChars(OutBuf<char> output) const;
         static bool TryRead(std::string_view &remaining, TextTag &out);
         static std::string_view Find(std::string_view text, TextTag &out);
     };
@@ -132,7 +138,10 @@ namespace HerosInsight::RichText
                 64,
                 [&](std::span<char> &out)
                 {
-                    tag.ToChars(out);
+                    SpanWriter<char> out_writer(out);
+                    OutBuf<char> out_buf(out_writer);
+                    tag.ToChars(out_buf);
+                    out = out_writer.WrittenSpan();
                 }
             );
         }

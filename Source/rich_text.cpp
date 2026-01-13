@@ -1,10 +1,51 @@
 #include <texture_module.h>
 #include <utils.h>
 
+#include <parsing.h>
+
 #include "rich_text.h"
 
 namespace HerosInsight::RichText
 {
+    using namespace Parsing;
+
+    using ColorOpenPattern = std::tuple<Lit<"<c=">, Color<&ColorTag::color>, Lit<">">>;
+    using ColorClosePattern = std::tuple<Lit<"</c>">>;
+
+    using TooltipOpenPattern = std::tuple<Lit<"<tip=">, Int<10, &TooltipTag::id>, Lit<">">>;
+    using TooltipClosePattern = std::tuple<Lit<"</tip>">>;
+
+    using FracPattern = std::tuple<Lit<"<frac=">, Int<10, &FracTag::num>, Lit<"/">, Int<10, &FracTag::den>, Lit<">">>;
+
+    bool ColorTag::TryRead(std::string_view &remaining, ColorTag &out)
+    {
+        if (Parsing::read_pattern<ColorOpenPattern>(remaining, &out))
+            return true;
+
+        if (Parsing::read_pattern<ColorClosePattern>(remaining, &out))
+        {
+            out.color = NULL;
+            return true;
+        }
+        return false;
+    }
+
+    bool TooltipTag::TryRead(std::string_view &remaining, TooltipTag &out)
+    {
+        if (Parsing::read_pattern<TooltipOpenPattern>(remaining, &out))
+            return true;
+
+        if (Parsing::read_pattern<TooltipClosePattern>(remaining, &out))
+        {
+            out.id = -1;
+            return true;
+        }
+        return false;
+    }
+
+    bool FracTag::TryRead(std::string_view &remaining, FracTag &out) { return Parsing::read_pattern<FracPattern>(remaining, &out); }
+    std::string_view FracTag::Find(std::string_view text, FracTag &out) { return Parsing::find_pattern<FracPattern>(text, &out); }
+
     float TextSegment::CalcWidth(TextFracProvider *frac_provider) const
     {
         if (auto frac_tag = std::get_if<FracTag>(&tag))
@@ -19,64 +60,6 @@ namespace HerosInsight::RichText
 
         assert(false && "Unknown text segment type");
         return 0;
-    }
-
-    bool FracTag::TryRead(std::string_view &remaining, FracTag &out)
-    {
-        constexpr std::string_view prefix = "<frac=";
-        constexpr std::string_view mid = "/";
-        constexpr std::string_view postfix = ">";
-        constexpr size_t req_size3 = postfix.size();
-        constexpr size_t req_size2 = req_size3 + mid.size() + 1;
-        constexpr size_t req_size1 = req_size2 + prefix.size() + 1;
-
-        size_t rem_size = remaining.size();
-        const char *p = remaining.data();
-        const char *end = remaining.data() + rem_size;
-        if (rem_size < req_size1)
-            return false;
-
-        if (std::memcmp(p, prefix.data(), prefix.size()))
-            return false;
-        p += prefix.size();
-
-        int32_t num;
-        {
-            auto [ptr, ec] = std::from_chars(p, end, num, 10);
-            if (ec != std::errc())
-                return false;
-            rem_size = end - ptr;
-            if (rem_size < req_size2)
-                return false;
-            p = ptr;
-        }
-
-        if (*p != mid[0])
-            return false;
-        p += 1;
-
-        int32_t den;
-        {
-            auto [ptr, ec] = std::from_chars(p, end, den, 10);
-            if (ec != std::errc())
-                return false;
-            rem_size = end - ptr;
-            if (rem_size < req_size3)
-                return false;
-            p = ptr;
-        }
-
-        if (*p != postfix[0])
-            return false;
-        p += 1;
-
-        if (num < 0 || den <= 0)
-            return false;
-
-        out.num = num;
-        out.den = den;
-        remaining = std::string_view(p, end - p);
-        return true;
     }
 
     void ExtractTags(std::string_view text_with_tags, std::span<char> &only_text, std::span<TextTag> &only_tags)
@@ -443,130 +426,52 @@ namespace HerosInsight::RichText
         return width;
     }
 
-    void TextTag::ToChars(std::span<char> &out) const
+    void TextTag::ToChars(OutBuf<char> output) const
     {
-        std::format_to_n_result<char *> result;
-        std::string_view to_copy{};
         switch (type)
         {
             case Type::Color:
                 if (color_tag.color == NULL)
-                    to_copy = "</c>";
+                    Parsing::write_pattern<ColorClosePattern>(output, &color_tag);
                 else
-                {
-                    ImU32 color = color_tag.color;
-                    // Swap red and blue channels because that's how GW formats them!
-                    color = ((color & 0xFF00FF00) | ((color & 0xFF) << 16) | ((color & 0xFF0000) >> 16));
-                    result = std::format_to_n(out.data(), out.size(), "<c=#{:x}>", color);
-                }
+                    Parsing::write_pattern<ColorOpenPattern>(output, &color_tag);
                 break;
 
             case Type::Tooltip:
                 if (tooltip_tag.id == -1)
-                    to_copy = "</t>";
+                    Parsing::write_pattern<TooltipClosePattern>(output, &tooltip_tag);
                 else
-                    result = std::format_to_n(out.data(), out.size(), "<t={}>", tooltip_tag.id);
+                    Parsing::write_pattern<TooltipOpenPattern>(output, &tooltip_tag);
                 break;
 
             case Type::Frac:
-                result = std::format_to_n(out.data(), out.size(), "<frac={}/{}>", frac_tag.num, frac_tag.den);
+                Parsing::write_pattern<FracPattern>(output, &frac_tag);
                 break;
 
             default:
                 assert(false);
         }
-
-        if (to_copy.data() != nullptr)
-        {
-            assert(out.size() >= to_copy.size());
-            to_copy.copy(out.data(), to_copy.size());
-            out = std::span<char>(out.data(), to_copy.size());
-        }
-        else
-        {
-            out = std::span<char>(out.data(), result.size);
-        }
     }
 
     bool TextTag::TryRead(std::string_view &remaining, TextTag &out)
     {
-        auto rem = remaining;
-        if (!Utils::TryRead('<', rem))
+        if (remaining.empty() || remaining[0] != '<')
             return false;
 
-        bool is_closing = Utils::TryRead('/', rem);
-
-        if (Utils::TryRead('c', rem))
+        if (TooltipTag::TryRead(remaining, out.tooltip_tag))
         {
-            auto &tag = out.color_tag;
-            out.type = TextTag::Type::Color;
-            if (is_closing)
-            {
-                if (Utils::TryRead('>', rem))
-                {
-                    tag.color = 0;
-                    remaining = rem;
-                    return true;
-                }
-            }
-            else if (Utils::TryRead('=', rem))
-            {
-                if (Utils::TryRead('#', rem))
-                {
-                    // Literal color tag
-                    if (Utils::TryReadHexColor(rem, tag.color) &&
-                        Utils::TryRead('>', rem))
-                    {
-                        remaining = rem;
-                        return true;
-                    }
-                }
-                else if (Utils::TryRead('@', rem))
-                {
-                    // Variable color tag
-                    if (Utils::TryRead("SKILLDULL", rem))
-                        tag.color = Constants::GWColors::skill_dull_gray;
-                    else if (Utils::TryRead("SKILLDYN", rem))
-                        tag.color = Constants::GWColors::skill_dynamic_green;
-                    else
-                        return false;
-                    if (Utils::TryRead('>', rem))
-                    {
-                        remaining = rem;
-                        return true;
-                    }
-                }
-            }
-        }
-        else if (Utils::TryRead("tip", rem))
-        {
-            auto &tag = out.tooltip_tag;
             out.type = TextTag::Type::Tooltip;
-            if (is_closing)
-            {
-                if (Utils::TryRead('>', rem))
-                {
-                    tag.id = -1;
-                    remaining = rem;
-                    return true;
-                }
-            }
-            else if (Utils::TryRead('=', rem) &&
-                     Utils::TryReadInt(rem, tag.id) &&
-                     Utils::TryRead('>', rem))
-            {
-                remaining = rem;
-                return true;
-            }
+            return true;
         }
-
+        else if (ColorTag::TryRead(remaining, out.color_tag))
         {
-            auto &tag = out.frac_tag;
+            out.type = TextTag::Type::Color;
+            return true;
+        }
+        else if (FracTag::TryRead(remaining, out.frac_tag))
+        {
             out.type = TextTag::Type::Frac;
-            if (FracTag::TryRead(remaining, tag))
-            {
-                return true;
-            }
+            return true;
         }
 
         return false;
