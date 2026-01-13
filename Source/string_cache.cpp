@@ -6,7 +6,7 @@
 
 #include "string_cache.h"
 
-namespace HerosInsight
+namespace HerosInsight::Text
 {
     struct Assimilator
     {

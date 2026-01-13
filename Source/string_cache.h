@@ -3,8 +3,16 @@
 #include <bitview.h>
 #include <string_arena.h>
 
-namespace HerosInsight
+namespace HerosInsight::Text
 {
+    namespace BuildMode
+    {
+        // clang-format off
+        struct Readable{};
+        struct Searchable{};
+        // clang-format on
+    }
+
     enum struct Plurality
     {
         Null,
@@ -78,14 +86,6 @@ namespace HerosInsight
 
     namespace
     {
-        namespace BuildMode
-        {
-            // clang-format off
-            struct Readable{};
-            struct Searchable{};
-            // clang-format on
-        }
-
         template <typename SubsProvider, typename Mode>
         void BuildString(StringCache &cache, size_t id, OutBuf<char> dst, SubsProvider &&subs_provider)
         {

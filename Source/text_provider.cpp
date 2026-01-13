@@ -141,12 +141,25 @@ namespace HerosInsight::Text
         return &this->skill_raw[is_concise ? SkillTextType::Concise : SkillTextType::Description];
     }
 
+    template <typename Mode>
     bool WriteSkillParam(const GW::Constants::SkillID skill_id, size_t param_id, int8_t attr_lvl, OutBuf<char> out)
     {
         auto &skill = GW::SkillbarMgr::GetSkills()[static_cast<size_t>(skill_id)];
         bool has_attribute = attr_lvl != -1;
 
         auto param = GetSkillParam(skill, param_id);
+
+        auto AppendValue = [&](uint32_t value)
+        {
+            if constexpr (std::is_same_v<Mode, BuildMode::Readable>)
+            {
+                out.AppendIntToChars(value);
+            }
+            else if constexpr (std::is_same_v<Mode, BuildMode::Searchable>)
+            {
+                EncodeSearchableNumber(out, (float)value);
+            }
+        };
 
         bool is_constant = param.IsConstant();
         bool is_green = !is_constant;
@@ -162,12 +175,16 @@ namespace HerosInsight::Text
         {
             // If one value, add it as literal
             value = param.Resolve((uint32_t)attr_lvl);
-            out.AppendIntToChars(value);
+            AppendValue(value);
         }
         else
         {
             // If two values, add range with two literals
-            out.AppendFormat("({}...{})", param.val0, param.val15);
+            out.push_back('(');
+            AppendValue(param.val0);
+            out.AppendRange(std::string_view("..."));
+            AppendValue(param.val15);
+            out.push_back(')');
             value = param.val15;
         }
 
@@ -188,7 +205,7 @@ namespace HerosInsight::Text
         auto str_id = cont.skill_id_to_str_id[(size_t)skill_id];
         auto SubsProvider = [skill_id, attr_lvl](size_t param_id, OutBuf<char> out) -> bool
         {
-            return WriteSkillParam(skill_id, param_id, attr_lvl, out);
+            return WriteSkillParam<BuildMode::Readable>(skill_id, param_id, attr_lvl, out);
         };
         cont.cache.BuildReadableString(str_id, dst, SubsProvider);
     }
