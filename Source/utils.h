@@ -647,5 +647,19 @@ namespace HerosInsight::Utils
         value = static_cast<FlagEnum>(static_cast<U>(value) & ~static_cast<U>(flag));
     }
 
+    // Macro for embedding enum
+#define EMBEDDED_ENUM(Name, TSubEnum) \
+    _##Name##_START,                  \
+        _##Name##_LAST = _##Name##_START + static_cast<size_t>(TSubEnum::COUNT) - 1
+
+#define EMBED_ENUM(TSuperEnum, Name, SubEnum) \
+    (TSuperEnum)((size_t)(TSuperEnum::_##Name##_START) + (size_t)SubEnum)
+
+#define UPROOT_ENUM(TSubEnum, Name, SuperEnum) \
+    (TSubEnum)((size_t)SuperEnum - (size_t)(decltype(SuperEnum)::_##Name##_START))
+
+#define IS_EMBEDDED_ENUM(Name, SuperEnum) \
+    (decltype(SuperEnum)::_##Name##_START <= SuperEnum && SuperEnum <= decltype(SuperEnum)::_##Name##_LAST)
+
     bool IsModdingAllowed();
 }
