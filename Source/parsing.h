@@ -7,6 +7,7 @@
 #include <tuple>
 
 #include <buffer.h>
+#include <constants.h>
 
 namespace
 {

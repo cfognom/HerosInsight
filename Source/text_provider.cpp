@@ -13,7 +13,9 @@
 
 #include <bitview.h>
 #include <custom_skill_data.h>
+#include <parsing.h>
 #include <string_arena.h>
+#include <string_cache.h>
 #include <utils.h>
 
 #include "text_provider.h"
@@ -95,8 +97,10 @@ namespace HerosInsight::Text
         for (bool is_concise : {false, true})
         {
             const auto &raw_descs = *this->GetRawDescriptions(is_concise);
-            auto &cache = this->description_cache[is_concise];
-            auto deduper = cache.pieces.CreateDeduper(0);
+            auto &cont = this->descriptions[is_concise];
+            auto &cache = cont.cache;
+            auto deduper1 = cache.pieces.CreateDeduper(0);
+            auto deduper2 = cache.strings.CreateDeduper(0);
             std::vector<uint16_t> remapper(raw_descs.SpanCount(), std::numeric_limits<uint16_t>::max());
             for (size_t skill_id = 0; skill_id < GW::Constants::SkillMax; ++skill_id)
             {
@@ -105,178 +109,13 @@ namespace HerosInsight::Text
                 if (dst_span_id == std::numeric_limits<uint16_t>::max())
                 {
                     auto raw_desc = raw_descs.Get(src_span_id);
-                    cache.AssimilateGWString(raw_desc, &deduper);
-                    dst_span_id = cache.strings.CommitWrittenToIndex(skill_id);
+                    auto id = cache.AssimilateString(raw_desc, &deduper1, &deduper2);
+                    dst_span_id = id;
+                    cont.skill_id_to_str_id[skill_id] = id;
                 }
                 else
                 {
-                    cache.strings.SetSpanId(skill_id, dst_span_id);
-                }
-            }
-        }
-    }
-
-    enum struct Plurality
-    {
-        Null,
-        Unknown,
-        Singular,
-        Plural,
-    };
-
-    Plurality GetPlurality(std::string_view str)
-    {
-        auto pos = str.find_last_of("0123456789");
-        if (pos == std::string_view::npos)
-            return Plurality::Null;
-        bool is_singular = str[pos] == '1' && (pos == 0 || !Utils::IsDigit(str[pos - 1]));
-        return is_singular ? Plurality::Singular : Plurality::Plural;
-    }
-
-    void Provider::GWStringCache::AssimilateGWString(std::string_view src_gw_str, StringArena<char>::deduper *deduper)
-    {
-        enum FixType
-        {
-            Substitution,
-            OptionalS,
-            PluralReplace,
-            FixCount,
-        };
-
-        enum Kind
-        {
-            Prefix,
-            Postfix,
-            KindCount,
-        };
-
-        static constexpr std::string_view patterns[KindCount][FixCount]{
-            {"%str",
-             "[s]",
-             "[pl:\""},
-            {"%",
-             "",
-             "\"]"}
-        };
-
-        size_t fix_positions[FixCount];
-        std::memset(fix_positions, -1, sizeof(fix_positions));
-
-        auto FindFix = [&fix_positions, src_gw_str](size_t fix)
-        {
-            auto &pos = fix_positions[fix];
-            auto &pattern = patterns[Prefix][fix];
-            pos = src_gw_str.find(pattern, pos + 1);
-        };
-
-        // static auto AppendToArena = [this, deduper](std::wstring_view wstr)
-        // {
-        //     AppendWStrToStrArena(this->pieces, wstr);
-        //     return this->pieces.CommitWritten(deduper);
-        // };
-
-        for (auto i = 0; i < FixCount; ++i)
-        {
-            assert(fix_positions[i] == -1);
-            FindFix(i);
-        }
-
-        size_t piece_begin_idx = 0;
-        Plurality replacement_plurality = Plurality::Null;
-        FixType fix_id;
-        for (; true; FindFix(fix_id))
-        {
-            auto min_pos_it = std::ranges::min_element(fix_positions);
-            fix_id = (FixType)std::distance(fix_positions, min_pos_it);
-            auto fix_pos = *min_pos_it;
-            bool is_last = fix_pos == std::string_view::npos;
-            fix_pos = is_last ? src_gw_str.size() : fix_pos;
-            assert(fix_pos <= src_gw_str.size());
-            size_t piece_end_idx;
-            if (!is_last && fix_id == PluralReplace)
-            {
-                piece_end_idx = src_gw_str.find_last_of(' ', fix_pos - 1);
-                assert(piece_end_idx != std::string_view::npos);
-                piece_end_idx++;
-            }
-            else
-            {
-                piece_end_idx = fix_pos;
-            }
-
-            auto piece = src_gw_str.substr(piece_begin_idx, piece_end_idx - piece_begin_idx);
-            size_t subpiece_begin = 0;
-            size_t subpiece_end;
-            do
-            {
-                // GWs strings use %% for %, we need to fix that.
-                subpiece_end = piece.find("%%", subpiece_begin);
-                auto sub_piece = piece.substr(subpiece_begin, std::min(subpiece_end, piece.size() - 1) + 1 - subpiece_begin);
-                pieces.Elements().append_range(sub_piece);
-                subpiece_begin = subpiece_end + 2;
-            } while (subpiece_end != std::string_view::npos);
-
-            if (fix_id == OptionalS || fix_id == PluralReplace)
-            {
-                // Use embedded plurality if it exists, otherwise fall back to the replacement plurality
-                auto embedded_plurality = GetPlurality(piece);
-                if (embedded_plurality != Plurality::Null)
-                {
-                    assert(fix_id != PluralReplace); // PluralReplace can't have embedded plurality (Not implemented)
-
-                    if (embedded_plurality == Plurality::Plural)
-                        pieces.Elements().push_back('s');
-                    piece_begin_idx = piece_end_idx + patterns[Prefix][OptionalS].size();
-                    assert(!is_last);
-                    continue;
-                }
-                assert(replacement_plurality != Plurality::Null);
-            }
-            auto str_id = pieces.CommitWritten(deduper);
-            this->strings.Elements().emplace_back(GWStringPiece::Type::StringAlways, str_id);
-
-            if (is_last)
-                break;
-
-            switch (fix_id)
-            {
-                case Substitution:
-                {
-                    constexpr auto prefix_size = patterns[Prefix][Substitution].size();
-                    constexpr auto postfix_size = patterns[Postfix][Substitution].size();
-
-                    piece_begin_idx = fix_pos + prefix_size;
-                    uint16_t subs_id = src_gw_str[piece_begin_idx++] - L'1'; // Their indexing starts at 1 but we want 0-indexed
-                    piece_begin_idx += postfix_size;
-
-                    this->strings.Elements().emplace_back(GWStringPiece::Type::Substitution, subs_id);
-                    replacement_plurality = Plurality::Unknown; // We assume every replacement contains a number
-                    break;
-                }
-                case OptionalS:
-                {
-                    piece_begin_idx = piece_end_idx + patterns[Prefix][OptionalS].size();
-
-                    this->strings.Elements().emplace_back(GWStringPiece::Type::CharPluralOnly, (uint16_t)'s');
-                    break;
-                }
-                case PluralReplace:
-                {
-                    auto singular_piece = src_gw_str.substr(piece_end_idx, fix_pos - piece_end_idx);
-                    auto singular_str_id = pieces.push_back(singular_piece, deduper);
-                    this->strings.Elements().emplace_back(GWStringPiece::Type::StringSingularOnly, singular_str_id);
-
-                    constexpr auto &prefix = patterns[Prefix][PluralReplace];
-                    constexpr auto &postfix = patterns[Postfix][PluralReplace];
-                    auto plural_begin_idx = fix_pos + prefix.size();
-                    auto plural_end_idx = src_gw_str.find(postfix, plural_begin_idx);
-                    assert(plural_end_idx != std::string_view::npos);
-                    auto plural_piece = src_gw_str.substr(plural_begin_idx, plural_end_idx - plural_begin_idx);
-                    auto plural_str_id = pieces.push_back(plural_piece, deduper);
-                    this->strings.Elements().emplace_back(GWStringPiece::Type::StringPluralOnly, plural_str_id);
-
-                    piece_begin_idx = plural_end_idx + postfix.size();
-                    break;
+                    cont.skill_id_to_str_id[skill_id] = dst_span_id;
                 }
             }
         }
@@ -345,70 +184,13 @@ namespace HerosInsight::Text
 
     void Provider::MakeDescription(GW::Constants::SkillID skill_id, bool is_concise, int8_t attr_lvl, OutBuf<char> dst)
     {
-        auto &cache = this->description_cache[is_concise];
-        auto string = cache.strings.GetIndexed((size_t)skill_id);
-        const auto &pieces = cache.pieces;
-
-        std::array<std::string_view, 3> replacements;
-        BitArray<3> is_plural;
-
-        Plurality plurality = Plurality::Null;
-
-        for (auto &piece : string)
+        auto &cont = this->descriptions[is_concise];
+        auto str_id = cont.skill_id_to_str_id[(size_t)skill_id];
+        auto SubsProvider = [skill_id, attr_lvl](size_t param_id, OutBuf<char> out) -> bool
         {
-            std::string_view str_piece;
-#ifdef _DEBUG
-            switch (piece.type)
-            {
-                case GWStringPiece::Type::StringSingularOnly:
-                case GWStringPiece::Type::StringPluralOnly:
-                case GWStringPiece::Type::CharPluralOnly:
-                    assert(plurality != Plurality::Null);
-            }
-#endif
-            switch (piece.type)
-            {
-                case GWStringPiece::Type::StringAlways:
-                    str_piece = pieces.Get(piece.value);
-                    break;
-
-                case GWStringPiece::Type::StringSingularOnly:
-                    if (plurality != Plurality::Singular)
-                        continue;
-                    str_piece = pieces.Get(piece.value);
-                    break;
-
-                case GWStringPiece::Type::StringPluralOnly:
-                    if (plurality != Plurality::Plural)
-                        continue;
-                    str_piece = pieces.Get(piece.value);
-                    break;
-
-                case GWStringPiece::Type::CharPluralOnly:
-                    if (plurality != Plurality::Plural)
-                        continue;
-                    dst.push_back((char)piece.value);
-                    continue;
-
-                case GWStringPiece::Type::Substitution:
-                {
-                    auto param_id = piece.value;
-                    str_piece = replacements[param_id];
-                    if (str_piece.empty())
-                    {
-                        auto start_idx = dst.size();
-                        bool plural = WriteSkillParam(skill_id, param_id, attr_lvl, dst);
-                        is_plural[param_id] = plural;
-                        replacements[param_id] = std::string_view(&dst[start_idx], dst.size() - start_idx);
-                        plurality = plural ? Plurality::Plural : Plurality::Singular;
-                        continue;
-                    }
-                    plurality = is_plural[param_id] ? Plurality::Plural : Plurality::Singular;
-                    break;
-                }
-            }
-            dst.AppendRange(str_piece);
-        }
+            return WriteSkillParam(skill_id, param_id, attr_lvl, out);
+        };
+        cont.cache.BuildReadableString(str_id, dst, SubsProvider);
     }
 
     /*

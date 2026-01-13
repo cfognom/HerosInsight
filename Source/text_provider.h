@@ -4,6 +4,7 @@
 #include <GWCA/Managers/AssetMgr.h>
 #include <rich_text.h>
 #include <string_arena.h>
+#include <string_cache.h>
 
 namespace HerosInsight::Text
 {
@@ -111,31 +112,16 @@ namespace HerosInsight::Text
             };
         };
 
-    private:
         GW::Constants::Language language;
 
-        struct GWStringPiece
+        struct Descriptions
         {
-            enum struct Type : uint16_t
-            {
-                StringAlways,
-                StringSingularOnly,
-                StringPluralOnly,
-                CharPluralOnly,
-                Substitution,
-            };
-            Type type;
-            uint16_t value;
+            StringCache cache;
+            uint16_t skill_id_to_str_id[GW::Constants::SkillMax];
         };
+        Descriptions descriptions[2];
 
-        struct GWStringCache
-        {
-            StringArena<char> pieces;
-            IndexedStringArena<GWStringPiece> strings;
-            void AssimilateGWString(std::string_view src_gw_str, StringArena<char>::deduper *deduper);
-        };
         IndexedStringArena<char> skill_raw[SkillTextType::COUNT];
-        GWStringCache description_cache[2]; // 0 = normal, 1 = concise
     };
 
     Provider &GetTextProvider(GW::Constants::Language language = GW::Constants::Language::English);
