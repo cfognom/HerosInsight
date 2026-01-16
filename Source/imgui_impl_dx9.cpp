@@ -390,6 +390,7 @@ struct FontBlitCommand
         {
             int dstRect;
             int atlasIndex;
+            uint32_t tint;
         };
         uint32_t gwImageFileId;
         GW::Dims iconDims;
@@ -470,13 +471,20 @@ ImFont *CreateGWFont(GWFontConfig cfg)
         entry.gwImageFileId = TextureModule::KnownFileIDs::UI_SkillStatsIcons;
         entry.iconDims = iconSize;
 
-        for (size_t atlas_index = 0; atlas_index <= 10; ++atlas_index)
+        auto AddIconGlyph = [&](size_t atlas_index, uint32_t tint = IM_COL32_WHITE)
         {
             auto id = io.Fonts->AddCustomRectFontGlyph(imFont, customCh++, iconSize.width, iconSize.height, iconSize.width, cfg.iconOffset);
             auto &mapping = entry.mappings.emplace_back();
             mapping.atlasIndex = atlas_index;
             mapping.dstRect = id;
+            mapping.tint = tint;
+        };
+
+        for (size_t atlas_index = 0; atlas_index <= 10; ++atlas_index)
+        {
+            AddIconGlyph(atlas_index);
         }
+        AddIconGlyph(2, IM_COL32(77, 84, 179, 255));
     }
 
     return imFont;
@@ -600,6 +608,24 @@ uint32_t ARGB4444ToARGB8888(uint16_t px)
     return (a << 24) | (r << 16) | (g << 8) | b;
 }
 
+inline constexpr uint8_t MulChannel(uint8_t a, uint8_t b)
+{
+    // a*b ranges 0..65025
+    // add 127 for rounding, divide by 255 to scale back to 0..255
+    return (a * b + 127) / 255;
+}
+
+// Multiply two 32-bit colors (RGBA) channel-wise
+inline uint32_t MultiplyColors32(uint32_t c1, uint32_t c2)
+{
+    uint8_t x = MulChannel((c1 >> 0) & 0xFF, (c2 >> 0) & 0xFF);
+    uint8_t y = MulChannel((c1 >> 8) & 0xFF, (c2 >> 8) & 0xFF);
+    uint8_t z = MulChannel((c1 >> 16) & 0xFF, (c2 >> 16) & 0xFF);
+    uint8_t w = MulChannel((c1 >> 24) & 0xFF, (c2 >> 24) & 0xFF);
+
+    return (w << 24) | (z << 16) | (y << 8) | x;
+}
+
 static void BlitGWGlyphs(uint32_t *pixels, uint32_t width, uint32_t height)
 {
     auto &io = ImGui::GetIO();
@@ -663,6 +689,16 @@ static void BlitGWGlyphs(uint32_t *pixels, uint32_t width, uint32_t height)
                     std::round(uv0.y * decoded.dims.height)
                 );
                 srcPtr.CopyTo(slotPtr, entry.iconDims);
+                if (mapping.tint != 0xFFFFFFFF)
+                {
+                    slotPtr.ForEach(
+                        [tint = mapping.tint](uint32_t &px)
+                        {
+                            px = MultiplyColors32(px, tint);
+                        },
+                        entry.iconDims
+                    );
+                }
             }
         }
     }

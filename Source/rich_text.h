@@ -84,6 +84,7 @@ namespace HerosInsight::RichText
         inline static std::string_view Sacrifice = (const char *)u8"\uE007";
         inline static std::string_view StarOrb = (const char *)u8"\uE009";
         inline static std::string_view Overcast = (const char *)u8"\uE00a";
+        inline static std::string_view Aftercast = (const char *)u8"\uE00b";
     }
 
     class TextTooltipProvider
