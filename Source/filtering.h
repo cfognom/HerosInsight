@@ -488,7 +488,7 @@ namespace HerosInsight::Filtering
                 FixedVector<char, 128> meta_name;
                 impl.GetMetaName(filter.meta_prop_id).GetRenderableString(meta_name);
                 auto cond = filter.inverted ? "not " : "";
-                std::format_to(inserter, "{} must {}contain '{}'\n", meta_name, cond, filter.filter_text);
+                std::format_to(inserter, "{} must {}contain '{}'\n", (std::string_view)meta_name, cond, filter.filter_text);
             }
 
             // for (auto &command : query.commands)
