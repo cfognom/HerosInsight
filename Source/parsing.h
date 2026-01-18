@@ -128,12 +128,12 @@ namespace
                 else if (input[pos] == '@')
                 {
                     ++pos;
-                    if (TryRead(input, pos, "skilldull"))
+                    if (TryRead(input, pos, "SkillDull"))
                     {
                         val = Constants::GWColors::skill_dull_gray;
                         return true;
                     }
-                    else if (TryRead(input, pos, "skilldyn"))
+                    else if (TryRead(input, pos, "SkillDyn"))
                     {
                         val = Constants::GWColors::skill_dynamic_green;
                         return true;
