@@ -761,8 +761,6 @@ namespace HerosInsight::SkillBook
 
         void RefreshDynamicProps(AttributeSource attr_src)
         {
-            Stopwatch stopwatch("RefreshDynamicProps");
-
             for (auto &prop : dynamic_props)
             {
                 prop.second.MarkDirty();
