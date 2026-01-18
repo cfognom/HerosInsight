@@ -26,7 +26,9 @@ namespace HerosInsight
             return *std::construct_at(data() + Len()++, std::forward<Args>(args)...);
         }
         size_t &Len() { return AsDerived().len; }
-        std::span<T> Span() { return std::span<T>(data(), capacity()); }
+        std::span<T> BackingSpan() { return std::span<T>(data(), capacity()); }
+        std::span<T> AsSpan() { return std::span<T>(data(), size()); }
+        std::span<const T> AsCSpan() { return std::span<const T>(data(), size()); }
         size_t size() const { return AsDerived().len; }
 
         bool try_push(const T &value)
@@ -128,8 +130,8 @@ namespace HerosInsight
             return *(data() + index);
         }
 
-        operator std::span<T>() { return std::span<T>(data(), size()); }
-        operator std::span<const T>() const { return std::span<const T>(data(), size()); }
+        operator std::span<T>() { return AsSpan(); }
+        operator std::span<const T>() const { return AsCSpan(); }
 
         // Conversion operator to std::string_view for FixedArrayRef<char>
         operator std::string_view() const
@@ -276,9 +278,9 @@ namespace HerosInsight
         size_t &len;
 
     public:
-        OutBuf(SpanWriter<T> &src) : span(src.Span()), len(src.Len()) {}
+        OutBuf(SpanWriter<T> &src) : span(src.BackingSpan()), len(src.Len()) {}
         template <std::size_t N>
-        OutBuf(FixedVector<T, N> &src) : span(src.Span()), len(src.Len()) {}
+        OutBuf(FixedVector<T, N> &src) : span(src.BackingSpan()), len(src.Len()) {}
 
         T *data() { return span.data(); }
         const T *data() const { return span.data(); }
