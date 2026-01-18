@@ -117,12 +117,13 @@ void ImGui_ImplDX9_RenderDrawData(ImDrawData *draw_data)
             vtx_dst->pos[0] = vtx_src->pos.x;
             vtx_dst->pos[1] = vtx_src->pos.y;
             vtx_dst->pos[2] = 0.0f;
-            vtx_dst->col = D3DCOLOR_ARGB(
-                (uint8_t)(vtx_src->col >> IM_COL32_A_SHIFT),
-                (uint8_t)(vtx_src->col >> IM_COL32_R_SHIFT),
-                (uint8_t)(vtx_src->col >> IM_COL32_G_SHIFT),
-                (uint8_t)(vtx_src->col >> IM_COL32_B_SHIFT)
-            );
+            vtx_dst->col = vtx_src->col;
+            // vtx_dst->col = D3DCOLOR_ARGB(
+            //     (uint8_t)(vtx_src->col >> IM_COL32_A_SHIFT),
+            //     (uint8_t)(vtx_src->col >> IM_COL32_R_SHIFT),
+            //     (uint8_t)(vtx_src->col >> IM_COL32_G_SHIFT),
+            //     (uint8_t)(vtx_src->col >> IM_COL32_B_SHIFT)
+            // );
             vtx_dst->uv[0] = vtx_src->uv.x;
             vtx_dst->uv[1] = vtx_src->uv.y;
             vtx_dst++;
@@ -580,7 +581,7 @@ bool ImGui_ImplDX9_Init(void *hwnd, IDirect3DDevice9 *device)
     io.ConfigWindowsMoveFromTitleBarOnly = true;
 
     AddFonts(io);
-    InvertDefaultStyleColors(); // Easy way to get unique style
+    // InvertDefaultStyleColors(); // Easy way to get unique style
 
     return true;
 }
