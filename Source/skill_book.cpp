@@ -1835,6 +1835,15 @@ namespace HerosInsight::SkillBook
             name.push_back('\0');
         }
 
+        void DrawFocusedCharacterInfo()
+        {
+            auto wname = Utils::GetAgentName(focused_agent_id, L"?");
+            auto name = Utils::WStrToStr(wname.c_str());
+            ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
+            ImGui::Text("Focused character: %s", name.c_str());
+            ImGui::PopStyleColor();
+        }
+
         void Draw(IDirect3DDevice9 *device, size_t book_index)
         {
             if (first_draw)
@@ -1867,6 +1876,8 @@ namespace HerosInsight::SkillBook
             {
                 DrawDupeButton();
                 DrawCheckboxes();
+                ImGui::Spacing();
+                DrawFocusedCharacterInfo();
                 DrawAttributeModeSelection();
                 DrawSearchBox();
 
