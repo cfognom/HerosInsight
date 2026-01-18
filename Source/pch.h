@@ -4,6 +4,8 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
 #endif
 
+#define IMGUI_USE_BGRA_PACKED_COLOR
+
 #if defined(__clang__)
 #define FORCE_INLINE [[gnu::always_inline]] [[gnu::gnu_inline]] extern inline
 
