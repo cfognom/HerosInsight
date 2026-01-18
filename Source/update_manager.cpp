@@ -21,6 +21,7 @@
 #include <skill_book.h>
 #include <texture_module.h>
 #include <texture_viewer.h>
+#include <version.h>
 #include <worldspaceUI.h>
 
 #include "update_manager.h"
@@ -288,6 +289,10 @@ namespace HerosInsight
 #endif
                 // const auto content_size = ImGui::GetItemRectMax();
                 // window->Size = content_size - ImVec2(0, 50);
+
+                ImGui::Spacing();
+
+                ImGui::Text("Version: %s", HEROSINSIGHT_VERSION_STRING);
             }
         }
         ImGui::End();
