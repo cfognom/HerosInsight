@@ -589,8 +589,8 @@ namespace HerosInsight::SkillBook
                     number_and_icon.push_back(b.Number(skill.aftercast));
                     if (!is_normal_aftercast)
                     {
-                        number_and_icon.push_back(b.Color(NULL));
                         number_and_icon.push_back(b.Char('*'));
+                        number_and_icon.push_back(b.Color(NULL));
                     }
                     number_and_icon.push_back(b.ExplicitString(RichText::Icons::Aftercast));
 
