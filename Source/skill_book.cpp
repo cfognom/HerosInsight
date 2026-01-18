@@ -494,10 +494,6 @@ namespace HerosInsight::SkillBook
     struct TextStorage
     {
         std::array<Filtering::IncrementalProp, PROP_COUNT> static_props;
-        // std::unordered_map<, IndexedLoweredTexts> dynamic_props;
-
-        // std::array<LoweredTexts, PROP_COUNT> props;
-        // std::array<std::array<uint16_t, GW::Constants::SkillMax>, PROP_COUNT> mappers{INVALID_SPAN};
         std::vector<Propset> meta_propsets;
         LoweredTextVector meta_prop_names;
 
@@ -516,26 +512,29 @@ namespace HerosInsight::SkillBook
 
             if (fraction.has_value())
             {
+                FixedVector<Text::StringTemplateAtom, 2> seq;
                 if (value_int > 0.f)
                 {
-                    return b.ExplicitSequence({b.Number(value_int), fraction.value()});
+                    seq.push_back(b.Number(value_int));
                 }
-                return fraction.value();
+                seq.push_back(fraction.value());
+                return b.ExplicitSequence(seq);
             }
             else
             {
+                // Default: just output a floating point number
                 return b.Number(value);
             }
         };
 
         template <auto Func, auto Icon>
-        static auto BuildNumberAndIconLambda()
+        static auto NumberAndIconLambda(Text::StringTemplateAtom::Builder &b, size_t skill_id, void *)
         {
-            return +[](Text::StringTemplateAtom::Builder &b, size_t skill_id, void *) -> Text::StringTemplateAtom
-            {
-                auto &cskill = CustomSkillDataModule::GetSkills()[skill_id];
-                return b.ExplicitSequence({MakeNumOrFraction(b, (cskill.*Func)()), b.ExplicitString(*Icon)});
-            };
+            auto &cskill = CustomSkillDataModule::GetSkills()[skill_id];
+            return b.ExplicitSequence(
+                {MakeNumOrFraction(b, (cskill.*Func)()),
+                 b.ExplicitString(*Icon)}
+            );
         }
 
         template <auto Func>
@@ -547,21 +546,21 @@ namespace HerosInsight::SkillBook
 
         void InitProps()
         {
-            static_props[(size_t)SkillProp::Energy].SetupIncremental(nullptr, BuildNumberAndIconLambda<&CustomSkillData::GetEnergy, &RichText::Icons::EnergyOrb>());
-            static_props[(size_t)SkillProp::Recharge].SetupIncremental(nullptr, BuildNumberAndIconLambda<&CustomSkillData::GetRecharge, &RichText::Icons::Sacrifice>());
+            static_props[(size_t)SkillProp::Energy].SetupIncremental(nullptr, NumberAndIconLambda<&CustomSkillData::GetEnergy, &RichText::Icons::EnergyOrb>);
+            static_props[(size_t)SkillProp::Recharge].SetupIncremental(nullptr, NumberAndIconLambda<&CustomSkillData::GetRecharge, &RichText::Icons::Sacrifice>);
 
-            static_props[(size_t)SkillProp::Upkeep].SetupIncremental(nullptr, BuildNumberAndIconLambda<&CustomSkillData::GetUpkeep, &RichText::Icons::Upkeep>());
-            static_props[(size_t)SkillProp::Overcast].SetupIncremental(nullptr, BuildNumberAndIconLambda<&CustomSkillData::GetOvercast, &RichText::Icons::Overcast>());
-            static_props[(size_t)SkillProp::Sacrifice].SetupIncremental(nullptr, BuildNumberAndIconLambda<&CustomSkillData::GetSacrifice, &RichText::Icons::Sacrifice>());
-            static_props[(size_t)SkillProp::Activation].SetupIncremental(nullptr, BuildNumberAndIconLambda<&CustomSkillData::GetActivation, &RichText::Icons::Activation>());
+            static_props[(size_t)SkillProp::Upkeep].SetupIncremental(nullptr, NumberAndIconLambda<&CustomSkillData::GetUpkeep, &RichText::Icons::Upkeep>);
+            static_props[(size_t)SkillProp::Overcast].SetupIncremental(nullptr, NumberAndIconLambda<&CustomSkillData::GetOvercast, &RichText::Icons::Overcast>);
+            static_props[(size_t)SkillProp::Sacrifice].SetupIncremental(nullptr, NumberAndIconLambda<&CustomSkillData::GetSacrifice, &RichText::Icons::Sacrifice>);
+            static_props[(size_t)SkillProp::Activation].SetupIncremental(nullptr, NumberAndIconLambda<&CustomSkillData::GetActivation, &RichText::Icons::Activation>);
 
             auto &text_provider = Text::GetTextProvider(GW::Constants::Language::English);
             static_props[(size_t)SkillProp::Name].PopulateItems(*text_provider.GetNames());
 
-            static_props[(size_t)SkillProp::Type].PopulateItems("SkillBookProp_Type", GW::Constants::SkillMax, &GetSkillProp<&CustomSkillData::GetTypeString>);
-            static_props[(size_t)SkillProp::Attribute].PopulateItems("SkillBookProp_Attribute", GW::Constants::SkillMax, &GetSkillProp<&CustomSkillData::GetAttributeStr>);
-            static_props[(size_t)SkillProp::Profession].PopulateItems("SkillBookProp_Profession", GW::Constants::SkillMax, &GetSkillProp<&CustomSkillData::GetProfessionStr>);
-            static_props[(size_t)SkillProp::Campaign].PopulateItems("SkillBookProp_Campaign", GW::Constants::SkillMax, &GetSkillProp<&CustomSkillData::GetCampaignStr>);
+            static_props[(size_t)SkillProp::Type].PopulateItems("SkillBookProp_Type", GW::Constants::SkillMax, GetSkillProp<&CustomSkillData::GetTypeString>);
+            static_props[(size_t)SkillProp::Attribute].PopulateItems("SkillBookProp_Attribute", GW::Constants::SkillMax, GetSkillProp<&CustomSkillData::GetAttributeStr>);
+            static_props[(size_t)SkillProp::Profession].PopulateItems("SkillBookProp_Profession", GW::Constants::SkillMax, GetSkillProp<&CustomSkillData::GetProfessionStr>);
+            static_props[(size_t)SkillProp::Campaign].PopulateItems("SkillBookProp_Campaign", GW::Constants::SkillMax, GetSkillProp<&CustomSkillData::GetCampaignStr>);
             static_props[(size_t)SkillProp::Id].PopulateItems(
                 "SkillBookProp_Id",
                 GW::Constants::SkillMax,
