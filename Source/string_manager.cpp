@@ -388,9 +388,9 @@ namespace HerosInsight::Text
                         if constexpr (is_renderable)
                         {
                             // clang-format off
-                            if (num == 1 && den == 2) dst.push_back('½'); else
-                            if (num == 1 && den == 4) dst.push_back('¼'); else
-                            if (num == 3 && den == 4) dst.push_back('¾'); else
+                            if (num == 1 && den == 2) dst.AppendString("½"); else
+                            if (num == 1 && den == 4) dst.AppendString("¼"); else
+                            if (num == 3 && den == 4) dst.AppendString("¾"); else
                             // clang-format on
                             {
                                 dst.AppendIntToChars(num);

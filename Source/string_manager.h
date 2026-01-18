@@ -217,7 +217,7 @@ namespace HerosInsight::Text
                 obj.num = number; // TODO: bitcast to float since its not allowed to store real floats and have unique object representations
                 return atom;
             }
-            static StringTemplateAtom Fraction(float num, uint16_t den)
+            static StringTemplateAtom Fraction(uint32_t num, uint16_t den)
             {
                 StringTemplateAtom atom;
                 auto &obj = atom.num;
