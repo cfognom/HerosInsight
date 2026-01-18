@@ -234,10 +234,21 @@ namespace HerosInsight
                                                        // | ImGuiWindowFlags_NoCollapse       //
             /**/;
 
+        auto window_name = "HerosInsight - Menu";
+        auto window_name_width = ImGui::CalcTextSize(window_name).x //
+                                 + style.WindowPadding.x * 2.0f     //
+                                 + style.FramePadding.x * 2.0f      //
+                                 + 10.0f;                           // For good measure :)
+
+        ImGui::SetNextWindowSizeConstraints(
+            ImVec2(window_name_width, 0.0f),
+            ImVec2(FLT_MAX, FLT_MAX)
+        );
+
         const auto window_menu_button_position = style.WindowMenuButtonPosition;
         style.WindowMenuButtonPosition = ImGuiDir_None;
         {
-            bool visible_content = ImGui::Begin("Main Menu", &UpdateManager::open_main_menu, flags);
+            bool visible_content = ImGui::Begin(window_name, &UpdateManager::open_main_menu, flags);
             style.WindowMenuButtonPosition = window_menu_button_position;
 
             const auto window = ImGui::GetCurrentWindow();
