@@ -528,11 +528,15 @@ namespace HerosInsight::SkillBook
         };
 
         template <auto Func, auto Icon>
-        static auto NumberAndIconLambda(Text::StringTemplateAtom::Builder &b, size_t skill_id, void *)
+        static Text::StringTemplateAtom NumberAndIconLambda(Text::StringTemplateAtom::Builder &b, size_t skill_id, void *)
         {
             auto &cskill = CustomSkillDataModule::GetSkills()[skill_id];
+            auto value = (cskill.*Func)();
+            if (value == 0)
+                return {};
+
             return b.ExplicitSequence(
-                {MakeNumOrFraction(b, (cskill.*Func)()),
+                {MakeNumOrFraction(b, value),
                  b.ExplicitString(*Icon)}
             );
         }
@@ -547,7 +551,7 @@ namespace HerosInsight::SkillBook
         void InitProps()
         {
             static_props[(size_t)SkillProp::Energy].SetupIncremental(nullptr, NumberAndIconLambda<&CustomSkillData::GetEnergy, &RichText::Icons::EnergyOrb>);
-            static_props[(size_t)SkillProp::Recharge].SetupIncremental(nullptr, NumberAndIconLambda<&CustomSkillData::GetRecharge, &RichText::Icons::Sacrifice>);
+            static_props[(size_t)SkillProp::Recharge].SetupIncremental(nullptr, NumberAndIconLambda<&CustomSkillData::GetRecharge, &RichText::Icons::Recharge>);
 
             static_props[(size_t)SkillProp::Upkeep].SetupIncremental(nullptr, NumberAndIconLambda<&CustomSkillData::GetUpkeep, &RichText::Icons::Upkeep>);
             static_props[(size_t)SkillProp::Overcast].SetupIncremental(nullptr, NumberAndIconLambda<&CustomSkillData::GetOvercast, &RichText::Icons::Overcast>);
