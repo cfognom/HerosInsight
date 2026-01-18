@@ -17,6 +17,14 @@ namespace HerosInsight::RichText
 
     using FracPattern = std::tuple<Lit<"<frac=">, Int<10, &FracTag::num>, Lit<"/">, Int<10, &FracTag::den>, Lit<">">>;
 
+    void ColorTag::ToChars(OutBuf<char> output) const
+    {
+        if (color)
+            Parsing::write_pattern<ColorOpenPattern>(output, this);
+        else
+            Parsing::write_pattern<ColorClosePattern>(output, this);
+    }
+
     bool ColorTag::TryRead(std::string_view &remaining, ColorTag &out)
     {
         if (Parsing::read_pattern<ColorOpenPattern>(remaining, &out))
@@ -431,10 +439,7 @@ namespace HerosInsight::RichText
         switch (type)
         {
             case Type::Color:
-                if (color_tag.color == NULL)
-                    Parsing::write_pattern<ColorClosePattern>(output, &color_tag);
-                else
-                    Parsing::write_pattern<ColorOpenPattern>(output, &color_tag);
+                color_tag.ToChars(output);
                 break;
 
             case Type::Tooltip:

@@ -44,14 +44,13 @@ namespace HerosInsight
             }
         }
 
-        std::string GetPresentableString()
+        void GetRenderableString(OutBuf<char> out)
         {
-            std::string out(text);
+            out.AppendRange(text);
             for (auto index : uppercase.IterSetBits())
             {
                 out[index] -= 32;
             }
-            return out;
         }
 
         LoweredText SubStr(size_t offset, size_t count)
@@ -95,6 +94,17 @@ namespace HerosInsight
         LoweredTextVector(StringArena<char> &&arena) : arena(std::move(arena))
         {
             LowercaseFold();
+        }
+
+        size_t CommitAndFold()
+        {
+            auto strId = arena.CommitWritten();
+            auto committed = arena.Get(strId);
+            auto size = arena.Elements().size();
+            uppercase.resize(size, false);
+            auto pending_uppercase = uppercase.Subview(committed.data() - arena.Elements().data(), committed.size());
+            LoweredText::FoldText(committed, pending_uppercase);
+            return strId;
         }
 
         LoweredText Get(size_t index)

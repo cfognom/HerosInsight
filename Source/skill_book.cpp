@@ -99,6 +99,7 @@
 #include <party_data.h>
 #include <rich_text.h>
 #include <string_arena.h>
+#include <string_cache.h>
 #include <texture_module.h>
 #include <update_manager.h>
 #include <utils.h>
@@ -209,10 +210,9 @@ namespace HerosInsight::SkillBook
         Energy,
         Recharge,
         Activation,
-        AdrenalineStrikes,
+        Adrenaline,
         Sacrifice,
         Overcast,
-        Adrenaline,
         Aftercast,
         Upkeep,
 
@@ -491,162 +491,154 @@ namespace HerosInsight::SkillBook
     constexpr static Propset ALL_PROPS = Propset(true);
     constexpr static uint16_t INVALID_SPAN = std::numeric_limits<uint16_t>::max();
 
-    struct SkillsProp
-    {
-        LoweredTextVector texts;
-        std::array<uint16_t, GW::Constants::SkillMax> skill_to_text;
-    };
-
-    struct InitHelper
-    {
-        StringArena<char> &dst;
-        size_t skill_id;
-        GW::Constants::SkillID SkillId() const { return static_cast<GW::Constants::SkillID>(skill_id); }
-        GW::Skill &Skill() const { return GW::SkillbarMgr::GetSkills()[skill_id]; }
-        CustomSkillData &CustomSkill() const { return CustomSkillDataModule::GetSkills()[skill_id]; }
-    };
-
-    void InitProp(SkillsProp &prop, std::string_view hint_key, bool dedupe, auto &&op)
-    {
-        auto &arena = prop.texts.arena;
-        arena.clear();
-        arena.ReserveFromHint(hint_key);
-
-        std::string deduper_hint_key;
-        StringArena<char>::deduper deduper;
-        if (dedupe)
-        {
-            deduper_hint_key = std::format("{}_deduper", hint_key);
-            auto bucket_count = CapacityHints::GetHint(deduper_hint_key);
-            deduper = arena.CreateDeduper(bucket_count);
-        }
-        auto p_deduper = dedupe ? &deduper : nullptr;
-
-        auto skills = GW::SkillbarMgr::GetSkills();
-        for (size_t i = 1; i < skills.size(); ++i)
-        {
-            op(InitHelper{arena, i});
-            prop.skill_to_text[i] = arena.CommitWritten(p_deduper);
-        }
-        prop.texts.LowercaseFold();
-
-        if (dedupe)
-        {
-            CapacityHints::UpdateHint(deduper_hint_key, deduper.bucket_count());
-        }
-        arena.StoreCapacityHint(hint_key);
-    }
-
-    void InitDescriptions(bool is_concise, AttributeSource attr_src, SkillsProp &dst_prop)
-    {
-        auto &text_provider = Text::GetTextProvider(GW::Constants::Language::English);
-
-        auto hint_key = std::format("skill_descriptions_{}", is_concise ? "concise" : "full");
-
-        InitProp(
-            dst_prop, hint_key, false,
-            [&text_provider, is_concise, attr_src](InitHelper helper)
-            {
-                auto skill_id = helper.SkillId();
-                auto &skill = helper.Skill();
-                int8_t attr_lvl = attr_src.GetAttrLvl(AttributeOrTitle(skill));
-                helper.dst.AppendWriteBuffer(
-                    512,
-                    [&text_provider, skill_id, is_concise, attr_lvl](std::span<char> &buffer)
-                    {
-                        SpanWriter<char> writer(buffer);
-                        text_provider.MakeDescription(skill_id, is_concise, attr_lvl, writer);
-                        buffer = writer.WrittenSpan();
-                    }
-                );
-            }
-        );
-    }
-
-    void InitTags(SkillsProp &dst_prop)
-    {
-        auto hint_key = "skill_tags";
-        InitProp(
-            dst_prop, hint_key, true,
-            [](InitHelper helper)
-            {
-                auto &dst = helper.dst;
-                auto &skill = helper.Skill();
-                auto &cskill = helper.CustomSkill();
-                auto &tags = cskill.tags;
-                auto skill_id_to_check = skill.IsPvP() ? skill.skill_id_pvp : skill.skill_id;
-
-                bool is_unlocked = GW::SkillbarMgr::GetIsSkillUnlocked(skill_id_to_check);
-                bool is_learned = Utils::IsSkillLearned(skill, focused_agent_id);
-                bool is_locked = tags.Unlockable && !is_unlocked;
-
-                auto PushTag = [&](std::string_view str, ImU32 color = NULL, std::string_view icon = {})
-                {
-                    if (color != NULL)
-                    {
-                        RichText::Helpers::PushColoredText(dst, color, str);
-                    }
-                    else
-                    {
-                        RichText::Helpers::PushText(dst, str);
-                    }
-
-                    if (!icon.empty())
-                    {
-                        RichText::Helpers::PushText(dst, icon);
-                    }
-
-                    RichText::Helpers::PushText(dst, ", ");
-                };
-
-                // clang-format off
-                if (is_learned)            PushTag("Learned"  , IM_COL32(100, 255, 255, 255));
-                if (is_unlocked)           PushTag("Unlocked" , IM_COL32(143, 255, 143, 255));
-                if (tags.Temporary)        PushTag("Temporary"                              );
-                if (is_locked)             PushTag("Locked"   , IM_COL32(255, 100, 100, 255));
-                
-                if (cskill.context != Utils::SkillContext::Null)
-                    PushTag(Utils::GetSkillContextString(cskill.context));
-
-                if (tags.Archived)         PushTag("Archived");
-                if (tags.EffectOnly)       PushTag("Effect-only");
-                if (tags.PvEOnly)          PushTag("PvE-only");
-                if (tags.PvPOnly)          PushTag("PvP-only");
-                if (tags.PvEVersion)       PushTag("PvE Version");
-                if (tags.PvPVersion)       PushTag("PvP Version");
-
-                if (tags.DeveloperSkill)   PushTag("Developer Skill");
-                if (tags.EnvironmentSkill) PushTag("Environment Skill");
-                if (tags.MonsterSkill)     PushTag("Monster Skill", NULL, RichText::Icons::MonsterSkull);
-                if (tags.SpiritAttack)     PushTag("Spirit Attack");
-                
-                if (tags.Maintained)       PushTag("Maintained");
-                if (tags.ConditionSource)  PushTag("Condition Source");
-                if (tags.ExploitsCorpse)   PushTag("Exploits Corpse");
-                if (tags.Consumable)       PushTag("Consumable");
-                if (tags.Celestial)        PushTag("Celestial");
-                if (tags.Mission)          PushTag("Mission");
-                if (tags.Bundle)           PushTag("Bundle");
-                // clang-format on
-
-                if (dst.GetWrittenSize() > 0)
-                {
-                    // Cut off the last ", "
-                    dst.Elements().resize(dst.Elements().size() - 2);
-                }
-            }
-        );
-    }
-
     struct TextStorage
     {
-        std::array<SkillsProp, PROP_COUNT> static_props;
+        std::array<Filtering::IncrementalProp, PROP_COUNT> static_props;
         // std::unordered_map<, IndexedLoweredTexts> dynamic_props;
 
         // std::array<LoweredTexts, PROP_COUNT> props;
         // std::array<std::array<uint16_t, GW::Constants::SkillMax>, PROP_COUNT> mappers{INVALID_SPAN};
         std::vector<Propset> meta_propsets;
         LoweredTextVector meta_prop_names;
+
+        static Text::StringTemplateAtom MakeNumOrFraction(OutBuf<Text::StringTemplateAtom> dst, float value)
+        {
+            float value_int;
+            float value_fract = std::modf(value, &value_int);
+
+            std::optional<Text::StringTemplateAtom> fraction = std::nullopt;
+            if (value_fract == 0.25f)
+                fraction = Text::StringTemplateAtom::MakeFraction(1, 4);
+            else if (value_fract == 0.5f)
+                fraction = Text::StringTemplateAtom::MakeFraction(1, 2);
+            else if (value_fract == 0.75f)
+                fraction = Text::StringTemplateAtom::MakeFraction(3, 4);
+
+            if (fraction.has_value())
+            {
+                if (value_int > 0.f)
+                {
+                    return Text::StringTemplateAtom::MakeExplicitSequence(
+                        dst,
+                        {Text::StringTemplateAtom::MakeNumber(value_int),
+                         fraction.value()}
+                    );
+                }
+                return fraction.value();
+            }
+            else
+            {
+                return Text::StringTemplateAtom::MakeNumber(value);
+            }
+        };
+
+        template <auto Func, auto Icon>
+        static auto BuildNumberAndIconLambda()
+        {
+            return +[](OutBuf<Text::StringTemplateAtom> dst, size_t skill_id, void *) -> Text::StringTemplateAtom
+            {
+                auto &cskill = CustomSkillDataModule::GetSkills()[skill_id];
+                return Text::StringTemplateAtom::MakeExplicitSequence(
+                    dst,
+                    {MakeNumOrFraction(dst, (cskill.*Func)()),
+                     Text::StringTemplateAtom::MakeExplicitString(*Icon)}
+                );
+            };
+        }
+
+        template <auto Func>
+        static void GetSkillProp(StringArena<char> &dst, size_t skill_id)
+        {
+            auto &cskill = CustomSkillDataModule::GetSkills()[skill_id];
+            dst.Elements().append_range((cskill.*Func)());
+        }
+
+        void InitProps()
+        {
+            static_props[(size_t)SkillProp::Energy].SetupIncremental(nullptr, BuildNumberAndIconLambda<&CustomSkillData::GetEnergy, &RichText::Icons::EnergyOrb>());
+            static_props[(size_t)SkillProp::Recharge].SetupIncremental(nullptr, BuildNumberAndIconLambda<&CustomSkillData::GetRecharge, &RichText::Icons::Sacrifice>());
+
+            static_props[(size_t)SkillProp::Upkeep].SetupIncremental(nullptr, BuildNumberAndIconLambda<&CustomSkillData::GetUpkeep, &RichText::Icons::Upkeep>());
+            static_props[(size_t)SkillProp::Overcast].SetupIncremental(nullptr, BuildNumberAndIconLambda<&CustomSkillData::GetOvercast, &RichText::Icons::Overcast>());
+            static_props[(size_t)SkillProp::Sacrifice].SetupIncremental(nullptr, BuildNumberAndIconLambda<&CustomSkillData::GetSacrifice, &RichText::Icons::Sacrifice>());
+            static_props[(size_t)SkillProp::Activation].SetupIncremental(nullptr, BuildNumberAndIconLambda<&CustomSkillData::GetActivation, &RichText::Icons::Activation>());
+
+            auto &text_provider = Text::GetTextProvider(GW::Constants::Language::English);
+            static_props[(size_t)SkillProp::Name].PopulateItems(*text_provider.GetNames());
+
+            static_props[(size_t)SkillProp::Type].PopulateItems("SkillBookProp_Type", GW::Constants::SkillMax, &GetSkillProp<&CustomSkillData::GetTypeString>);
+            static_props[(size_t)SkillProp::Attribute].PopulateItems("SkillBookProp_Attribute", GW::Constants::SkillMax, &GetSkillProp<&CustomSkillData::GetAttributeStr>);
+            static_props[(size_t)SkillProp::Profession].PopulateItems("SkillBookProp_Profession", GW::Constants::SkillMax, &GetSkillProp<&CustomSkillData::GetProfessionStr>);
+            static_props[(size_t)SkillProp::Campaign].PopulateItems("SkillBookProp_Campaign", GW::Constants::SkillMax, &GetSkillProp<&CustomSkillData::GetCampaignStr>);
+            static_props[(size_t)SkillProp::Id].PopulateItems(
+                "SkillBookProp_Id",
+                GW::Constants::SkillMax,
+                [](StringArena<char> &dst, size_t skill_id)
+                {
+                    std::format_to(std::back_inserter(dst.Elements()), "{}", skill_id);
+                }
+            );
+
+            static_props[(size_t)SkillProp::Aftercast].SetupIncremental(
+                nullptr,
+                +[](OutBuf<Text::StringTemplateAtom> dst, size_t skill_id, void *) -> Text::StringTemplateAtom
+                {
+                    auto &skill = GW::SkillbarMgr::GetSkills()[skill_id];
+                    const bool is_normal_aftercast = (skill.activation > 0 && skill.aftercast == 0.75f) ||
+                                                     (skill.activation == 0 && skill.aftercast == 0);
+                    if (skill.aftercast == 0.f && is_normal_aftercast)
+                        return {};
+
+                    FixedVector<Text::StringTemplateAtom, 5> number_and_icon;
+
+                    if (!is_normal_aftercast)
+                    {
+                        number_and_icon.push_back(Text::StringTemplateAtom::MakeColor(IM_COL32(255, 255, 0, 255)));
+                    }
+                    number_and_icon.push_back(Text::StringTemplateAtom::MakeNumber(skill.aftercast));
+                    if (!is_normal_aftercast)
+                    {
+                        number_and_icon.push_back(Text::StringTemplateAtom::MakeColor(NULL));
+                        number_and_icon.push_back(Text::StringTemplateAtom::MakeChar('*'));
+                    }
+                    number_and_icon.push_back(Text::StringTemplateAtom::MakeExplicitString(RichText::Icons::Aftercast));
+
+                    return Text::StringTemplateAtom::MakeExplicitSequence(dst, number_and_icon);
+                }
+            );
+
+            static_props[(size_t)SkillProp::Range].PopulateItems(
+                "SkillBookProp_Range",
+                GW::Constants::SkillMax,
+                [](StringArena<char> &dst, size_t skill_id)
+                {
+                    FixedVector<Utils::Range, 4> ranges;
+                    auto &cskill = CustomSkillDataModule::GetSkills()[skill_id];
+                    cskill.GetRanges(ranges);
+                    for (size_t i = 0; i < ranges.size(); ++i)
+                    {
+                        auto range = ranges[i];
+                        dst.AppendWriteBuffer(
+                            64,
+                            [range](std::span<char> &buffer)
+                            {
+                                SpanWriter<char> writer(buffer);
+                                writer.AppendIntToChars((int)range);
+                                auto range_name = Utils::GetRangeStr(range);
+                                if (range_name.has_value())
+                                {
+                                    writer.AppendFormat(" ({})", range_name.value());
+                                }
+                                buffer = writer.WrittenSpan();
+                            }
+                        );
+
+                        if (i < ranges.size() - 1)
+                            dst.Elements().append_range(std::string_view(", "));
+                    }
+                }
+            );
+        }
 
         struct MetaPropSection
         {
@@ -702,7 +694,7 @@ namespace HerosInsight::SkillBook
             SetupMetaProp("Aftercast", CreatePropset(SkillProp::Aftercast));
             SetupMetaProp("Sacrifice", CreatePropset(SkillProp::Sacrifice));
             SetupMetaProp("Overcast", CreatePropset(SkillProp::Overcast));
-            SetupMetaProp("Adrenaline", CreatePropset(SkillProp::AdrenalineStrikes));
+            SetupMetaProp("Adrenaline", CreatePropset(SkillProp::Adrenaline));
             SetupMetaProp("Upkeep", CreatePropset(SkillProp::Upkeep));
             SetupMetaProp("Full Description", CreatePropset(SkillProp::Description));
             SetupMetaProp("Concise Description", CreatePropset(SkillProp::Concise));
@@ -726,7 +718,7 @@ namespace HerosInsight::SkillBook
         {
             InitBaseSkills();
             SetupMetaProps();
-            InitStaticProps();
+            InitProps();
         }
 
         struct DoubleWriter
@@ -744,201 +736,181 @@ namespace HerosInsight::SkillBook
                 dst = dst.subspan(0, written_count);
             }
         };
-
-        void InitPropById(SkillProp prop_id, auto &&op)
-        {
-            auto prop_id_val = static_cast<size_t>(prop_id);
-            auto &prop = static_props[prop_id_val];
-
-            auto hint_key = std::format("prop_{}", prop_id_val);
-            InitProp(prop, hint_key, true, op);
-        }
-
-        void InitNames()
-        {
-            auto prop_index = static_cast<size_t>(SkillProp::Name);
-            auto &text_provider = Text::GetTextProvider(GW::Constants::Language::English);
-            auto &names = *text_provider.GetNames();
-            auto &prop = static_props[prop_index];
-            prop.texts = LoweredTextVector(names);
-            std::copy(names.index_to_id.begin(), names.index_to_id.end(), prop.skill_to_text.begin());
-        }
-
-        void InitStaticProps()
-        {
-            InitNames();
-            // AttributeSource attr_src;
-            // InitDescriptions(false, attr_src, this->static_props[(size_t)SkillProp::Description]);
-            // InitDescriptions(true, attr_src, this->static_props[(size_t)SkillProp::Concise]);
-            // InitTags(this->static_props[(size_t)SkillProp::Tag]);
-
-            static auto AppendStr = [](StringArena<char> &dst, std::string_view sv)
-            {
-                dst.Elements().append_range(sv);
-            };
-            static auto AppendInt = [](StringArena<char> &dst, int32_t value, std::string_view icon = {})
-            {
-                if (value == 0)
-                    return;
-
-                dst.AppendWriteBuffer(32, DoubleWriter{(double)value});
-                if (!icon.empty())
-                {
-                    RichText::Helpers::PushText(dst, icon);
-                }
-            };
-
-            // clang-format off
-            InitPropById(SkillProp::Type,              [](InitHelper h) { AppendStr(h.dst, h.CustomSkill().GetTypeString()); });
-            InitPropById(SkillProp::Attribute,         [](InitHelper h) { AppendStr(h.dst, h.CustomSkill().GetAttributeStr()); });
-            InitPropById(SkillProp::Profession,        [](InitHelper h) { AppendStr(h.dst, h.CustomSkill().GetProfessionStr()); });
-            InitPropById(SkillProp::Campaign,          [](InitHelper h) { AppendStr(h.dst, h.CustomSkill().GetCampaignStr()); });
-            InitPropById(SkillProp::Upkeep,            [](InitHelper h) { AppendInt(h.dst, h.CustomSkill().GetUpkeep(),            RichText::Icons::Upkeep); });
-            InitPropById(SkillProp::Energy,            [](InitHelper h) { AppendInt(h.dst, h.CustomSkill().GetEnergy(),            RichText::Icons::EnergyOrb); });
-            InitPropById(SkillProp::AdrenalineStrikes, [](InitHelper h) { AppendInt(h.dst, h.CustomSkill().GetAdrenalineStrikes(), RichText::Icons::Adrenaline); });
-            InitPropById(SkillProp::Overcast,          [](InitHelper h) { AppendInt(h.dst, h.CustomSkill().GetOvercast(),          RichText::Icons::Overcast); });
-            InitPropById(SkillProp::Sacrifice,         [](InitHelper h) { AppendInt(h.dst, h.CustomSkill().GetSacrifice(),         RichText::Icons::Sacrifice); });
-            InitPropById(SkillProp::Recharge,          [](InitHelper h) { AppendInt(h.dst, h.CustomSkill().GetRecharge(),          RichText::Icons::Recharge); });
-            InitPropById(SkillProp::Id,                [](InitHelper h) { AppendInt(h.dst, h.skill_id); });
-            // clang-format on
-
-            static auto AppendFraction = [](StringArena<char> &dst, double value)
-            {
-                float value_int;
-                float value_fract = std::modf(value, &value_int);
-
-                std::optional<RichText::FracTag> frac_tag = std::nullopt;
-                if (value_fract == 0.25f)
-                    frac_tag = {1, 4};
-                else if (value_fract == 0.5f)
-                    frac_tag = {1, 2};
-                else if (value_fract == 0.75f)
-                    frac_tag = {3, 4};
-
-                if (frac_tag.has_value())
-                {
-                    if (value_int > 0.f)
-                        dst.AppendWriteBuffer(32, DoubleWriter{value_int});
-                    RichText::Helpers::PushTag(dst, RichText::TextTag(frac_tag.value()));
-                }
-                else
-                {
-                    dst.AppendWriteBuffer(32, DoubleWriter{value});
-                }
-            };
-
-            InitPropById(
-                SkillProp::Adrenaline,
-                [&](InitHelper h)
-                {
-                    auto adrenaline = h.CustomSkill().GetAdrenaline();
-                    if (adrenaline == 0)
-                        return;
-                    uint16_t adrenaline_div = adrenaline / 25;
-                    uint16_t adrenaline_rem = adrenaline % 25;
-                    if (adrenaline_div > 0)
-                    {
-                        h.dst.AppendWriteBuffer(32, DoubleWriter{(double)adrenaline_div});
-                    }
-                    if (adrenaline_rem > 0)
-                    {
-                        RichText::Helpers::PushTag(h.dst, RichText::TextTag(RichText::FracTag{adrenaline_rem, 25}));
-                    }
-                    RichText::Helpers::PushText(h.dst, RichText::Icons::Adrenaline);
-                }
-            );
-
-            InitPropById(
-                SkillProp::Activation,
-                [&](InitHelper h)
-                {
-                    auto activation = h.CustomSkill().GetActivation();
-                    if (activation == 0.f)
-                        return;
-                    AppendFraction(h.dst, activation);
-                    RichText::Helpers::PushText(h.dst, RichText::Icons::Activation);
-                }
-            );
-
-            InitPropById(
-                SkillProp::Aftercast,
-                [&](InitHelper h)
-                {
-                    auto &skill = h.Skill();
-                    const bool is_normal_aftercast = (skill.activation > 0 && skill.aftercast == 0.75f) ||
-                                                     (skill.activation == 0 && skill.aftercast == 0);
-                    if (skill.aftercast == 0.f && is_normal_aftercast)
-                        return;
-
-                    if (!is_normal_aftercast)
-                        RichText::Helpers::PushColorTag(h.dst, IM_COL32(255, 255, 0, 255));
-                    AppendFraction(h.dst, skill.aftercast);
-                    if (!is_normal_aftercast)
-                        RichText::Helpers::PushColorTag(h.dst, NULL);
-                    RichText::Helpers::PushColoredText(h.dst, IM_COL32(77, 84, 179, 255), RichText::Icons::Activation);
-                }
-            );
-
-            InitPropById(
-                SkillProp::Range,
-                [](InitHelper h)
-                {
-                    FixedVector<Utils::Range, 4> ranges;
-                    h.CustomSkill().GetRanges(ranges);
-                    for (size_t i = 0; i < ranges.size(); ++i)
-                    {
-                        auto range = ranges[i];
-                        h.dst.AppendWriteBuffer(
-                            64,
-                            [range](std::span<char> &buffer)
-                            {
-                                SpanWriter<char> writer(buffer);
-                                writer.AppendIntToChars((int)range);
-                                auto range_name = Utils::GetRangeStr(range);
-                                if (range_name.has_value())
-                                {
-                                    writer.AppendFormat(" ({})", range_name.value());
-                                }
-                                buffer = writer.WrittenSpan();
-                            }
-                        );
-
-                        if (i < ranges.size() - 1)
-                            h.dst.Elements().append_range(std::string_view(", "));
-                    }
-                }
-            );
-        }
     };
     TextStorage text_storage;
+
+    struct BookSettings
+    {
+        // AttributeMode attribute_mode = AttributeMode::Generic;
+        AttributeSource attr_src;
+        int attr_lvl_slider = 12;
+        bool IsGeneric() const { return attr_src.type == AttributeSource::Type::Constant && attr_src.value == -1; }
+        bool IsCharacters() const { return attr_src.type == AttributeSource::Type::FromAgent; }
+        bool IsManual() const { return attr_src.type == AttributeSource::Type::Constant && attr_src.value != -1; }
+
+        bool include_pve_only_skills = true;
+        bool include_temporary_skills = false;
+        bool include_npc_skills = false;
+        bool include_archived_skills = false;
+        bool include_disguises = false;
+
+        bool use_exact_adrenaline = false;
+        bool prefer_concise_descriptions = false;
+        bool limit_to_characters_professions = false;
+        bool show_null_stats = false;
+        bool snap_to_skill = true;
+    };
 
     struct FilteringAdapter
     {
         TextStorage &ts;
-        std::unordered_map<SkillProp, SkillsProp> dynamic_props;
-        std::array<SkillsProp *, PROP_COUNT> props;
+        std::unordered_map<SkillProp, Filtering::IncrementalProp> dynamic_props;
+        std::array<Filtering::IncrementalProp *, PROP_COUNT> props;
 
-        void InitDynamicProps(AttributeSource attr_src)
+        void RefreshDynamicProps(AttributeSource attr_src)
         {
-            Stopwatch stopwatch("InitDynamicProps");
+            Stopwatch stopwatch("RefreshDynamicProps");
 
-            InitDescriptions(false, attr_src, dynamic_props[SkillProp::Description]);
-            InitDescriptions(true, attr_src, dynamic_props[SkillProp::Concise]);
-            InitTags(dynamic_props[SkillProp::Tag]);
+            for (auto &prop : dynamic_props)
+            {
+                prop.second.MarkDirty();
+            }
+        }
+
+        template <bool IsConcise>
+        static Text::StringTemplateAtom MakeDescription(OutBuf<Text::StringTemplateAtom> dst, size_t skill_id, void *data)
+        {
+            auto &settings = *(BookSettings *)data;
+            auto &cskill = CustomSkillDataModule::GetSkills()[skill_id];
+            auto &text_provider = Text::GetTextProvider(GW::Constants::Language::English);
+            auto attr_lvl = settings.attr_src.GetAttrLvl(cskill.attribute);
+            return text_provider.MakeSkillDescription(dst, (GW::Constants::SkillID)skill_id, IsConcise, attr_lvl);
+        }
+
+        explicit FilteringAdapter(TextStorage &storage, BookSettings &settings)
+            : ts(storage)
+        {
+            dynamic_props[SkillProp::Description].SetupIncremental(&settings, MakeDescription<false>);
+            dynamic_props[SkillProp::Concise].SetupIncremental(&settings, MakeDescription<true>);
+            dynamic_props[SkillProp::Adrenaline].SetupIncremental(
+                &settings,
+                +[](OutBuf<Text::StringTemplateAtom> dst, size_t skill_id, void *data) -> Text::StringTemplateAtom
+                {
+                    auto &settings = *(BookSettings *)data;
+                    auto &skill = GW::SkillbarMgr::GetSkills()[skill_id];
+                    auto adrenaline = skill.adrenaline;
+                    if (adrenaline == 0)
+                        return {};
+
+                    auto adrenaline_strikes = adrenaline / 25;
+                    auto adrenaline_units = adrenaline % 25;
+
+                    if (!settings.use_exact_adrenaline)
+                    {
+                        if (adrenaline_units > 0)
+                        {
+                            adrenaline_strikes += 1;
+                            adrenaline_units = 0;
+                        }
+                    }
+
+                    FixedVector<Text::StringTemplateAtom, 4> args;
+
+                    if (adrenaline_strikes > 0)
+                        args.push_back(Text::StringTemplateAtom::MakeNumber(adrenaline_strikes));
+
+                    if (adrenaline_units > 0)
+                        args.push_back(Text::StringTemplateAtom::MakeFraction(adrenaline_units, 25));
+
+                    args.push_back(Text::StringTemplateAtom::MakeExplicitString(RichText::Icons::Adrenaline));
+
+                    return Text::StringTemplateAtom::MakeExplicitSequence(dst, args);
+                }
+            );
+            dynamic_props[SkillProp::Tag].SetupIncremental(
+                &settings,
+                +[](OutBuf<Text::StringTemplateAtom> dst, size_t skill_id, void *data) -> Text::StringTemplateAtom
+                {
+                    auto &skill = GW::SkillbarMgr::GetSkills()[skill_id];
+                    auto &cskill = CustomSkillDataModule::GetSkills()[skill_id];
+                    auto &tags = cskill.tags;
+                    auto skill_id_to_check = skill.IsPvP() ? skill.skill_id_pvp : skill.skill_id;
+
+                    bool is_unlocked = GW::SkillbarMgr::GetIsSkillUnlocked(skill_id_to_check);
+                    bool is_learned = Utils::IsSkillLearned(skill, focused_agent_id);
+                    bool is_locked = tags.Unlockable && !is_unlocked;
+
+                    FixedVector<Text::StringTemplateAtom, 16> args;
+
+                    auto PushTag = [&](std::string_view str, ImU32 color = NULL, std::string_view icon = {})
+                    {
+                        if (color != NULL)
+                            args.push_back(Text::StringTemplateAtom::MakeColor(color));
+
+                        args.push_back(Text::StringTemplateAtom::MakeExplicitString(str));
+
+                        if (color != NULL)
+                            args.push_back(Text::StringTemplateAtom::MakeColor(NULL));
+
+                        if (!icon.empty())
+                            args.push_back(Text::StringTemplateAtom::MakeExplicitString(icon));
+
+                        args.push_back(Text::StringTemplateAtom::MakeExplicitString(", "));
+                    };
+
+                    // clang-format off
+                    if (is_learned)            PushTag("Learned"  , IM_COL32(100, 255, 255, 255));
+                    if (is_unlocked)           PushTag("Unlocked" , IM_COL32(143, 255, 143, 255));
+                    if (tags.Temporary)        PushTag("Temporary"                              );
+                    if (is_locked)             PushTag("Locked"   , IM_COL32(255, 100, 100, 255));
+                    
+                    if (cskill.context != Utils::SkillContext::Null)
+                        PushTag(Utils::GetSkillContextString(cskill.context));
+
+                    if (tags.Archived)         PushTag("Archived");
+                    if (tags.EffectOnly)       PushTag("Effect-only");
+                    if (tags.PvEOnly)          PushTag("PvE-only");
+                    if (tags.PvPOnly)          PushTag("PvP-only");
+                    if (tags.PvEVersion)       PushTag("PvE Version");
+                    if (tags.PvPVersion)       PushTag("PvP Version");
+
+                    if (tags.DeveloperSkill)   PushTag("Developer Skill");
+                    if (tags.EnvironmentSkill) PushTag("Environment Skill");
+                    if (tags.MonsterSkill)     PushTag("Monster Skill", NULL, RichText::Icons::MonsterSkull);
+                    if (tags.SpiritAttack)     PushTag("Spirit Attack");
+                    
+                    if (tags.Maintained)       PushTag("Maintained");
+                    if (tags.ConditionSource)  PushTag("Condition Source");
+                    if (tags.ExploitsCorpse)   PushTag("Exploits Corpse");
+                    if (tags.Consumable)       PushTag("Consumable");
+                    if (tags.Celestial)        PushTag("Celestial");
+                    if (tags.Mission)          PushTag("Mission");
+                    if (tags.Bundle)           PushTag("Bundle");
+                    // clang-format on
+
+                    if (!args.empty())
+                    {
+                        // Cut off the last ", "
+                        args.pop();
+                    }
+
+                    return Text::StringTemplateAtom::MakeExplicitSequence(dst, args);
+                }
+            );
+
             for (size_t i = 0; i < PROP_COUNT; ++i)
             {
                 auto prop_id = (SkillProp)i;
                 auto it = dynamic_props.find(prop_id);
                 if (it != dynamic_props.end())
+                {
                     props[i] = &it->second;
+                }
                 else
+                {
                     props[i] = &ts.static_props[i];
+                }
             }
-        }
-
-        explicit FilteringAdapter(TextStorage &storage)
-            : ts(storage)
-        {
         }
 
         using index_type = uint16_t;
@@ -949,8 +921,7 @@ namespace HerosInsight::SkillBook
         LoweredText GetMetaName(size_t meta) { return ts.meta_prop_names.Get(meta); }
         BitView GetMetaPropset(size_t meta) const { return ts.meta_propsets[meta]; }
 
-        std::span<index_type> GetItemToSpan(size_t prop) { return props[prop]->skill_to_text; }
-        LoweredTextVector &GetProperty(size_t prop) { return props[prop]->texts; }
+        Filtering::IncrementalProp &GetProperty(size_t prop) { return *props[prop]; }
     };
 
     bool is_dragging = false;
@@ -1035,35 +1006,14 @@ namespace HerosInsight::SkillBook
     }
     struct BookState
     {
-        struct Settings
-        {
-            // AttributeMode attribute_mode = AttributeMode::Generic;
-            AttributeSource attr_src;
-            int attr_lvl_slider = 12;
-            bool IsGeneric() const { return attr_src.type == AttributeSource::Type::Constant && attr_src.value == -1; }
-            bool IsCharacters() const { return attr_src.type == AttributeSource::Type::FromAgent; }
-            bool IsManual() const { return attr_src.type == AttributeSource::Type::Constant && attr_src.value != -1; }
-
-            bool include_pve_only_skills = true;
-            bool include_temporary_skills = false;
-            bool include_npc_skills = false;
-            bool include_archived_skills = false;
-            bool include_disguises = false;
-
-            bool use_exact_adrenaline = false;
-            bool prefer_concise_descriptions = false;
-            bool limit_to_characters_professions = false;
-            bool show_null_stats = false;
-            bool snap_to_skill = true;
-        };
         struct WindowDims
         {
             ImVec2 window_pos;
             ImVec2 window_size;
         };
         std::optional<WindowDims> init_dims = std::nullopt;
-        Settings settings;
-        FilteringAdapter adapter{text_storage};
+        BookSettings settings;
+        FilteringAdapter adapter{text_storage, settings};
         Filtering::Device<FilteringAdapter> filter_device{adapter};
         Filtering::Query query;
         std::vector<uint16_t> filtered_skills; // skill ids
@@ -1131,7 +1081,7 @@ namespace HerosInsight::SkillBook
             bool filtered_outdated = props_dirty || filter_dirty;
             if (props_dirty)
             {
-                adapter.InitDynamicProps(this->settings.attr_src);
+                adapter.RefreshDynamicProps(this->settings.attr_src);
                 props_dirty = false;
             }
             if (filtered_outdated)
@@ -1386,7 +1336,7 @@ namespace HerosInsight::SkillBook
                 {SkillProp::Sacrifice, 7, 4},
                 {SkillProp::Upkeep, 0, 4},
                 {SkillProp::Energy, 1, 3},
-                {settings.use_exact_adrenaline ? SkillProp::Adrenaline : SkillProp::AdrenalineStrikes, 3, 3},
+                {SkillProp::Adrenaline, 3, 3},
                 {SkillProp::Activation, 2, 2},
                 {SkillProp::Recharge, 1, 1},
                 {SkillProp::Aftercast, 2, 0},

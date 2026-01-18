@@ -11,6 +11,7 @@ namespace HerosInsight::RichText
     {
         ImU32 color; // 0 = pop color
 
+        void ToChars(OutBuf<char> output) const;
         static bool TryRead(std::string_view &remaining, ColorTag &out);
     };
 

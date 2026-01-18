@@ -2477,7 +2477,7 @@ namespace HerosInsight::Utils
     {
         if (remaining.size() < 6 || !TryReadHex(remaining, out))
             return false;
-        // Swap red and blue channels because that's how GW formats them!
+        // Swap red and blue channels because that's how GW formats them! (Not needed now?)
         out = ((out & 0xFF00FF00) | ((out & 0xFF) << 16) | ((out & 0xFF0000) >> 16));
         auto alpha = out >> IM_COL32_A_SHIFT;
         if (alpha == 0)

@@ -5,10 +5,10 @@
 
 namespace HerosInsight::Text
 {
-    namespace BuildMode
+    namespace AssembleMode
     {
         // clang-format off
-        struct Readable{};
+        struct Renderable{};
         struct Searchable{};
         // clang-format on
     }
@@ -55,166 +55,276 @@ namespace HerosInsight::Text
         return std::bit_cast<float>(value);
     }
 
-    struct StringCache
+    // We add padding manually to get unique object representations
+    struct StringTemplateAtom
     {
-        struct StringPiece
+        enum struct Type : uint8_t
         {
-            enum struct Type : uint16_t
-            {
-                StringAlways,
-                StringSingularOnly,
-                StringPluralOnly,
-                CharPluralOnly,
-                Substitution,
-                Number,
-                Fraction,
-                Tag,
-            };
-            Type type;
-            uint16_t value;
+            Null,
+            InlineChars1,
+            InlineChars2,
+            InlineChars3,
+            InlineChars4,
+            InlineChars5,
+            InlineChars6,
+            InlineChars7,
+            LookupSequence,
+            ExplicitSequence,
+            Substitution,
+            Color,
+            Number,
+            Fraction,
+            LookupString,
+            ExplicitString,
         };
+        enum struct Constraint : uint8_t
+        {
+            None,
+            SingularOnly,
+            PluralOnly,
+            RenderableOnly,
+        };
+        struct Header
+        {
+            Type type : 4;
+            Constraint constraint : 4;
+        };
+        static_assert(sizeof(Header) == 1);
 
-        StringArena<char> pieces;
-        StringArena<StringPiece> strings;
-        size_t AssimilateString(std::string_view str, StringArena<char>::deduper *pieces_deduper, StringArena<StringPiece>::deduper *strings_deduper);
+        static StringTemplateAtom MakeLookupSequence(uint32_t seqId, OutBuf<StringTemplateAtom> dst, std::span<const StringTemplateAtom> substitutions)
+        {
+            StringTemplateAtom atom;
+            auto &obj = atom.parent;
+            obj.header = Header{Type::LookupSequence, Constraint::None};
+            obj.child_count = substitutions.size();
+            obj.child_offset = dst.size();
+            obj.strId = seqId;
+            dst.AppendRange(substitutions);
+            return atom;
+        }
+        static StringTemplateAtom MakeLookupSequence(uint32_t seqId, OutBuf<StringTemplateAtom> dst, std::initializer_list<StringTemplateAtom> substitutions)
+        {
+            return MakeLookupSequence(seqId, dst, std::span<const StringTemplateAtom>(substitutions.begin(), substitutions.size()));
+        }
+        static StringTemplateAtom MakeExplicitSequence(OutBuf<StringTemplateAtom> dst, std::span<const StringTemplateAtom> atoms)
+        {
+            StringTemplateAtom atom;
+            auto &obj = atom.parent;
+            obj.header = Header{Type::ExplicitSequence, Constraint::None};
+            obj.child_count = atoms.size();
+            obj.child_offset = dst.size();
+            obj.strId = 0;
+            dst.AppendRange(atoms);
+            return atom;
+        }
+        static StringTemplateAtom MakeExplicitSequence(OutBuf<StringTemplateAtom> dst, std::initializer_list<StringTemplateAtom> atoms)
+        {
+            return MakeExplicitSequence(dst, std::span<const StringTemplateAtom>(atoms.begin(), atoms.size()));
+        }
+        static StringTemplateAtom MakeLookupString(Constraint constraint, uint32_t strId)
+        {
+            StringTemplateAtom atom;
+            auto &obj = atom.parent;
+            obj.header = Header{Type::LookupString, constraint};
+            obj.child_count = 0;
+            obj.child_offset = 0;
+            obj.pieceId = strId;
+            return atom;
+        }
+        static StringTemplateAtom MakeColor(uint32_t color)
+        {
+            StringTemplateAtom atom;
+            auto &obj = atom.parent;
+            obj.header = Header{Type::Color, Constraint::RenderableOnly};
+            obj.child_count = 0;
+            obj.child_offset = 0;
+            obj.color = color;
+            return atom;
+        }
+        static StringTemplateAtom MakeSubstitution(uint32_t index)
+        {
+            StringTemplateAtom atom;
+            auto &obj = atom.parent;
+            obj.header = Header{Type::Substitution, Constraint::None};
+            obj.child_count = 0;
+            obj.child_offset = 0;
+            obj.subsIndex = index;
+            return atom;
+        }
+        static StringTemplateAtom MakeNumber(float number)
+        {
+            StringTemplateAtom atom;
+            auto &obj = atom.num;
+            obj.header = Header{Type::Number, Constraint::None};
+            obj.sign = false;
+            obj.den = 1;
+            obj.num = number; // TODO: bitcast to float since its not allowed to store real floats and have unique object representations
+            return atom;
+        }
+        static StringTemplateAtom MakeFraction(float num, uint16_t den)
+        {
+            StringTemplateAtom atom;
+            auto &obj = atom.num;
+            obj.header = Header{Type::Fraction, Constraint::None};
+            obj.sign = false;
+            obj.den = den;
+            obj.num = num;
+            return atom;
+        }
+        static StringTemplateAtom MakeExplicitString(std::string_view str)
+        {
+            StringTemplateAtom atom;
+            auto &obj = atom.str;
+            obj.header = Header{Type::ExplicitString, Constraint::None};
+            obj.padding = 0;
+            obj.len = str.size();
+            obj.ptr = str.data();
+            return atom;
+        }
+        static StringTemplateAtom MakeChar(char ch, Constraint constraint = Constraint::None)
+        {
+            StringTemplateAtom atom;
+            auto &obj = atom.chars;
+            obj.header = Header{Type::InlineChars1, constraint};
+            obj.chars[0] = ch;
+            std::memset(obj.chars + 1, 0, sizeof(obj.chars) - 1);
+            return atom;
+        }
+        static StringTemplateAtom MakeChars(std::string_view chars, Constraint constraint = Constraint::None)
+        {
+            assert(!chars.empty());
+            StringTemplateAtom atom;
+            auto &obj = atom.chars;
+            obj.header = Header{(Type)((size_t)Type::InlineChars1 + chars.size() - 1), constraint};
+            std::memcpy(obj.chars, chars.data(), chars.size());
+            std::memset(obj.chars + chars.size(), 0, sizeof(obj.chars) - chars.size());
+            return atom;
+        }
 
-        template <typename SubsProvider>
-        void BuildSearchableString(size_t id, OutBuf<char> dst, SubsProvider &&subs_provider);
-        template <typename SubsProvider>
-        void BuildReadableString(size_t id, OutBuf<char> dst, SubsProvider &&subs_provider);
+        struct Parent
+        {
+            Header header;
+            uint8_t child_count;
+            uint16_t child_offset;
+            union
+            {
+                uint32_t pieceId;
+                uint32_t strId;
+                uint32_t color;
+                uint32_t subsIndex;
+            };
+            std::span<StringTemplateAtom> GetChildren(std::span<StringTemplateAtom> rest) { return rest.subspan(child_offset, child_count); }
+        };
+        static_assert(sizeof(Parent) == 8);
+        struct Num
+        {
+            Header header;
+            uint8_t sign;
+            uint16_t den;
+            uint32_t num;
+        };
+        static_assert(sizeof(Num) == 8);
+        struct Str
+        {
+            Header header;
+            uint8_t padding;
+            uint16_t len;
+            const char *ptr;
+            std::string_view GetStr() const { return std::string_view(ptr, len); }
+        };
+        static_assert(sizeof(Str) == 8);
+        struct InlineChars
+        {
+            Header header;
+            char chars[7];
+        };
+        static_assert(sizeof(InlineChars) == 8);
+
+        union
+        {
+            struct
+            {
+                Header header;
+                uint8_t padding[7];
+            };
+            Parent parent;
+            Num num;
+            Str str;
+            InlineChars chars;
+        };
+    };
+    static_assert(sizeof(StringTemplateAtom) == 8);
+    static_assert(std::has_unique_object_representations_v<StringTemplateAtom>);
+
+    struct StringTemplate
+    {
+        StringTemplateAtom root;
+        std::span<StringTemplateAtom> rest;
     };
 
-    namespace
+    struct StringManager
     {
-        template <typename SubsProvider, typename Mode>
-        void BuildString(StringCache &cache, size_t id, OutBuf<char> dst, SubsProvider &&subs_provider)
+        using StrId = uint16_t;
+        // struct StringPiece
+        // {
+        //     enum struct Type : uint8_t
+        //     {
+        //         LookupString,
+        //         Char,
+        //         Char2,
+        //         Substitution,
+        //         Number,
+        //         Fraction,
+        //         Tag,
+        //     };
+        //     enum struct When : uint8_t
+        //     {
+        //         Always,
+        //         SingularOnly,
+        //         PluralOnly,
+        //     };
+        //     Type type;
+        //     When when;
+        //     uint16_t value;
+        // };
+
+        StringArena<char> strings;
+        StringArena<StringTemplateAtom> sequences;
+
+        StringArena<char>::deduper strings_deduper = strings.CreateDeduper(0);
+        StringArena<StringTemplateAtom>::deduper sequences_deduper = sequences.CreateDeduper(0);
+
+        size_t AssimilateString(std::string_view str);
+
+        void AssembleSearchableString(StringTemplate t, OutBuf<char> dst);
+        void AssembleRenderableString(StringTemplate t, OutBuf<char> dst);
+    };
+
+    struct StringMapper
+    {
+        Text::StringManager &mgr;
+        std::vector<uint16_t> itemId_to_strId;
+
+        StringMapper(size_t size, Text::StringManager &assembler) : mgr(assembler)
         {
-            using StringPiece = StringCache::StringPiece;
-
-            auto string = cache.strings.Get(id);
-            const auto &pieces = cache.pieces;
-
-            std::array<std::string_view, 3> replacements;
-            BitArray<3> is_plural;
-
-            Plurality plurality = Plurality::Null;
-
-            for (auto &piece : string)
-            {
-                std::string_view str_piece;
-#ifdef _DEBUG
-                switch (piece.type)
-                {
-                    case StringPiece::Type::StringSingularOnly:
-                    case StringPiece::Type::StringPluralOnly:
-                    case StringPiece::Type::CharPluralOnly:
-                        assert(plurality != Plurality::Null);
-                }
-#endif
-
-                switch (piece.type)
-                {
-                    case StringPiece::Type::Tag:
-                    case StringPiece::Type::StringAlways:
-                        str_piece = pieces.Get(piece.value);
-                        break;
-
-                    case StringPiece::Type::StringSingularOnly:
-                        if (plurality != Plurality::Singular)
-                            continue;
-                        str_piece = pieces.Get(piece.value);
-                        break;
-
-                    case StringPiece::Type::StringPluralOnly:
-                        if (plurality != Plurality::Plural)
-                            continue;
-                        str_piece = pieces.Get(piece.value);
-                        break;
-
-                    case StringPiece::Type::CharPluralOnly:
-                        if (plurality != Plurality::Plural)
-                            continue;
-                        dst.push_back((char)piece.value);
-                        continue;
-
-                    case StringPiece::Type::Substitution:
-                    {
-                        auto param_id = piece.value;
-                        str_piece = replacements[param_id];
-                        if (str_piece.empty())
-                        {
-                            auto start_idx = dst.size();
-                            // bool plural = WriteSkillParam(skill_id, param_id, attr_lvl, dst);
-                            bool plural = subs_provider(param_id, dst);
-                            is_plural[param_id] = plural;
-                            replacements[param_id] = std::string_view(&dst[start_idx], dst.size() - start_idx);
-                            plurality = plural ? Plurality::Plural : Plurality::Singular;
-                            continue;
-                        }
-                        plurality = is_plural[param_id] ? Plurality::Plural : Plurality::Singular;
-                        break;
-                    }
-
-                    case StringPiece::Type::Fraction:
-                    {
-                        auto num = piece.value >> 8;
-                        auto den = piece.value & 0xFF;
-                        if constexpr (std::is_same_v<Mode, BuildMode::Readable>)
-                        {
-                            switch (piece.value)
-                            {
-                                    // clang-format off
-                            case ((1 << 8) | 2): dst.push_back('½'); break;
-                            case ((1 << 8) | 4): dst.push_back('¼'); break;
-                            case ((3 << 8) | 4): dst.push_back('¾'); break;
-                                    // clang-format on
-                                default:
-                                {
-                                    dst.AppendIntToChars(num);
-                                    dst.push_back('/');
-                                    dst.AppendIntToChars(den);
-                                }
-                            }
-                        }
-                        else if constexpr (std::is_same_v<Mode, BuildMode::Searchable>)
-                        {
-                            auto value = (float)num / (float)den;
-                            EncodeSearchableNumber(dst, value);
-                        }
-                        continue;
-                    }
-
-                    case StringPiece::Type::Number:
-                    {
-                        if constexpr (std::is_same_v<Mode, BuildMode::Readable>)
-                        {
-                            dst.AppendIntToChars(piece.value);
-                        }
-                        else if constexpr (std::is_same_v<Mode, BuildMode::Searchable>)
-                        {
-                            EncodeSearchableNumber(dst, (float)piece.value);
-                        }
-                        continue;
-                    }
-
-#ifdef _DEBUG
-                    default:
-                        assert(false);
-#endif
-                }
-                dst.AppendRange(str_piece);
-            }
+            itemId_to_strId.resize(size, std::numeric_limits<uint16_t>::max());
         }
-    }
 
-    template <typename SubsProvider>
-    inline void StringCache::BuildSearchableString(size_t id, OutBuf<char> dst, SubsProvider &&subs_provider)
-    {
-        BuildString<SubsProvider, BuildMode::Searchable>(*this, id, dst, std::forward<SubsProvider>(subs_provider));
-    }
-    template <typename SubsProvider>
-    inline void StringCache::BuildReadableString(size_t id, OutBuf<char> dst, SubsProvider &&subs_provider)
-    {
-        BuildString<SubsProvider, BuildMode::Readable>(*this, id, dst, std::forward<SubsProvider>(subs_provider));
-    }
+        size_t AssimilateString(size_t itemId, std::string_view str)
+        {
+            auto strId = mgr.AssimilateString(str);
+            itemId_to_strId[itemId] = strId;
+            return strId;
+        }
+
+        void SetStrId(size_t itemId, size_t strId)
+        {
+            itemId_to_strId[itemId] = strId;
+        }
+
+        size_t GetStrId(size_t itemId)
+        {
+            return itemId_to_strId[itemId];
+        }
+    };
 }

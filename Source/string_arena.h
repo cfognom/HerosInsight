@@ -133,7 +133,7 @@ namespace HerosInsight
         }
 
         // Returns the size of the span being written
-        size_t GetWrittenSize() const
+        size_t GetPendingSize() const
         {
             auto start = GetSpanStart(ends.size());
             return elements.size() - start;
@@ -197,7 +197,7 @@ namespace HerosInsight
             return span;
         }
         // Gets a reference to a string in the arena
-        T_const_view Get(size_t span_id) const
+        T_const_view CGet(size_t span_id) const
         {
             // if (span_id >= ends.size())
             //     return std::span<const T>();
@@ -210,7 +210,7 @@ namespace HerosInsight
         }
 
         std::span<T> operator[](size_t span_id) { return Get(span_id); }
-        T_const_view operator[](size_t span_id) const { return Get(span_id); }
+        T_const_view operator[](size_t span_id) const { return CGet(span_id); }
 
         std::span<T> back()
         {
@@ -239,7 +239,6 @@ namespace HerosInsight
         struct iterator
         {
             using iterator_category = std::random_access_iterator_tag;
-            ;
             using difference_type = std::size_t;
             using value_type = std::span<T>;
             using reference = value_type; // spans act like views

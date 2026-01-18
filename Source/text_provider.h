@@ -90,13 +90,25 @@ namespace HerosInsight::Text
 
     void SkillDescriptionToEncStr(const GW::Skill &skill, bool concise, int32_t attr_lvl, std::span<wchar_t> dst);
 
+    inline StringManager s_Manager;
+
+#define AssimilateIntoVar(var, str) HerosInsight::Text::StringManager::StrId var = HerosInsight::Text::s_Manager.AssimilateString(str);
+    struct CommonStrings
+    {
+        AssimilateIntoVar(dyn_strId, "<c=#8fff8f><tip=13371337>%str1%</tip></c>");
+        AssimilateIntoVar(dyn_range_strId, "<c=#8fff8f><tip=13371337>(%str1%...%str2%)</tip></c>");
+        AssimilateIntoVar(comma, ", ");
+    };
+    inline CommonStrings s_CommonStrings;
+
     struct Provider
     {
         std::string_view GetName(GW::Constants::SkillID skill_id);
         std::string_view GetRawDescription(GW::Constants::SkillID skill_id, bool is_concise);
         IndexedStringArena<char> *GetNames();
         IndexedStringArena<char> *GetRawDescriptions(bool is_concise);
-        void MakeDescription(GW::Constants::SkillID skill_id, bool is_concise, int8_t attr_lvl, OutBuf<char> dst);
+        StringTemplateAtom MakeSkillParam(OutBuf<StringTemplateAtom> dst, GW::Constants::SkillID skill_id, int8_t attr_lvl, size_t param_id);
+        StringTemplateAtom MakeSkillDescription(OutBuf<StringTemplateAtom> dst, GW::Constants::SkillID skill_id, bool is_concise, int8_t attr_lvl);
 
         Provider(GW::Constants::Language language);
 
@@ -114,12 +126,7 @@ namespace HerosInsight::Text
 
         GW::Constants::Language language;
 
-        struct Descriptions
-        {
-            StringCache cache;
-            uint16_t skill_id_to_str_id[GW::Constants::SkillMax];
-        };
-        Descriptions descriptions[2];
+        std::array<StringManager::StrId, GW::Constants::SkillMax> skill_descriptions[2]; // [is_concise][skill_id]
 
         IndexedStringArena<char> skill_raw[SkillTextType::COUNT];
     };
