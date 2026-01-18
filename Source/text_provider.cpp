@@ -15,7 +15,7 @@
 #include <custom_skill_data.h>
 #include <parsing.h>
 #include <string_arena.h>
-#include <string_cache.h>
+#include <string_manager.h>
 #include <utils.h>
 
 #include "text_provider.h"

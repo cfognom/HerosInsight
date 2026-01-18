@@ -36,7 +36,7 @@ add_library(HerosInsight SHARED
     filtering.cpp
     rich_text.cpp
     capacity_hints.cpp
-    string_cache.cpp
+    string_manager.cpp
 )
 
 # Headers live here

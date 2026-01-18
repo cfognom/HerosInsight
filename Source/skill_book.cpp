@@ -99,7 +99,7 @@
 #include <party_data.h>
 #include <rich_text.h>
 #include <string_arena.h>
-#include <string_cache.h>
+#include <string_manager.h>
 #include <texture_module.h>
 #include <update_manager.h>
 #include <utils.h>

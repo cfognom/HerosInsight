@@ -4,7 +4,7 @@
 #include <GWCA/Managers/AssetMgr.h>
 #include <rich_text.h>
 #include <string_arena.h>
-#include <string_cache.h>
+#include <string_manager.h>
 
 namespace HerosInsight::Text
 {

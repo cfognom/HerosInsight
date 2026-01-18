@@ -10,7 +10,7 @@
 #include <multibuffer.h>
 #include <stopwatch.h>
 #include <string_arena.h>
-#include <string_cache.h>
+#include <string_manager.h>
 #include <text_provider.h>
 #include <utils.h>
 
