@@ -501,48 +501,40 @@ namespace HerosInsight::SkillBook
         std::vector<Propset> meta_propsets;
         LoweredTextVector meta_prop_names;
 
-        static Text::StringTemplateAtom MakeNumOrFraction(OutBuf<Text::StringTemplateAtom> dst, float value)
+        static Text::StringTemplateAtom MakeNumOrFraction(Text::StringTemplateAtom::Builder &b, float value)
         {
             float value_int;
             float value_fract = std::modf(value, &value_int);
 
             std::optional<Text::StringTemplateAtom> fraction = std::nullopt;
             if (value_fract == 0.25f)
-                fraction = Text::StringTemplateAtom::MakeFraction(1, 4);
+                fraction = b.Fraction(1, 4);
             else if (value_fract == 0.5f)
-                fraction = Text::StringTemplateAtom::MakeFraction(1, 2);
+                fraction = b.Fraction(1, 2);
             else if (value_fract == 0.75f)
-                fraction = Text::StringTemplateAtom::MakeFraction(3, 4);
+                fraction = b.Fraction(3, 4);
 
             if (fraction.has_value())
             {
                 if (value_int > 0.f)
                 {
-                    return Text::StringTemplateAtom::MakeExplicitSequence(
-                        dst,
-                        {Text::StringTemplateAtom::MakeNumber(value_int),
-                         fraction.value()}
-                    );
+                    return b.ExplicitSequence({b.Number(value_int), fraction.value()});
                 }
                 return fraction.value();
             }
             else
             {
-                return Text::StringTemplateAtom::MakeNumber(value);
+                return b.Number(value);
             }
         };
 
         template <auto Func, auto Icon>
         static auto BuildNumberAndIconLambda()
         {
-            return +[](OutBuf<Text::StringTemplateAtom> dst, size_t skill_id, void *) -> Text::StringTemplateAtom
+            return +[](Text::StringTemplateAtom::Builder &b, size_t skill_id, void *) -> Text::StringTemplateAtom
             {
                 auto &cskill = CustomSkillDataModule::GetSkills()[skill_id];
-                return Text::StringTemplateAtom::MakeExplicitSequence(
-                    dst,
-                    {MakeNumOrFraction(dst, (cskill.*Func)()),
-                     Text::StringTemplateAtom::MakeExplicitString(*Icon)}
-                );
+                return b.ExplicitSequence({MakeNumOrFraction(b, (cskill.*Func)()), b.ExplicitString(*Icon)});
             };
         }
 
@@ -581,7 +573,7 @@ namespace HerosInsight::SkillBook
 
             static_props[(size_t)SkillProp::Aftercast].SetupIncremental(
                 nullptr,
-                +[](OutBuf<Text::StringTemplateAtom> dst, size_t skill_id, void *) -> Text::StringTemplateAtom
+                +[](Text::StringTemplateAtom::Builder &b, size_t skill_id, void *) -> Text::StringTemplateAtom
                 {
                     auto &skill = GW::SkillbarMgr::GetSkills()[skill_id];
                     const bool is_normal_aftercast = (skill.activation > 0 && skill.aftercast == 0.75f) ||
@@ -593,17 +585,17 @@ namespace HerosInsight::SkillBook
 
                     if (!is_normal_aftercast)
                     {
-                        number_and_icon.push_back(Text::StringTemplateAtom::MakeColor(IM_COL32(255, 255, 0, 255)));
+                        number_and_icon.push_back(b.Color(IM_COL32(255, 255, 0, 255)));
                     }
-                    number_and_icon.push_back(Text::StringTemplateAtom::MakeNumber(skill.aftercast));
+                    number_and_icon.push_back(b.Number(skill.aftercast));
                     if (!is_normal_aftercast)
                     {
-                        number_and_icon.push_back(Text::StringTemplateAtom::MakeColor(NULL));
-                        number_and_icon.push_back(Text::StringTemplateAtom::MakeChar('*'));
+                        number_and_icon.push_back(b.Color(NULL));
+                        number_and_icon.push_back(b.Char('*'));
                     }
-                    number_and_icon.push_back(Text::StringTemplateAtom::MakeExplicitString(RichText::Icons::Aftercast));
+                    number_and_icon.push_back(b.ExplicitString(RichText::Icons::Aftercast));
 
-                    return Text::StringTemplateAtom::MakeExplicitSequence(dst, number_and_icon);
+                    return b.ExplicitSequence(number_and_icon);
                 }
             );
 
@@ -778,13 +770,13 @@ namespace HerosInsight::SkillBook
         }
 
         template <bool IsConcise>
-        static Text::StringTemplateAtom MakeDescription(OutBuf<Text::StringTemplateAtom> dst, size_t skill_id, void *data)
+        static Text::StringTemplateAtom MakeDescription(Text::StringTemplateAtom::Builder &b, size_t skill_id, void *data)
         {
             auto &settings = *(BookSettings *)data;
             auto &cskill = CustomSkillDataModule::GetSkills()[skill_id];
             auto &text_provider = Text::GetTextProvider(GW::Constants::Language::English);
             auto attr_lvl = settings.attr_src.GetAttrLvl(cskill.attribute);
-            return text_provider.MakeSkillDescription(dst, (GW::Constants::SkillID)skill_id, IsConcise, attr_lvl);
+            return text_provider.MakeSkillDescription(b, (GW::Constants::SkillID)skill_id, IsConcise, attr_lvl);
         }
 
         explicit FilteringAdapter(TextStorage &storage, BookSettings &settings)
@@ -794,7 +786,7 @@ namespace HerosInsight::SkillBook
             dynamic_props[SkillProp::Concise].SetupIncremental(&settings, MakeDescription<true>);
             dynamic_props[SkillProp::Adrenaline].SetupIncremental(
                 &settings,
-                +[](OutBuf<Text::StringTemplateAtom> dst, size_t skill_id, void *data) -> Text::StringTemplateAtom
+                +[](Text::StringTemplateAtom::Builder &b, size_t skill_id, void *data) -> Text::StringTemplateAtom
                 {
                     auto &settings = *(BookSettings *)data;
                     auto &skill = GW::SkillbarMgr::GetSkills()[skill_id];
@@ -817,19 +809,19 @@ namespace HerosInsight::SkillBook
                     FixedVector<Text::StringTemplateAtom, 4> args;
 
                     if (adrenaline_strikes > 0)
-                        args.push_back(Text::StringTemplateAtom::MakeNumber(adrenaline_strikes));
+                        args.push_back(b.Number(adrenaline_strikes));
 
                     if (adrenaline_units > 0)
-                        args.push_back(Text::StringTemplateAtom::MakeFraction(adrenaline_units, 25));
+                        args.push_back(b.Fraction(adrenaline_units, 25));
 
-                    args.push_back(Text::StringTemplateAtom::MakeExplicitString(RichText::Icons::Adrenaline));
+                    args.push_back(b.ExplicitString(RichText::Icons::Adrenaline));
 
-                    return Text::StringTemplateAtom::MakeExplicitSequence(dst, args);
+                    return b.ExplicitSequence(args);
                 }
             );
             dynamic_props[SkillProp::Tag].SetupIncremental(
                 &settings,
-                +[](OutBuf<Text::StringTemplateAtom> dst, size_t skill_id, void *data) -> Text::StringTemplateAtom
+                +[](Text::StringTemplateAtom::Builder &b, size_t skill_id, void *data) -> Text::StringTemplateAtom
                 {
                     auto &skill = GW::SkillbarMgr::GetSkills()[skill_id];
                     auto &cskill = CustomSkillDataModule::GetSkills()[skill_id];
@@ -845,17 +837,17 @@ namespace HerosInsight::SkillBook
                     auto PushTag = [&](std::string_view str, ImU32 color = NULL, std::string_view icon = {})
                     {
                         if (color != NULL)
-                            args.push_back(Text::StringTemplateAtom::MakeColor(color));
+                            args.push_back(b.Color(color));
 
-                        args.push_back(Text::StringTemplateAtom::MakeExplicitString(str));
+                        args.push_back(b.ExplicitString(str));
 
                         if (color != NULL)
-                            args.push_back(Text::StringTemplateAtom::MakeColor(NULL));
+                            args.push_back(b.Color(NULL));
 
                         if (!icon.empty())
-                            args.push_back(Text::StringTemplateAtom::MakeExplicitString(icon));
+                            args.push_back(b.ExplicitString(icon));
 
-                        args.push_back(Text::StringTemplateAtom::MakeExplicitString(", "));
+                        args.push_back(b.ExplicitString(", "));
                     };
 
                     // clang-format off
@@ -894,7 +886,7 @@ namespace HerosInsight::SkillBook
                         args.pop();
                     }
 
-                    return Text::StringTemplateAtom::MakeExplicitSequence(dst, args);
+                    return b.ExplicitSequence(args);
                 }
             );
 

@@ -91,116 +91,6 @@ namespace HerosInsight::Text
         };
         static_assert(sizeof(Header) == 1);
 
-        static StringTemplateAtom MakeLookupSequence(uint32_t seqId, OutBuf<StringTemplateAtom> dst, std::span<const StringTemplateAtom> substitutions)
-        {
-            StringTemplateAtom atom;
-            auto &obj = atom.parent;
-            obj.header = Header{Type::LookupSequence, Constraint::None};
-            obj.child_count = substitutions.size();
-            obj.child_offset = dst.size();
-            obj.strId = seqId;
-            dst.AppendRange(substitutions);
-            return atom;
-        }
-        static StringTemplateAtom MakeLookupSequence(uint32_t seqId, OutBuf<StringTemplateAtom> dst, std::initializer_list<StringTemplateAtom> substitutions)
-        {
-            return MakeLookupSequence(seqId, dst, std::span<const StringTemplateAtom>(substitutions.begin(), substitutions.size()));
-        }
-        static StringTemplateAtom MakeExplicitSequence(OutBuf<StringTemplateAtom> dst, std::span<const StringTemplateAtom> atoms)
-        {
-            StringTemplateAtom atom;
-            auto &obj = atom.parent;
-            obj.header = Header{Type::ExplicitSequence, Constraint::None};
-            obj.child_count = atoms.size();
-            obj.child_offset = dst.size();
-            obj.strId = 0;
-            dst.AppendRange(atoms);
-            return atom;
-        }
-        static StringTemplateAtom MakeExplicitSequence(OutBuf<StringTemplateAtom> dst, std::initializer_list<StringTemplateAtom> atoms)
-        {
-            return MakeExplicitSequence(dst, std::span<const StringTemplateAtom>(atoms.begin(), atoms.size()));
-        }
-        static StringTemplateAtom MakeLookupString(Constraint constraint, uint32_t strId)
-        {
-            StringTemplateAtom atom;
-            auto &obj = atom.parent;
-            obj.header = Header{Type::LookupString, constraint};
-            obj.child_count = 0;
-            obj.child_offset = 0;
-            obj.pieceId = strId;
-            return atom;
-        }
-        static StringTemplateAtom MakeColor(uint32_t color)
-        {
-            StringTemplateAtom atom;
-            auto &obj = atom.parent;
-            obj.header = Header{Type::Color, Constraint::RenderableOnly};
-            obj.child_count = 0;
-            obj.child_offset = 0;
-            obj.color = color;
-            return atom;
-        }
-        static StringTemplateAtom MakeSubstitution(uint32_t index)
-        {
-            StringTemplateAtom atom;
-            auto &obj = atom.parent;
-            obj.header = Header{Type::Substitution, Constraint::None};
-            obj.child_count = 0;
-            obj.child_offset = 0;
-            obj.subsIndex = index;
-            return atom;
-        }
-        static StringTemplateAtom MakeNumber(float number)
-        {
-            StringTemplateAtom atom;
-            auto &obj = atom.num;
-            obj.header = Header{Type::Number, Constraint::None};
-            obj.sign = false;
-            obj.den = 1;
-            obj.num = number; // TODO: bitcast to float since its not allowed to store real floats and have unique object representations
-            return atom;
-        }
-        static StringTemplateAtom MakeFraction(float num, uint16_t den)
-        {
-            StringTemplateAtom atom;
-            auto &obj = atom.num;
-            obj.header = Header{Type::Fraction, Constraint::None};
-            obj.sign = false;
-            obj.den = den;
-            obj.num = num;
-            return atom;
-        }
-        static StringTemplateAtom MakeExplicitString(std::string_view str)
-        {
-            StringTemplateAtom atom;
-            auto &obj = atom.str;
-            obj.header = Header{Type::ExplicitString, Constraint::None};
-            obj.padding = 0;
-            obj.len = str.size();
-            obj.ptr = str.data();
-            return atom;
-        }
-        static StringTemplateAtom MakeChar(char ch, Constraint constraint = Constraint::None)
-        {
-            StringTemplateAtom atom;
-            auto &obj = atom.chars;
-            obj.header = Header{Type::InlineChars1, constraint};
-            obj.chars[0] = ch;
-            std::memset(obj.chars + 1, 0, sizeof(obj.chars) - 1);
-            return atom;
-        }
-        static StringTemplateAtom MakeChars(std::string_view chars, Constraint constraint = Constraint::None)
-        {
-            assert(!chars.empty());
-            StringTemplateAtom atom;
-            auto &obj = atom.chars;
-            obj.header = Header{(Type)((size_t)Type::InlineChars1 + chars.size() - 1), constraint};
-            std::memcpy(obj.chars, chars.data(), chars.size());
-            std::memset(obj.chars + chars.size(), 0, sizeof(obj.chars) - chars.size());
-            return atom;
-        }
-
         struct Parent
         {
             Header header;
@@ -251,6 +141,121 @@ namespace HerosInsight::Text
             Num num;
             Str str;
             InlineChars chars;
+        };
+
+        struct Builder
+        {
+            OutBuf<StringTemplateAtom> dst;
+
+            StringTemplateAtom LookupSequence(uint32_t seqId, std::span<const StringTemplateAtom> substitutions)
+            {
+                StringTemplateAtom atom;
+                auto &obj = atom.parent;
+                obj.header = Header{Type::LookupSequence, Constraint::None};
+                obj.child_count = substitutions.size();
+                obj.child_offset = dst.size();
+                obj.strId = seqId;
+                dst.AppendRange(substitutions);
+                return atom;
+            }
+            StringTemplateAtom LookupSequence(uint32_t seqId, std::initializer_list<StringTemplateAtom> substitutions)
+            {
+                return this->LookupSequence(seqId, std::span<const StringTemplateAtom>(substitutions.begin(), substitutions.size()));
+            }
+            StringTemplateAtom ExplicitSequence(std::span<const StringTemplateAtom> atoms)
+            {
+                StringTemplateAtom atom;
+                auto &obj = atom.parent;
+                obj.header = Header{Type::ExplicitSequence, Constraint::None};
+                obj.child_count = atoms.size();
+                obj.child_offset = dst.size();
+                obj.strId = 0;
+                dst.AppendRange(atoms);
+                return atom;
+            }
+            StringTemplateAtom ExplicitSequence(std::initializer_list<StringTemplateAtom> atoms)
+            {
+                return this->ExplicitSequence(std::span<const StringTemplateAtom>(atoms.begin(), atoms.size()));
+            }
+            static StringTemplateAtom LookupString(Constraint constraint, uint32_t strId)
+            {
+                StringTemplateAtom atom;
+                auto &obj = atom.parent;
+                obj.header = Header{Type::LookupString, constraint};
+                obj.child_count = 0;
+                obj.child_offset = 0;
+                obj.pieceId = strId;
+                return atom;
+            }
+            static StringTemplateAtom Color(uint32_t color)
+            {
+                StringTemplateAtom atom;
+                auto &obj = atom.parent;
+                obj.header = Header{Type::Color, Constraint::RenderableOnly};
+                obj.child_count = 0;
+                obj.child_offset = 0;
+                obj.color = color;
+                return atom;
+            }
+            static StringTemplateAtom Substitution(uint32_t index)
+            {
+                StringTemplateAtom atom;
+                auto &obj = atom.parent;
+                obj.header = Header{Type::Substitution, Constraint::None};
+                obj.child_count = 0;
+                obj.child_offset = 0;
+                obj.subsIndex = index;
+                return atom;
+            }
+            static StringTemplateAtom Number(float number)
+            {
+                StringTemplateAtom atom;
+                auto &obj = atom.num;
+                obj.header = Header{Type::Number, Constraint::None};
+                obj.sign = false;
+                obj.den = 1;
+                obj.num = number; // TODO: bitcast to float since its not allowed to store real floats and have unique object representations
+                return atom;
+            }
+            static StringTemplateAtom Fraction(float num, uint16_t den)
+            {
+                StringTemplateAtom atom;
+                auto &obj = atom.num;
+                obj.header = Header{Type::Fraction, Constraint::None};
+                obj.sign = false;
+                obj.den = den;
+                obj.num = num;
+                return atom;
+            }
+            static StringTemplateAtom ExplicitString(std::string_view str)
+            {
+                StringTemplateAtom atom;
+                auto &obj = atom.str;
+                obj.header = Header{Type::ExplicitString, Constraint::None};
+                obj.padding = 0;
+                obj.len = str.size();
+                obj.ptr = str.data();
+                return atom;
+            }
+            static StringTemplateAtom Char(char ch, Constraint constraint = Constraint::None)
+            {
+                StringTemplateAtom atom;
+                auto &obj = atom.chars;
+                obj.header = Header{Type::InlineChars1, constraint};
+                obj.chars[0] = ch;
+                std::memset(obj.chars + 1, 0, sizeof(obj.chars) - 1);
+                return atom;
+            }
+            static StringTemplateAtom Chars(std::string_view chars, Constraint constraint = Constraint::None)
+            {
+                assert(!chars.empty());
+                StringTemplateAtom atom;
+                auto &obj = atom.chars;
+                obj.header = Header{(Type)((size_t)Type::InlineChars1 + chars.size() - 1), constraint};
+                std::memcpy(obj.chars, chars.data(), chars.size());
+                std::memset(obj.chars + chars.size(), 0, sizeof(obj.chars) - chars.size());
+                return atom;
+            }
         };
     };
     static_assert(sizeof(StringTemplateAtom) == 8);

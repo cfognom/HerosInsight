@@ -107,8 +107,8 @@ namespace HerosInsight::Text
         std::string_view GetRawDescription(GW::Constants::SkillID skill_id, bool is_concise);
         IndexedStringArena<char> *GetNames();
         IndexedStringArena<char> *GetRawDescriptions(bool is_concise);
-        StringTemplateAtom MakeSkillParam(OutBuf<StringTemplateAtom> dst, GW::Constants::SkillID skill_id, int8_t attr_lvl, size_t param_id);
-        StringTemplateAtom MakeSkillDescription(OutBuf<StringTemplateAtom> dst, GW::Constants::SkillID skill_id, bool is_concise, int8_t attr_lvl);
+        StringTemplateAtom MakeSkillParam(StringTemplateAtom::Builder &b, GW::Constants::SkillID skill_id, int8_t attr_lvl, size_t param_id);
+        StringTemplateAtom MakeSkillDescription(StringTemplateAtom::Builder &b, GW::Constants::SkillID skill_id, bool is_concise, int8_t attr_lvl);
 
         Provider(GW::Constants::Language language);
 

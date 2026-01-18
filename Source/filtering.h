@@ -63,9 +63,9 @@ namespace HerosInsight::Filtering
     {
         using BuildTemplateFn =
             Text::StringTemplateAtom (*)(
-                OutBuf<Text::StringTemplateAtom>,
-                size_t,
-                void *
+                Text::StringTemplateAtom::Builder &b,
+                size_t itemId,
+                void *data
             );
 
         Text::StringManager &mgr = Text::s_Manager;
@@ -156,7 +156,8 @@ namespace HerosInsight::Filtering
                     {
                         SpanWriter<Text::StringTemplateAtom> writer(buffer);
                         OutBuf<Text::StringTemplateAtom> out(writer);
-                        out.push_back(BuildTemplate_fn(out, itemId, buildTemplate_data));
+                        Text::StringTemplateAtom::Builder b(out);
+                        out.push_back(BuildTemplate_fn(b, itemId, buildTemplate_data));
                         buffer = writer.WrittenSpan();
                     }
                 );

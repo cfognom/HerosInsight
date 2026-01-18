@@ -54,7 +54,7 @@ namespace HerosInsight::Text
         );
     };
 
-    StringTemplateAtom Provider::MakeSkillParam(OutBuf<StringTemplateAtom> dst, GW::Constants::SkillID skill_id, int8_t attr_lvl, size_t param_id)
+    StringTemplateAtom Provider::MakeSkillParam(StringTemplateAtom::Builder &b, GW::Constants::SkillID skill_id, int8_t attr_lvl, size_t param_id)
     {
         auto &skill = GW::SkillbarMgr::GetSkills()[static_cast<size_t>(skill_id)];
         bool has_attribute = attr_lvl != -1;
@@ -64,29 +64,23 @@ namespace HerosInsight::Text
         bool is_constant = param.IsConstant();
         if (is_constant)
         {
-            return StringTemplateAtom::MakeNumber((float)param.val0);
+            return b.Number((float)param.val0);
         }
         else
         {
             if (has_attribute)
             {
-                return StringTemplateAtom::MakeLookupSequence(
-                    s_CommonStrings.dyn_strId, dst,
-                    {StringTemplateAtom::MakeNumber(
-                        (float)param.Resolve((uint32_t)attr_lvl)
-                    )}
+                return b.LookupSequence(
+                    s_CommonStrings.dyn_strId,
+                    {b.Number((float)param.Resolve((uint32_t)attr_lvl))}
                 );
             }
             else
             {
-                return StringTemplateAtom::MakeLookupSequence(
-                    s_CommonStrings.dyn_range_strId, dst,
-                    {StringTemplateAtom::MakeNumber(
-                         (float)param.val0
-                     ),
-                     StringTemplateAtom::MakeNumber(
-                         (float)param.val15
-                     )}
+                return b.LookupSequence(
+                    s_CommonStrings.dyn_range_strId,
+                    {b.Number((float)param.val0),
+                     b.Number((float)param.val15)}
                 );
             }
         }
@@ -174,15 +168,15 @@ namespace HerosInsight::Text
         return &this->skill_raw[is_concise ? SkillTextType::Concise : SkillTextType::Description];
     }
 
-    StringTemplateAtom Provider::MakeSkillDescription(OutBuf<StringTemplateAtom> dst, GW::Constants::SkillID skill_id, bool is_concise, int8_t attr_lvl)
+    StringTemplateAtom Provider::MakeSkillDescription(StringTemplateAtom::Builder &b, GW::Constants::SkillID skill_id, bool is_concise, int8_t attr_lvl)
     {
         auto description_str_id = this->skill_descriptions[is_concise][(size_t)skill_id];
 
-        return StringTemplateAtom::MakeLookupSequence(
-            description_str_id, dst,
-            {MakeSkillParam(dst, skill_id, attr_lvl, 0),
-             MakeSkillParam(dst, skill_id, attr_lvl, 1),
-             MakeSkillParam(dst, skill_id, attr_lvl, 2)}
+        return b.LookupSequence(
+            description_str_id,
+            {MakeSkillParam(b, skill_id, attr_lvl, 0),
+             MakeSkillParam(b, skill_id, attr_lvl, 1),
+             MakeSkillParam(b, skill_id, attr_lvl, 2)}
         );
     }
 

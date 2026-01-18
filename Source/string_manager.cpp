@@ -39,13 +39,13 @@ namespace HerosInsight::Text
             assert(!str.empty());
             if (str.size() <= MaxInlineChars)
             {
-                mgr.sequences.Elements().emplace_back(StringTemplateAtom::MakeChars(str, constraint));
+                mgr.sequences.Elements().emplace_back(StringTemplateAtom::Builder::Chars(str, constraint));
             }
             else
             {
                 assert(mgr.strings.GetPendingSize() == 0);
                 auto id = mgr.strings.push_back(str, &mgr.strings_deduper);
-                mgr.sequences.Elements().emplace_back(StringTemplateAtom::MakeLookupString(constraint, id));
+                mgr.sequences.Elements().emplace_back(StringTemplateAtom::Builder::LookupString(constraint, id));
             }
         }
 
@@ -55,13 +55,13 @@ namespace HerosInsight::Text
             assert(!pending.empty());
             if (pending.size() <= MaxInlineChars)
             {
-                mgr.sequences.Elements().emplace_back(StringTemplateAtom::MakeChars(pending, constraint));
+                mgr.sequences.Elements().emplace_back(StringTemplateAtom::Builder::Chars(pending, constraint));
                 mgr.strings.DiscardWritten();
             }
             else
             {
                 auto id = mgr.strings.CommitWritten(&mgr.strings_deduper);
-                mgr.sequences.Elements().emplace_back(StringTemplateAtom::MakeLookupString(constraint, id));
+                mgr.sequences.Elements().emplace_back(StringTemplateAtom::Builder::LookupString(constraint, id));
             }
         }
 
@@ -115,7 +115,7 @@ namespace HerosInsight::Text
             }
             void Handle(Assimilator &a)
             {
-                a.mgr.sequences.Elements().emplace_back(StringTemplateAtom::MakeSubstitution(id - 1));
+                a.mgr.sequences.Elements().emplace_back(StringTemplateAtom::Builder::Substitution(id - 1));
                 a.plurality = Plurality::Unknown;
             }
         };
@@ -178,7 +178,7 @@ namespace HerosInsight::Text
                     case Plurality::Singular:
                         break;
                     case Plurality::Unknown:
-                        a.mgr.sequences.Elements().emplace_back(StringTemplateAtom::MakeChar('s', StringTemplateAtom::Constraint::PluralOnly));
+                        a.mgr.sequences.Elements().emplace_back(StringTemplateAtom::Builder::Char('s', StringTemplateAtom::Constraint::PluralOnly));
                         break;
                     case Plurality::Null:
                     default:
@@ -202,7 +202,7 @@ namespace HerosInsight::Text
                 {
                     auto num = tag.frac_tag.num;
                     auto den = tag.frac_tag.den;
-                    a.mgr.sequences.Elements().emplace_back(StringTemplateAtom::MakeFraction(num, den));
+                    a.mgr.sequences.Elements().emplace_back(StringTemplateAtom::Builder::Fraction(num, den));
                 }
                 else
                 {
@@ -226,7 +226,7 @@ namespace HerosInsight::Text
             }
             void Handle(Assimilator &a)
             {
-                a.mgr.sequences.Elements().emplace_back(StringTemplateAtom::MakeNumber(num));
+                a.mgr.sequences.Elements().emplace_back(StringTemplateAtom::Builder::Number(num));
                 a.plurality = num == 1 ? Plurality::Singular : Plurality::Plural;
             }
         };
