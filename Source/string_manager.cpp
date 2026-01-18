@@ -272,7 +272,7 @@ namespace HerosInsight::Text
         constexpr static bool is_renderable = std::is_same_v<Mode, AssembleMode::Renderable>;
         constexpr static bool is_searchable = std::is_same_v<Mode, AssembleMode::Searchable>;
 
-        StringManager &manager;
+        StringManager &mgr;
         std::span<StringTemplateAtom> nodes;
         OutBuf<char> dst;
         Plurality plurality = Plurality::Null;
@@ -358,7 +358,7 @@ namespace HerosInsight::Text
 
                     case StringTemplateAtom::Type::LookupSequence:
                     {
-                        auto atoms = this->manager.sequences.Get(atom.parent.strId);
+                        auto atoms = this->mgr.sequences.Get(atom.parent.strId);
                         auto subs = atom.parent.GetChildren(nodes);
                         Assemble(atoms, subs);
                         break;
@@ -377,7 +377,7 @@ namespace HerosInsight::Text
                         break;
 
                     case StringTemplateAtom::Type::LookupString:
-                        str_to_append = manager.strings.CGet(atom.parent.pieceId);
+                        str_to_append = mgr.strings.CGet(atom.parent.pieceId);
                         dst.AppendRange(str_to_append);
                         break;
 
@@ -438,7 +438,7 @@ namespace HerosInsight::Text
     void StringManager::AssembleSearchableString(StringTemplate t, OutBuf<char> dst)
     {
         auto a = StringTemplateAssembler<AssembleMode::Searchable>{
-            .manager = *this,
+            .mgr = *this,
             .nodes = t.rest,
             .dst = dst,
         };
@@ -447,7 +447,7 @@ namespace HerosInsight::Text
     void StringManager::AssembleRenderableString(StringTemplate t, OutBuf<char> dst)
     {
         auto a = StringTemplateAssembler<AssembleMode::Renderable>{
-            .manager = *this,
+            .mgr = *this,
             .nodes = t.rest,
             .dst = dst,
         };
