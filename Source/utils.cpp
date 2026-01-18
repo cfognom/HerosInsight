@@ -1398,13 +1398,17 @@ namespace HerosInsight::Utils
         return DecodeString(buffer);
     }
 
-    std::wstring GetAgentName(uint32_t agent_id)
+    std::optional<std::wstring> TryGetAgentName(uint32_t agent_id)
     {
         const auto agent_name = GW::Agents::GetAgentEncName(agent_id);
         if (agent_name == nullptr)
-            return L"UNKNOWN_AGENT";
+            return std::nullopt;
 
-        return DecodeString(agent_name);
+        return TryDecodeString(agent_name);
+    }
+    std::wstring GetAgentName(uint32_t agent_id, std::wstring default_name)
+    {
+        return TryGetAgentName(agent_id).value_or(default_name);
     }
 
     std::wstring GetSkillName(GW::Constants::SkillID skill_id)
@@ -3075,7 +3079,7 @@ namespace HerosInsight::Utils
     void GetControllableAgentsOfPlayer(OutBuf<uint32_t> out, uint32_t player_number)
     {
         if (!player_number)
-            player_number = GW::PlayerMgr::GetPlayerNumber();
+            player_number = GW::PlayerMgr::GetPlayerId();
 
         if (!player_number)
         {

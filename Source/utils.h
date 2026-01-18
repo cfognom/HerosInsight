@@ -322,7 +322,8 @@ namespace HerosInsight::Utils
     uint32_t RoundHalfToEven(float num);
 
     bool IsFoe(GW::AgentLiving *agent);
-    std::wstring GetAgentName(uint32_t agent_id);
+    std::optional<std::wstring> TryGetAgentName(uint32_t agent_id);
+    std::wstring GetAgentName(uint32_t agent_id, std::wstring default_name = L"UNKNOWN_AGENT");
     std::wstring GetSkillName(GW::Constants::SkillID skill_id);
     std::wstring EffectToString(const GW::Effect *effect);
     std::wstring BuffToString(const GW::Buff *buff);
