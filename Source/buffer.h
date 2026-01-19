@@ -149,6 +149,15 @@ namespace HerosInsight
             Len() = result.ptr - data();
         }
 
+        template <typename Float>
+        void AppendFloatToChars(Float value, std::chars_format format = std::chars_format::general)
+        {
+            static_assert(std::is_same_v<T, char>, "AppendIntToChars is only available for char arrays");
+            auto result = std::to_chars(data() + size(), data() + capacity(), value, format);
+            assert(result.ec == std::errc());
+            Len() = result.ptr - data();
+        }
+
         template <typename... Args>
         void AppendFormat(const std::basic_format_string<T, std::type_identity_t<Args>...> &format, Args &&...args)
         {

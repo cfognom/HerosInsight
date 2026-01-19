@@ -109,9 +109,9 @@ namespace HerosInsight::Text
         struct Num
         {
             Header header;
-            uint8_t sign;
+            uint8_t padding;
             uint16_t den;
-            uint32_t num;
+            uint32_t num; // For non-fractional numbers this holds a bit-casted float (bit cast is a workaround since we need the object to have unique object representation)
         };
         static_assert(sizeof(Num) == 8);
         struct Str
@@ -212,9 +212,9 @@ namespace HerosInsight::Text
                 StringTemplateAtom atom;
                 auto &obj = atom.num;
                 obj.header = Header{Type::Number, Constraint::None};
-                obj.sign = false;
+                obj.padding = 0;
                 obj.den = 1;
-                obj.num = number; // TODO: bitcast to float since its not allowed to store real floats and have unique object representations
+                obj.num = std::bit_cast<decltype(obj.num)>(number);
                 return atom;
             }
             static StringTemplateAtom Fraction(uint32_t num, uint16_t den)
@@ -222,7 +222,7 @@ namespace HerosInsight::Text
                 StringTemplateAtom atom;
                 auto &obj = atom.num;
                 obj.header = Header{Type::Fraction, Constraint::None};
-                obj.sign = false;
+                obj.padding = 0;
                 obj.den = den;
                 obj.num = num;
                 return atom;

@@ -409,14 +409,14 @@ namespace HerosInsight::Text
 
                     case StringTemplateAtom::Type::Number:
                     {
-                        auto num = atom.num.num;
+                        auto num = std::bit_cast<float>(atom.num.num);
                         if constexpr (is_renderable)
                         {
-                            dst.AppendIntToChars(num);
+                            dst.AppendFloatToChars(num);
                         }
                         else if constexpr (is_searchable)
                         {
-                            EncodeSearchableNumber(dst, (float)num);
+                            EncodeSearchableNumber(dst, num);
                         }
                         plurality = num == 1 ? Plurality::Singular : Plurality::Plural;
                         break;
