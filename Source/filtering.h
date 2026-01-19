@@ -208,13 +208,6 @@ namespace HerosInsight::Filtering
         }
     };
 
-    template <typename P>
-    concept Property =
-        requires(P &p, size_t itemId, size_t strId) {
-            { p.GetStrId(itemId) } -> std::same_as<size_t>;
-            { p.GetStr(strId) } -> std::same_as<LoweredText>;
-        };
-
     template <typename I>
     concept DeviceImpl =
         requires {
