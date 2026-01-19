@@ -1105,7 +1105,7 @@ namespace HerosInsight::SkillBook
             auto button_side = title_bar_height - 2 * button_padding;
             auto button_size = ImVec2(button_side, button_side);
             auto saved_cursor = ImGui::GetCursorPos();
-            auto button_pos = ImVec2(window->Size.x - button_size.x - 24, button_padding);
+            auto button_pos = ImVec2(window->Size.x - button_side * 2, button_padding);
 
             ImGui::PushClipRect(title_bar_rect.Min, title_bar_rect.Max, false);
             ImGui::SetCursorPos(button_pos);
@@ -1876,9 +1876,10 @@ namespace HerosInsight::SkillBook
             ImGui::PushFont(Constants::Fonts::window_name_font);
             if (ImGui::Begin(name.data(), &is_opened))
             {
+                DrawDupeButton();
+
                 ImGui::PushFont(current_font);
 
-                DrawDupeButton();
                 DrawCheckboxes();
                 ImGui::Spacing();
                 DrawFocusedCharacterInfo();
