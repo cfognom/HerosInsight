@@ -271,19 +271,25 @@ namespace HerosInsight::Text
     {
         constexpr static bool is_renderable = std::is_same_v<Mode, AssembleMode::Renderable>;
         constexpr static bool is_searchable = std::is_same_v<Mode, AssembleMode::Searchable>;
+        constexpr static bool is_measure = std::is_same_v<Mode, AssembleMode::Measure>;
 
         StringManager &mgr;
         std::span<StringTemplateAtom> nodes;
         OutBuf<char> dst;
+        OutBuf<PosDelta> *searchable_to_renderable = nullptr;
         Plurality plurality = Plurality::Null;
+        size_t searchable_pos = 0;
+        size_t current_delta = 0;
 
         void Assemble(std::span<StringTemplateAtom> atoms, std::span<StringTemplateAtom> subs)
         {
             std::array<std::string_view, 3> cached_subs;
             std::array<Plurality, 3> subs_pluralities;
+            size_t start_pos = 0;
 
             for (auto &atom : atoms)
             {
+                start_pos = dst.size();
                 std::string_view str_to_append;
 #ifdef _DEBUG
                 if (plurality == Plurality::Null)
@@ -299,7 +305,7 @@ namespace HerosInsight::Text
                 if constexpr (!is_renderable)
                 {
                     if (atom.header.constraint == StringTemplateAtom::Constraint::RenderableOnly)
-                        continue;
+                        goto skip;
                 }
 
                 assert(dst.AvailableCapacity() >= 7);
@@ -341,7 +347,7 @@ namespace HerosInsight::Text
                                 if constexpr (is_renderable)
                                     dst.AppendString("</c>");
                                 plurality = Plurality::Singular;
-                                continue;
+                                goto skip;
                             }
 #endif
                             Assemble(subs.subspan(subs_index, 1), {});
@@ -349,10 +355,12 @@ namespace HerosInsight::Text
                             auto written_sub = std::string_view(dst.data() + start_idx, dst.size() - start_idx);
                             assert(!written_sub.empty());
                             cached_subs[subs_index] = written_sub;
-                            continue;
                         }
-                        dst.AppendRange(str_to_append);
-                        plurality = subs_pluralities[subs_index];
+                        else
+                        {
+                            dst.AppendRange(str_to_append);
+                            plurality = subs_pluralities[subs_index];
+                        }
                         break;
                     }
 
@@ -461,6 +469,42 @@ namespace HerosInsight::Text
                         assert(false);
 #endif
                 }
+
+            skip:
+
+                if constexpr (is_renderable)
+                {
+                    if (searchable_to_renderable &&
+                        atom.header.type < StringTemplateAtom::Type::__LEAF_END__)
+                    {
+                        // Make offset mapper between searchable text and renderable text
+                        // This code works but is wonky, how to improve?
+
+                        auto pos = dst.size();
+                        size_t atom_len = pos - start_pos;
+                        if (atom.header.constraint != StringTemplateAtom::Constraint::RenderableOnly)
+                        {
+                            switch (atom.header.type)
+                            {
+                                case StringTemplateAtom::Type::Number:
+                                    searchable_pos += 7; // Numbers are always 7 bytes in searchable text
+                                    break;
+
+                                default:
+                                    searchable_pos += atom_len;
+                                    break;
+                            }
+                        }
+
+                        if (searchable_pos + current_delta != pos)
+                        {
+                            current_delta = pos - searchable_pos;
+                            auto &delta_entry = searchable_to_renderable->emplace_back();
+                            delta_entry.pos = searchable_pos;
+                            delta_entry.delta = current_delta;
+                        }
+                    }
+                }
             }
         }
     };
@@ -474,13 +518,35 @@ namespace HerosInsight::Text
         };
         a.Assemble(std::span<StringTemplateAtom>(&t.root, 1), {});
     }
-    void StringManager::AssembleRenderableString(StringTemplate t, OutBuf<char> dst)
+    void StringManager::AssembleRenderableString(StringTemplate t, OutBuf<char> dst, OutBuf<PosDelta> *searchable_to_renderable)
     {
         auto a = StringTemplateAssembler<AssembleMode::Renderable>{
             .mgr = *this,
             .nodes = t.rest,
             .dst = dst,
+            .searchable_to_renderable = searchable_to_renderable,
         };
         a.Assemble(std::span<StringTemplateAtom>(&t.root, 1), {});
+    }
+    void PatchPositions(std::span<uint16_t> positions, std::span<PosDelta> deltas)
+    {
+        if (deltas.empty())
+            return;
+
+        auto delta_to_apply = 0;
+        size_t i = 0;
+        auto until_pos = deltas[i].pos;
+
+        for (auto &pos : positions)
+        {
+            while (pos >= until_pos)
+            {
+                delta_to_apply = deltas[i].delta;
+                ++i;
+                until_pos = i < deltas.size() ? deltas[i].pos : std::numeric_limits<decltype(PosDelta::pos)>::max();
+            }
+
+            pos += delta_to_apply;
+        }
     }
 }

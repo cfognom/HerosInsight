@@ -190,7 +190,7 @@ namespace HerosInsight::Filtering
             return searchable_text[strId];
         }
 
-        void GetRenderableString(size_t strId, OutBuf<char> out)
+        void GetRenderableString(size_t strId, OutBuf<char> out, OutBuf<Text::PosDelta> deltas)
         {
             if (stringTemplates.SpanCount() == 0) // Temp hack
             {
@@ -202,7 +202,7 @@ namespace HerosInsight::Filtering
             auto t = GetStringTemplate(strId);
             if (t.root.header.type != Text::StringTemplateAtom::Type::Null)
             {
-                mgr.AssembleRenderableString(t, out);
+                mgr.AssembleRenderableString(t, out, &deltas);
                 return;
             }
         }
@@ -520,7 +520,9 @@ namespace HerosInsight::Filtering
             LoweredText lowered = prop.GetSearchableStr(str_id);
             ResultItem result;
             CalcHL(q, prop_id, lowered, result.hl);
-            prop.GetRenderableString(str_id, result.text);
+            FixedVector<Text::PosDelta, 64> deltas;
+            prop.GetRenderableString(str_id, result.text, deltas);
+            Text::PatchPositions(result.hl, deltas);
             return result;
         }
 

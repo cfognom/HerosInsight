@@ -10,6 +10,7 @@ namespace HerosInsight::Text
         // clang-format off
         struct Renderable{};
         struct Searchable{};
+        struct Measure{};
         // clang-format on
     }
 
@@ -68,13 +69,14 @@ namespace HerosInsight::Text
             InlineChars5,
             InlineChars6,
             InlineChars7,
-            LookupSequence,
-            ExplicitSequence,
-            Substitution,
             Color,
             Number,
             LookupString,
             ExplicitString,
+            __LEAF_END__,
+            LookupSequence,
+            ExplicitSequence,
+            Substitution,
         };
         enum struct Constraint : uint8_t
         {
@@ -315,6 +317,14 @@ namespace HerosInsight::Text
         std::span<StringTemplateAtom> rest;
     };
 
+    struct PosDelta
+    {
+        uint16_t pos;
+        uint16_t delta;
+    };
+
+    void PatchPositions(std::span<uint16_t> positions, std::span<PosDelta> deltas);
+
     struct StringManager
     {
         using StrId = uint16_t;
@@ -350,7 +360,7 @@ namespace HerosInsight::Text
         size_t AssimilateString(std::string_view str);
 
         void AssembleSearchableString(StringTemplate t, OutBuf<char> dst);
-        void AssembleRenderableString(StringTemplate t, OutBuf<char> dst);
+        void AssembleRenderableString(StringTemplate t, OutBuf<char> dst, OutBuf<PosDelta> *searchable_to_renderable = nullptr);
     };
 
     struct StringMapper
