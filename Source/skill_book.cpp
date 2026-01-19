@@ -497,38 +497,8 @@ namespace HerosInsight::SkillBook
         std::vector<Propset> meta_propsets;
         LoweredTextVector meta_prop_names;
 
-        static Text::StringTemplateAtom MakeNumOrFraction(Text::StringTemplateAtom::Builder &b, float value)
-        {
-            float value_int;
-            float value_fract = std::modf(value, &value_int);
-
-            std::optional<Text::StringTemplateAtom> fraction = std::nullopt;
-            if (value_fract == 0.25f)
-                fraction = b.Fraction(1, 4);
-            else if (value_fract == 0.5f)
-                fraction = b.Fraction(1, 2);
-            else if (value_fract == 0.75f)
-                fraction = b.Fraction(3, 4);
-
-            if (fraction.has_value())
-            {
-                FixedVector<Text::StringTemplateAtom, 2> seq;
-                if (value_int > 0.f)
-                {
-                    seq.push_back(b.Number(value_int));
-                }
-                seq.push_back(fraction.value());
-                return b.ExplicitSequence(seq);
-            }
-            else
-            {
-                // Default: just output a floating point number
-                return b.Number(value);
-            }
-        };
-
         template <auto Func, auto Icon>
-        static Text::StringTemplateAtom NumberAndIconLambda(Text::StringTemplateAtom::Builder &b, size_t skill_id, void *)
+        static Text::StringTemplateAtom NumberAndIcon(Text::StringTemplateAtom::Builder &b, size_t skill_id, void *)
         {
             auto &cskill = CustomSkillDataModule::GetSkills()[skill_id];
             auto value = (cskill.*Func)();
@@ -536,7 +506,7 @@ namespace HerosInsight::SkillBook
                 return {};
 
             return b.ExplicitSequence(
-                {MakeNumOrFraction(b, value),
+                {b.MixedNumber(value),
                  b.ExplicitString(*Icon)}
             );
         }
@@ -550,13 +520,13 @@ namespace HerosInsight::SkillBook
 
         void InitProps()
         {
-            static_props[(size_t)SkillProp::Energy].SetupIncremental(nullptr, NumberAndIconLambda<&CustomSkillData::GetEnergy, &RichText::Icons::EnergyOrb>);
-            static_props[(size_t)SkillProp::Recharge].SetupIncremental(nullptr, NumberAndIconLambda<&CustomSkillData::GetRecharge, &RichText::Icons::Recharge>);
+            static_props[(size_t)SkillProp::Energy].SetupIncremental(nullptr, NumberAndIcon<&CustomSkillData::GetEnergy, &RichText::Icons::EnergyOrb>);
+            static_props[(size_t)SkillProp::Recharge].SetupIncremental(nullptr, NumberAndIcon<&CustomSkillData::GetRecharge, &RichText::Icons::Recharge>);
 
-            static_props[(size_t)SkillProp::Upkeep].SetupIncremental(nullptr, NumberAndIconLambda<&CustomSkillData::GetUpkeep, &RichText::Icons::Upkeep>);
-            static_props[(size_t)SkillProp::Overcast].SetupIncremental(nullptr, NumberAndIconLambda<&CustomSkillData::GetOvercast, &RichText::Icons::Overcast>);
-            static_props[(size_t)SkillProp::Sacrifice].SetupIncremental(nullptr, NumberAndIconLambda<&CustomSkillData::GetSacrifice, &RichText::Icons::Sacrifice>);
-            static_props[(size_t)SkillProp::Activation].SetupIncremental(nullptr, NumberAndIconLambda<&CustomSkillData::GetActivation, &RichText::Icons::Activation>);
+            static_props[(size_t)SkillProp::Upkeep].SetupIncremental(nullptr, NumberAndIcon<&CustomSkillData::GetUpkeep, &RichText::Icons::Upkeep>);
+            static_props[(size_t)SkillProp::Overcast].SetupIncremental(nullptr, NumberAndIcon<&CustomSkillData::GetOvercast, &RichText::Icons::Overcast>);
+            static_props[(size_t)SkillProp::Sacrifice].SetupIncremental(nullptr, NumberAndIcon<&CustomSkillData::GetSacrifice, &RichText::Icons::Sacrifice>);
+            static_props[(size_t)SkillProp::Activation].SetupIncremental(nullptr, NumberAndIcon<&CustomSkillData::GetActivation, &RichText::Icons::Activation>);
 
             auto &text_provider = Text::GetTextProvider(GW::Constants::Language::English);
             static_props[(size_t)SkillProp::Name].PopulateItems(*text_provider.GetNames());
@@ -590,7 +560,7 @@ namespace HerosInsight::SkillBook
                     {
                         number_and_icon.push_back(b.Color(IM_COL32(255, 255, 0, 255)));
                     }
-                    number_and_icon.push_back(b.Number(skill.aftercast));
+                    number_and_icon.push_back(b.MixedNumber(skill.aftercast));
                     if (!is_normal_aftercast)
                     {
                         number_and_icon.push_back(b.Char('*'));
@@ -807,17 +777,10 @@ namespace HerosInsight::SkillBook
                         }
                     }
 
-                    FixedVector<Text::StringTemplateAtom, 4> args;
-
-                    if (adrenaline_strikes > 0)
-                        args.push_back(b.Number(adrenaline_strikes));
-
-                    if (adrenaline_units > 0)
-                        args.push_back(b.Fraction(adrenaline_units, 25));
-
-                    args.push_back(b.ExplicitString(RichText::Icons::Adrenaline));
-
-                    return b.ExplicitSequence(args);
+                    return b.ExplicitSequence(
+                        {b.MixedNumber(adrenaline_strikes, adrenaline_units, 25),
+                         b.ExplicitString(RichText::Icons::Adrenaline)}
+                    );
                 }
             );
             dynamic_props[SkillProp::Tag].SetupIncremental(
@@ -1144,7 +1107,7 @@ namespace HerosInsight::SkillBook
 
                 ImGui::NextColumn();
 
-                ImGui::Checkbox("Show exact adrenaline", &settings.use_exact_adrenaline);
+                props_dirty |= ImGui::Checkbox("Show exact adrenaline", &settings.use_exact_adrenaline);
                 // ImGui::Checkbox("Show null stats", &settings.show_null_stats);
                 ImGui::Checkbox("Snap to skill", &settings.snap_to_skill);
                 ImGui::Checkbox("Prefer concise descriptions", &settings.prefer_concise_descriptions);

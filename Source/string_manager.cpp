@@ -381,44 +381,74 @@ namespace HerosInsight::Text
                         dst.AppendRange(str_to_append);
                         break;
 
-                    case StringTemplateAtom::Type::Fraction:
+                        // case StringTemplateAtom::Type::Fraction:
+                        // {
+                        //     auto num = atom.num.value;
+                        //     auto den = atom.num.den;
+                        //     if constexpr (is_renderable)
+                        //     {
+                        //         // clang-format off
+                        //         if (num == 1 && den == 2) dst.AppendString("½"); else
+                        //         if (num == 1 && den == 4) dst.AppendString("¼"); else
+                        //         if (num == 3 && den == 4) dst.AppendString("¾"); else
+                        //         // clang-format on
+                        //         {
+                        //             dst.AppendIntToChars(num);
+                        //             dst.push_back('/');
+                        //             dst.AppendIntToChars(den);
+                        //         }
+                        //     }
+                        //     else if constexpr (is_searchable)
+                        //     {
+                        //         auto value = (float)num / (float)den;
+                        //         EncodeSearchableNumber(dst, value);
+                        //     }
+                        //     plurality = Plurality::Plural;
+                        //     break;
+                        // }
+
+                    case StringTemplateAtom::Type::Number:
                     {
-                        auto num = atom.num.num;
-                        auto den = atom.num.den;
+                        float value = atom.number.GetValue();
                         if constexpr (is_renderable)
                         {
-                            // clang-format off
-                            if (num == 1 && den == 2) dst.AppendString("½"); else
-                            if (num == 1 && den == 4) dst.AppendString("¼"); else
-                            if (num == 3 && den == 4) dst.AppendString("¾"); else
-                            // clang-format on
+                            if (value == 0.f)
                             {
-                                dst.AppendIntToChars(num);
-                                dst.push_back('/');
-                                dst.AppendIntToChars(den);
+                                dst.push_back('0');
+                            }
+                            else if (atom.number.den == 0)
+                            {
+                                dst.AppendFloatToChars(value);
+                            }
+                            else
+                            {
+                                if (atom.number.value != 0)
+                                    dst.AppendIntToChars(atom.number.value);
+
+                                std::optional<std::string_view> fraction = std::nullopt;
+                                // clang-format off
+                                if (atom.number.num == 1 && atom.number.den == 4) fraction = "¼"; else
+                                if (atom.number.num == 1 && atom.number.den == 2) fraction = "½"; else
+                                if (atom.number.num == 3 && atom.number.den == 4) fraction = "¾";
+                                // clang-format on
+                                if (fraction.has_value())
+                                {
+                                    dst.AppendString(fraction.value());
+                                }
+                                else if (atom.number.num != 0)
+                                {
+                                    dst.push_back(' ');
+                                    dst.AppendIntToChars(atom.number.num);
+                                    dst.push_back('/');
+                                    dst.AppendIntToChars(atom.number.den);
+                                }
                             }
                         }
                         else if constexpr (is_searchable)
                         {
-                            auto value = (float)num / (float)den;
                             EncodeSearchableNumber(dst, value);
                         }
-                        plurality = Plurality::Plural;
-                        break;
-                    }
-
-                    case StringTemplateAtom::Type::Number:
-                    {
-                        auto num = std::bit_cast<float>(atom.num.num);
-                        if constexpr (is_renderable)
-                        {
-                            dst.AppendFloatToChars(num);
-                        }
-                        else if constexpr (is_searchable)
-                        {
-                            EncodeSearchableNumber(dst, num);
-                        }
-                        plurality = num == 1 ? Plurality::Singular : Plurality::Plural;
+                        plurality = value == 1.f ? Plurality::Singular : Plurality::Plural;
                         break;
                     }
 

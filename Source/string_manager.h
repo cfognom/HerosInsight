@@ -73,7 +73,6 @@ namespace HerosInsight::Text
             Substitution,
             Color,
             Number,
-            Fraction,
             LookupString,
             ExplicitString,
         };
@@ -86,8 +85,8 @@ namespace HerosInsight::Text
         };
         struct Header
         {
-            Type type : 4;
-            Constraint constraint : 4;
+            Type type : 5;
+            Constraint constraint : 3;
         };
         static_assert(sizeof(Header) == 1);
 
@@ -109,9 +108,21 @@ namespace HerosInsight::Text
         struct Num
         {
             Header header;
-            uint8_t padding;
-            uint16_t den;
-            uint32_t num; // For non-fractional numbers this holds a bit-casted float (bit cast is a workaround since we need the object to have unique object representation)
+            uint8_t den;
+            int16_t num;
+            int32_t value; // For non-fractional numbers this holds a bit-casted float (bit cast is a workaround since we need the object to have unique object representation)
+
+            float GetValue()
+            {
+                if (den == 0)
+                {
+                    return std::bit_cast<float>(value);
+                }
+                else
+                {
+                    return (float)value + (float)num / (float)den;
+                }
+            }
         };
         static_assert(sizeof(Num) == 8);
         struct Str
@@ -138,7 +149,7 @@ namespace HerosInsight::Text
                 uint8_t padding[7];
             };
             Parent parent;
-            Num num;
+            Num number;
             Str str;
             InlineChars chars;
         };
@@ -210,22 +221,59 @@ namespace HerosInsight::Text
             static StringTemplateAtom Number(float number)
             {
                 StringTemplateAtom atom;
-                auto &obj = atom.num;
+                auto &obj = atom.number;
                 obj.header = Header{Type::Number, Constraint::None};
-                obj.padding = 0;
-                obj.den = 1;
-                obj.num = std::bit_cast<decltype(obj.num)>(number);
+                obj.den = 0;
+                obj.num = 0;
+                obj.value = std::bit_cast<decltype(obj.value)>(number);
                 return atom;
             }
-            static StringTemplateAtom Fraction(uint32_t num, uint16_t den)
+            static StringTemplateAtom MixedNumber(int32_t wholes, int16_t num, uint8_t den)
             {
                 StringTemplateAtom atom;
-                auto &obj = atom.num;
-                obj.header = Header{Type::Fraction, Constraint::None};
-                obj.padding = 0;
+                auto &obj = atom.number;
+                obj.header = Header{Type::Number, Constraint::None};
                 obj.den = den;
                 obj.num = num;
+                obj.value = wholes;
                 return atom;
+            }
+            static StringTemplateAtom MixedNumber(float number) // Auto decomposes
+            {
+                float value_int;
+                float value_fract = std::modf(number, &value_int);
+
+                int16_t num = 0;
+                uint8_t den = 0;
+                if (value_fract == 0.25f)
+                {
+                    num = 1;
+                    den = 4;
+                }
+                else if (value_fract == 0.5f)
+                {
+                    num = 1;
+                    den = 2;
+                }
+                else if (value_fract == 0.75f)
+                {
+                    num = 3;
+                    den = 4;
+                }
+
+                if (num)
+                {
+                    int32_t wholes = (int32_t)value_int;
+                    return MixedNumber(wholes, num, den);
+                }
+                else
+                {
+                    return Number(number);
+                }
+            }
+            static StringTemplateAtom Fraction(int16_t num, uint8_t den)
+            {
+                return MixedNumber(0, num, den);
             }
             static StringTemplateAtom ExplicitString(std::string_view str)
             {
