@@ -375,6 +375,7 @@ struct GWFontConfig
     ImVec2 glyphOffset = ImVec2(0, 0);
     ImVec2 iconOffset = ImVec2(0, 0);
     uint32_t color = 0xffffffff;
+    std::unordered_map<wchar_t, uint32_t> advanceAdjustmentOverrides;
 };
 
 struct FontBlitCommand
@@ -446,7 +447,9 @@ ImFont *CreateGWFont(GWFontConfig cfg)
                 glyph_width = font->advance_unit;
             }
             uint32_t padded_width = glyph_width + padding * 2;
-            uint32_t advance = padded_width + cfg.advanceAdjustment;
+            auto advanceOverrride_it = cfg.advanceAdjustmentOverrides.find(ch);
+            uint32_t advanceAdjustment = advanceOverrride_it != cfg.advanceAdjustmentOverrides.end() ? advanceOverrride_it->second : cfg.advanceAdjustment;
+            uint32_t advance = padded_width + advanceAdjustment;
             auto id = io.Fonts->AddCustomRectFontGlyph(imFont, ch, padded_width, padded_height, advance, cfg.glyphOffset);
             auto &g = command.glyphs.emplace_back();
             g.ch = ch;
@@ -506,12 +509,16 @@ void AddFonts(ImGuiIO &io)
         .blitFlags = GW::TextMgr::BlitFontFlags::AmbientOcclusion,
         .glyphPadding = 2,
         .advanceAdjustment = -3,
+        .glyphOffset = ImVec2(-2, 0),
         .iconOffset = ImVec2(0, -2),
         .color = 0xffdddddd,
     });
     Constants::Fonts::skill_thick_font_15 = CreateGWFont(GWFontConfig{
         .fontIndex = 1,
         .iconOffset = ImVec2(0, -2),
+        .advanceAdjustmentOverrides = {
+            {L'*', -3},
+        },
     });
     Constants::Fonts::skill_name_font = CreateGWFont(GWFontConfig{
         .fontIndex = 3,
