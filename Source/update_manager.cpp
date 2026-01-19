@@ -235,6 +235,9 @@ namespace HerosInsight
                                                        // | ImGuiWindowFlags_NoCollapse       //
             /**/;
 
+        auto current_font = ImGui::GetFont();
+        ImGui::PushFont(Constants::Fonts::window_name_font);
+
         auto window_name = "HerosInsight - Menu";
         auto window_name_width = ImGui::CalcTextSize(window_name).x //
                                  + style.WindowPadding.x * 2.0f     //
@@ -265,6 +268,7 @@ namespace HerosInsight
             }
             if (visible_content)
             {
+                ImGui::PushFont(current_font);
 #ifdef _DEBUG
                 ImGui::TextUnformatted("Windows");
                 if (ImGui::Checkbox("Debug UI", &UpdateManager::enable_ui_debug))
@@ -293,9 +297,11 @@ namespace HerosInsight
                 ImGui::Spacing();
 
                 ImGui::Text("Version: %s", HEROSINSIGHT_VERSION_STRING);
+                ImGui::PopFont();
             }
+            ImGui::End();
         }
-        ImGui::End();
+        ImGui::PopFont();
     }
 
     void UpdateManager::Draw(IDirect3DDevice9 *device)

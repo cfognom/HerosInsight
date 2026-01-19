@@ -501,18 +501,20 @@ void AddFonts(ImGuiIO &io)
         .glyphOffset = ImVec2(-1, 0),
         .iconOffset = ImVec2(0, -1),
     });
+    Constants::Fonts::window_name_font = CreateGWFont(GWFontConfig{
+        .fontIndex = 1,
+        .blitFlags = GW::TextMgr::BlitFontFlags::AmbientOcclusion,
+        .glyphPadding = 2,
+        .advanceAdjustment = -3,
+        .iconOffset = ImVec2(0, -2),
+        .color = 0xffdddddd,
+    });
     Constants::Fonts::skill_thick_font_15 = CreateGWFont(GWFontConfig{
         .fontIndex = 1,
         .iconOffset = ImVec2(0, -2),
     });
     Constants::Fonts::skill_name_font = CreateGWFont(GWFontConfig{
         .fontIndex = 3,
-        .glyphPadding = 1,
-        .advanceAdjustment = -1,
-        .glyphOffset = ImVec2(-1, 0),
-    });
-    Constants::Fonts::big_font = CreateGWFont(GWFontConfig{
-        .fontIndex = 4,
         .glyphPadding = 1,
         .advanceAdjustment = -1,
         .glyphOffset = ImVec2(-1, 0),
@@ -660,8 +662,7 @@ static void BlitGWGlyphs(uint32_t *pixels, uint32_t width, uint32_t height)
             auto rect = io.Fonts->GetCustomRectByIndex(g.dstRect);
             auto slotPtr = atlasDataPtr.Index(rect->X, rect->Y);
 
-            uint32_t color = 0xFFFFFFFF;
-            GW::TextMgr::BlitFontARBG4444(font, blitDataPtr, glyphDataBuffer.data(), glyphDims, color, com.config.blitFlags);
+            GW::TextMgr::BlitFontARBG4444(font, blitDataPtr, glyphDataBuffer.data(), glyphDims, com.config.color, com.config.blitFlags);
 
             for (int y = 0; y < rect->Height; y++)
             {

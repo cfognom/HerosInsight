@@ -1822,14 +1822,14 @@ namespace HerosInsight::SkillBook
 
         void MakeBookName(OutBuf<char> name, size_t book_index)
         {
-            name.AppendRange(std::string_view("Skill Book (Ctrl + K)"));
+            name.AppendString("Skill Book [Ctrl + K]");
             if (book_index > 0)
             {
                 name.AppendFormat(" ({})", book_index);
             }
 
             // Add unique id: Hex-string of pointer to BookState
-            name.AppendRange(std::string_view("###"));
+            name.AppendString("###");
             name.AppendIntToChars(reinterpret_cast<size_t>(this), 16);
 
             name.push_back('\0');
@@ -1872,8 +1872,12 @@ namespace HerosInsight::SkillBook
             FixedVector<char, 64> name;
             MakeBookName(name, book_index);
 
+            auto current_font = ImGui::GetFont();
+            ImGui::PushFont(Constants::Fonts::window_name_font);
             if (ImGui::Begin(name.data(), &is_opened))
             {
+                ImGui::PushFont(current_font);
+
                 DrawDupeButton();
                 DrawCheckboxes();
                 ImGui::Spacing();
@@ -1957,8 +1961,10 @@ namespace HerosInsight::SkillBook
                     clipper.Draw(n_skills, est_item_height, settings.snap_to_skill, DrawItem);
                 }
                 ImGui::EndChild();
+                ImGui::PopFont();
             }
             ImGui::End();
+            ImGui::PopFont();
         }
     };
 
