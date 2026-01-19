@@ -74,12 +74,24 @@ namespace
         inline static constexpr uint32_t (*f)(uint32_t) = F;
     };
 
+    inline char tolower_ascii(char c)
+    {
+        return (c >= 'A' && c <= 'Z') ? (c + 32) : c;
+    }
+
     constexpr bool TryRead(std::string_view input, size_t &pos, std::string_view expected)
     {
-        bool success = pos + expected.size() <= input.size() && input.substr(pos, expected.size()) == expected;
-        if (success)
-            pos += expected.size();
-        return success;
+        if (pos + expected.size() > input.size())
+            return false;
+
+        for (size_t i = 0; i < expected.size(); ++i)
+        {
+            if (tolower_ascii(input[pos + i]) != expected[i])
+                return false;
+        }
+
+        pos += expected.size();
+        return true;
     }
 
     template <typename Element>
@@ -128,12 +140,12 @@ namespace
                 else if (input[pos] == '@')
                 {
                     ++pos;
-                    if (TryRead(input, pos, "SkillDull"))
+                    if (TryRead(input, pos, "skilldull"))
                     {
                         val = Constants::GWColors::skill_dull_gray;
                         return true;
                     }
-                    else if (TryRead(input, pos, "SkillDyn"))
+                    else if (TryRead(input, pos, "skilldyn"))
                     {
                         val = Constants::GWColors::skill_dynamic_green;
                         return true;
