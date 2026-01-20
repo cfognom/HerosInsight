@@ -371,51 +371,52 @@ namespace HerosInsight
     {
         auto n_atoms = atoms.size();
 
-        for (size_t i = 0; i < n_atoms; ++i)
-        {
-            work_mem[i].begin = 0;
-        }
-
+        size_t horizon = 0;
         size_t match_end;
         for (size_t i = 0; i < n_atoms; ++i)
         {
-            work_mem[i].limit = CalcLimit(atoms[i], text, offset);
-        backtrack:
-            auto &atom = atoms[i];
-            auto &mrec = work_mem[i];
+            auto atom = &atoms[i];
+            auto mrec = &work_mem[i];
+
+            mrec->limit = CalcLimit(*atom, text, offset);
+
+            if (i < horizon && offset <= mrec->begin) // We already have a cached 'Find'
+            {
+                offset = mrec->begin;
+                goto skip_find;
+            }
+            --offset;
+            horizon += (i == horizon);
             while (true)
             {
-                if (offset < mrec.begin)
-                {
-                    offset = mrec.begin;
-                }
-                else
-                {
-                    offset = Find(atom, text, offset);
-                    if (offset == std::string::npos)
-                        return false;
-                    mrec.begin = offset;
-                }
+                offset = Find(*atom, text, offset + 1);
+                if (offset == std::string::npos)
+                    return false;
+                mrec->begin = offset;
 
-                if (offset >= mrec.limit)
+            skip_find:
+                if (offset >= mrec->limit)
                 {
+                    // Backtrack
                     if (i == 0)
-                        return std::string::npos;
+                        return false;
                     --i;
-                    offset = mrec.begin + 1;
-                    goto backtrack;
+                    atom = &atoms[i];
+                    mrec = &work_mem[i];
+                    offset = mrec->begin;
+                    continue;
                 }
-                auto needle = atom.GetNeedleStr();
-                match_end = offset + needle.size();
-                if (PostChecks(atom, text, offset))
+                if (!PostChecks(*atom, text, offset))
                 {
-                    mrec.end = match_end;
-                    break;
+                    // Retry
+                    continue;
                 }
-                offset = offset + 1;
+                // Success, record end
+                auto needle = atom->GetNeedleStr();
+                offset += needle.size();
+                mrec->end = offset;
+                break;
             }
-
-            offset = match_end;
         }
 
         return true;
