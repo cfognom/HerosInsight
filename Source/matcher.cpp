@@ -290,10 +290,10 @@ namespace HerosInsight
                 search_space_max = text.text.find(' ', search_space_max);
                 break;
             case Location::WithinWord:
-                search_space_max = text.text.find(' ');
+                search_space_max = text.text.find(' ', offset);
                 break;
             case Location::WithinSentence:
-                search_space_max = text.text.find('.');
+                search_space_max = text.text.find('.', offset);
                 break;
             case Location::Anywhere:
             default:
