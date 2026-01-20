@@ -19,7 +19,7 @@ namespace HerosInsight::Filtering
     // Takes a span of highlight starts and stops, sorts them and removes any bad openings and closings
     // Modifies the size of the span to account for the removed values
     void SortHighlighting(std::span<uint16_t> &hl);
-    void SortHighlighting(std::vector<uint16_t> &hl);
+    void ConnectHighlighting(std::string_view text, std::span<uint16_t> &hl);
 
     struct Filter
     {
@@ -549,7 +549,10 @@ namespace HerosInsight::Filtering
                         bool match = filter.matcher.Matches(lowered, hl);
                     }
                 }
-                SortHighlighting(hl);
+                std::span<uint16_t> hl_span = hl;
+                SortHighlighting(hl_span);
+                ConnectHighlighting(lowered.text, hl_span);
+                hl.resize(hl_span.size());
             }
         }
 

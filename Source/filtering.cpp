@@ -41,11 +41,29 @@ namespace HerosInsight::Filtering
         }
     }
 
-    void SortHighlighting(std::vector<uint16_t> &hl)
+    void ConnectHighlighting(std::string_view text, std::span<uint16_t> &hl)
     {
-        std::span<uint16_t> span = hl;
-        SortHighlighting(span);
-        hl.resize(span.size());
-    }
+        if (hl.size() < 4)
+            return;
 
+        size_t dst_idx = 1;
+        size_t i = 1;
+        for (; i + 1 < hl.size(); i += 2)
+        {
+            auto begin = hl[i];
+            auto end = hl[i + 1];
+            auto between = text.substr(begin, end - begin);
+            for (auto c : between)
+            {
+                if (c != ' ')
+                {
+                    hl[dst_idx++] = begin;
+                    hl[dst_idx++] = end;
+                    break;
+                }
+            }
+        }
+        hl[dst_idx++] = hl[i];
+        hl = hl.subspan(0, dst_idx);
+    }
 }
