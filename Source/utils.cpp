@@ -297,7 +297,8 @@ namespace HerosInsight::Utils
         }
         return false;
     }
-    bool TryReadNumber(std::string_view &remaining, double &out)
+    template <typename Floaty>
+    bool TryReadFloatyNumber(std::string_view &remaining, Floaty &out)
     {
         if (remaining.empty())
             return false;
@@ -320,6 +321,14 @@ namespace HerosInsight::Utils
             }
         }
         return false;
+    }
+    bool TryReadNumber(std::string_view &remaining, float &out)
+    {
+        return TryReadFloatyNumber(remaining, out);
+    }
+    bool TryReadNumber(std::string_view &remaining, double &out)
+    {
+        return TryReadFloatyNumber(remaining, out);
     }
     bool TryReadNumber(std::wstring_view &remaining, double &out)
     {

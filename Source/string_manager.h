@@ -22,39 +22,10 @@ namespace HerosInsight::Text
         Plural,
     };
 
-    static void EncodeSearchableNumber(OutBuf<char> out, float num)
-    {
-        out.push_back(1);
-        uint32_t value = std::bit_cast<uint32_t>(num);
-        if (num < 0)
-        {
-            value = ~value;
-        }
-        else if (num > 0)
-        {
-            value &= 0x7FFFFFFF;
-        }
-        else
-        {
-            value = 0;
-        }
-        for (int i = 0; i < 6; ++i)
-        {
-            out.push_back(((value >> (6 * i)) & 0x3F) | 0x80);
-        }
-    }
+    using EncodedNumber = std::array<char, 7>;
 
-    static float DecodeSearchableNumber(char (*src)[7])
-    {
-        auto &cs = *src;
-        assert(cs[0] == '\x1');
-        uint32_t value = 0;
-        for (int i = 0; i < 6; i++)
-        {
-            value |= (cs[i + 1] & 0x3F) << (6 * i);
-        }
-        return std::bit_cast<float>(value);
-    }
+    constexpr EncodedNumber EncodeSearchableNumber(float num);
+    float DecodeSearchableNumber(EncodedNumber &enc_num);
 
     // We add padding manually to get unique object representations
     struct StringTemplateAtom
@@ -320,7 +291,7 @@ namespace HerosInsight::Text
     struct PosDelta
     {
         uint16_t pos;
-        uint16_t delta;
+        int16_t delta;
     };
 
     void PatchPositions(std::span<uint16_t> positions, std::span<PosDelta> deltas);

@@ -27,6 +27,23 @@ namespace HerosInsight
         return false;
     }
 
+    bool TryReadNumberOrFraction(std::string_view &rem, float &num)
+    {
+        auto r = rem;
+        if (Utils::TryReadNumber(r, num))
+        {
+            float den;
+            if (Utils::TryRead('/', r) &&
+                Utils::TryReadNumber(r, den))
+            {
+                num /= den;
+            }
+            rem = r;
+            return true;
+        }
+        return false;
+    }
+
     Matcher::Matcher(std::string_view source)
     {
         using Type = Matcher::Atom::Type;
@@ -87,20 +104,18 @@ namespace HerosInsight
 
             if (Utils::TryRead('#', rem))
             {
-                auto &atom = this->atoms.emplace_back(Type::AnyDigit, location);
-                atom.post_check = PostCheck::ValidNum;
+                auto &atom = this->atoms.emplace_back(Type::AnyNumber, location);
                 continue;
             }
 
             {
-                auto rem_restore = rem;
-
-                PostCheck post_check = PostCheck::ValidNum;
-                if (Utils::TryRead('<', rem))
+                auto r = rem;
+                PostCheck post_check = PostCheck::Null;
+                if (Utils::TryRead('<', r))
                 {
                     post_check |= PostCheck::NumLess;
                 }
-                else if (Utils::TryRead('>', rem))
+                else if (Utils::TryRead('>', r))
                 {
                     post_check |= PostCheck::NumGreater;
                 }
@@ -109,27 +124,27 @@ namespace HerosInsight
                     post_check |= PostCheck::NumEqual;
                 }
 
-                if (Utils::TryRead('=', rem))
+                if (Utils::TryRead('=', r))
                 {
                     post_check |= PostCheck::NumEqual;
                 }
 
-                double num;
-                if (Utils::TryReadNumber(rem, num))
+                float num;
+                if (TryReadNumberOrFraction(r, num))
                 {
-                    double denom;
-                    if (Utils::TryRead('/', rem) &&
-                        Utils::TryReadNumber(rem, denom))
+                    auto type = Type::AnyNumber;
+                    if (post_check == PostCheck::NumEqual)
                     {
-                        num /= denom;
+                        // Pure equal, we can just std::find it
+                        post_check = PostCheck::Null;
+                        type = Type::EncodedNumber;
                     }
-                    auto &atom = this->atoms.emplace_back(Type::AnyDigit, location);
+                    auto &atom = this->atoms.emplace_back(type, location);
+                    atom.enc_num = Text::EncodeSearchableNumber(num);
                     atom.post_check = post_check;
-                    atom.num = num;
+                    rem = r;
                     continue;
                 }
-
-                rem = rem_restore;
             }
 
             if (!Utils::IsSpace(rem[0]))
@@ -310,34 +325,18 @@ namespace HerosInsight
                 offset = haystack.text.find_first_not_of(' ', offset);
                 break;
             case Type::String:
-                offset = haystack.text.find(atom.needle.text, offset);
+            case Type::EncodedNumber:
+                offset = haystack.text.find(atom.GetNeedleStr(), offset);
                 break;
-            case Type::AnyDigit:
-                offset = haystack.text.find_first_of("0123456789", offset);
+            case Type::AnyNumber:
+                offset = haystack.text.find('\x1', offset);
                 break;
-                // case Type::Number:
-                // {
-                //     r.begin = haystack.text.find(needle.text, offset);
-                //     size_t alt_begin = 0;
-                //     switch (atom.num)
-                //     {
-                //         case 0.25:
-                //             alt_begin = haystack.text.find("<1/4>", r.begin + 1);
-                //             break;
-                //         case 0.5:
-                //             alt_begin = haystack.text.find("<1/2>", r.begin + 1);
-                //             break;
-                //         case 0.75:
-                //             alt_begin = haystack.text.find("<3/4>", r.begin + 1);
-                //             break;
-                //     }
-                // }
         }
 
         return offset;
     }
 
-    bool PostChecks(Matcher::Atom &atom, LoweredText haystack, size_t offset, size_t &end_out)
+    bool PostChecks(Matcher::Atom &atom, LoweredText haystack, size_t offset)
     {
         if (atom.location >= Matcher::Atom::Location::WithinNextWord)
         {
@@ -351,55 +350,18 @@ namespace HerosInsight
                 return false;
         }
 
-        if (Utils::HasFlag(atom.post_check, Matcher::Atom::PostCheck::ValidNum))
+        if (Utils::HasFlag(atom.post_check, Matcher::Atom::PostCheck::NumChecks))
         {
-            if (offset > 0)
-            {
-                if (Utils::IsDigit(haystack.text[offset - 1]))
-                    return false;
-
-                if (haystack.text[offset - 1] == '.' &&
-                    offset > 1 &&
-                    Utils::IsDigit(haystack.text[offset - 2]))
-                    return false;
-            }
-
-            auto haystack_endptr = haystack.text.data() + haystack.text.size();
-            double value;
-            constexpr size_t tag_prefix_len = std::string_view("<frac=").size();
-            std::string_view rem;
-            RichText::FracTag tag;
-            if (offset >= tag_prefix_len &&
-                (rem = haystack.text.substr(offset - tag_prefix_len), RichText::FracTag::TryRead(rem, tag)))
-            {
-                value = (double)tag.num / (double)tag.den;
-            }
-            else
-            {
-                auto [ptr, ec] = std::from_chars(haystack.text.data() + offset, haystack_endptr, value);
-                if (ec != std::errc())
-                    return false;
-                auto num_end = ptr - haystack.text.data();
-                rem = haystack.text.substr(num_end);
-                if (RichText::FracTag::TryRead(rem, tag))
-                {
-                    value += (double)tag.num / (double)tag.den;
-                }
-            }
-
-            if (Utils::HasFlag(atom.post_check, Matcher::Atom::PostCheck::NumChecks))
-            {
-                bool num_in_range = false;
-                // clang-format off
-                if (Utils::HasFlag(atom.post_check, Matcher::Atom::PostCheck::NumEqual  )) num_in_range |= value == atom.num;
-                if (Utils::HasFlag(atom.post_check, Matcher::Atom::PostCheck::NumLess   )) num_in_range |= value <  atom.num;
-                if (Utils::HasFlag(atom.post_check, Matcher::Atom::PostCheck::NumGreater)) num_in_range |= value >  atom.num;
-                // clang-format on
-                if (!num_in_range)
-                    return false;
-            }
-
-            end_out = rem.data() - haystack.text.data();
+            bool num_in_range = false;
+            auto needle = atom.GetNeedleStr();
+            auto found = haystack.text.substr(offset, needle.size());
+            // clang-format off
+            if (Utils::HasFlag(atom.post_check, Matcher::Atom::PostCheck::NumEqual  )) num_in_range |= found == needle;
+            if (Utils::HasFlag(atom.post_check, Matcher::Atom::PostCheck::NumLess   )) num_in_range |= found <  needle;
+            if (Utils::HasFlag(atom.post_check, Matcher::Atom::PostCheck::NumGreater)) num_in_range |= found >  needle;
+            // clang-format on
+            if (!num_in_range)
+                return false;
         }
 
         return true;
@@ -443,8 +405,9 @@ namespace HerosInsight
                     offset = mrec.begin + 1;
                     goto backtrack;
                 }
-                match_end = offset + atom.needle.text.size();
-                if (PostChecks(atom, text, offset, match_end))
+                auto needle = atom.GetNeedleStr();
+                match_end = offset + needle.size();
+                if (PostChecks(atom, text, offset))
                 {
                     mrec.end = match_end;
                     break;

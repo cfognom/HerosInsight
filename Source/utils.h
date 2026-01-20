@@ -244,6 +244,7 @@ namespace HerosInsight::Utils
     bool TryRead(const std::string_view str, std::string_view &remaining);
     bool TryRead(const std::wstring_view str, std::wstring_view &remaining);
     bool TryReadInt(std::string_view &remaining, int32_t &out);
+    bool TryReadNumber(std::string_view &remaining, float &out);
     bool TryReadNumber(std::string_view &remaining, double &out);
     bool TryReadNumber(std::wstring_view &remaining, double &out);
     size_t TryReadPartial(const std::string_view str, std::string_view &remaining);

@@ -8,6 +8,7 @@
 #include <bitview.h>
 #include <multibuffer.h>
 #include <string_arena.h>
+#include <string_manager.h>
 #include <utils.h>
 
 namespace HerosInsight
@@ -140,12 +141,8 @@ namespace HerosInsight
             {
                 String,
                 AnyNonSpace,
-                AnyDigit,
-                Number,
-                NumberLessThan,
-                NumberLessThanOrEqual,
-                NumberGreaterThan,
-                NumberGreaterThanOrEqual,
+                AnyNumber,
+                EncodedNumber,
             };
 
             enum struct Location
@@ -158,10 +155,10 @@ namespace HerosInsight
 
             enum struct PostCheck
             {
+                Null = 0,
                 WordStart = 1,
                 CaseEqual = 2,
                 CaseSubset = 4,
-                ValidNum = 8,
                 NumEqual = 16,
                 NumLess = 32,
                 NumGreater = 64,
@@ -169,15 +166,16 @@ namespace HerosInsight
             };
 
             Atom(Type type, Location location, std::string_view value) : type(type), location(location), src_str(value) {}
-            Atom(Type type, Location location, double value) : type(type), num(value), location(location) {}
             Atom(Type type, Location location) : type(type), location(location) {}
 
             Type type;
-            PostCheck post_check = (PostCheck)0;
+            PostCheck post_check = PostCheck::Null;
             Location location;
             std::string_view src_str;
-            double num;
+            Text::EncodedNumber enc_num;
             LoweredText needle;
+
+            std::string_view GetNeedleStr() const { return type == Type::String ? needle.text : std::string_view(enc_num.data(), enc_num.size()); }
 
             std::string ToString() const;
         };

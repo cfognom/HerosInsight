@@ -216,12 +216,13 @@ namespace HerosInsight::Text
             int num;
             std::string_view Locate(std::string_view rem)
             {
-                auto pos = rem.find_first_of("0123456789");
+                auto pos = rem.find_first_of("-0123456789");
                 if (pos == std::string_view::npos)
                     return {};
                 auto begin = rem.data() + pos;
                 auto [ptr, ec] = std::from_chars(begin, rem.data() + rem.size(), num, 10);
-                assert(ec == std::errc());
+                if (ec != std::errc())
+                    return {};
                 return std::string_view(begin, ptr - begin);
             }
             void Handle(Assimilator &a)
@@ -279,7 +280,7 @@ namespace HerosInsight::Text
         OutBuf<PosDelta> *searchable_to_renderable = nullptr;
         Plurality plurality = Plurality::Null;
         size_t searchable_pos = 0;
-        size_t current_delta = 0;
+        int32_t searchable_to_renderable_delta = 0;
 
         void Assemble(std::span<StringTemplateAtom> atoms, std::span<StringTemplateAtom> subs)
         {
@@ -332,34 +333,42 @@ namespace HerosInsight::Text
                     case StringTemplateAtom::Type::Substitution:
                     {
                         auto subs_index = atom.parent.subsIndex;
-                        str_to_append = cached_subs[subs_index];
-                        if (str_to_append.empty())
-                        {
-                            auto start_idx = dst.size();
 #ifdef _DEBUG
-                            assert(subs_index < subs.size());
+                        assert(subs_index < subs.size());
 #else
-                            if (subs_index >= subs.size())
-                            {
-                                if constexpr (is_renderable)
-                                    dst.AppendString("<c=#FFFF0000>");
-                                dst.AppendString("[Missing Text]");
-                                if constexpr (is_renderable)
-                                    dst.AppendString("</c>");
-                                plurality = Plurality::Singular;
-                                goto skip;
-                            }
+                        if (subs_index >= subs.size())
+                        {
+                            if constexpr (is_renderable)
+                                dst.AppendString("<c=#FFFF0000>");
+                            dst.AppendString("[Missing Text]");
+                            if constexpr (is_renderable)
+                                dst.AppendString("</c>");
+                            plurality = Plurality::Singular;
+                            goto skip;
+                        }
 #endif
+                        if constexpr (is_renderable)
+                        {
+                            // We need to recalc the PosDeltas so we cant use cached_subs
                             Assemble(subs.subspan(subs_index, 1), {});
-                            subs_pluralities[subs_index] = plurality;
-                            auto written_sub = std::string_view(dst.data() + start_idx, dst.size() - start_idx);
-                            assert(!written_sub.empty());
-                            cached_subs[subs_index] = written_sub;
                         }
                         else
                         {
-                            dst.AppendRange(str_to_append);
-                            plurality = subs_pluralities[subs_index];
+                            str_to_append = cached_subs[subs_index];
+                            if (str_to_append.empty())
+                            {
+                                auto start_idx = dst.size();
+                                Assemble(subs.subspan(subs_index, 1), {});
+                                subs_pluralities[subs_index] = plurality;
+                                auto written_sub = std::string_view(dst.data() + start_idx, dst.size() - start_idx);
+                                assert(!written_sub.empty());
+                                cached_subs[subs_index] = written_sub;
+                            }
+                            else
+                            {
+                                dst.AppendRange(str_to_append);
+                                plurality = subs_pluralities[subs_index];
+                            }
                         }
                         break;
                     }
@@ -454,7 +463,10 @@ namespace HerosInsight::Text
                         }
                         else if constexpr (is_searchable)
                         {
-                            EncodeSearchableNumber(dst, value);
+                            constexpr auto enc_num_len = sizeof(EncodedNumber);
+                            assert(dst.AvailableCapacity() >= enc_num_len);
+                            *(EncodedNumber *)(dst.data() + dst.size()) = EncodeSearchableNumber(value);
+                            dst.Len() += enc_num_len;
                         }
                         plurality = value == 1.f ? Plurality::Singular : Plurality::Plural;
                         break;
@@ -481,27 +493,39 @@ namespace HerosInsight::Text
                         // This code works but is wonky, how to improve?
 
                         auto pos = dst.size();
-                        size_t atom_len = pos - start_pos;
+                        size_t renderable_atom_len = pos - start_pos;
+                        size_t searchable_atom_len = 0;
                         if (atom.header.constraint != StringTemplateAtom::Constraint::RenderableOnly)
                         {
                             switch (atom.header.type)
                             {
                                 case StringTemplateAtom::Type::Number:
-                                    searchable_pos += 7; // Numbers are always 7 bytes in searchable text
+                                    searchable_atom_len = sizeof(EncodedNumber);
                                     break;
 
                                 default:
-                                    searchable_pos += atom_len;
+                                    searchable_atom_len = renderable_atom_len;
                                     break;
                             }
                         }
 
-                        if (searchable_pos + current_delta != pos)
+                        if (searchable_atom_len)
                         {
-                            current_delta = pos - searchable_pos;
-                            auto &delta_entry = searchable_to_renderable->emplace_back();
-                            delta_entry.pos = searchable_pos;
-                            delta_entry.delta = current_delta;
+                            if (searchable_pos + searchable_to_renderable_delta != start_pos)
+                            {
+                                searchable_to_renderable_delta = start_pos - searchable_pos;
+                                auto &delta_entry = searchable_to_renderable->emplace_back();
+                                delta_entry.pos = searchable_pos;
+                                delta_entry.delta = searchable_to_renderable_delta;
+                            }
+                            searchable_pos += searchable_atom_len;
+                            // if (searchable_pos + searchable_to_renderable_delta != pos)
+                            // {
+                            //     searchable_to_renderable_delta = pos - searchable_pos;
+                            //     auto &delta_entry = searchable_to_renderable->emplace_back();
+                            //     delta_entry.pos = searchable_pos;
+                            //     delta_entry.delta = searchable_to_renderable_delta;
+                            // }
                         }
                     }
                 }
@@ -528,12 +552,77 @@ namespace HerosInsight::Text
         };
         a.Assemble(std::span<StringTemplateAtom>(&t.root, 1), {});
     }
+
+    static_assert(
+        std::endian::native == std::endian::little ||
+            std::endian::native == std::endian::big,
+        "What cursed machine are you using??"
+    );
+
+    constexpr EncodedNumber EncodeSearchableNumber(float num)
+    {
+        EncodedNumber out;
+
+        out[0] = '\x1';
+
+        uint32_t value = std::bit_cast<uint32_t>(num);
+
+        // Manipulate values so that sort correctly during lexical sort
+        if (num < 0) // Negative values become positive and all bits are inverted
+            value = ~value;
+        else if (num >= 0) // Positive values and negative zero become negative
+            value |= 0x80000000;
+
+        for (int i = 0; i < 6; ++i)
+        {
+            size_t bits_idx;
+            if constexpr (std::endian::native == std::endian::little)
+            {
+                bits_idx = 5 - i;
+            }
+            else
+            {
+                bits_idx = i;
+            }
+            out[1 + i] = char(((value >> (6 * bits_idx)) & 0x3F) | 0x80);
+        }
+
+        return out;
+    }
+
+    float DecodeSearchableNumber(EncodedNumber &enc_num)
+    {
+        assert(enc_num[0] == '\x1');
+        uint32_t value = 0;
+        for (int i = 0; i < 6; i++)
+        {
+            size_t bits_idx;
+            if constexpr (std::endian::native == std::endian::little)
+            {
+                bits_idx = 5 - i;
+            }
+            else
+            {
+                bits_idx = i;
+            }
+            value |= (enc_num[i + 1] & 0x3F) << (6 * bits_idx);
+        }
+
+        auto num = std::bit_cast<float>(value);
+        if (num > 0) // Positive values become negative and all bits are inverted
+            value = ~value;
+        else if (num <= 0) // Negative values become positive
+            value &= 0x7FFFFFFF;
+
+        return std::bit_cast<float>(value);
+    }
+
     void PatchPositions(std::span<uint16_t> positions, std::span<PosDelta> deltas)
     {
         if (deltas.empty())
             return;
 
-        auto delta_to_apply = 0;
+        int32_t delta_to_apply = 0;
         size_t i = 0;
         auto until_pos = deltas[i].pos;
 
