@@ -535,12 +535,11 @@ namespace HerosInsight::SkillBook
             static_props[(size_t)SkillProp::Attribute].PopulateItems("SkillBookProp_Attribute", GW::Constants::SkillMax, GetSkillProp<&CustomSkillData::GetAttributeStr>);
             static_props[(size_t)SkillProp::Profession].PopulateItems("SkillBookProp_Profession", GW::Constants::SkillMax, GetSkillProp<&CustomSkillData::GetProfessionStr>);
             static_props[(size_t)SkillProp::Campaign].PopulateItems("SkillBookProp_Campaign", GW::Constants::SkillMax, GetSkillProp<&CustomSkillData::GetCampaignStr>);
-            static_props[(size_t)SkillProp::Id].PopulateItems(
-                "SkillBookProp_Id",
-                GW::Constants::SkillMax,
-                [](StringArena<char> &dst, size_t skill_id)
+            static_props[(size_t)SkillProp::Id].SetupIncremental(
+                nullptr,
+                +[](Text::StringTemplateAtom::Builder &b, size_t skill_id, void *) -> Text::StringTemplateAtom
                 {
-                    std::format_to(std::back_inserter(dst.Elements()), "{}", skill_id);
+                    return b.Number((float)skill_id);
                 }
             );
 
