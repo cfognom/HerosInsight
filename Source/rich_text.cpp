@@ -173,10 +173,10 @@ namespace HerosInsight::RichText
                 auto tag_val = tag.value();
                 switch (tag_val.type)
                 {
-                    case TextTag::Type::Frac:
+                    case TextTagType::Frac:
                     {
-                        seg.tag = tag_val.frac_tag;
-                        seg.width = frac_provider->CalcWidth(tag_val.frac_tag);
+                        seg.tag = tag_val.tag.frac_tag;
+                        seg.width = frac_provider->CalcWidth(tag_val.tag.frac_tag);
                         break;
                     }
                     default:
@@ -233,23 +233,23 @@ namespace HerosInsight::RichText
                 i = rem.data() - text.data();
                 switch (tag.type)
                 {
-                    case TextTag::Type::Frac:
+                    case TextTagType::Frac:
                     {
                         AddSegment(i_start, i, tag);
                         break;
                     }
-                    case TextTag::Type::Color:
+                    case TextTagType::Color:
                     {
-                        auto &color_tag = tag.color_tag;
+                        auto &color_tag = tag.tag.color_tag;
                         if (color_tag.color == 0)
                             color_stack.pop();
                         else
                             color_stack.push_back(color_tag.color);
                         break;
                     }
-                    case TextTag::Type::Tooltip:
+                    case TextTagType::Tooltip:
                     {
-                        auto &tooltip_tag = tag.tooltip_tag;
+                        auto &tooltip_tag = tag.tag.tooltip_tag;
                         if (tooltip_tag.id == -1)
                             tooltip_stack.pop();
                         else
@@ -434,23 +434,23 @@ namespace HerosInsight::RichText
         return width;
     }
 
-    void TextTag::ToChars(OutBuf<char> output) const
+    void WriteTag(TextTagType type, UntypedTextTag tag, OutBuf<char> output)
     {
         switch (type)
         {
-            case Type::Color:
-                color_tag.ToChars(output);
+            case TextTagType::Color:
+                tag.color_tag.ToChars(output);
                 break;
 
-            case Type::Tooltip:
-                if (tooltip_tag.id == -1)
-                    Parsing::write_pattern<TooltipClosePattern>(output, &tooltip_tag);
+            case TextTagType::Tooltip:
+                if (tag.tooltip_tag.id == -1)
+                    Parsing::write_pattern<TooltipClosePattern>(output, &tag.tooltip_tag);
                 else
-                    Parsing::write_pattern<TooltipOpenPattern>(output, &tooltip_tag);
+                    Parsing::write_pattern<TooltipOpenPattern>(output, &tag.tooltip_tag);
                 break;
 
-            case Type::Frac:
-                Parsing::write_pattern<FracPattern>(output, &frac_tag);
+            case TextTagType::Frac:
+                Parsing::write_pattern<FracPattern>(output, &tag.frac_tag);
                 break;
 
             default:
@@ -463,19 +463,19 @@ namespace HerosInsight::RichText
         if (remaining.empty() || remaining[0] != '<')
             return false;
 
-        if (TooltipTag::TryRead(remaining, out.tooltip_tag))
+        if (TooltipTag::TryRead(remaining, out.tag.tooltip_tag))
         {
-            out.type = TextTag::Type::Tooltip;
+            out.type = TextTagType::Tooltip;
             return true;
         }
-        else if (ColorTag::TryRead(remaining, out.color_tag))
+        else if (ColorTag::TryRead(remaining, out.tag.color_tag))
         {
-            out.type = TextTag::Type::Color;
+            out.type = TextTagType::Color;
             return true;
         }
-        else if (FracTag::TryRead(remaining, out.frac_tag))
+        else if (FracTag::TryRead(remaining, out.tag.frac_tag))
         {
-            out.type = TextTag::Type::Frac;
+            out.type = TextTagType::Frac;
             return true;
         }
 

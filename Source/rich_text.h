@@ -37,38 +37,41 @@ namespace HerosInsight::RichText
         static std::string_view Find(std::string_view text, FracTag &out);
     };
 
+    union UntypedTextTag
+    {
+        ColorTag color_tag;
+        TooltipTag tooltip_tag;
+        FracTag frac_tag;
+    };
+
+    enum struct TextTagType : uint8_t
+    {
+        Color,
+        Tooltip,
+        Frac,
+    };
+
+    void WriteTag(TextTagType type, UntypedTextTag tag, OutBuf<char> output);
+
     struct TextTag
     {
-        enum struct Type : uint8_t
-        {
-            Color,
-            Tooltip,
-            Frac,
-        };
-
         TextTag() = default;
-        TextTag(ColorTag color_tag) : type(Type::Color), color_tag(color_tag) {};
-        TextTag(TooltipTag tooltip_tag) : type(Type::Tooltip), tooltip_tag(tooltip_tag) {};
-        TextTag(FracTag frac_tag) : type(Type::Frac), frac_tag(frac_tag) {};
+        TextTag(ColorTag color_tag) : type(TextTagType::Color), tag{.color_tag = color_tag} {};
+        TextTag(TooltipTag tooltip_tag) : type(TextTagType::Tooltip), tag{.tooltip_tag = tooltip_tag} {};
+        TextTag(FracTag frac_tag) : type(TextTagType::Frac), tag{.frac_tag = frac_tag} {};
 
-        Type type;
+        TextTagType type;
         uint8_t _padding{};
         uint16_t offset;
-
-        union
-        {
-            ColorTag color_tag;
-            TooltipTag tooltip_tag;
-            FracTag frac_tag;
-        };
+        UntypedTextTag tag;
 
         bool IsZeroWidth() const
         {
-            return type == Type::Color ||
-                   type == Type::Tooltip;
+            return type == TextTagType::Color ||
+                   type == TextTagType::Tooltip;
         }
 
-        void ToChars(OutBuf<char> output) const;
+        void ToChars(OutBuf<char> output) const { WriteTag(type, tag, output); }
         static bool TryRead(std::string_view &remaining, TextTag &out);
         static std::string_view Find(std::string_view text, TextTag &out);
     };

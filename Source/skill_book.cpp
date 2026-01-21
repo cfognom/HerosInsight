@@ -563,13 +563,13 @@ namespace HerosInsight::SkillBook
 
                     if (!is_normal_aftercast)
                     {
-                        number_and_icon.push_back(b.Color(IM_COL32(255, 255, 0, 255)));
+                        number_and_icon.push_back(b.Tag(RichText::ColorTag(IM_COL32(255, 255, 0, 255))));
                     }
                     number_and_icon.push_back(b.MixedNumber(skill.aftercast));
                     if (!is_normal_aftercast)
                     {
                         number_and_icon.push_back(b.Char('*'));
-                        number_and_icon.push_back(b.Color(NULL));
+                        number_and_icon.push_back(b.Tag(RichText::ColorTag(NULL)));
                     }
                     number_and_icon.push_back(b.ExplicitString(RichText::Icons::Aftercast));
 
@@ -806,12 +806,12 @@ namespace HerosInsight::SkillBook
                     auto PushTag = [&](std::string_view str, ImU32 color = NULL, std::string_view icon = {})
                     {
                         if (color != NULL)
-                            args.push_back(b.Color(color));
+                            args.push_back(b.Tag(RichText::ColorTag(color)));
 
                         args.push_back(b.ExplicitString(str));
 
                         if (color != NULL)
-                            args.push_back(b.Color(NULL));
+                            args.push_back(b.Tag(RichText::ColorTag(NULL)));
 
                         if (!icon.empty())
                             args.push_back(b.ExplicitString(icon));

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <bitview.h>
+#include <rich_text.h>
 #include <string_arena.h>
 
 namespace HerosInsight::Text
@@ -40,7 +41,7 @@ namespace HerosInsight::Text
             InlineChars5,
             InlineChars6,
             InlineChars7,
-            Color,
+            Tag,
             Number,
             LookupString,
             ExplicitString,
@@ -72,12 +73,19 @@ namespace HerosInsight::Text
             {
                 uint32_t pieceId;
                 uint32_t strId;
-                uint32_t color;
                 uint32_t subsIndex;
             };
             std::span<StringTemplateAtom> GetChildren(std::span<StringTemplateAtom> rest) { return rest.subspan(child_offset, child_count); }
         };
         static_assert(sizeof(Parent) == 8);
+        struct Tag
+        {
+            Header header;
+            RichText::TextTagType tag_type;
+            uint16_t padding;
+            RichText::UntypedTextTag raw_tag;
+        };
+        static_assert(sizeof(Tag) == 8);
         struct Num
         {
             Header header;
@@ -121,6 +129,7 @@ namespace HerosInsight::Text
                 Header header;
                 uint8_t padding[7];
             };
+            Tag tag;
             Parent parent;
             Num number;
             Str str;
@@ -175,14 +184,14 @@ namespace HerosInsight::Text
                 obj.pieceId = strId;
                 return atom;
             }
-            static StringTemplateAtom Color(uint32_t color)
+            static StringTemplateAtom Tag(RichText::TextTag tag)
             {
                 StringTemplateAtom atom;
-                auto &obj = atom.parent;
-                obj.header = Header{Type::Color, Constraint::RenderableOnly};
-                obj.child_count = 0;
-                obj.child_offset = 0;
-                obj.color = color;
+                auto &obj = atom.tag;
+                obj.header = Header{Type::Tag, Constraint::RenderableOnly};
+                obj.tag_type = tag.type;
+                obj.padding = 0;
+                obj.raw_tag = tag.tag;
                 return atom;
             }
             static StringTemplateAtom Substitution(uint32_t index)

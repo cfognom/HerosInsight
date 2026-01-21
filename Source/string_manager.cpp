@@ -198,10 +198,10 @@ namespace HerosInsight::Text
             }
             void Handle(Assimilator &a)
             {
-                if (tag.type == RichText::TextTag::Type::Frac)
+                if (tag.type == RichText::TextTagType::Frac)
                 {
-                    auto num = tag.frac_tag.num;
-                    auto den = tag.frac_tag.den;
+                    auto num = tag.tag.frac_tag.num;
+                    auto den = tag.tag.frac_tag.den;
                     a.mgr.sequences.Elements().emplace_back(StringTemplateAtom::Builder::Fraction(num, den));
                 }
                 else
@@ -472,8 +472,8 @@ namespace HerosInsight::Text
                         break;
                     }
 
-                    case StringTemplateAtom::Type::Color:
-                        RichText::ColorTag{atom.parent.color}.ToChars(dst);
+                    case StringTemplateAtom::Type::Tag:
+                        RichText::WriteTag(atom.tag.tag_type, atom.tag.raw_tag, dst);
                         break;
 
 #ifdef _DEBUG
