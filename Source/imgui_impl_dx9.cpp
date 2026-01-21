@@ -370,7 +370,7 @@ struct GWFontConfig
 {
     uint32_t fontIndex = 0;
     GW::TextMgr::BlitFontFlags blitFlags = (GW::TextMgr::BlitFontFlags)0;
-    uint32_t glyphPadding = 0;
+    int32_t glyphPadding = 0;
     int32_t advanceAdjustment = 0;
     ImVec2 glyphOffset = ImVec2(0, 0);
     ImVec2 iconOffset = ImVec2(0, 0);
@@ -413,7 +413,7 @@ ImFont *CreateGWFont(GWFontConfig cfg)
     auto font = fontHandle.font;
 
     auto padding = cfg.glyphPadding;
-    uint32_t padded_height = font->glyphHeight + padding * 2;
+    int32_t padded_height = font->glyphHeight + padding * 2;
 
     ImFontConfig config;
     config.SizePixels = padded_height;
@@ -449,8 +449,9 @@ ImFont *CreateGWFont(GWFontConfig cfg)
             uint32_t padded_width = glyph_width + padding * 2;
             auto advanceOverrride_it = cfg.advanceAdjustmentOverrides.find(ch);
             uint32_t advanceAdjustment = advanceOverrride_it != cfg.advanceAdjustmentOverrides.end() ? advanceOverrride_it->second : cfg.advanceAdjustment;
-            uint32_t advance = padded_width + advanceAdjustment;
-            auto id = io.Fonts->AddCustomRectFontGlyph(imFont, ch, padded_width, padded_height, advance, cfg.glyphOffset);
+            uint32_t advance = glyph_width + advanceAdjustment;
+            auto offset = ImVec2(-padding, 0) + cfg.glyphOffset;
+            auto id = io.Fonts->AddCustomRectFontGlyph(imFont, ch, padded_width, padded_height, advance, offset);
             auto &g = command.glyphs.emplace_back();
             g.ch = ch;
             g.dstRect = id;
@@ -474,10 +475,17 @@ ImFont *CreateGWFont(GWFontConfig cfg)
         auto &entry = command.icons.emplace_back();
         entry.gwImageFileId = TextureModule::KnownFileIDs::UI_SkillStatsIcons;
         entry.iconDims = iconSize;
+        ImVec2 iconOffset{-1, -1};
+        iconOffset.y += padding;
+        auto iconEffectiveHeight = (int32_t)iconSize.height - 2;
+        iconOffset.y += std::round(((float)font->glyphHeight * 0.8f - iconEffectiveHeight) / 2);
+        auto advanceAdjustment = -2;
 
         auto AddIconGlyph = [&](size_t atlas_index, uint32_t tint = IM_COL32_WHITE)
         {
-            auto id = io.Fonts->AddCustomRectFontGlyph(imFont, customCh++, iconSize.width, iconSize.height, iconSize.width, cfg.iconOffset);
+            auto advance = iconSize.width + advanceAdjustment;
+            auto offset = iconOffset + cfg.iconOffset;
+            auto id = io.Fonts->AddCustomRectFontGlyph(imFont, customCh++, iconSize.width, iconSize.height, advance, offset);
             auto &mapping = entry.mappings.emplace_back();
             mapping.atlasIndex = atlas_index;
             mapping.dstRect = id;
@@ -500,31 +508,26 @@ void AddFonts(ImGuiIO &io)
     // First font is used by default
     Constants::Fonts::gw_font_16 = CreateGWFont(GWFontConfig{
         .glyphPadding = 1,
-        .advanceAdjustment = -1,
-        .glyphOffset = ImVec2(-1, 0),
-        .iconOffset = ImVec2(0, -1),
+        .advanceAdjustment = 1,
     });
     Constants::Fonts::window_name_font = CreateGWFont(GWFontConfig{
         .fontIndex = 1,
         .blitFlags = GW::TextMgr::BlitFontFlags::AmbientOcclusion,
         .glyphPadding = 2,
-        .advanceAdjustment = -3,
-        .glyphOffset = ImVec2(-2, 0),
-        .iconOffset = ImVec2(0, -2),
+        .advanceAdjustment = 1,
         .color = 0xffdddddd,
     });
     Constants::Fonts::skill_thick_font_15 = CreateGWFont(GWFontConfig{
         .fontIndex = 1,
-        .iconOffset = ImVec2(0, -2),
+        .glyphPadding = 1,
         .advanceAdjustmentOverrides = {
-            {L'*', -3},
+            {L'*', -2},
         },
     });
     Constants::Fonts::skill_name_font = CreateGWFont(GWFontConfig{
         .fontIndex = 3,
         .glyphPadding = 1,
-        .advanceAdjustment = -1,
-        .glyphOffset = ImVec2(-1, 0),
+        .advanceAdjustment = 1,
     });
 
     ImFontConfig config;

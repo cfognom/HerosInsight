@@ -1313,8 +1313,8 @@ namespace HerosInsight::SkillBook
                 const auto text_width = RichText::CalcTextSegmentsWidth(segments);
                 float start_x = max_pos_x - l.pos_from_right * width_per_stat - text_width;
                 float current_x = std::max(start_x, min_pos_x);
-                const auto ls_text_cursor = ImVec2(current_x, base_pos_y + 2);
-                ImGui::SetCursorPos(ls_text_cursor);
+                const auto stat_line_cursor = ImVec2(current_x, base_pos_y + 1);
+                ImGui::SetCursorPos(stat_line_cursor);
 
                 text_drawer.DrawTextSegments(segments, 0, -1);
 
