@@ -126,11 +126,11 @@ namespace HerosInsight::Text
         {
             throw std::runtime_error("Failed to get skill texts");
         }
-        for (bool is_concise : {false, true})
+        auto &mgr = s_Manager;
+        for (size_t type = 0; type < SkillTextType::COUNT; ++type)
         {
-            const auto &raw_descs = *this->GetRawDescriptions(is_concise);
-            auto &skillId_to_strId = this->skill_descriptions[is_concise];
-            auto &mgr = s_Manager;
+            const auto &raw_descs = this->skill_raw[type];
+            auto &skillId_to_strId = this->skill_strIds[type];
             // auto deduper1 = assembler.pieces.CreateDeduper(0);
             // auto deduper2 = assembler.strings.CreateDeduper(0);
             std::vector<uint16_t> remapper(raw_descs.SpanCount(), std::numeric_limits<uint16_t>::max());
@@ -170,7 +170,7 @@ namespace HerosInsight::Text
 
     StringTemplateAtom Provider::MakeSkillDescription(StringTemplateAtom::Builder &b, GW::Constants::SkillID skill_id, bool is_concise, int8_t attr_lvl)
     {
-        auto description_str_id = this->skill_descriptions[is_concise][(size_t)skill_id];
+        auto description_str_id = this->skill_strIds[is_concise][(size_t)skill_id];
 
         return b.LookupSequence(
             description_str_id,
@@ -178,6 +178,12 @@ namespace HerosInsight::Text
              MakeSkillParam(b, skill_id, attr_lvl, 1),
              MakeSkillParam(b, skill_id, attr_lvl, 2)}
         );
+    }
+
+    StringTemplateAtom Provider::MakeSkillName(StringTemplateAtom::Builder &b, GW::Constants::SkillID skill_id)
+    {
+        auto name_str_id = this->skill_strIds[SkillTextType::Name][(size_t)skill_id];
+        return b.LookupSequence(name_str_id);
     }
 
     /*

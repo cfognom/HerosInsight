@@ -528,8 +528,14 @@ namespace HerosInsight::SkillBook
             static_props[(size_t)SkillProp::Sacrifice].SetupIncremental(nullptr, NumberAndIcon<&CustomSkillData::GetSacrifice, &RichText::Icons::Sacrifice>);
             static_props[(size_t)SkillProp::Activation].SetupIncremental(nullptr, NumberAndIcon<&CustomSkillData::GetActivation, &RichText::Icons::Activation>);
 
-            auto &text_provider = Text::GetTextProvider(GW::Constants::Language::English);
-            static_props[(size_t)SkillProp::Name].PopulateItems(*text_provider.GetNames());
+            static_props[(size_t)SkillProp::Name].SetupIncremental(
+                nullptr,
+                +[](Text::StringTemplateAtom::Builder &b, size_t skill_id, void *) -> Text::StringTemplateAtom
+                {
+                    auto &text_provider = Text::GetTextProvider(GW::Constants::Language::English);
+                    return text_provider.MakeSkillName(b, (GW::Constants::SkillID)skill_id);
+                }
+            );
 
             static_props[(size_t)SkillProp::Type].PopulateItems("SkillBookProp_Type", GW::Constants::SkillMax, GetSkillProp<&CustomSkillData::GetTypeString>);
             static_props[(size_t)SkillProp::Attribute].PopulateItems("SkillBookProp_Attribute", GW::Constants::SkillMax, GetSkillProp<&CustomSkillData::GetAttributeStr>);

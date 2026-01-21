@@ -146,6 +146,10 @@ namespace HerosInsight::Text
             {
                 return this->LookupSequence(seqId, std::span<const StringTemplateAtom>(substitutions.begin(), substitutions.size()));
             }
+            StringTemplateAtom LookupSequence(uint32_t seqId)
+            {
+                return this->LookupSequence(seqId, std::span<const StringTemplateAtom>{});
+            }
             StringTemplateAtom ExplicitSequence(std::span<const StringTemplateAtom> atoms)
             {
                 StringTemplateAtom atom;
