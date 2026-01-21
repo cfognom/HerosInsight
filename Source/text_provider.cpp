@@ -170,7 +170,7 @@ namespace HerosInsight::Text
 
     StringTemplateAtom Provider::MakeSkillDescription(StringTemplateAtom::Builder &b, GW::Constants::SkillID skill_id, bool is_concise, int8_t attr_lvl)
     {
-        auto description_str_id = this->skill_strIds[is_concise][(size_t)skill_id];
+        auto description_str_id = this->skill_strIds[is_concise ? SkillTextType::Concise : SkillTextType::Description][(size_t)skill_id];
 
         return b.LookupSequence(
             description_str_id,
