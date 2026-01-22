@@ -68,21 +68,27 @@ namespace HerosInsight::Text
         }
         else
         {
+            StringTemplateAtom content;
             if (has_attribute)
             {
-                return b.LookupSequence(
+                content = b.LookupSequence(
                     s_CommonStrings.dyn_strId,
                     {b.Number((float)param.Resolve((uint32_t)attr_lvl))}
                 );
             }
             else
             {
-                return b.LookupSequence(
+                content = b.LookupSequence(
                     s_CommonStrings.dyn_range_strId,
                     {b.Number((float)param.val0),
                      b.Number((float)param.val15)}
                 );
             }
+            return b.ExplicitSequence(
+                {b.Tag(RichText::TooltipTag(param_id)),
+                 content,
+                 b.Tag(RichText::TooltipTag())}
+            );
         }
     }
 

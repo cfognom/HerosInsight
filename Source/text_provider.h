@@ -95,8 +95,8 @@ namespace HerosInsight::Text
 #define AssimilateIntoVar(var, str) HerosInsight::Text::StringManager::StrId var = HerosInsight::Text::s_Manager.AssimilateString(str);
     struct CommonStrings
     {
-        AssimilateIntoVar(dyn_strId, "<c=#8fff8f><tip=13371337>%str1%</tip></c>");
-        AssimilateIntoVar(dyn_range_strId, "<c=#8fff8f><tip=13371337>(%str1%...%str2%)</tip></c>");
+        AssimilateIntoVar(dyn_strId, "<c=#8fff8f>%str1%</c>");
+        AssimilateIntoVar(dyn_range_strId, "<c=#8fff8f>(%str1%...%str2%)</c>");
         AssimilateIntoVar(comma, ", ");
     };
     inline CommonStrings s_CommonStrings;
