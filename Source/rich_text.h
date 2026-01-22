@@ -9,7 +9,7 @@ namespace HerosInsight::RichText
 {
     struct ColorTag
     {
-        ImU32 color; // 0 = pop color
+        ImU32 color = 0; // 0 = pop color
 
         void ToChars(OutBuf<char> output) const;
         static bool TryRead(std::string_view &remaining, ColorTag &out);
@@ -17,7 +17,7 @@ namespace HerosInsight::RichText
 
     struct TooltipTag
     {
-        int32_t id; // -1 = close tooltip
+        int32_t id = -1; // -1 = close tooltip
 
         static bool TryRead(std::string_view &remaining, TooltipTag &out);
         static std::string_view Find(std::string_view text, TooltipTag &out);
