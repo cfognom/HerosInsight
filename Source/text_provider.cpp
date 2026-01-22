@@ -87,7 +87,7 @@ namespace HerosInsight::Text
             return b.ExplicitSequence(
                 {b.Tag(RichText::TooltipTag(param_id)),
                  content,
-                 b.Tag(RichText::TooltipTag())}
+                 b.Tag(RichText::TooltipTag(-1))}
             );
         }
     }
