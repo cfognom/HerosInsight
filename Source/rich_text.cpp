@@ -243,7 +243,7 @@ namespace HerosInsight::RichText
                         auto &color_tag = tag.tag.color_tag;
                         if (color_tag.color == 0)
                         {
-                            if (!color_stack.empty()) // GW sometimes close colors without opening
+                            if (!color_stack.empty()) // GW sometimes closes colors without opening
                                 color_stack.pop();
                         }
                         else
