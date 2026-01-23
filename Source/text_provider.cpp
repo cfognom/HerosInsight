@@ -135,19 +135,19 @@ namespace HerosInsight::Text
         auto &mgr = s_Manager;
         for (size_t type = 0; type < SkillTextType::COUNT; ++type)
         {
-            const auto &raw_descs = this->skill_raw[type];
+            const auto &raw_texts = this->skill_raw[type];
             auto &skillId_to_strId = this->skill_strIds[type];
             // auto deduper1 = assembler.pieces.CreateDeduper(0);
             // auto deduper2 = assembler.strings.CreateDeduper(0);
-            std::vector<uint16_t> remapper(raw_descs.SpanCount(), std::numeric_limits<uint16_t>::max());
+            std::vector<uint16_t> remapper(raw_texts.SpanCount(), std::numeric_limits<uint16_t>::max());
             for (size_t skill_id = 0; skill_id < GW::Constants::SkillMax; ++skill_id)
             {
-                auto src_span_id = raw_descs.GetSpanId(skill_id).value();
+                auto src_span_id = raw_texts.GetSpanId(skill_id).value();
                 auto &dst_span_id = remapper[src_span_id];
                 if (dst_span_id == std::numeric_limits<uint16_t>::max())
                 {
-                    auto raw_desc = raw_descs.CGet(src_span_id);
-                    dst_span_id = mgr.AssimilateString(raw_desc);
+                    auto raw_text = raw_texts.CGet(src_span_id);
+                    dst_span_id = mgr.AssimilateString(raw_text);
                 }
                 skillId_to_strId[skill_id] = dst_span_id;
             }
