@@ -242,18 +242,27 @@ namespace HerosInsight::RichText
                     {
                         auto &color_tag = tag.tag.color_tag;
                         if (color_tag.color == 0)
-                            color_stack.pop();
+                        {
+                            if (!color_stack.empty()) // GW sometimes close colors without opening
+                                color_stack.pop();
+                        }
                         else
+                        {
                             color_stack.push_back(color_tag.color);
+                        }
                         break;
                     }
                     case TextTagType::Tooltip:
                     {
                         auto &tooltip_tag = tag.tag.tooltip_tag;
                         if (tooltip_tag.id == -1)
+                        {
                             tooltip_stack.pop();
+                        }
                         else
+                        {
                             tooltip_stack.push_back(tooltip_tag.id);
+                        }
                         break;
                     }
                     default:
@@ -278,6 +287,8 @@ namespace HerosInsight::RichText
         {
             AddSegment(text.size(), text.size());
         }
+        assert(tooltip_stack.empty());
+        assert(color_stack.empty());
     }
 
     void Drawer::DrawTextSegments(std::span<TextSegment> segments, float wrapping_min, float wrapping_max)
