@@ -65,13 +65,13 @@ namespace HerosInsight::Text
             }
         }
 
-        template <typename Handler, typename... Rest>
-        constexpr void FixCommon(std::string_view rem)
+        template <std::size_t I, typename Handlers>
+        constexpr void FixCommon(std::string_view rem, Handlers &handlers)
         {
             assert(!rem.empty());
+            auto &handler = std::get<I>(handlers);
             std::string_view current = rem;
             auto end = rem.data() + rem.size();
-            auto handler = Handler();
             while (true)
             {
                 auto found = handler.Locate(current);
@@ -84,9 +84,9 @@ namespace HerosInsight::Text
 
                 if (!current.empty())
                 {
-                    if constexpr (sizeof...(Rest) > 0)
+                    if constexpr (I + 1 < std::tuple_size_v<Handlers>)
                     {
-                        FixCommon<Rest...>(current);
+                        FixCommon<I + 1>(current, handlers);
                     }
                     else
                     {
@@ -103,6 +103,13 @@ namespace HerosInsight::Text
                 auto next = found.data() + found.size();
                 current = std::string_view(next, end - next);
             }
+        }
+
+        template <typename... Handlers>
+        constexpr void FixWithHandlers(std::string_view rem)
+        {
+            auto handlers = std::tuple<Handlers...>{};
+            FixCommon<0>(rem, handlers);
         }
 
         struct Substitution
@@ -254,7 +261,7 @@ namespace HerosInsight::Text
             .mgr = *this,
         };
         // clang-format off
-        a.FixCommon<
+        a.FixWithHandlers<
             Assimilator::Substitution,
             Assimilator::ReplacePlural,
             Assimilator::OptionalS,
