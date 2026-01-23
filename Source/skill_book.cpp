@@ -1451,6 +1451,11 @@ namespace HerosInsight::SkillBook
         void DrawFilterTooltip()
         {
             ImGui::BeginTooltip();
+            // Temporary fix start
+            ImGui::TextUnformatted("[Here should be help information (not yet implemented!)]");
+            ImGui::EndTooltip();
+            return;
+            // Temporary fix end
 
             auto width = 600;
             std::string_view text;
