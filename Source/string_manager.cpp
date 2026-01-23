@@ -566,37 +566,6 @@ namespace HerosInsight::Text
         "What cursed machine are you using??"
     );
 
-    constexpr EncodedNumber EncodeSearchableNumber(float num)
-    {
-        EncodedNumber out;
-
-        out[0] = '\x1';
-
-        uint32_t value = std::bit_cast<uint32_t>(num);
-
-        // Manipulate values so that sort correctly during lexical sort
-        if (num < 0) // Negative values become positive and all bits are inverted
-            value = ~value;
-        else if (num >= 0) // Positive values and negative zero become negative
-            value |= 0x80000000;
-
-        for (int i = 0; i < 6; ++i)
-        {
-            size_t bits_idx;
-            if constexpr (std::endian::native == std::endian::little)
-            {
-                bits_idx = 5 - i;
-            }
-            else
-            {
-                bits_idx = i;
-            }
-            out[1 + i] = char(((value >> (6 * bits_idx)) & 0x3F) | 0x80);
-        }
-
-        return out;
-    }
-
     float DecodeSearchableNumber(EncodedNumber &enc_num)
     {
         assert(enc_num[0] == '\x1');
