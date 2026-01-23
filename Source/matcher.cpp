@@ -30,7 +30,8 @@ namespace HerosInsight
     bool TryReadNumberOrFraction(std::string_view &rem, float &num)
     {
         auto r = rem;
-        if (Utils::TryRead('-', r)) // We explicitly don't support negative numbers
+        if (Utils::TryRead('-', r) ||
+            Utils::TryRead('+', r)) // Leading + or - is not treated as part of the number
             return false;
         if (Utils::TryReadNumber(r, num))
         {
