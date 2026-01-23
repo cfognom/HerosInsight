@@ -505,10 +505,18 @@ namespace HerosInsight::SkillBook
             if (value == 0)
                 return {};
 
-            return b.ExplicitSequence(
-                {b.MixedNumber(value),
-                 b.ExplicitString(*Icon)}
-            );
+            FixedVector<Text::StringTemplateAtom, 3> args;
+
+            if (value < 0)
+            {
+                value = -value;
+                args.push_back(b.Char('-'));
+            }
+
+            args.push_back(b.MixedNumber(value));
+            args.push_back(b.ExplicitString(*Icon));
+
+            return b.ExplicitSequence(args);
         }
 
         template <auto Func>

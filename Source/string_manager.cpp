@@ -223,7 +223,7 @@ namespace HerosInsight::Text
             int num;
             std::string_view Locate(std::string_view rem)
             {
-                auto pos = rem.find_first_of("-0123456789");
+                auto pos = rem.find_first_of("0123456789");
                 if (pos == std::string_view::npos)
                     return {};
                 auto begin = rem.data() + pos;
