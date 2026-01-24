@@ -1698,9 +1698,15 @@ namespace HerosInsight::SkillBook
 
             if (!feedback.empty())
             {
+                ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
+
+                // ImGui::TextUnformatted("Feedback:");
+                // ImGui::SameLine(0, 0);
                 auto window = ImGui::GetCurrentWindow();
                 auto wrapping_max = window->WorkRect.GetWidth();
                 text_drawer.DrawRichText(feedback, 0, wrapping_max);
+
+                ImGui::PopStyleColor();
             }
         }
 

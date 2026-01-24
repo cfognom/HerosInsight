@@ -18,10 +18,14 @@ namespace HerosInsight
     {
         if (offset == 0 || offset == text.size())
             return true;
+        if ((text[offset] & 0xC0) == 0x80) // UTF-8 continuation
+            return false;
+        if (text[offset] == '\x1') // start of number in our own encoding
+            return true;
         if (Utils::IsAlpha(text[offset]))
             return !Utils::IsAlpha(text[offset - 1]);
-        if (Utils::IsDigit(text[offset]))
-            return !Utils::IsDigit(text[offset - 1]);
+        // if (Utils::IsDigit(text[offset]))
+        //     return !Utils::IsDigit(text[offset - 1]);
         if (text[offset - 1] != text[offset])
             return true;
         return false;
@@ -47,124 +51,115 @@ namespace HerosInsight
         return false;
     }
 
+    // ' ' (space) means: "new word" and makes distinct
+    // '..' (2 dots) means: skip non-space
+    // '...' (3 dots) means: skip anything
+
     Matcher::Matcher(std::string_view source)
     {
         using Type = Matcher::Atom::Type;
-        using Location = Matcher::Atom::Location;
+        using SearchBound = Matcher::Atom::SearchBound;
         using PostCheck = Matcher::Atom::PostCheck;
 
-        auto location = Location::Anywhere;
+        auto search_bound = SearchBound::Anywhere;
 
         auto rem = source;
-        for (; !rem.empty(); location = (Location)0)
+        for (; !rem.empty(); search_bound = SearchBound::WithinXWords)
         {
-            while (true)
+            auto &atom = this->atoms.emplace_back();
+
+            bool is_distinct = true;
+            while (true) // Parse search bound
             {
-                bool has_leading_spaces = Utils::TryReadSpaces(rem);
-                bool has_dot2 = Utils::TryRead("..", rem);
-                bool has_dot3 = has_dot2 && Utils::TryRead('.', rem);
-
-                Location new_location;
-                if (has_dot3)
+                bool has_spaces = Utils::TryReadSpaces(rem);
+                atom.within_count += has_spaces;
+                is_distinct |= has_spaces;
+                if (has_spaces)
                 {
-                    location = std::max(location, Location::Anywhere);
+                    search_bound = std::max(search_bound, SearchBound::WithinXWords);
                 }
-                else if (has_dot2)
+                bool has_2dots = Utils::TryRead("..", rem);
+                bool has_3dots = has_2dots && Utils::TryRead('.', rem);
+                if (has_3dots)
                 {
-                    location = std::max(location, Location::WithinSentence);
+                    search_bound = SearchBound::Anywhere;
                 }
-                else if (has_leading_spaces)
-                {
-                    location = std::max(location, Location::WithinNextWord);
-                }
-                else
-                {
-                    location = std::max(location, Location::WithinWord);
-                    if (rem.empty())
-                        goto super_break;
+                is_distinct &= !has_2dots;
+                if (!has_2dots)
                     break;
-                }
             }
+            atom.search_bound = search_bound;
 
-            // if (Utils::TryRead("???", rem))
-            // {
-            //     this->atoms.push_back(Matcher::Atom(Type::ZeroOrMoreWildcard, location));
-            //     continue;
-            // }
-
-            // if (Utils::TryRead("??", rem))
-            // {
-            //     this->atoms.push_back(Matcher::Atom(Type::Wildcard, location));
-            //     this->atoms.push_back(Matcher::Atom(Type::ZeroOrMoreWildcard, location));
-            //     continue;
-            // }
-
-            // if (Utils::TryRead('?', rem))
-            // {
-            //     this->atoms.push_back(Matcher::Atom(Type::Wildcard, location));
-            //     continue;
-            // }
+            if (rem.empty())
+            {
+                atoms.pop_back();
+                break;
+            }
 
             if (Utils::TryRead('#', rem))
             {
-                auto &atom = this->atoms.emplace_back(Type::AnyNumber, location);
+                atom.type = Type::AnyNumber;
                 continue;
             }
 
             {
                 auto r = rem;
-                PostCheck post_check = PostCheck::Null;
                 if (Utils::TryRead('<', r))
                 {
-                    post_check |= PostCheck::NumLess;
+                    atom.post_check |= PostCheck::NumLess;
                 }
                 else if (Utils::TryRead('>', r))
                 {
-                    post_check |= PostCheck::NumGreater;
+                    atom.post_check |= PostCheck::NumGreater;
                 }
                 else
                 {
-                    post_check |= PostCheck::NumEqual;
+                    atom.post_check |= PostCheck::NumEqual;
                 }
 
                 if (Utils::TryRead('=', r))
                 {
-                    post_check |= PostCheck::NumEqual;
+                    atom.post_check |= PostCheck::NumEqual;
                 }
 
                 float num;
                 if (TryReadNumberOrFraction(r, num))
                 {
                     auto type = Type::AnyNumber;
-                    if (post_check == PostCheck::NumEqual)
+                    if ((atom.post_check & PostCheck::NumChecks) == PostCheck::NumEqual)
                     {
                         // Pure equal, we can just std::find it
-                        post_check = PostCheck::Null;
-                        type = Type::EncodedNumber;
+                        Utils::RemoveFlag(atom.post_check, PostCheck::NumChecks);
+                        type = Type::ExactNumber;
                     }
-                    auto &atom = this->atoms.emplace_back(type, location);
+                    atom.type = type;
+                    atom.src_str = std::string_view(rem.data(), r.data() - rem.data());
                     atom.enc_num = Text::EncodeSearchableNumber(num);
-                    atom.post_check = post_check;
                     rem = r;
                     continue;
                 }
             }
 
-            if (!Utils::IsSpace(rem[0]))
+            atom.type = Type::String;
+            if (is_distinct)
+                atom.post_check |= PostCheck::Distinct;
+
+            if (!rem.empty() && !Utils::IsSpace(rem[0]))
             {
                 size_t i = 0;
                 do
                 {
                     ++i;
-                } while (i < rem.size() && !Utils::IsSpace(rem[i]) && !Utils::IsDigit(rem[i]) && rem[i] != '.');
+                } while (!IsBoundary(rem, i));
                 auto str = rem.substr(0, i);
-                auto &atom = this->atoms.emplace_back(Type::String, location, str);
-                atom.post_check = PostCheck::CaseSubset;
+                atom.src_str = str;
+                atom.post_check |= PostCheck::CaseSubset;
                 rem = rem.substr(i);
                 continue;
             }
+
+            atom.src_str = "";
         }
-    super_break:
 
         auto values = atoms | std::views::transform(&Atom::src_str);
         this->strings = LoweredTextVector(values);
@@ -175,7 +170,7 @@ namespace HerosInsight
 
             // Optimization: When the atom requires to be a case subset
             // but there are no upper-case letters in the needle, we can skip the case check
-            // ("nothing" is a subset of "anything")
+            // ("nothing" is guaranteed to be a subset of "anything")
             if (Utils::HasFlag(atom.post_check, PostCheck::CaseSubset) &&
                 !atom.needle.uppercase.Any())
             {
@@ -283,22 +278,22 @@ namespace HerosInsight
 
     size_t CalcLimit(Matcher::Atom atom, LoweredText text, size_t offset)
     {
-        using Location = Matcher::Atom::Location;
+        using SearchBound = Matcher::Atom::SearchBound;
 
         size_t search_space_max;
-        switch (atom.location)
+        switch (atom.search_bound)
         {
-            case Location::WithinNextWord:
-                search_space_max = FindNextWord(text.text, offset);
-                search_space_max = text.text.find(' ', search_space_max);
-                break;
-            case Location::WithinWord:
+            case SearchBound::WithinXWords:
+                for (size_t i = 0; i < atom.within_count; ++i)
+                {
+                    offset = FindNextWord(text.text, offset);
+                    if (offset == std::string::npos)
+                        return text.text.size();
+                }
                 search_space_max = text.text.find(' ', offset);
                 break;
-            case Location::WithinSentence:
-                search_space_max = text.text.find('.', offset);
-                break;
-            case Location::Anywhere:
+
+            case SearchBound::Anywhere:
             default:
                 return text.text.size();
         }
@@ -324,11 +319,8 @@ namespace HerosInsight
 
         switch (atom.type)
         {
-            case Type::AnyNonSpace:
-                offset = haystack.text.find_first_not_of(' ', offset);
-                break;
             case Type::String:
-            case Type::EncodedNumber:
+            case Type::ExactNumber:
                 offset = haystack.text.find(atom.GetNeedleStr(), offset);
                 break;
             case Type::AnyNumber:
@@ -341,7 +333,7 @@ namespace HerosInsight
 
     bool PostChecks(Matcher::Atom &atom, LoweredText haystack, size_t offset)
     {
-        if (atom.location >= Matcher::Atom::Location::WithinNextWord)
+        if (Utils::HasFlag(atom.post_check, Matcher::Atom::PostCheck::Distinct))
         {
             if (!IsBoundary(haystack.text, offset))
                 return false;
@@ -359,9 +351,9 @@ namespace HerosInsight
             auto needle = atom.GetNeedleStr();
             auto found = haystack.text.substr(offset, needle.size());
             // clang-format off
-            if (Utils::HasFlag(atom.post_check, Matcher::Atom::PostCheck::NumEqual  )) num_in_range |= found == needle;
-            if (Utils::HasFlag(atom.post_check, Matcher::Atom::PostCheck::NumLess   )) num_in_range |= found <  needle;
-            if (Utils::HasFlag(atom.post_check, Matcher::Atom::PostCheck::NumGreater)) num_in_range |= found >  needle;
+            if (                 Utils::HasFlag(atom.post_check, Matcher::Atom::PostCheck::NumLess   )) num_in_range |= found <  needle; else
+            if (                 Utils::HasFlag(atom.post_check, Matcher::Atom::PostCheck::NumGreater)) num_in_range |= found >  needle;
+            if (!num_in_range && Utils::HasFlag(atom.post_check, Matcher::Atom::PostCheck::NumEqual  )) num_in_range |= found == needle;
             // clang-format on
             if (!num_in_range)
                 return false;

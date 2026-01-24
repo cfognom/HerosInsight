@@ -137,40 +137,36 @@ namespace HerosInsight
     {
         struct Atom
         {
-            enum struct Type
+            enum struct Type : uint8_t
             {
                 String,
-                AnyNonSpace,
+                ExactNumber,
                 AnyNumber,
-                EncodedNumber,
             };
 
-            enum struct Location
+            enum struct SearchBound : uint8_t
             {
-                WithinWord,
-                WithinNextWord,
-                WithinSentence,
+                // They must be in order of strength
+                WithinXWords,
                 Anywhere,
             };
 
-            enum struct PostCheck
+            enum struct PostCheck : uint8_t
             {
                 Null = 0,
-                WordStart = 1,
-                CaseEqual = 2,
-                CaseSubset = 4,
-                NumEqual = 16,
-                NumLess = 32,
-                NumGreater = 64,
+                Distinct = 1 << 0,  // If the match must start at a boundary
+                CaseEqual = 1 << 1, // Not used
+                CaseSubset = 1 << 2,
+                NumEqual = 1 << 3,
+                NumLess = 1 << 4,
+                NumGreater = 1 << 5,
                 NumChecks = NumEqual | NumLess | NumGreater,
             };
 
-            Atom(Type type, Location location, std::string_view value) : type(type), location(location), src_str(value) {}
-            Atom(Type type, Location location) : type(type), location(location) {}
-
             Type type;
             PostCheck post_check = PostCheck::Null;
-            Location location;
+            SearchBound search_bound;
+            uint8_t within_count = 0;
             std::string_view src_str;
             Text::EncodedNumber enc_num;
             LoweredText needle;
@@ -190,6 +186,8 @@ namespace HerosInsight
 
         std::string ToString() const;
 
+        std::vector<Atom> atoms;
+
     private:
         struct MatchRecord
         {
@@ -199,7 +197,6 @@ namespace HerosInsight
         };
 
         LoweredTextVector strings;
-        std::vector<Atom> atoms;
         std::vector<MatchRecord> work_mem;
     };
 }
