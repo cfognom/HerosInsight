@@ -389,6 +389,15 @@ namespace HerosInsight::Utils
         return count;
     }
 
+    size_t TrimTrailingSpaces(std::string_view &view)
+    {
+        auto len = view.size();
+        while (len > 0 && Utils::IsSpace(view[len - 1]))
+            --len;
+        view = view.substr(0, len);
+        return len;
+    }
+
     std::string ToHumanReadable(float number, std::span<Unit> units)
     {
         if (units.empty())

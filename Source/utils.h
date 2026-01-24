@@ -252,6 +252,7 @@ namespace HerosInsight::Utils
     bool TryReadHex(std::string_view &remaining, uint32_t &out);
     bool TryReadHexColor(std::string_view &remaining, ImU32 &out);
     size_t ReadSpaces(std::string_view &remaining);
+    size_t TrimTrailingSpaces(std::string_view &view);
 
     struct Unit
     {
