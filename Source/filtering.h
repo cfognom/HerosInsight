@@ -478,7 +478,7 @@ namespace HerosInsight::Filtering
             {
                 if (atom.type == Matcher::Atom::Type::AnyNumber)
                 {
-                    if (!Utils::HasFlag(atom.post_check, Matcher::Atom::PostCheck::NumChecks))
+                    if (!Utils::HasAnyFlag(atom.post_check, Matcher::Atom::PostCheck::NumChecks))
                     {
                         return "any number";
                     }
@@ -501,7 +501,7 @@ namespace HerosInsight::Filtering
                 for (size_t i = 0; i < filter.matcher.atoms.size(); ++i)
                 {
                     auto &atom = filter.matcher.atoms[i];
-                    bool is_distinct = Utils::HasFlag(atom.post_check, Matcher::Atom::PostCheck::Distinct);
+                    bool is_distinct = Utils::HasAnyFlag(atom.post_check, Matcher::Atom::PostCheck::Distinct);
                     if (is_distinct)
                         std::format_to(inserter, "distinct ");
                     auto src_str = GetDispStr(atom);
@@ -518,7 +518,7 @@ namespace HerosInsight::Filtering
                             std::string_view number_str = atom.src_str;
                             if (atom.type == Matcher::Atom::Type::AnyNumber)
                             {
-                                if (!Utils::HasFlag(atom.post_check, Matcher::Atom::PostCheck::NumChecks))
+                                if (!Utils::HasAnyFlag(atom.post_check, Matcher::Atom::PostCheck::NumChecks))
                                     number_str = "any number";
                             }
                             else if (atom.type == Matcher::Atom::Type::ExactNumber)

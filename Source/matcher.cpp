@@ -129,7 +129,7 @@ namespace HerosInsight
                     if ((atom.post_check & PostCheck::NumChecks) == PostCheck::NumEqual)
                     {
                         // Pure equal, we can just std::find it
-                        Utils::RemoveFlag(atom.post_check, PostCheck::NumChecks);
+                        Utils::RemoveFlags(atom.post_check, PostCheck::NumChecks);
                         type = Type::ExactNumber;
                     }
                     atom.type = type;
@@ -171,10 +171,10 @@ namespace HerosInsight
             // Optimization: When the atom requires to be a case subset
             // but there are no upper-case letters in the needle, we can skip the case check
             // ("nothing" is guaranteed to be a subset of "anything")
-            if (Utils::HasFlag(atom.post_check, PostCheck::CaseSubset) &&
+            if (Utils::HasAnyFlag(atom.post_check, PostCheck::CaseSubset) &&
                 !atom.needle.uppercase.Any())
             {
-                Utils::RemoveFlag(atom.post_check, PostCheck::CaseSubset);
+                Utils::RemoveFlags(atom.post_check, PostCheck::CaseSubset);
             }
         }
         work_mem.resize(atoms.size());
@@ -333,27 +333,27 @@ namespace HerosInsight
 
     bool PostChecks(Matcher::Atom &atom, LoweredText haystack, size_t offset)
     {
-        if (Utils::HasFlag(atom.post_check, Matcher::Atom::PostCheck::Distinct))
+        if (Utils::HasAnyFlag(atom.post_check, Matcher::Atom::PostCheck::Distinct))
         {
             if (!IsBoundary(haystack.text, offset))
                 return false;
         }
 
-        if (Utils::HasFlag(atom.post_check, Matcher::Atom::PostCheck::CaseSubset))
+        if (Utils::HasAnyFlag(atom.post_check, Matcher::Atom::PostCheck::CaseSubset))
         {
             if (!atom.needle.uppercase.IsSubsetOf(haystack.uppercase.Subview(offset, atom.needle.text.size())))
                 return false;
         }
 
-        if (Utils::HasFlag(atom.post_check, Matcher::Atom::PostCheck::NumChecks))
+        if (Utils::HasAnyFlag(atom.post_check, Matcher::Atom::PostCheck::NumChecks))
         {
             bool num_in_range = false;
             auto needle = atom.GetNeedleStr();
             auto found = haystack.text.substr(offset, needle.size());
             // clang-format off
-            if (                 Utils::HasFlag(atom.post_check, Matcher::Atom::PostCheck::NumLess   )) num_in_range |= found <  needle; else
-            if (                 Utils::HasFlag(atom.post_check, Matcher::Atom::PostCheck::NumGreater)) num_in_range |= found >  needle;
-            if (!num_in_range && Utils::HasFlag(atom.post_check, Matcher::Atom::PostCheck::NumEqual  )) num_in_range |= found == needle;
+            if (                 Utils::HasAnyFlag(atom.post_check, Matcher::Atom::PostCheck::NumLess   )) num_in_range |= found <  needle; else
+            if (                 Utils::HasAnyFlag(atom.post_check, Matcher::Atom::PostCheck::NumGreater)) num_in_range |= found >  needle;
+            if (!num_in_range && Utils::HasAnyFlag(atom.post_check, Matcher::Atom::PostCheck::NumEqual  )) num_in_range |= found == needle;
             // clang-format on
             if (!num_in_range)
                 return false;

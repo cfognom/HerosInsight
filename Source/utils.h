@@ -634,19 +634,27 @@ namespace HerosInsight::Utils
     void ImGuiDebugLastItemRect();
 
     template <typename FlagEnum>
-    constexpr bool HasFlag(FlagEnum value, FlagEnum flag)
+    constexpr bool HasAnyFlag(FlagEnum value, FlagEnum flags)
         requires std::is_enum_v<FlagEnum>
     {
         using U = std::underlying_type_t<FlagEnum>;
-        return (static_cast<U>(value) & static_cast<U>(flag)) != 0;
+        return (static_cast<U>(value) & static_cast<U>(flags)) != 0;
     }
 
     template <typename FlagEnum>
-    constexpr void RemoveFlag(FlagEnum &value, FlagEnum flag)
+    constexpr bool HasAllFlags(FlagEnum value, FlagEnum flags)
         requires std::is_enum_v<FlagEnum>
     {
         using U = std::underlying_type_t<FlagEnum>;
-        value = static_cast<FlagEnum>(static_cast<U>(value) & ~static_cast<U>(flag));
+        return (static_cast<U>(value) & static_cast<U>(flags)) == static_cast<U>(flags);
+    }
+
+    template <typename FlagEnum>
+    constexpr void RemoveFlags(FlagEnum &value, FlagEnum flags)
+        requires std::is_enum_v<FlagEnum>
+    {
+        using U = std::underlying_type_t<FlagEnum>;
+        value = static_cast<FlagEnum>(static_cast<U>(value) & ~static_cast<U>(flags));
     }
 
     // Macro for embedding enum
