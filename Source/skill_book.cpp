@@ -497,7 +497,7 @@ namespace HerosInsight::SkillBook
         std::vector<Propset> meta_propsets;
         LoweredTextVector meta_prop_names;
 
-        template <auto Func, auto Icon>
+        template <auto Func, auto Unit, auto Icon>
         static Text::StringTemplateAtom NumberAndIcon(Text::StringTemplateAtom::Builder &b, size_t skill_id, void *)
         {
             auto &cskill = CustomSkillDataModule::GetSkills()[skill_id];
@@ -505,7 +505,7 @@ namespace HerosInsight::SkillBook
             if (value == 0)
                 return {};
 
-            FixedVector<Text::StringTemplateAtom, 3> args;
+            FixedVector<Text::StringTemplateAtom, 4> args;
 
             if (value < 0)
             {
@@ -514,6 +514,10 @@ namespace HerosInsight::SkillBook
             }
 
             args.push_back(b.MixedNumber(value));
+            if constexpr (Unit != nullptr)
+            {
+                args.push_back(b.Chars(*Unit));
+            }
             args.push_back(b.ExplicitString(*Icon));
 
             return b.ExplicitSequence(args);
@@ -528,13 +532,15 @@ namespace HerosInsight::SkillBook
 
         void InitProps()
         {
-            static_props[(size_t)SkillProp::Energy].SetupIncremental(nullptr, NumberAndIcon<&CustomSkillData::GetEnergy, &RichText::Icons::EnergyOrb>);
-            static_props[(size_t)SkillProp::Recharge].SetupIncremental(nullptr, NumberAndIcon<&CustomSkillData::GetRecharge, &RichText::Icons::Recharge>);
+            static std::string_view Percent = "%";
 
-            static_props[(size_t)SkillProp::Upkeep].SetupIncremental(nullptr, NumberAndIcon<&CustomSkillData::GetUpkeep, &RichText::Icons::Upkeep>);
-            static_props[(size_t)SkillProp::Overcast].SetupIncremental(nullptr, NumberAndIcon<&CustomSkillData::GetOvercast, &RichText::Icons::Overcast>);
-            static_props[(size_t)SkillProp::Sacrifice].SetupIncremental(nullptr, NumberAndIcon<&CustomSkillData::GetSacrifice, &RichText::Icons::Sacrifice>);
-            static_props[(size_t)SkillProp::Activation].SetupIncremental(nullptr, NumberAndIcon<&CustomSkillData::GetActivation, &RichText::Icons::Activation>);
+            static_props[(size_t)SkillProp::Energy].SetupIncremental(nullptr, NumberAndIcon<&CustomSkillData::GetEnergy, nullptr, &RichText::Icons::EnergyOrb>);
+            static_props[(size_t)SkillProp::Recharge].SetupIncremental(nullptr, NumberAndIcon<&CustomSkillData::GetRecharge, nullptr, &RichText::Icons::Recharge>);
+
+            static_props[(size_t)SkillProp::Upkeep].SetupIncremental(nullptr, NumberAndIcon<&CustomSkillData::GetUpkeep, nullptr, &RichText::Icons::Upkeep>);
+            static_props[(size_t)SkillProp::Overcast].SetupIncremental(nullptr, NumberAndIcon<&CustomSkillData::GetOvercast, nullptr, &RichText::Icons::Overcast>);
+            static_props[(size_t)SkillProp::Sacrifice].SetupIncremental(nullptr, NumberAndIcon<&CustomSkillData::GetSacrifice, &Percent, &RichText::Icons::Sacrifice>);
+            static_props[(size_t)SkillProp::Activation].SetupIncremental(nullptr, NumberAndIcon<&CustomSkillData::GetActivation, nullptr, &RichText::Icons::Activation>);
 
             static_props[(size_t)SkillProp::Name].SetupIncremental(
                 nullptr,
