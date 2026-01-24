@@ -237,23 +237,74 @@ namespace HerosInsight::Filtering
             filter.source_text = source;
             Utils::ReadSpaces(source);
 
-            auto splitter_pos = source.find(':');
-            if (splitter_pos != std::string_view::npos)
+            enum struct SeparatorType
             {
-                auto target_str = source.substr(0, splitter_pos);
+                None,
+                Colon,
+                Equal,
+                LessThan,
+                GreaterThan,
+                Not,
+            };
+            SeparatorType separator_type = SeparatorType::None;
+            auto separator_pos = source.find(':');
+            if (separator_pos != std::string_view::npos)
+            {
+                separator_type = SeparatorType::Colon;
+            }
+            else
+            {
+                auto rem = source;
+                size_t temp_pos;
+                if (temp_pos = rem.find('='), temp_pos != std::string_view::npos)
+                {
+                    separator_type = SeparatorType::Equal;
+                    separator_pos = temp_pos;
+                    rem = rem.substr(0, separator_pos);
+                }
+                if (temp_pos = rem.find('<'), temp_pos != std::string_view::npos)
+                {
+                    separator_type = SeparatorType::LessThan;
+                    separator_pos = temp_pos;
+                    rem = rem.substr(0, separator_pos);
+                }
+                if (temp_pos = rem.find('>'), temp_pos != std::string_view::npos)
+                {
+                    separator_type = SeparatorType::GreaterThan;
+                    separator_pos = temp_pos;
+                    rem = rem.substr(0, separator_pos);
+                }
+                if (temp_pos = rem.find('!'), temp_pos != std::string_view::npos)
+                {
+                    separator_type = SeparatorType::Not;
+                    separator_pos = temp_pos;
+                    rem = rem.substr(0, separator_pos);
+                }
+            }
+
+            std::optional<size_t> meta_prop_id = std::nullopt;
+            if (separator_pos != std::string_view::npos)
+            {
+                auto target_str = source.substr(0, separator_pos);
                 if (!target_str.empty())
                 {
-                    auto index = BestMatch(target_str);
-                    if (!index.has_value())
-                        return false;
-                    filter.meta_prop_id = index.value();
+                    meta_prop_id = BestMatch(target_str);
                 }
+            }
 
-                size_t i = splitter_pos + 1;
-                while (i < source.size() && Utils::IsSpace(source[i]))
-                    ++i;
-
-                source = source.substr(i);
+            if (meta_prop_id.has_value())
+            {
+                filter.meta_prop_id = meta_prop_id.value();
+                source = source.substr(separator_pos);
+                if (separator_type == SeparatorType::Colon)
+                {
+                    source = source.substr(1);
+                }
+            }
+            else
+            {
+                if (separator_type == SeparatorType::Colon)
+                    return false;
             }
 
             Utils::ReadSpaces(source);
