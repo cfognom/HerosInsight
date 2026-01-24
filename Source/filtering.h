@@ -312,7 +312,7 @@ namespace HerosInsight::Filtering
             filter.filter_text = rem;
             filter.inverted = Utils::TryRead('!', rem);
 
-            while (!rem.empty())
+            do
             {
                 auto or_pos = rem.find('|');
                 std::string_view content;
@@ -328,11 +328,9 @@ namespace HerosInsight::Filtering
                 }
                 Utils::ReadSpaces(content);
                 Utils::TrimTrailingSpaces(content);
-                if (content.empty())
-                    continue;
 
                 filter.matchers.emplace_back(Matcher(content));
-            }
+            } while (!rem.empty());
 
             return true;
         }
@@ -593,68 +591,75 @@ namespace HerosInsight::Filtering
                     }
                     else
                     {
-                        for (size_t a = 0; a < matcher.atoms.size(); ++a)
+                        if (matcher.atoms.empty())
                         {
-                            auto &atom = matcher.atoms[a];
-
-                            bool is_leading = Utils::HasAnyFlag(atom.post_check, Matcher::Atom::PostCheck::Distinct);
-                            if (is_leading)
-                                std::format_to(inserter, "leading ");
-                            auto src_str = GetDispStr(atom);
-                            switch (atom.type)
+                            std::format_to(inserter, "<c=@skilldyn>[Nothing]</c>");
+                        }
+                        else
+                        {
+                            for (size_t a = 0; a < matcher.atoms.size(); ++a)
                             {
-                                case Matcher::Atom::Type::String:
+                                auto &atom = matcher.atoms[a];
+
+                                bool is_leading = Utils::HasAnyFlag(atom.post_check, Matcher::Atom::PostCheck::Distinct);
+                                if (is_leading)
+                                    std::format_to(inserter, "leading ");
+                                auto src_str = GetDispStr(atom);
+                                switch (atom.type)
                                 {
-                                    std::format_to(inserter, "<c=@skilldyn>'{}'</c>", atom.src_str);
-                                    break;
+                                    case Matcher::Atom::Type::String:
+                                    {
+                                        std::format_to(inserter, "<c=@skilldyn>'{}'</c>", atom.src_str);
+                                        break;
+                                    }
+                                    case Matcher::Atom::Type::AnyNumber:
+                                    case Matcher::Atom::Type::ExactNumber:
+                                    {
+                                        std::string_view number_str = atom.src_str;
+                                        if (atom.type == Matcher::Atom::Type::AnyNumber)
+                                        {
+                                            if (!Utils::HasAnyFlag(atom.post_check, Matcher::Atom::PostCheck::NumChecks))
+                                                number_str = "[AnyNumber]";
+                                        }
+                                        else if (atom.type == Matcher::Atom::Type::ExactNumber)
+                                        {
+                                            if (!atom.src_str.empty() && atom.src_str[0] == '=')
+                                                number_str = atom.src_str.substr(1);
+                                        }
+
+                                        std::format_to(inserter, "<c=@skilldyn>{}</c>", number_str);
+                                        break;
+                                    }
                                 }
-                                case Matcher::Atom::Type::AnyNumber:
-                                case Matcher::Atom::Type::ExactNumber:
+                                switch (atom.search_bound)
                                 {
-                                    std::string_view number_str = atom.src_str;
-                                    if (atom.type == Matcher::Atom::Type::AnyNumber)
-                                    {
-                                        if (!Utils::HasAnyFlag(atom.post_check, Matcher::Atom::PostCheck::NumChecks))
-                                            number_str = "any number";
-                                    }
-                                    else if (atom.type == Matcher::Atom::Type::ExactNumber)
-                                    {
-                                        if (!atom.src_str.empty() && atom.src_str[0] == '=')
-                                            number_str = atom.src_str.substr(1);
-                                    }
-
-                                    std::format_to(inserter, "<c=@skilldyn>{}</c>", number_str);
-                                    break;
+                                    case Matcher::Atom::SearchBound::Anywhere:
+                                        // std::format_to(inserter, " <c=#ffff80>anywhere</c>");
+                                        break;
+                                    case Matcher::Atom::SearchBound::WithinXWords:
+                                        switch (atom.within_count)
+                                        {
+                                            case 0:
+                                                std::format_to(inserter, " <c=#ffff80>within same word</c>");
+                                                break;
+                                            case 1:
+                                                std::format_to(inserter, " <c=#ffff80>within 1 word</c>");
+                                                break;
+                                            default:
+                                                std::format_to(inserter, " <c=#ffff80>within {} words</c>", atom.within_count);
+                                                break;
+                                        }
+                                        break;
                                 }
-                            }
-                            switch (atom.search_bound)
-                            {
-                                case Matcher::Atom::SearchBound::Anywhere:
-                                    // std::format_to(inserter, " <c=#ffff80>anywhere</c>");
-                                    break;
-                                case Matcher::Atom::SearchBound::WithinXWords:
-                                    switch (atom.within_count)
-                                    {
-                                        case 0:
-                                            std::format_to(inserter, " <c=#ffff80>within same word</c>");
-                                            break;
-                                        case 1:
-                                            std::format_to(inserter, " <c=#ffff80>within 1 word</c>");
-                                            break;
-                                        default:
-                                            std::format_to(inserter, " <c=#ffff80>within {} words</c>", atom.within_count);
-                                            break;
-                                    }
-                                    break;
-                            }
 
-                            if (a + 2 < matcher.atoms.size())
-                            {
-                                std::format_to(inserter, ", then ");
-                            }
-                            else if (a + 1 < matcher.atoms.size()) // second to last
-                            {
-                                std::format_to(inserter, " and then ");
+                                if (a + 2 < matcher.atoms.size())
+                                {
+                                    std::format_to(inserter, ", then ");
+                                }
+                                else if (a + 1 < matcher.atoms.size()) // second to last
+                                {
+                                    std::format_to(inserter, " and then ");
+                                }
                             }
                         }
                     }
