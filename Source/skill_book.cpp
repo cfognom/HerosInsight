@@ -743,6 +743,13 @@ namespace HerosInsight::SkillBook
         bool limit_to_characters_professions = false;
         bool show_null_stats = false;
         bool snap_to_skill = true;
+        enum struct FeedbackSetting : int
+        {
+            Hidden,
+            Concise,
+            Detailed,
+        };
+        FeedbackSetting feedback_setting = FeedbackSetting::Detailed;
     };
 
     struct FilteringAdapter
@@ -1132,6 +1139,12 @@ namespace HerosInsight::SkillBook
                 ImGui::Checkbox("Prefer concise descriptions", &settings.prefer_concise_descriptions);
                 filter_dirty |= ImGui::Checkbox("Limit to character's professions", &settings.limit_to_characters_professions);
 
+                const char *feedback_items[] = {"Hidden", "Concise", "Detailed"};
+                if (ImGui::Combo("Feedback", (int *)&settings.feedback_setting, feedback_items, IM_ARRAYSIZE(feedback_items)))
+                {
+                    UpdateFeedback();
+                }
+
                 ImGui::Columns(1);
             }
         }
@@ -1229,6 +1242,12 @@ namespace HerosInsight::SkillBook
             }
         }
 
+        void UpdateFeedback()
+        {
+            bool verbose = settings.feedback_setting == BookSettings::FeedbackSetting::Detailed;
+            filter_device.GetFeedback(query, feedback, verbose);
+        }
+
         void UpdateQuery()
         {
             auto input_text_view = std::string_view(input_text, strlen(input_text));
@@ -1244,7 +1263,7 @@ namespace HerosInsight::SkillBook
             //     ApplyCommand(command, filtered_skills);
             // }
 
-            filter_device.GetFeedback(query, feedback);
+            UpdateFeedback();
 
             // if (active_state->filtered_skills.size() > 0)
             // {
@@ -1702,7 +1721,8 @@ namespace HerosInsight::SkillBook
             //     }
             // }
 
-            if (!feedback.empty())
+            if (settings.feedback_setting != BookSettings::FeedbackSetting::Hidden &&
+                !feedback.empty())
             {
                 ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
 

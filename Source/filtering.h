@@ -356,18 +356,27 @@ namespace HerosInsight::Filtering
         {
             query.clear();
 
-            char *p = (char *)source.data();
-            char *end = p + source.size();
-
-            while (p < end)
+            auto rem = source;
+            while (!rem.empty())
             {
-                auto stmt_start = p;
-                while (p < end && *p != '&')
-                    ++p;
-                auto stmt_end = p;
-                std::string_view stmt(stmt_start, stmt_end - stmt_start);
+                auto stmt_end = rem.find('&');
+                std::string_view stmt;
+                if (stmt_end == std::string_view::npos)
+                {
+                    stmt = rem;
+                    rem = "";
+                }
+                else
+                {
+                    stmt = rem.substr(0, stmt_end);
+                    rem = rem.substr(stmt_end + 1);
+                }
+                Utils::ReadSpaces(stmt);
+                Utils::TrimTrailingSpaces(stmt);
+                if (stmt.empty())
+                    continue;
 
-                if (*stmt_start == '/')
+                if (stmt[0] == '/')
                 {
                     query.commands.emplace_back();
                     auto &command = query.commands.back();
@@ -381,7 +390,6 @@ namespace HerosInsight::Filtering
                     if (!ParseFilter(stmt, filter))
                         query.filters.pop_back();
                 }
-                ++p;
             }
         }
         void RunFilters(std::span<Filter> filters, std::vector<typename I::index_type> &items)
@@ -523,7 +531,7 @@ namespace HerosInsight::Filtering
             if (!query.filters.empty())
                 RunFilters(query.filters, items);
         }
-        void GetFeedback(Query &query, std::string &out)
+        void GetFeedback(Query &query, std::string &out, bool verbose = false)
         {
             static auto GetDispStr = [](const Matcher::Atom &atom) -> std::string_view
             {
@@ -543,78 +551,92 @@ namespace HerosInsight::Filtering
             };
             out.clear();
             auto inserter = std::back_inserter(out);
-            for (auto &filter : query.filters)
+            for (size_t i = 0; i < query.filters.size(); ++i)
             {
+                auto &filter = query.filters[i];
+
                 FixedVector<char, 128> meta_name;
                 impl.GetMetaName(filter.meta_prop_id).GetRenderableString(meta_name);
                 auto cond = filter.inverted ? "not " : "";
                 std::format_to(inserter, "<c=@skilldyn>{}</c> must {}contain: ", (std::string_view)meta_name, cond);
-                for (size_t i = 0; i < filter.matcher.atoms.size(); ++i)
+                if (!verbose)
                 {
-                    auto &atom = filter.matcher.atoms[i];
-                    bool is_distinct = Utils::HasAnyFlag(atom.post_check, Matcher::Atom::PostCheck::Distinct);
-                    if (is_distinct)
-                        std::format_to(inserter, "distinct ");
-                    auto src_str = GetDispStr(atom);
-                    switch (atom.type)
+                    std::format_to(inserter, "<c=@skilldyn>'{}'</c>.", filter.filter_text);
+                }
+                else
+                {
+                    for (size_t i = 0; i < filter.matcher.atoms.size(); ++i)
                     {
-                        case Matcher::Atom::Type::String:
+                        auto &atom = filter.matcher.atoms[i];
+                        bool is_distinct = Utils::HasAnyFlag(atom.post_check, Matcher::Atom::PostCheck::Distinct);
+                        if (is_distinct)
+                            std::format_to(inserter, "distinct ");
+                        auto src_str = GetDispStr(atom);
+                        switch (atom.type)
                         {
-                            std::format_to(inserter, "<c=@skilldyn>'{}'</c>", atom.src_str);
-                            break;
+                            case Matcher::Atom::Type::String:
+                            {
+                                std::format_to(inserter, "<c=@skilldyn>'{}'</c>", atom.src_str);
+                                break;
+                            }
+                            case Matcher::Atom::Type::AnyNumber:
+                            case Matcher::Atom::Type::ExactNumber:
+                            {
+                                std::string_view number_str = atom.src_str;
+                                if (atom.type == Matcher::Atom::Type::AnyNumber)
+                                {
+                                    if (!Utils::HasAnyFlag(atom.post_check, Matcher::Atom::PostCheck::NumChecks))
+                                        number_str = "any number";
+                                }
+                                else if (atom.type == Matcher::Atom::Type::ExactNumber)
+                                {
+                                    if (!atom.src_str.empty() && atom.src_str[0] == '=')
+                                        number_str = atom.src_str.substr(1);
+                                }
+
+                                std::format_to(inserter, "<c=@skilldyn>{}</c>", number_str);
+                                break;
+                            }
                         }
-                        case Matcher::Atom::Type::AnyNumber:
-                        case Matcher::Atom::Type::ExactNumber:
+                        switch (atom.search_bound)
                         {
-                            std::string_view number_str = atom.src_str;
-                            if (atom.type == Matcher::Atom::Type::AnyNumber)
-                            {
-                                if (!Utils::HasAnyFlag(atom.post_check, Matcher::Atom::PostCheck::NumChecks))
-                                    number_str = "any number";
-                            }
-                            else if (atom.type == Matcher::Atom::Type::ExactNumber)
-                            {
-                                if (!atom.src_str.empty() && atom.src_str[0] == '=')
-                                    number_str = atom.src_str.substr(1);
-                            }
+                            case Matcher::Atom::SearchBound::Anywhere:
+                                // std::format_to(inserter, " <c=#ffff80>anywhere</c>");
+                                break;
+                            case Matcher::Atom::SearchBound::WithinXWords:
+                                switch (atom.within_count)
+                                {
+                                    case 0:
+                                        std::format_to(inserter, " <c=#ffff80>within same word</c>");
+                                        break;
+                                    case 1:
+                                        std::format_to(inserter, " <c=#ffff80>within 1 word</c>");
+                                        break;
+                                    default:
+                                        std::format_to(inserter, " <c=#ffff80>within {} words</c>", atom.within_count);
+                                        break;
+                                }
+                                break;
+                        }
 
-                            std::format_to(inserter, "<c=@skilldyn>{}</c>", number_str);
-                            break;
+                        if (i + 2 < filter.matcher.atoms.size())
+                        {
+                            std::format_to(inserter, ", then ");
+                        }
+                        else if (i + 1 < filter.matcher.atoms.size())
+                        {
+                            std::format_to(inserter, " and then ");
+                        }
+                        else
+                        {
+                            *inserter++ = '.';
                         }
                     }
-                    switch (atom.search_bound)
-                    {
-                        case Matcher::Atom::SearchBound::Anywhere:
-                            // std::format_to(inserter, " <c=#ffff80>anywhere</c>");
-                            break;
-                        case Matcher::Atom::SearchBound::WithinXWords:
-                            switch (atom.within_count)
-                            {
-                                case 0:
-                                    std::format_to(inserter, " <c=#ffff80>within same word</c>");
-                                    break;
-                                case 1:
-                                    std::format_to(inserter, " <c=#ffff80>within 1 word</c>");
-                                    break;
-                                default:
-                                    std::format_to(inserter, " <c=#ffff80>within {} words</c>", atom.within_count);
-                                    break;
-                            }
-                            break;
-                    }
+                }
 
-                    if (i + 2 < filter.matcher.atoms.size())
-                    {
-                        std::format_to(inserter, ", ");
-                    }
-                    else if (i + 1 < filter.matcher.atoms.size())
-                    {
-                        std::format_to(inserter, " and ");
-                    }
-                    else
-                    {
-                        std::format_to(inserter, ".\n");
-                    }
+                if (i + 1 < query.filters.size())
+                {
+                    *inserter++ = '\n';
                 }
             }
 
