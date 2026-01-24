@@ -35,7 +35,8 @@ namespace HerosInsight
     {
         auto r = rem;
         if (Utils::TryRead('-', r) ||
-            Utils::TryRead('+', r)) // Leading + or - is not treated as part of the number
+            Utils::TryRead('+', r) ||
+            Utils::TryRead("inf", r)) // Leading + or - is not treated as part of the number
             return false;
         if (Utils::TryReadNumber(r, num))
         {
