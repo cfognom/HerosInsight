@@ -393,16 +393,6 @@ namespace HerosInsight::Utils
         return false;
     }
 
-    bool TryFindAhead(std::string_view str, std::string_view &remaining)
-    {
-        if (Utils::TryReadAhead(str, remaining))
-        {
-            remaining = std::string_view(remaining.data() - str.size(), str.size());
-            return true;
-        }
-        return false;
-    }
-
     // Returns the number of whitespace characters read
     size_t ReadWhitespace(std::string_view &remaining)
     {

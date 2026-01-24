@@ -250,7 +250,6 @@ namespace HerosInsight::Utils
     size_t TryReadPartial(const std::string_view str, std::string_view &remaining);
     bool TryReadAhead(std::string_view str, std::string_view &remaining);
     bool TryReadAhead(std::wstring_view str, std::wstring_view &remaining);
-    bool TryFindAhead(std::string_view str, std::string_view &remaining);
     bool TryReadHex(std::string_view &remaining, uint32_t &out);
     bool TryReadHexColor(std::string_view &remaining, ImU32 &out);
     size_t ReadWhitespace(std::string_view &remaining);
