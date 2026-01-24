@@ -314,6 +314,7 @@ namespace HerosInsight::Text
                 assert(!chars.empty());
                 StringTemplateAtom atom;
                 auto &obj = atom.chars;
+                assert(chars.size() <= sizeof(obj.chars));
                 obj.header = Header{(Type)((size_t)Type::InlineChars1 + chars.size() - 1), constraint};
                 std::memcpy(obj.chars, chars.data(), chars.size());
                 std::memset(obj.chars + chars.size(), 0, sizeof(obj.chars) - chars.size());
