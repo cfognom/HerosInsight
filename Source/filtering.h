@@ -702,12 +702,19 @@ namespace HerosInsight::Filtering
                     auto propset = impl.GetMetaPropset(filter.meta_prop_id);
                     if (propset[prop_id])
                     {
-                        bool match = filter.matcher.Matches(lowered, hl);
+                        for (auto &matcher : filter.matchers)
+                        {
+                            auto hl_size_before = hl.size();
+                            bool is_match = matcher.Matches(lowered, hl);
+                            std::span<uint16_t> hl_span = hl;
+                            hl_span = hl_span.subspan(hl_size_before);
+                            ConnectHighlighting(lowered.text, hl_span);
+                            hl.resize(hl_size_before + hl_span.size());
+                        }
                     }
                 }
                 std::span<uint16_t> hl_span = hl;
                 SortHighlighting(hl_span);
-                ConnectHighlighting(lowered.text, hl_span);
                 hl.resize(hl_span.size());
             }
         }
