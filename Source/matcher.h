@@ -186,6 +186,7 @@ namespace HerosInsight
 
         std::string ToString() const;
 
+        std::string_view src_str;
         std::vector<Atom> atoms;
 
     private:

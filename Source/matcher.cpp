@@ -52,7 +52,7 @@ namespace HerosInsight
         return false;
     }
 
-    // ' ' (space) means: "new word" and makes distinct
+    // ' ' (space) means: "new word" and makes "leading"
     // '..' (2 dots) means: skip non-space
     // '...' (3 dots) means: skip anything
 
@@ -62,6 +62,7 @@ namespace HerosInsight
         using SearchBound = Matcher::Atom::SearchBound;
         using PostCheck = Matcher::Atom::PostCheck;
 
+        this->src_str = source;
         auto search_bound = SearchBound::Anywhere;
 
         auto rem = source;
@@ -69,12 +70,12 @@ namespace HerosInsight
         {
             auto &atom = this->atoms.emplace_back();
 
-            bool is_distinct = true;
+            bool is_leading = true;
             while (true) // Parse search bound
             {
                 bool has_spaces = Utils::ReadSpaces(rem);
                 atom.within_count += has_spaces;
-                is_distinct |= has_spaces;
+                is_leading |= has_spaces;
                 if (has_spaces)
                 {
                     search_bound = std::max(search_bound, SearchBound::WithinXWords);
@@ -85,7 +86,7 @@ namespace HerosInsight
                 {
                     search_bound = SearchBound::Anywhere;
                 }
-                is_distinct &= !has_2dots;
+                is_leading &= !has_2dots;
                 if (!has_2dots)
                     break;
             }
@@ -142,7 +143,7 @@ namespace HerosInsight
             }
 
             atom.type = Type::String;
-            if (is_distinct)
+            if (is_leading)
                 atom.post_check |= PostCheck::Distinct;
 
             if (!rem.empty() && !Utils::IsSpace(rem[0]))

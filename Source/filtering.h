@@ -26,7 +26,7 @@ namespace HerosInsight::Filtering
         size_t meta_prop_id = 0;
         std::string_view source_text;
         std::string_view filter_text;
-        Matcher matcher;
+        std::vector<Matcher> matchers; // We have several because we can OR them
         bool inverted;
     };
     struct SortCommand
@@ -235,7 +235,8 @@ namespace HerosInsight::Filtering
         bool ParseFilter(std::string_view source, Filter &filter)
         {
             filter.source_text = source;
-            Utils::ReadSpaces(source);
+            auto rem = source;
+            Utils::ReadSpaces(rem);
 
             enum struct SeparatorType
             {
@@ -247,45 +248,45 @@ namespace HerosInsight::Filtering
                 Not,
             };
             SeparatorType separator_type = SeparatorType::None;
-            auto separator_pos = source.find(':');
+            auto separator_pos = rem.find(':');
             if (separator_pos != std::string_view::npos)
             {
                 separator_type = SeparatorType::Colon;
             }
             else
             {
-                auto rem = source;
+                auto r = rem;
                 size_t temp_pos;
-                if (temp_pos = rem.find('='), temp_pos != std::string_view::npos)
+                if (temp_pos = r.find('='), temp_pos != std::string_view::npos)
                 {
                     separator_type = SeparatorType::Equal;
                     separator_pos = temp_pos;
-                    rem = rem.substr(0, separator_pos);
+                    r = r.substr(0, separator_pos);
                 }
-                if (temp_pos = rem.find('<'), temp_pos != std::string_view::npos)
+                if (temp_pos = r.find('<'), temp_pos != std::string_view::npos)
                 {
                     separator_type = SeparatorType::LessThan;
                     separator_pos = temp_pos;
-                    rem = rem.substr(0, separator_pos);
+                    r = r.substr(0, separator_pos);
                 }
-                if (temp_pos = rem.find('>'), temp_pos != std::string_view::npos)
+                if (temp_pos = r.find('>'), temp_pos != std::string_view::npos)
                 {
                     separator_type = SeparatorType::GreaterThan;
                     separator_pos = temp_pos;
-                    rem = rem.substr(0, separator_pos);
+                    r = r.substr(0, separator_pos);
                 }
-                if (temp_pos = rem.find('!'), temp_pos != std::string_view::npos)
+                if (temp_pos = r.find('!'), temp_pos != std::string_view::npos)
                 {
                     separator_type = SeparatorType::Not;
                     separator_pos = temp_pos;
-                    rem = rem.substr(0, separator_pos);
+                    r = r.substr(0, separator_pos);
                 }
             }
 
             std::optional<size_t> meta_prop_id = std::nullopt;
             if (separator_pos != std::string_view::npos)
             {
-                auto target_str = source.substr(0, separator_pos);
+                auto target_str = rem.substr(0, separator_pos);
                 if (!target_str.empty())
                 {
                     meta_prop_id = BestMatch(target_str);
@@ -295,10 +296,10 @@ namespace HerosInsight::Filtering
             if (meta_prop_id.has_value())
             {
                 filter.meta_prop_id = meta_prop_id.value();
-                source = source.substr(separator_pos);
+                rem = rem.substr(separator_pos);
                 if (separator_type == SeparatorType::Colon)
                 {
-                    source = source.substr(1);
+                    rem = rem.substr(1);
                 }
             }
             else
@@ -307,12 +308,31 @@ namespace HerosInsight::Filtering
                     return false;
             }
 
-            Utils::ReadSpaces(source);
-            filter.inverted = Utils::TryRead('!', source);
-            Utils::ReadSpaces(source);
+            Utils::ReadSpaces(rem);
+            filter.filter_text = rem;
+            filter.inverted = Utils::TryRead('!', rem);
 
-            filter.filter_text = source;
-            filter.matcher = Matcher(source);
+            while (!rem.empty())
+            {
+                auto or_pos = rem.find('|');
+                std::string_view content;
+                if (or_pos == std::string_view::npos)
+                {
+                    content = rem;
+                    rem = "";
+                }
+                else
+                {
+                    content = rem.substr(0, or_pos);
+                    rem = rem.substr(or_pos + 1);
+                }
+                Utils::ReadSpaces(content);
+                Utils::TrimTrailingSpaces(content);
+                if (content.empty())
+                    continue;
+
+                filter.matchers.emplace_back(Matcher(content));
+            }
 
             return true;
         }
@@ -415,10 +435,8 @@ namespace HerosInsight::Filtering
             stopwatch.Checkpoint("init");
             for (auto &filter : filters)
             {
-                // std::string_view meta_prop_name = GetMetaName(filter.meta_prop_id);
                 BitView propset = impl.GetMetaPropset(filter.meta_prop_id);
 
-                // std::bitset<N_entries> matched_items;
                 BitView unconfirmed_match(items_bits.ptr, items.size(), true);
 
                 for (auto prop_id : propset.IterSetBits())
@@ -430,43 +448,44 @@ namespace HerosInsight::Filtering
                         for (size_t i_meta = 0; i_meta < n_meta; ++i_meta)
                         {
                             LoweredText str = impl.GetMetaName(i_meta);
-                            if (!filter.matcher.Match(str, 0))
-                                continue;
-
-                            // The filter matched against this meta name, now we need to find out which items "have it"
-
-                            BitView meta_propset = impl.GetMetaPropset(i_meta);
-                            for (auto prop_id : meta_propset.IterSetBits())
+                            for (auto &matcher : filter.matchers)
                             {
-                                bool is_meta = prop_id == n_props;
-                                if (is_meta) // Meta properties cannot be "had"
+                                if (!matcher.Match(str, 0))
                                     continue;
-                                auto &prop = impl.GetProperty(prop_id);
-                                // Iterate the items and check which ones "has values" in this property
-                                bool all_confirmed = true;
-                                for (auto index : unconfirmed_match.IterSetBits())
+
+                                // The filter matched against this meta name, now we need to find out which items "have it"
+
+                                BitView meta_propset = impl.GetMetaPropset(i_meta);
+                                for (auto prop_id : meta_propset.IterSetBits())
                                 {
-                                    auto item = items[index];
-                                    auto str_id = prop.GetStrId(item);
-                                    auto str = prop.GetSearchableStr(str_id);
-                                    if (!str.text.empty())
-                                    {
-                                        unconfirmed_match[index] = false;
+                                    bool is_meta = prop_id == n_props;
+                                    if (is_meta) // Meta properties cannot be "had"
                                         continue;
+                                    auto &prop = impl.GetProperty(prop_id);
+                                    // Iterate the items and check which ones "has values" in this property
+                                    bool all_confirmed = true;
+                                    for (auto index : unconfirmed_match.IterSetBits())
+                                    {
+                                        auto item = items[index];
+                                        auto str_id = prop.GetStrId(item);
+                                        auto str = prop.GetSearchableStr(str_id);
+                                        if (!str.text.empty())
+                                        {
+                                            // If they have a value, mark the item as confirmed
+                                            unconfirmed_match[index] = false;
+                                            continue;
+                                        }
+                                        all_confirmed = false;
                                     }
-                                    all_confirmed = false;
+                                    if (all_confirmed)
+                                        goto next_filter;
                                 }
-                                if (all_confirmed)
-                                    goto next_filter;
                             }
                         }
                     }
                     else // Non-meta
                     {
                         auto &prop = impl.GetProperty(prop_id);
-
-                        // if (unique_count == 0) // Todo: remove
-                        //     continue;
                         BitView marked_spans(span_bits.ptr, n_spans, false);
 
                         // Iterate the unconfirmed items and mark which spans we use
@@ -485,8 +504,13 @@ namespace HerosInsight::Filtering
                         {
                             auto str = prop.GetSearchableStr(span_id);
 
-                            if (!filter.matcher.Match(str, 0))
-                                marked_spans[span_id] = false;
+                            for (auto &matcher : filter.matchers)
+                            {
+                                if (matcher.Match(str, 0))
+                                    goto next;
+                            }
+                            marked_spans[span_id] = false;
+                        next:;
                         }
                         stopwatch.Checkpoint(std::format("prop_{} matching", prop_id));
 
@@ -551,90 +575,101 @@ namespace HerosInsight::Filtering
             };
             out.clear();
             auto inserter = std::back_inserter(out);
-            for (size_t i = 0; i < query.filters.size(); ++i)
+            for (size_t f = 0; f < query.filters.size(); ++f)
             {
-                auto &filter = query.filters[i];
+                auto &filter = query.filters[f];
 
                 FixedVector<char, 128> meta_name;
                 impl.GetMetaName(filter.meta_prop_id).GetRenderableString(meta_name);
-                auto cond = filter.inverted ? "not " : "";
-                std::format_to(inserter, "<c=@skilldyn>{}</c> must {}contain: ", (std::string_view)meta_name, cond);
-                if (!verbose)
+                auto cond = filter.inverted ? "<c=#55ffdd>not</c> " : "";
+                std::format_to(inserter, "<c=#55ffdd>{}</c> must {}contain<c=#55ffdd>:</c> ", (std::string_view)meta_name, cond);
+                for (size_t m = 0; m < filter.matchers.size(); ++m)
                 {
-                    std::format_to(inserter, "<c=@skilldyn>'{}'</c>.", filter.filter_text);
-                }
-                else
-                {
-                    for (size_t i = 0; i < filter.matcher.atoms.size(); ++i)
+                    auto &matcher = filter.matchers[m];
+
+                    if (!verbose)
                     {
-                        auto &atom = filter.matcher.atoms[i];
-                        bool is_distinct = Utils::HasAnyFlag(atom.post_check, Matcher::Atom::PostCheck::Distinct);
-                        if (is_distinct)
-                            std::format_to(inserter, "distinct ");
-                        auto src_str = GetDispStr(atom);
-                        switch (atom.type)
+                        std::format_to(inserter, "<c=@skilldyn>'{}'</c>", matcher.src_str);
+                    }
+                    else
+                    {
+                        for (size_t a = 0; a < matcher.atoms.size(); ++a)
                         {
-                            case Matcher::Atom::Type::String:
-                            {
-                                std::format_to(inserter, "<c=@skilldyn>'{}'</c>", atom.src_str);
-                                break;
-                            }
-                            case Matcher::Atom::Type::AnyNumber:
-                            case Matcher::Atom::Type::ExactNumber:
-                            {
-                                std::string_view number_str = atom.src_str;
-                                if (atom.type == Matcher::Atom::Type::AnyNumber)
-                                {
-                                    if (!Utils::HasAnyFlag(atom.post_check, Matcher::Atom::PostCheck::NumChecks))
-                                        number_str = "any number";
-                                }
-                                else if (atom.type == Matcher::Atom::Type::ExactNumber)
-                                {
-                                    if (!atom.src_str.empty() && atom.src_str[0] == '=')
-                                        number_str = atom.src_str.substr(1);
-                                }
+                            auto &atom = matcher.atoms[a];
 
-                                std::format_to(inserter, "<c=@skilldyn>{}</c>", number_str);
-                                break;
+                            bool is_leading = Utils::HasAnyFlag(atom.post_check, Matcher::Atom::PostCheck::Distinct);
+                            if (is_leading)
+                                std::format_to(inserter, "leading ");
+                            auto src_str = GetDispStr(atom);
+                            switch (atom.type)
+                            {
+                                case Matcher::Atom::Type::String:
+                                {
+                                    std::format_to(inserter, "<c=@skilldyn>'{}'</c>", atom.src_str);
+                                    break;
+                                }
+                                case Matcher::Atom::Type::AnyNumber:
+                                case Matcher::Atom::Type::ExactNumber:
+                                {
+                                    std::string_view number_str = atom.src_str;
+                                    if (atom.type == Matcher::Atom::Type::AnyNumber)
+                                    {
+                                        if (!Utils::HasAnyFlag(atom.post_check, Matcher::Atom::PostCheck::NumChecks))
+                                            number_str = "any number";
+                                    }
+                                    else if (atom.type == Matcher::Atom::Type::ExactNumber)
+                                    {
+                                        if (!atom.src_str.empty() && atom.src_str[0] == '=')
+                                            number_str = atom.src_str.substr(1);
+                                    }
+
+                                    std::format_to(inserter, "<c=@skilldyn>{}</c>", number_str);
+                                    break;
+                                }
+                            }
+                            switch (atom.search_bound)
+                            {
+                                case Matcher::Atom::SearchBound::Anywhere:
+                                    // std::format_to(inserter, " <c=#ffff80>anywhere</c>");
+                                    break;
+                                case Matcher::Atom::SearchBound::WithinXWords:
+                                    switch (atom.within_count)
+                                    {
+                                        case 0:
+                                            std::format_to(inserter, " <c=#ffff80>within same word</c>");
+                                            break;
+                                        case 1:
+                                            std::format_to(inserter, " <c=#ffff80>within 1 word</c>");
+                                            break;
+                                        default:
+                                            std::format_to(inserter, " <c=#ffff80>within {} words</c>", atom.within_count);
+                                            break;
+                                    }
+                                    break;
+                            }
+
+                            if (a + 2 < matcher.atoms.size())
+                            {
+                                std::format_to(inserter, ", then ");
+                            }
+                            else if (a + 1 < matcher.atoms.size())
+                            {
+                                std::format_to(inserter, " and then ");
                             }
                         }
-                        switch (atom.search_bound)
-                        {
-                            case Matcher::Atom::SearchBound::Anywhere:
-                                // std::format_to(inserter, " <c=#ffff80>anywhere</c>");
-                                break;
-                            case Matcher::Atom::SearchBound::WithinXWords:
-                                switch (atom.within_count)
-                                {
-                                    case 0:
-                                        std::format_to(inserter, " <c=#ffff80>within same word</c>");
-                                        break;
-                                    case 1:
-                                        std::format_to(inserter, " <c=#ffff80>within 1 word</c>");
-                                        break;
-                                    default:
-                                        std::format_to(inserter, " <c=#ffff80>within {} words</c>", atom.within_count);
-                                        break;
-                                }
-                                break;
-                        }
+                    }
 
-                        if (i + 2 < filter.matcher.atoms.size())
-                        {
-                            std::format_to(inserter, ", then ");
-                        }
-                        else if (i + 1 < filter.matcher.atoms.size())
-                        {
-                            std::format_to(inserter, " and then ");
-                        }
-                        else
-                        {
-                            *inserter++ = '.';
-                        }
+                    if (m + 1 < filter.matchers.size())
+                    {
+                        std::format_to(inserter, ", <c=#55ffdd>or</c> ");
+                    }
+                    else
+                    {
+                        *inserter++ = '.';
                     }
                 }
 
-                if (i + 1 < query.filters.size())
+                if (f + 1 < query.filters.size())
                 {
                     *inserter++ = '\n';
                 }
