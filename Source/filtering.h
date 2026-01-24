@@ -235,7 +235,7 @@ namespace HerosInsight::Filtering
         bool ParseFilter(std::string_view source, Filter &filter)
         {
             filter.source_text = source;
-            Utils::TryReadSpaces(source);
+            Utils::ReadSpaces(source);
 
             auto splitter_pos = source.find(':');
             if (splitter_pos != std::string_view::npos)
@@ -256,9 +256,9 @@ namespace HerosInsight::Filtering
                 source = source.substr(i);
             }
 
-            Utils::TryReadSpaces(source);
+            Utils::ReadSpaces(source);
             filter.inverted = Utils::TryRead('!', source);
-            Utils::TryReadSpaces(source);
+            Utils::ReadSpaces(source);
 
             filter.filter_text = source;
             filter.matcher = Matcher(source);
@@ -269,7 +269,7 @@ namespace HerosInsight::Filtering
         {
             auto rem = remaining;
 
-            Utils::ReadWhitespace(rem);
+            Utils::ReadSpaces(rem);
 
             if (!Utils::TryRead('/', rem))
                 return false;
@@ -279,7 +279,7 @@ namespace HerosInsight::Filtering
                 auto &sort_com = command.emplace<SortCommand>();
                 while (rem.size())
                 {
-                    if (!Utils::ReadWhitespace(rem))
+                    if (!Utils::ReadSpaces(rem))
                         break;
                     sort_com.args.emplace_back();
                     auto &sort_arg = sort_com.args.back();

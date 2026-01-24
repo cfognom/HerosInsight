@@ -238,7 +238,6 @@ namespace HerosInsight::Utils
     size_t StrCountEqual(std::wstring_view a, std::wstring_view b);
     std::string_view PopWord(std::string_view &str);
     bool StartsWith(const wchar_t *str, const wchar_t *prefix);
-    bool TryReadSpaces(std::string_view &remaining);
     bool TryRead(const char c, std::string_view &remaining);
     bool TryRead(const wchar_t c, std::wstring_view &remaining);
     bool TryRead(const std::string_view str, std::string_view &remaining);
@@ -252,7 +251,7 @@ namespace HerosInsight::Utils
     bool TryReadAhead(std::wstring_view str, std::wstring_view &remaining);
     bool TryReadHex(std::string_view &remaining, uint32_t &out);
     bool TryReadHexColor(std::string_view &remaining, ImU32 &out);
-    size_t ReadWhitespace(std::string_view &remaining);
+    size_t ReadSpaces(std::string_view &remaining);
 
     struct Unit
     {

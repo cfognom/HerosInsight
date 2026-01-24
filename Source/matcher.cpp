@@ -71,7 +71,7 @@ namespace HerosInsight
             bool is_distinct = true;
             while (true) // Parse search bound
             {
-                bool has_spaces = Utils::TryReadSpaces(rem);
+                bool has_spaces = Utils::ReadSpaces(rem);
                 atom.within_count += has_spaces;
                 is_distinct |= has_spaces;
                 if (has_spaces)

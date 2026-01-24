@@ -227,21 +227,6 @@ namespace HerosInsight::Utils
             ++prefix;
         }
     }
-
-    bool TryReadSpaces(std::string_view &remaining)
-    {
-        size_t count = 0;
-        while (count < remaining.size() && Utils::IsSpace(remaining[count]))
-        {
-            ++count;
-        }
-        if (count > 0)
-        {
-            remaining = remaining.substr(count);
-            return true;
-        }
-        return false;
-    }
     bool TryRead(const char c, std::string_view &remaining)
     {
         if (remaining.size() && (c == remaining[0] || std::tolower(c) == remaining[0]))
@@ -394,7 +379,7 @@ namespace HerosInsight::Utils
     }
 
     // Returns the number of whitespace characters read
-    size_t ReadWhitespace(std::string_view &remaining)
+    size_t ReadSpaces(std::string_view &remaining)
     {
         size_t count = 0;
         while (count < remaining.size() && Utils::IsSpace(remaining[count]))
