@@ -571,7 +571,7 @@ namespace HerosInsight::SkillBook
 
                     if (!is_normal_aftercast)
                     {
-                        number_and_icon.push_back(b.Tag(RichText::ColorTag(IM_COL32(255, 255, 0, 255))));
+                        number_and_icon.push_back(b.Tag(RichText::ColorTag(IM_COL32(255, 255, 120, 255))));
                     }
                     number_and_icon.push_back(b.MixedNumber(skill.aftercast));
                     if (!is_normal_aftercast)
