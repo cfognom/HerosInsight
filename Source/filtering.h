@@ -652,24 +652,24 @@ namespace HerosInsight::Filtering
                             {
                                 std::format_to(inserter, ", then ");
                             }
-                            else if (a + 1 < matcher.atoms.size())
+                            else if (a + 1 < matcher.atoms.size()) // second to last
                             {
                                 std::format_to(inserter, " and then ");
                             }
                         }
                     }
 
-                    if (m + 1 < filter.matchers.size())
+                    if (m + 1 < filter.matchers.size()) // second to last
                     {
                         std::format_to(inserter, ", <c=#55ffdd>or</c> ");
                     }
-                    else
+                    else // last
                     {
                         *inserter++ = '.';
                     }
                 }
 
-                if (f + 1 < query.filters.size())
+                if (f + 1 < query.filters.size()) // second to last
                 {
                     *inserter++ = '\n';
                 }
