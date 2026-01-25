@@ -159,7 +159,7 @@ namespace HerosInsight::Text
         return (std::string_view)this->skill_raw[SkillTextType::Name].GetIndexed((size_t)skill_id);
     }
 
-    IndexedStringArena<char> *Provider::GetNames()
+    SlotSpanVector<char> *Provider::GetNames()
     {
         return &this->skill_raw[SkillTextType::Name];
     }
@@ -169,7 +169,7 @@ namespace HerosInsight::Text
         return (std::string_view)this->skill_raw[is_concise ? SkillTextType::Concise : SkillTextType::Description].GetIndexed((size_t)skill_id);
     }
 
-    IndexedStringArena<char> *Provider::GetRawDescriptions(bool is_concise)
+    SlotSpanVector<char> *Provider::GetRawDescriptions(bool is_concise)
     {
         return &this->skill_raw[is_concise ? SkillTextType::Concise : SkillTextType::Description];
     }

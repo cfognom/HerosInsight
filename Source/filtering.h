@@ -93,7 +93,7 @@ namespace HerosInsight::Filtering
             stringTemplates_deduper = stringTemplates.CreateDeduper(0);
         }
 
-        void PopulateItems(IndexedStringArena<char> &src)
+        void PopulateItems(SlotSpanVector<char> &src)
         {
             searchable_text = LoweredTextVector(src);
             item_to_str = src.index_to_id;

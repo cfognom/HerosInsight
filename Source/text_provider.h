@@ -105,8 +105,8 @@ namespace HerosInsight::Text
     {
         std::string_view GetName(GW::Constants::SkillID skill_id);
         std::string_view GetRawDescription(GW::Constants::SkillID skill_id, bool is_concise);
-        IndexedStringArena<char> *GetNames();
-        IndexedStringArena<char> *GetRawDescriptions(bool is_concise);
+        SlotSpanVector<char> *GetNames();
+        SlotSpanVector<char> *GetRawDescriptions(bool is_concise);
         StringTemplateAtom MakeSkillParam(StringTemplateAtom::Builder &b, GW::Constants::SkillID skill_id, int8_t attr_lvl, size_t param_id);
         StringTemplateAtom MakeSkillDescription(StringTemplateAtom::Builder &b, GW::Constants::SkillID skill_id, bool is_concise, int8_t attr_lvl);
         StringTemplateAtom MakeSkillName(StringTemplateAtom::Builder &b, GW::Constants::SkillID skill_id);
@@ -128,7 +128,7 @@ namespace HerosInsight::Text
         GW::Constants::Language language;
 
         std::array<StringManager::StrId, GW::Constants::SkillMax> skill_strIds[SkillTextType::COUNT];
-        IndexedStringArena<char> skill_raw[SkillTextType::COUNT];
+        SlotSpanVector<char> skill_raw[SkillTextType::COUNT];
     };
 
     Provider &GetTextProvider(GW::Constants::Language language = GW::Constants::Language::English);

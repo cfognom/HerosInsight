@@ -335,7 +335,7 @@ namespace HerosInsight
     // A datastructure that can associate ids with a set of unique spans of data.
     // Auto-dedupes equal entries.
     template <typename T>
-    class IndexedStringArena : public SpanVector<T>
+    class SlotSpanVector : public SpanVector<T>
     {
         using base = SpanVector<T>;
 
@@ -351,8 +351,8 @@ namespace HerosInsight
     public:
         using value_type = T;
 
-        IndexedStringArena() {}
-        IndexedStringArena(size_t n_indices, size_t n_spans, size_t n_elements)
+        SlotSpanVector() {}
+        SlotSpanVector(size_t n_indices, size_t n_spans, size_t n_elements)
         {
             this->Reserve(n_indices, n_spans, n_elements);
 
@@ -361,7 +361,7 @@ namespace HerosInsight
 #endif
         }
 
-        IndexedStringArena(const IndexedStringArena &other)
+        SlotSpanVector(const SlotSpanVector &other)
             : base(other)
         {
             index_to_id = other.index_to_id;
@@ -371,7 +371,7 @@ namespace HerosInsight
         }
 
         // Custom copy assignment
-        IndexedStringArena &operator=(const IndexedStringArena &other)
+        SlotSpanVector &operator=(const SlotSpanVector &other)
         {
             if (this != &other)
             {
@@ -466,7 +466,7 @@ namespace HerosInsight
 
         std::string GetDebugInfo()
         {
-            std::string info = "IndexedStringArena:\n";
+            std::string info = "SlotSpanVector:\n";
             info += "Num Elements: " + std::to_string(this->size()) + "\n";
             info += "Num Spans: " + std::to_string(this->id_to_span.size()) + "\n";
             info += "Num Indices: " + std::to_string(index_to_id.size()) + "\n";
