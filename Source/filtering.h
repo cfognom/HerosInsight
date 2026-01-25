@@ -594,7 +594,7 @@ namespace HerosInsight::Filtering
                                         {
                                             auto str_a = prop.GetSearchableStr(prop.GetStrId(item_a));
                                             auto str_b = prop.GetSearchableStr(prop.GetStrId(item_b));
-                                            return str_a < str_b;
+                                            return str_a.text < str_b.text;
                                         }
                                     );
                                 }
