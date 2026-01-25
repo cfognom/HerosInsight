@@ -1323,19 +1323,18 @@ namespace HerosInsight::SkillBook
             struct Layout
             {
                 SkillProp id;
-                size_t atlas_index;
                 size_t pos_from_right;
             };
 
             Layout layout[]{
-                {SkillProp::Overcast, 10, 4},
-                {SkillProp::Sacrifice, 7, 4},
-                {SkillProp::Upkeep, 0, 4},
-                {SkillProp::Energy, 1, 3},
-                {SkillProp::Adrenaline, 3, 3},
-                {SkillProp::Activation, 2, 2},
-                {SkillProp::Recharge, 1, 1},
-                {SkillProp::Aftercast, 2, 0},
+                {SkillProp::Overcast, 4},
+                {SkillProp::Sacrifice, 4},
+                {SkillProp::Upkeep, 4},
+                {SkillProp::Energy, 3},
+                {SkillProp::Adrenaline, 3},
+                {SkillProp::Activation, 2},
+                {SkillProp::Recharge, 1},
+                {SkillProp::Aftercast, 0},
             };
 
             for (const auto &l : layout)
