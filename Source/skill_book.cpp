@@ -780,6 +780,7 @@ namespace HerosInsight::SkillBook
         explicit FilteringAdapter(TextStorage &storage, BookSettings &settings)
             : ts(storage)
         {
+            dynamic_props.reserve(8);
             dynamic_props[SkillProp::Description].SetupIncremental(&settings, MakeDescription<false>);
             dynamic_props[SkillProp::Concise].SetupIncremental(&settings, MakeDescription<true>);
             dynamic_props[SkillProp::Adrenaline].SetupIncremental(
@@ -904,7 +905,7 @@ namespace HerosInsight::SkillBook
         LoweredText GetMetaName(size_t meta) { return ts.meta_prop_names.Get(meta); }
         BitView GetMetaPropset(size_t meta) const { return ts.meta_propsets[meta]; }
 
-        Filtering::IncrementalProp &GetProperty(size_t prop) { return *props[prop]; }
+        Filtering::IncrementalProp *GetProperty(size_t prop) { return props[prop]; }
     };
 
     bool is_dragging = false;

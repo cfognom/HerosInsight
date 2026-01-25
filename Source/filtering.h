@@ -71,7 +71,7 @@ namespace HerosInsight::Filtering
         Text::StringManager &mgr = Text::s_Manager;
         LoweredTextVector searchable_text;
         StringArena<Text::StringTemplateAtom> stringTemplates;
-        StringArena<Text::StringTemplateAtom>::deduper stringTemplates_deduper;
+        StringArena<Text::StringTemplateAtom>::Deduper stringTemplates_deduper;
         std::vector<uint16_t> item_to_str;
         void *buildTemplate_data;
         BuildTemplateFn BuildTemplate_fn;
@@ -100,7 +100,7 @@ namespace HerosInsight::Filtering
             item_to_str.reserve(count);
 
             std::string deduper_hint_key;
-            StringArena<char>::deduper deduper;
+            StringArena<char>::Deduper deduper;
             if (dedupe)
             {
                 deduper_hint_key = std::format("{}_deduper", hint_key);
@@ -120,7 +120,7 @@ namespace HerosInsight::Filtering
 
             if (dedupe)
             {
-                CapacityHints::UpdateHint(deduper_hint_key, deduper.bucket_count());
+                CapacityHints::UpdateHint(deduper_hint_key, deduper.uniques.bucket_count());
             }
             arena.StoreCapacityHint(hint_key);
         }
@@ -224,7 +224,7 @@ namespace HerosInsight::Filtering
             { d.GetMetaPropset(metaId) } -> std::same_as<BitView>;
 
             // props
-            { d.GetProperty(propId) } -> std::same_as<IncrementalProp &>;
+            { d.GetProperty(propId) } -> std::same_as<IncrementalProp *>;
         };
 
     template <DeviceImpl I>
@@ -421,9 +421,9 @@ namespace HerosInsight::Filtering
             size_t n_meta = impl.MetaCount();
 
             // clang-format off
-                //   NAME                            TYPE               COUNT
-                auto items_bits = MultiBuffer::Spec< BitView::word_t >( BitView::CalcWordCount(n_items) );
-                auto span_bits  = MultiBuffer::Spec< BitView::word_t >( BitView::CalcWordCount(n_spans) );
+            //   NAME                            TYPE               COUNT
+            auto items_bits = MultiBuffer::Spec< BitView::word_t >( BitView::CalcWordCount(n_items) );
+            auto span_bits  = MultiBuffer::Spec< BitView::word_t >( BitView::CalcWordCount(n_spans) );
             // clang-format on
             auto allocation = MultiBuffer::HeapAllocated(
                 items_bits,
@@ -459,7 +459,7 @@ namespace HerosInsight::Filtering
                                     bool is_meta = prop_id == n_props;
                                     if (is_meta) // Meta properties cannot be "had"
                                         continue;
-                                    auto &prop = impl.GetProperty(prop_id);
+                                    auto &prop = *impl.GetProperty(prop_id);
                                     // Iterate the items and check which ones "has values" in this property
                                     bool all_confirmed = true;
                                     for (auto index : unconfirmed_match.IterSetBits())
@@ -483,7 +483,7 @@ namespace HerosInsight::Filtering
                     }
                     else // Non-meta
                     {
-                        auto &prop = impl.GetProperty(prop_id);
+                        auto &prop = *impl.GetProperty(prop_id);
                         BitView marked_spans(span_bits.ptr, n_spans, false);
 
                         // Iterate the unconfirmed items and mark which spans we use
@@ -711,7 +711,7 @@ namespace HerosInsight::Filtering
 
         ResultItem CalcItemResult(Query &q, size_t prop_id, I::index_type item_id)
         {
-            auto &prop = impl.GetProperty(prop_id);
+            auto &prop = *impl.GetProperty(prop_id);
             auto str_id = prop.GetStrId(item_id);
             LoweredText lowered = prop.GetSearchableStr(str_id);
             ResultItem result;

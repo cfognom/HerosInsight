@@ -368,8 +368,8 @@ namespace HerosInsight::Text
         StringArena<char> strings;
         StringArena<StringTemplateAtom> sequences;
 
-        StringArena<char>::deduper strings_deduper = strings.CreateDeduper(0);
-        StringArena<StringTemplateAtom>::deduper sequences_deduper = sequences.CreateDeduper(0);
+        StringArena<char>::Deduper strings_deduper = strings.CreateDeduper(0);
+        StringArena<StringTemplateAtom>::Deduper sequences_deduper = sequences.CreateDeduper(0);
 
         size_t AssimilateString(std::string_view str);
 

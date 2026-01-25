@@ -37,26 +37,6 @@ namespace HerosInsight
             return std::string_view((const char *)span.data(), span.size() * sizeof(T));
         }
 
-        struct Hasher
-        {
-            size_t operator()(T_span_id index) const
-            {
-                return std::hash<std::string_view>{}(AsStringView(arena->Get(index)));
-            }
-
-            StringArena *arena;
-        };
-
-        struct Eq
-        {
-            bool operator()(T_span_id a, T_span_id b) const
-            {
-                return AsStringView(arena->Get(a)) == AsStringView(arena->Get(b));
-            }
-
-            StringArena *arena;
-        };
-
         std::vector<T> elements;
         std::vector<T_ends> ends;
         T_ends GetSpanStart(size_t index) const
@@ -72,7 +52,40 @@ namespace HerosInsight
         }
 
     public:
-        using deduper = std::unordered_set<T_span_id, Hasher, Eq>;
+        struct Deduper
+        {
+            struct Hasher
+            {
+                size_t operator()(T_span_id index) const
+                {
+                    return std::hash<std::string_view>{}(AsStringView(arena->Get(index)));
+                }
+
+                StringArena *arena;
+            };
+
+            struct Eq
+            {
+                bool operator()(T_span_id a, T_span_id b) const
+                {
+                    return AsStringView(arena->Get(a)) == AsStringView(arena->Get(b));
+                }
+
+                StringArena *arena;
+            };
+
+            std::unordered_set<T_span_id, Hasher, Eq> uniques;
+            StringArena *arena = nullptr;
+
+            void clear()
+            {
+                uniques.clear();
+            }
+
+            Deduper() = default;
+            Deduper(StringArena *arena, size_t n_buckets)
+                : uniques(n_buckets, Hasher{arena}, Eq{arena}), arena(arena) {}
+        };
 
         // The count of strings in the arena
         size_t SpanCount() const { return ends.size(); }
@@ -114,9 +127,9 @@ namespace HerosInsight
         }
 
         // Deduper is valid until the StringArena is moved!
-        deduper CreateDeduper(size_t n_buckets)
+        Deduper CreateDeduper(size_t n_buckets)
         {
-            return deduper(n_buckets, Hasher{this}, Eq{this});
+            return Deduper(this, n_buckets);
         }
 
         // Discards the span being written
@@ -146,7 +159,7 @@ namespace HerosInsight
         }
 
         // Commits the span being written and returns its id
-        T_span_id CommitWritten(deduper *deduper = nullptr)
+        T_span_id CommitWritten(Deduper *deduper = nullptr)
         {
             auto span_id = ends.size();
             auto end = elements.size();
@@ -161,11 +174,14 @@ namespace HerosInsight
 
             if (deduper != nullptr)
             {
-                auto it = deduper->find(span_id_cast);
-                if (it == deduper->end())
+#ifdef SAFETY_CHECKS
+                assert(deduper->arena == this);
+#endif
+                auto it = deduper->uniques.find(span_id_cast);
+                if (it == deduper->uniques.end())
                 {
                     // We found no previous occurrence of this string:
-                    deduper->insert(span_id_cast); // Track it
+                    deduper->uniques.insert(span_id_cast); // Track it
                 }
                 else
                 {
@@ -218,7 +234,7 @@ namespace HerosInsight
             return Get(ends.size() - 1);
         }
 
-        T_span_id push_back(std::span<const T> span, deduper *deduper = nullptr)
+        T_span_id push_back(std::span<const T> span, Deduper *deduper = nullptr)
         {
             elements.append_range(span);
             return CommitWritten(deduper);
@@ -330,7 +346,7 @@ namespace HerosInsight
         std::vector<T_span_id> index_to_id;
 
     private:
-        base::deduper deduper = base::CreateDeduper(0);
+        base::Deduper deduper = base::CreateDeduper(0);
 
     public:
         using value_type = T;
@@ -350,8 +366,8 @@ namespace HerosInsight
         {
             index_to_id = other.index_to_id;
             // Deep copy the deduper
-            deduper.reserve(other.deduper.size());
-            deduper.insert(other.deduper.begin(), other.deduper.end());
+            deduper.uniques.reserve(other.deduper.uniques.size());
+            deduper.uniques.insert(other.deduper.uniques.begin(), other.deduper.uniques.end());
         }
 
         // Custom copy assignment
