@@ -669,6 +669,7 @@ namespace HerosInsight::SkillBook
             meta_propsets.reserve(meta_prop_names.arena.SpanCount());
 
             SetupMetaProp("Anything", ALL_PROPS); // Must be first
+            SetupMetaProp("Meta", CreatePropset(SkillProp::COUNT));
             SetupMetaProp("Name", CreatePropset(SkillProp::Name));
             SetupMetaProp("Type", CreatePropset(SkillProp::Type));
             SetupMetaProp("Tags", CreatePropset(SkillProp::Tag));
