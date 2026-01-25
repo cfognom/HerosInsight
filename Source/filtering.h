@@ -41,6 +41,14 @@ namespace HerosInsight::Filtering
     };
     using Command = std::variant<SortCommand>;
 
+    template <class... Ts>
+    struct VisitHelper : Ts...
+    {
+        using Ts::operator()...;
+    };
+    template <class... Ts>
+    VisitHelper(Ts...) -> VisitHelper<Ts...>;
+
     struct Query
     {
         std::vector<Filter> filters;
@@ -57,6 +65,7 @@ namespace HerosInsight::Filtering
     {
         FixedVector<char, 512> text;
         std::vector<uint16_t> hl; // Highlight
+        bool is_zero = false;
     };
 
     struct IncrementalProp
@@ -334,9 +343,9 @@ namespace HerosInsight::Filtering
 
             return true;
         }
-        bool TryReadCommand(std::string_view &remaining, Command &command)
+        bool TryReadCommand(std::string_view source, Command &command)
         {
-            auto rem = remaining;
+            auto rem = source;
 
             Utils::ReadSpaces(rem);
 
@@ -394,20 +403,34 @@ namespace HerosInsight::Filtering
                 if (stmt.empty())
                     continue;
 
-                if (stmt[0] == '/')
+                FixedVector<Command, 32> commands;
+                while (true) // Loop that eats commands from end
                 {
-                    query.commands.emplace_back();
-                    auto &command = query.commands.back();
-                    if (!TryReadCommand(stmt, command))
-                        query.commands.pop_back();
+                    auto com_start = stmt.find_last_of('/');
+                    if (com_start == std::string_view::npos)
+                        break;
+                    auto com_src = stmt.substr(com_start);
+
+                    auto &command = commands.emplace_back();
+                    if (TryReadCommand(com_src, command))
+                    {
+                        stmt = stmt.substr(0, com_start);
+                        Utils::TrimTrailingSpaces(stmt);
+                    }
+                    else
+                    {
+                        commands.pop_back();
+                        break;
+                    }
                 }
-                else
+                while (!commands.empty()) // Reverse
                 {
-                    query.filters.emplace_back();
-                    auto &filter = query.filters.back();
-                    if (!ParseFilter(stmt, filter))
-                        query.filters.pop_back();
+                    query.commands.emplace_back(std::move(commands.pop_back()));
                 }
+
+                auto &filter = query.filters.emplace_back();
+                if (!ParseFilter(stmt, filter))
+                    query.filters.pop_back();
             }
         }
         void RunFilters(std::span<Filter> filters, std::vector<typename I::index_type> &items)
@@ -548,10 +571,56 @@ namespace HerosInsight::Filtering
             }
             stopwatch.Checkpoint("filters");
         }
+        void RunCommands(std::span<Command> commands, std::vector<typename I::index_type> &items)
+        {
+            Stopwatch stopwatch("RunCommands");
+
+            for (auto &command : commands)
+            {
+                std::visit(
+                    VisitHelper{
+                        [&](SortCommand &sort_command)
+                        {
+                            for (auto &arg : sort_command.args)
+                            {
+                                auto propset = impl.GetMetaPropset(arg.target_meta_prop_id);
+                                for (auto prop_id : propset.IterSetBits())
+                                {
+                                    if (prop_id == impl.PropCount())
+                                        continue;
+                                    auto &prop = *impl.GetProperty(prop_id);
+                                    std::sort(
+                                        items.begin(), items.end(),
+                                        [&](size_t item_a, size_t item_b)
+                                        {
+                                            auto str_a = prop.GetSearchableStr(prop.GetStrId(item_a));
+                                            auto str_b = prop.GetSearchableStr(prop.GetStrId(item_b));
+                                            return str_a < str_b;
+                                        }
+                                    );
+                                }
+                            }
+                        },
+                        [](auto &&)
+                        {
+                            assert(false);
+                        },
+                    },
+                    command
+                );
+            }
+        }
         void RunQuery(Query &query, std::vector<typename I::index_type> &items)
         {
             if (!query.filters.empty())
+            {
                 RunFilters(query.filters, items);
+            }
+
+            if (!query.commands.empty())
+            {
+                RunCommands(query.commands, items);
+            }
         }
         void GetFeedback(Query &query, std::string &out, bool verbose = false)
         {
@@ -664,7 +733,7 @@ namespace HerosInsight::Filtering
                         }
                     }
 
-                    if (m + 1 < filter.matchers.size()) // second to last
+                    if (m + 1 < filter.matchers.size()) // all but last
                     {
                         std::format_to(inserter, ", <c=#55ffdd>or</c> ");
                     }
@@ -674,39 +743,73 @@ namespace HerosInsight::Filtering
                     }
                 }
 
-                if (f + 1 < query.filters.size()) // second to last
+                if (f + 1 < query.filters.size()) // all but last
                 {
                     *inserter++ = '\n';
                 }
             }
 
-            // for (auto &command : query.commands)
-            // {
-            //     if (std::holds_alternative<SortCommand>(command))
-            //     {
-            //         auto &sort_command = std::get<SortCommand>(command);
+            if (!query.filters.empty())
+            {
+                *inserter++ = '\n';
+            }
 
-            //         const auto n_values = sort_command.args.size();
+            for (size_t c = 0; c < query.commands.size(); c++)
+            {
+                auto &command = query.commands[c];
 
-            //         out += "Sort";
-            //         for (uint32_t i = 0; i < n_values; i++)
-            //         {
-            //             const auto &arg = sort_command.args[i];
-            //             auto kind = i == 0             ? 0
-            //                         : i < n_values - 1 ? 1
-            //                                            : 2;
+                std::visit(
+                    VisitHelper{
+                        [&](SortCommand &sort_command)
+                        {
+                            const auto n_args = sort_command.args.size();
 
-            //             // clang-format off
-            //                 if (kind == 1)      out += ", then";
-            //                 else if (kind == 2) out += " and then";
-            //                 if (arg.is_negated) out += " descending by ";
-            //                 else                out += " ascending by ";
-            //                                     out += (std::string_view)prop_bundle_names[arg.target_meta_prop_id];
-            //             // clang-format on
-            //         }
-            //     }
-            //     out += "\n";
-            // }
+                            std::format_to(inserter, "<c=#55ffdd>Sort</c>");
+                            for (uint32_t a = 0; a < n_args; a++)
+                            {
+                                const auto &arg = sort_command.args[a];
+
+                                if (a > 0)
+                                {
+                                    if (a + 1 < n_args)
+                                    {
+                                        std::format_to(inserter, ", then");
+                                    }
+                                    else
+                                    {
+                                        std::format_to(inserter, " and then");
+                                    }
+                                }
+
+                                if (arg.is_negated)
+                                {
+                                    std::format_to(inserter, " descending by");
+                                }
+                                else
+                                {
+                                    std::format_to(inserter, " ascending by");
+                                }
+
+                                auto meta_name = impl.GetMetaName(arg.target_meta_prop_id);
+                                FixedVector<char, 64> name;
+                                meta_name.GetRenderableString(name);
+
+                                std::format_to(inserter, " <c=#55ffdd>{}</c>", (std::string_view)name);
+                            }
+                        },
+                        [](auto &&)
+                        {
+                            assert(false);
+                        },
+                    },
+                    command
+                );
+
+                if (c + 1 < query.commands.size()) // all but last
+                {
+                    *inserter++ = '\n';
+                }
+            }
         }
 
         ResultItem CalcItemResult(Query &q, size_t prop_id, I::index_type item_id)
@@ -715,6 +818,12 @@ namespace HerosInsight::Filtering
             auto str_id = prop.GetStrId(item_id);
             LoweredText lowered = prop.GetSearchableStr(str_id);
             ResultItem result;
+            if (lowered.text.size() >= sizeof(Text::EncodedNumber) &&
+                lowered.text.data()[0] == '\x1')
+            {
+                if (Text::DecodeSearchableNumber(*(Text::EncodedNumber *)(lowered.text.data())) == 0.f)
+                    result.is_zero = true;
+            }
             CalcHL(q, prop_id, lowered, result.hl);
             FixedVector<Text::PosDelta, 64> deltas;
             prop.GetRenderableString(str_id, result.text, deltas);

@@ -1260,11 +1260,6 @@ namespace HerosInsight::SkillBook
 
             this->filter_device.RunQuery(this->query, this->filtered_skills);
 
-            // for (auto &command : parsed_commands)
-            // {
-            //     ApplyCommand(command, filtered_skills);
-            // }
-
             UpdateFeedback();
 
             // if (active_state->filtered_skills.size() > 0)
