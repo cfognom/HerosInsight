@@ -55,7 +55,9 @@
 #include <constants.h>
 #include <crash_handling.h>
 #include <imgui.h>
+#include <imgui_customize.h>
 #include <imgui_impl_dx9.h>
+#include <imgui_impl_win32.h>
 #include <imgui_internal.h>
 #include <skill_book.h>
 
@@ -63,6 +65,8 @@
 
 // We can forward declare, because we won't use it
 struct IDirect3DDevice9;
+
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 static volatile bool running;
 static long OldWndProc = 0;
@@ -119,83 +123,11 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM l
 
     ImGuiIO &io = ImGui::GetIO();
 
-    //
-    // The first switch case is used to update the state of imgui with respect of the inputs.
-    //
-
-    switch (Message)
-    {
-        case WM_LBUTTONDOWN:
-        case WM_LBUTTONDBLCLK:
-            if (!right_mouse_down)
-                io.MouseDown[0] = true;
-            break;
-        case WM_LBUTTONUP:
-            io.MouseDown[0] = false;
-            break;
-        case WM_MBUTTONDOWN:
-        case WM_MBUTTONDBLCLK:
-            if (!right_mouse_down)
-            {
-                io.KeysDown[VK_MBUTTON] = true;
-                io.MouseDown[2] = true;
-            }
-            break;
-        case WM_MBUTTONUP:
-            io.KeysDown[VK_MBUTTON] = false;
-            io.MouseDown[2] = false;
-            break;
-        case WM_MOUSEWHEEL:
-            if (!right_mouse_down)
-            {
-                io.MouseWheel += (float)GET_WHEEL_DELTA_WPARAM(wParam) / 120.f; // The values seem to come in multiples of 120
-                // io.MouseWheel += GET_WHEEL_DELTA_WPARAM(wParam) > 0 ? +1.0f : -1.0f;
-            }
-            break;
-        case WM_MOUSEMOVE:
-            if (!right_mouse_down)
-            {
-                io.MousePos.x = (float)GET_X_LPARAM(lParam);
-                io.MousePos.y = (float)GET_Y_LPARAM(lParam);
-            }
-            break;
-        case WM_XBUTTONDOWN:
-            if (!right_mouse_down)
-            {
-                if (GET_XBUTTON_WPARAM(wParam) == XBUTTON1)
-                    io.KeysDown[VK_XBUTTON1] = true;
-                if (GET_XBUTTON_WPARAM(wParam) == XBUTTON2)
-                    io.KeysDown[VK_XBUTTON2] = true;
-            }
-            break;
-        case WM_XBUTTONUP:
-            if (GET_XBUTTON_WPARAM(wParam) == XBUTTON1)
-                io.KeysDown[VK_XBUTTON1] = false;
-            if (GET_XBUTTON_WPARAM(wParam) == XBUTTON2)
-                io.KeysDown[VK_XBUTTON2] = false;
-            break;
-        case WM_SYSKEYDOWN:
-        case WM_KEYDOWN:
-            if (wParam < 256)
-                io.KeysDown[wParam] = true;
-            break;
-        case WM_SYSKEYUP:
-        case WM_KEYUP:
-            if (wParam < 256)
-                io.KeysDown[wParam] = false;
-            break;
-        case WM_CHAR: // You can also use ToAscii()+GetKeyboardState() to retrieve characters.
-            if (wParam > 0 && wParam < 0x10000)
-                io.AddInputCharacter((unsigned short)wParam);
-            break;
-        default:
-            break;
-    }
+    ImGui_ImplWin32_WndProcHandler(hWnd, Message, wParam, lParam);
 
     //
-    // This second switch is used to determine whether we need to forward the input to Guild Wars.
+    // This switch is used to determine whether we need to forward the input to Guild Wars.
     //
-
     bool is_up = false;
     switch (Message)
     {
@@ -312,6 +244,7 @@ static void Shutdown()
     HerosInsight::UpdateManager::Terminate();
 
     HWND hWnd = GW::MemoryMgr::GetGWWindowHandle();
+    ImGui_ImplWin32_Shutdown();
     ImGui_ImplDX9_Shutdown();
     ImGui::DestroyContext();
     SetWindowLongPtr(hWnd, GWL_WNDPROC, OldWndProc);
@@ -324,7 +257,9 @@ static void OnRender(void *data)
     auto helper = *static_cast<GW::Render::Helper *>(data);
     auto device = helper.device;
 
+    ImGui_ImplWin32_NewFrame();
     ImGui_ImplDX9_NewFrame();
+    ImGui::NewFrame();
 
     HerosInsight::UpdateManager::Draw(device);
 
@@ -394,7 +329,9 @@ static void Initialize(void *data)
     HWND hWnd = GW::MemoryMgr::GetGWWindowHandle();
     OldWndProc = SetWindowLongPtr(hWnd, GWL_WNDPROC, reinterpret_cast<long>(SafeWndProc));
     ImGui::CreateContext();
-    ImGui_ImplDX9_Init(hWnd, device);
+    ImGui_ImplWin32_Init(hWnd);
+    ImGui_ImplDX9_Init(device);
+    HerosInsight::ImGui::Init();
     HerosInsight::UpdateManager::Initialize();
 
     GW::GameThread::RegisterGameThreadCallback(

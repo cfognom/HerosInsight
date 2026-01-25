@@ -630,8 +630,6 @@ namespace HerosInsight::Utils
     GW::UI::Frame *GetTooltipFrame();
     GW::UI::Frame *GetDraggedSkillFrame();
 
-    void ImGuiDebugLastItemRect();
-
     template <typename FlagEnum>
     constexpr bool HasAnyFlag(FlagEnum value, FlagEnum flags)
         requires std::is_enum_v<FlagEnum>

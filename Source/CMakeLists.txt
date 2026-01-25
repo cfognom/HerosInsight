@@ -4,6 +4,8 @@ add_library(HerosInsight SHARED
     main.cpp
     constants.h
     imgui_impl_dx9.cpp
+    imgui_impl_win32.cpp
+    imgui_customize.cpp
     utils.cpp
     hero_ai.cpp
     party_data.cpp

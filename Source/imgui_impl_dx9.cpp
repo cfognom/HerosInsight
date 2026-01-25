@@ -1,129 +1,214 @@
-// ImGui Win32 + DirectX9 binding
+// dear imgui: Renderer Backend for DirectX9
+// This needs to be used along with a Platform Backend (e.g. Win32)
 
 // Implemented features:
-//  [X] User texture binding. Use 'LPDIRECT3DTEXTURE9' as ImTextureID. Read the FAQ about ImTextureID in imgui.cpp.
+//  [X] Renderer: User texture binding. Use 'LPDIRECT3DTEXTURE9' as ImTextureID. Read the FAQ about ImTextureID!
+//  [X] Renderer: Support for large meshes (64k+ vertices) with 16-bit indices.
 
-// You can copy and use unmodified imgui_impl_* files in your project. See main.cpp for an example of using this.
-// If you use this binding you'll need to call 4 functions: ImGui_ImplXXXX_Init(), ImGui_ImplXXXX_NewFrame(), ImGui::Render() and ImGui_ImplXXXX_Shutdown().
-// If you are new to ImGui, see examples/README.txt and documentation at the top of imgui.cpp.
-// https://github.com/ocornut/imgui
+// You can use unmodified imgui_impl_* files in your project. See examples/ folder for examples of using this.
+// Prefer including the entire imgui/ repository into your project (either as a copy or as a submodule), and only build the backends you need.
+// If you are new to Dear ImGui, read documentation from the docs/ folder + read the top of imgui.cpp.
+// Read online: https://github.com/ocornut/imgui/tree/master/docs
 
 // CHANGELOG
 // (minor and older changes stripped away, please see git history for details)
+//  2021-06-29: Reorganized backend to pull data from a single structure to facilitate usage with multiple-contexts (all g_XXXX access changed to bd->XXXX).
+//  2021-06-25: DirectX9: Explicitly disable texture state stages after >= 1.
+//  2021-05-19: DirectX9: Replaced direct access to ImDrawCmd::TextureId with a call to ImDrawCmd::GetTexID(). (will become a requirement)
+//  2021-04-23: DirectX9: Explicitly setting up more graphics states to increase compatibility with unusual non-default states.
+//  2021-03-18: DirectX9: Calling IDirect3DStateBlock9::Capture() after CreateStateBlock() as a workaround for state restoring issues (see #3857).
+//  2021-03-03: DirectX9: Added support for IMGUI_USE_BGRA_PACKED_COLOR in user's imconfig file.
+//  2021-02-18: DirectX9: Change blending equation to preserve alpha in output buffer.
+//  2019-05-29: DirectX9: Added support for large mesh (64K+ vertices), enable ImGuiBackendFlags_RendererHasVtxOffset flag.
+//  2019-04-30: DirectX9: Added support for special ImDrawCallback_ResetRenderState callback to reset render state.
+//  2019-03-29: Misc: Fixed erroneous assert in ImGui_ImplDX9_InvalidateDeviceObjects().
+//  2019-01-16: Misc: Disabled fog before drawing UI's. Fixes issue #2288.
+//  2018-11-30: Misc: Setting up io.BackendRendererName so it can be displayed in the About Window.
+//  2018-06-08: Misc: Extracted imgui_impl_dx9.cpp/.h away from the old combined DX9+Win32 example.
+//  2018-06-08: DirectX9: Use draw_data->DisplayPos and draw_data->DisplaySize to setup projection matrix and clipping rectangle.
 //  2018-05-07: Render: Saving/restoring Transform because they don't seem to be included in the StateBlock. Setting shading mode to Gouraud.
-//  2018-03-20: Misc: Setup io.BackendFlags ImGuiBackendFlags_HasMouseCursors and ImGuiBackendFlags_HasSetMousePos flags + honor ImGuiConfigFlags_NoMouseCursorChange flag.
-//  2018-02-20: Inputs: Added support for mouse cursors (ImGui::GetMouseCursor() value and WM_SETCURSOR message handling).
 //  2018-02-16: Misc: Obsoleted the io.RenderDrawListsFn callback and exposed ImGui_ImplDX9_RenderDrawData() in the .h file so you can call it yourself.
 //  2018-02-06: Misc: Removed call to ImGui::Shutdown() which is not available from 1.60 WIP, user needs to call CreateContext/DestroyContext themselves.
-//  2018-02-06: Inputs: Honoring the io.WantSetMousePos by repositioning the mouse (when using navigation and ImGuiConfigFlags_NavEnableSetMousePos is set).
-//  2018-02-06: Inputs: Added mapping for ImGuiKey_Space.
-
-#include <GWCA/Managers/AssetMgr.h>
-#include <GWCA/Managers/TextMgr.h>
-
-#include <constants.h>
-#include <rich_text.h>
 
 #include "imgui.h"
-
 #include "imgui_impl_dx9.h"
 
 // DirectX
 #include <d3d9.h>
-#define DIRECTINPUT_VERSION 0x0800
-#include <dinput.h>
-
-// Win32 data
-static HWND g_hWnd = 0;
-static INT64 g_Time = 0;
-static INT64 g_TicksPerSecond = 0;
-static ImGuiMouseCursor g_LastMouseCursor = ImGuiMouseCursor_COUNT;
 
 // DirectX data
-LPDIRECT3DDEVICE9 g_pd3dDevice = NULL;
-static LPDIRECT3DVERTEXBUFFER9 g_pVB = NULL;
-static LPDIRECT3DINDEXBUFFER9 g_pIB = NULL;
-static LPDIRECT3DTEXTURE9 g_FontTexture = NULL;
-static int g_VertexBufferSize = 5000, g_IndexBufferSize = 10000;
+struct ImGui_ImplDX9_Data
+{
+    LPDIRECT3DDEVICE9           pd3dDevice;
+    LPDIRECT3DVERTEXBUFFER9     pVB;
+    LPDIRECT3DINDEXBUFFER9      pIB;
+    LPDIRECT3DTEXTURE9          FontTexture;
+    int                         VertexBufferSize;
+    int                         IndexBufferSize;
+
+    ImGui_ImplDX9_Data()        { memset(this, 0, sizeof(*this)); VertexBufferSize = 5000; IndexBufferSize = 10000; }
+};
 
 struct CUSTOMVERTEX
 {
-    float pos[3];
+    float    pos[3];
     D3DCOLOR col;
-    float uv[2];
+    float    uv[2];
 };
-#define D3DFVF_CUSTOMVERTEX (D3DFVF_XYZ | D3DFVF_DIFFUSE | D3DFVF_TEX1)
+#define D3DFVF_CUSTOMVERTEX (D3DFVF_XYZ|D3DFVF_DIFFUSE|D3DFVF_TEX1)
+
+#ifdef IMGUI_USE_BGRA_PACKED_COLOR
+#define IMGUI_COL_TO_DX9_ARGB(_COL)     (_COL)
+#else
+#define IMGUI_COL_TO_DX9_ARGB(_COL)     (((_COL) & 0xFF00FF00) | (((_COL) & 0xFF0000) >> 16) | (((_COL) & 0xFF) << 16))
+#endif
+
+// Backend data stored in io.BackendRendererUserData to allow support for multiple Dear ImGui contexts
+// It is STRONGLY preferred that you use docking branch with multi-viewports (== single Dear ImGui context + multiple windows) instead of multiple Dear ImGui contexts.
+static ImGui_ImplDX9_Data* ImGui_ImplDX9_GetBackendData()
+{
+    return ImGui::GetCurrentContext() ? (ImGui_ImplDX9_Data*)ImGui::GetIO().BackendRendererUserData : NULL;
+}
+
+// Functions
+static void ImGui_ImplDX9_SetupRenderState(ImDrawData* draw_data)
+{
+    ImGui_ImplDX9_Data* bd = ImGui_ImplDX9_GetBackendData();
+
+    // Setup viewport
+    D3DVIEWPORT9 vp;
+    vp.X = vp.Y = 0;
+    vp.Width = (DWORD)draw_data->DisplaySize.x;
+    vp.Height = (DWORD)draw_data->DisplaySize.y;
+    vp.MinZ = 0.0f;
+    vp.MaxZ = 1.0f;
+    bd->pd3dDevice->SetViewport(&vp);
+
+    // Setup render state: fixed-pipeline, alpha-blending, no face culling, no depth testing, shade mode (for gradient)
+    bd->pd3dDevice->SetPixelShader(NULL);
+    bd->pd3dDevice->SetVertexShader(NULL);
+    bd->pd3dDevice->SetRenderState(D3DRS_FILLMODE, D3DFILL_SOLID);
+    bd->pd3dDevice->SetRenderState(D3DRS_SHADEMODE, D3DSHADE_GOURAUD);
+    bd->pd3dDevice->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
+    bd->pd3dDevice->SetRenderState(D3DRS_ALPHATESTENABLE, FALSE);
+    bd->pd3dDevice->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
+    bd->pd3dDevice->SetRenderState(D3DRS_ZENABLE, FALSE);
+    bd->pd3dDevice->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
+    bd->pd3dDevice->SetRenderState(D3DRS_BLENDOP, D3DBLENDOP_ADD);
+    bd->pd3dDevice->SetRenderState(D3DRS_SRCBLEND, D3DBLEND_SRCALPHA);
+    bd->pd3dDevice->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
+    bd->pd3dDevice->SetRenderState(D3DRS_SEPARATEALPHABLENDENABLE, TRUE);
+    bd->pd3dDevice->SetRenderState(D3DRS_SRCBLENDALPHA, D3DBLEND_ONE);
+    bd->pd3dDevice->SetRenderState(D3DRS_DESTBLENDALPHA, D3DBLEND_INVSRCALPHA);
+    bd->pd3dDevice->SetRenderState(D3DRS_SCISSORTESTENABLE, TRUE);
+    bd->pd3dDevice->SetRenderState(D3DRS_FOGENABLE, FALSE);
+    bd->pd3dDevice->SetRenderState(D3DRS_RANGEFOGENABLE, FALSE);
+    bd->pd3dDevice->SetRenderState(D3DRS_SPECULARENABLE, FALSE);
+    bd->pd3dDevice->SetRenderState(D3DRS_STENCILENABLE, FALSE);
+    bd->pd3dDevice->SetRenderState(D3DRS_CLIPPING, TRUE);
+    bd->pd3dDevice->SetRenderState(D3DRS_LIGHTING, FALSE);
+    bd->pd3dDevice->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_MODULATE);
+    bd->pd3dDevice->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+    bd->pd3dDevice->SetTextureStageState(0, D3DTSS_COLORARG2, D3DTA_DIFFUSE);
+    bd->pd3dDevice->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_MODULATE);
+    bd->pd3dDevice->SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
+    bd->pd3dDevice->SetTextureStageState(0, D3DTSS_ALPHAARG2, D3DTA_DIFFUSE);
+    bd->pd3dDevice->SetTextureStageState(1, D3DTSS_COLOROP, D3DTOP_DISABLE);
+    bd->pd3dDevice->SetTextureStageState(1, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
+    bd->pd3dDevice->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
+    bd->pd3dDevice->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
+
+    // Setup orthographic projection matrix
+    // Our visible imgui space lies from draw_data->DisplayPos (top left) to draw_data->DisplayPos+data_data->DisplaySize (bottom right). DisplayPos is (0,0) for single viewport apps.
+    // Being agnostic of whether <d3dx9.h> or <DirectXMath.h> can be used, we aren't relying on D3DXMatrixIdentity()/D3DXMatrixOrthoOffCenterLH() or DirectX::XMMatrixIdentity()/DirectX::XMMatrixOrthographicOffCenterLH()
+    {
+        float L = draw_data->DisplayPos.x + 0.5f;
+        float R = draw_data->DisplayPos.x + draw_data->DisplaySize.x + 0.5f;
+        float T = draw_data->DisplayPos.y + 0.5f;
+        float B = draw_data->DisplayPos.y + draw_data->DisplaySize.y + 0.5f;
+        D3DMATRIX mat_identity = { { { 1.0f, 0.0f, 0.0f, 0.0f,  0.0f, 1.0f, 0.0f, 0.0f,  0.0f, 0.0f, 1.0f, 0.0f,  0.0f, 0.0f, 0.0f, 1.0f } } };
+        D3DMATRIX mat_projection =
+        { { {
+            2.0f/(R-L),   0.0f,         0.0f,  0.0f,
+            0.0f,         2.0f/(T-B),   0.0f,  0.0f,
+            0.0f,         0.0f,         0.5f,  0.0f,
+            (L+R)/(L-R),  (T+B)/(B-T),  0.5f,  1.0f
+        } } };
+        bd->pd3dDevice->SetTransform(D3DTS_WORLD, &mat_identity);
+        bd->pd3dDevice->SetTransform(D3DTS_VIEW, &mat_identity);
+        bd->pd3dDevice->SetTransform(D3DTS_PROJECTION, &mat_projection);
+    }
+}
 
 // Render function.
-// (this used to be set in io.RenderDrawListsFn and called by ImGui::Render(), but you can now call this directly from your main loop)
-void ImGui_ImplDX9_RenderDrawData(ImDrawData *draw_data)
+void ImGui_ImplDX9_RenderDrawData(ImDrawData* draw_data)
 {
     // Avoid rendering when minimized
-    ImGuiIO &io = ImGui::GetIO();
-    if (io.DisplaySize.x <= 0.0f || io.DisplaySize.y <= 0.0f)
+    if (draw_data->DisplaySize.x <= 0.0f || draw_data->DisplaySize.y <= 0.0f)
         return;
 
     // Create and grow buffers if needed
-    if (!g_pVB || g_VertexBufferSize < draw_data->TotalVtxCount)
+    ImGui_ImplDX9_Data* bd = ImGui_ImplDX9_GetBackendData();
+    if (!bd->pVB || bd->VertexBufferSize < draw_data->TotalVtxCount)
     {
-        if (g_pVB)
-        {
-            g_pVB->Release();
-            g_pVB = NULL;
-        }
-        g_VertexBufferSize = draw_data->TotalVtxCount + 5000;
-        if (g_pd3dDevice->CreateVertexBuffer(g_VertexBufferSize * sizeof(CUSTOMVERTEX), D3DUSAGE_DYNAMIC | D3DUSAGE_WRITEONLY, D3DFVF_CUSTOMVERTEX, D3DPOOL_DEFAULT, &g_pVB, NULL) < 0)
+        if (bd->pVB) { bd->pVB->Release(); bd->pVB = NULL; }
+        bd->VertexBufferSize = draw_data->TotalVtxCount + 5000;
+        if (bd->pd3dDevice->CreateVertexBuffer(bd->VertexBufferSize * sizeof(CUSTOMVERTEX), D3DUSAGE_DYNAMIC | D3DUSAGE_WRITEONLY, D3DFVF_CUSTOMVERTEX, D3DPOOL_DEFAULT, &bd->pVB, NULL) < 0)
             return;
     }
-    if (!g_pIB || g_IndexBufferSize < draw_data->TotalIdxCount)
+    if (!bd->pIB || bd->IndexBufferSize < draw_data->TotalIdxCount)
     {
-        if (g_pIB)
-        {
-            g_pIB->Release();
-            g_pIB = NULL;
-        }
-        g_IndexBufferSize = draw_data->TotalIdxCount + 10000;
-        if (g_pd3dDevice->CreateIndexBuffer(g_IndexBufferSize * sizeof(ImDrawIdx), D3DUSAGE_DYNAMIC | D3DUSAGE_WRITEONLY, sizeof(ImDrawIdx) == 2 ? D3DFMT_INDEX16 : D3DFMT_INDEX32, D3DPOOL_DEFAULT, &g_pIB, NULL) < 0)
+        if (bd->pIB) { bd->pIB->Release(); bd->pIB = NULL; }
+        bd->IndexBufferSize = draw_data->TotalIdxCount + 10000;
+        if (bd->pd3dDevice->CreateIndexBuffer(bd->IndexBufferSize * sizeof(ImDrawIdx), D3DUSAGE_DYNAMIC | D3DUSAGE_WRITEONLY, sizeof(ImDrawIdx) == 2 ? D3DFMT_INDEX16 : D3DFMT_INDEX32, D3DPOOL_DEFAULT, &bd->pIB, NULL) < 0)
             return;
     }
 
     // Backup the DX9 state
-    IDirect3DStateBlock9 *d3d9_state_block = NULL;
-    if (g_pd3dDevice->CreateStateBlock(D3DSBT_ALL, &d3d9_state_block) < 0)
+    IDirect3DStateBlock9* d3d9_state_block = NULL;
+    if (bd->pd3dDevice->CreateStateBlock(D3DSBT_ALL, &d3d9_state_block) < 0)
         return;
+    if (d3d9_state_block->Capture() < 0)
+    {
+        d3d9_state_block->Release();
+        return;
+    }
 
     // Backup the DX9 transform (DX9 documentation suggests that it is included in the StateBlock but it doesn't appear to)
     D3DMATRIX last_world, last_view, last_projection;
-    g_pd3dDevice->GetTransform(D3DTS_WORLD, &last_world);
-    g_pd3dDevice->GetTransform(D3DTS_VIEW, &last_view);
-    g_pd3dDevice->GetTransform(D3DTS_PROJECTION, &last_projection);
+    bd->pd3dDevice->GetTransform(D3DTS_WORLD, &last_world);
+    bd->pd3dDevice->GetTransform(D3DTS_VIEW, &last_view);
+    bd->pd3dDevice->GetTransform(D3DTS_PROJECTION, &last_projection);
+
+    // Allocate buffers
+    CUSTOMVERTEX* vtx_dst;
+    ImDrawIdx* idx_dst;
+    if (bd->pVB->Lock(0, (UINT)(draw_data->TotalVtxCount * sizeof(CUSTOMVERTEX)), (void**)&vtx_dst, D3DLOCK_DISCARD) < 0)
+    {
+        d3d9_state_block->Release();
+        return;
+    }
+    if (bd->pIB->Lock(0, (UINT)(draw_data->TotalIdxCount * sizeof(ImDrawIdx)), (void**)&idx_dst, D3DLOCK_DISCARD) < 0)
+    {
+        bd->pVB->Unlock();
+        d3d9_state_block->Release();
+        return;
+    }
 
     // Copy and convert all vertices into a single contiguous buffer, convert colors to DX9 default format.
-    // FIXME-OPT: This is a waste of resource, the ideal is to use imconfig.h and
+    // FIXME-OPT: This is a minor waste of resource, the ideal is to use imconfig.h and
     //  1) to avoid repacking colors:   #define IMGUI_USE_BGRA_PACKED_COLOR
     //  2) to avoid repacking vertices: #define IMGUI_OVERRIDE_DRAWVERT_STRUCT_LAYOUT struct ImDrawVert { ImVec2 pos; float z; ImU32 col; ImVec2 uv; }
-    CUSTOMVERTEX *vtx_dst;
-    ImDrawIdx *idx_dst;
-    if (g_pVB->Lock(0, (UINT)(draw_data->TotalVtxCount * sizeof(CUSTOMVERTEX)), (void **)&vtx_dst, D3DLOCK_DISCARD) < 0)
-        return;
-    if (g_pIB->Lock(0, (UINT)(draw_data->TotalIdxCount * sizeof(ImDrawIdx)), (void **)&idx_dst, D3DLOCK_DISCARD) < 0)
-        return;
     for (int n = 0; n < draw_data->CmdListsCount; n++)
     {
-        const ImDrawList *cmd_list = draw_data->CmdLists[n];
-        const ImDrawVert *vtx_src = cmd_list->VtxBuffer.Data;
+        const ImDrawList* cmd_list = draw_data->CmdLists[n];
+        const ImDrawVert* vtx_src = cmd_list->VtxBuffer.Data;
         for (int i = 0; i < cmd_list->VtxBuffer.Size; i++)
         {
             vtx_dst->pos[0] = vtx_src->pos.x;
             vtx_dst->pos[1] = vtx_src->pos.y;
             vtx_dst->pos[2] = 0.0f;
-            vtx_dst->col = vtx_src->col;
-            // vtx_dst->col = D3DCOLOR_ARGB(
-            //     (uint8_t)(vtx_src->col >> IM_COL32_A_SHIFT),
-            //     (uint8_t)(vtx_src->col >> IM_COL32_R_SHIFT),
-            //     (uint8_t)(vtx_src->col >> IM_COL32_G_SHIFT),
-            //     (uint8_t)(vtx_src->col >> IM_COL32_B_SHIFT)
-            // );
+            vtx_dst->col = IMGUI_COL_TO_DX9_ARGB(vtx_src->col);
             vtx_dst->uv[0] = vtx_src->uv.x;
             vtx_dst->uv[1] = vtx_src->uv.y;
             vtx_dst++;
@@ -132,621 +217,141 @@ void ImGui_ImplDX9_RenderDrawData(ImDrawData *draw_data)
         memcpy(idx_dst, cmd_list->IdxBuffer.Data, cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx));
         idx_dst += cmd_list->IdxBuffer.Size;
     }
-    g_pVB->Unlock();
-    g_pIB->Unlock();
-    g_pd3dDevice->SetStreamSource(0, g_pVB, 0, sizeof(CUSTOMVERTEX));
-    g_pd3dDevice->SetIndices(g_pIB);
-    g_pd3dDevice->SetFVF(D3DFVF_CUSTOMVERTEX);
+    bd->pVB->Unlock();
+    bd->pIB->Unlock();
+    bd->pd3dDevice->SetStreamSource(0, bd->pVB, 0, sizeof(CUSTOMVERTEX));
+    bd->pd3dDevice->SetIndices(bd->pIB);
+    bd->pd3dDevice->SetFVF(D3DFVF_CUSTOMVERTEX);
 
-    // Setup viewport
-    D3DVIEWPORT9 vp;
-    vp.X = vp.Y = 0;
-    vp.Width = (DWORD)io.DisplaySize.x;
-    vp.Height = (DWORD)io.DisplaySize.y;
-    vp.MinZ = 0.0f;
-    vp.MaxZ = 1.0f;
-    g_pd3dDevice->SetViewport(&vp);
-
-    // Setup render state: fixed-pipeline, alpha-blending, no face culling, no depth testing, shade mode (for gradient)
-    g_pd3dDevice->SetPixelShader(NULL);
-    g_pd3dDevice->SetVertexShader(NULL);
-    g_pd3dDevice->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
-    g_pd3dDevice->SetRenderState(D3DRS_LIGHTING, false);
-    g_pd3dDevice->SetRenderState(D3DRS_ZENABLE, false);
-    g_pd3dDevice->SetRenderState(D3DRS_ALPHABLENDENABLE, true);
-    g_pd3dDevice->SetRenderState(D3DRS_ALPHATESTENABLE, false);
-    g_pd3dDevice->SetRenderState(D3DRS_BLENDOP, D3DBLENDOP_ADD);
-    g_pd3dDevice->SetRenderState(D3DRS_SRCBLEND, D3DBLEND_SRCALPHA);
-    g_pd3dDevice->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
-    g_pd3dDevice->SetRenderState(D3DRS_SCISSORTESTENABLE, true);
-    g_pd3dDevice->SetRenderState(D3DRS_SHADEMODE, D3DSHADE_GOURAUD);
-    g_pd3dDevice->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_MODULATE);
-    g_pd3dDevice->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
-    g_pd3dDevice->SetTextureStageState(0, D3DTSS_COLORARG2, D3DTA_DIFFUSE);
-    g_pd3dDevice->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_MODULATE);
-    g_pd3dDevice->SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
-    g_pd3dDevice->SetTextureStageState(0, D3DTSS_ALPHAARG2, D3DTA_DIFFUSE);
-    g_pd3dDevice->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
-    g_pd3dDevice->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
-
-    // Setup orthographic projection matrix
-    // Being agnostic of whether <d3dx9.h> or <DirectXMath.h> can be used, we aren't relying on D3DXMatrixIdentity()/D3DXMatrixOrthoOffCenterLH() or DirectX::XMMatrixIdentity()/DirectX::XMMatrixOrthographicOffCenterLH()
-    {
-        const float L = 0.5f, R = io.DisplaySize.x + 0.5f, T = 0.5f, B = io.DisplaySize.y + 0.5f;
-        D3DMATRIX mat_identity = {{1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f}};
-        D3DMATRIX mat_projection =
-            {
-                2.0f / (R - L),
-                0.0f,
-                0.0f,
-                0.0f,
-                0.0f,
-                2.0f / (T - B),
-                0.0f,
-                0.0f,
-                0.0f,
-                0.0f,
-                0.5f,
-                0.0f,
-                (L + R) / (L - R),
-                (T + B) / (B - T),
-                0.5f,
-                1.0f,
-            };
-        g_pd3dDevice->SetTransform(D3DTS_WORLD, &mat_identity);
-        g_pd3dDevice->SetTransform(D3DTS_VIEW, &mat_identity);
-        g_pd3dDevice->SetTransform(D3DTS_PROJECTION, &mat_projection);
-    }
+    // Setup desired DX state
+    ImGui_ImplDX9_SetupRenderState(draw_data);
 
     // Render command lists
-    int vtx_offset = 0;
-    int idx_offset = 0;
+    // (Because we merged all buffers into a single one, we maintain our own offset into them)
+    int global_vtx_offset = 0;
+    int global_idx_offset = 0;
+    ImVec2 clip_off = draw_data->DisplayPos;
     for (int n = 0; n < draw_data->CmdListsCount; n++)
     {
-        const ImDrawList *cmd_list = draw_data->CmdLists[n];
+        const ImDrawList* cmd_list = draw_data->CmdLists[n];
         for (int cmd_i = 0; cmd_i < cmd_list->CmdBuffer.Size; cmd_i++)
         {
-            const ImDrawCmd *pcmd = &cmd_list->CmdBuffer[cmd_i];
-            if (pcmd->UserCallback)
+            const ImDrawCmd* pcmd = &cmd_list->CmdBuffer[cmd_i];
+            if (pcmd->UserCallback != NULL)
             {
-                pcmd->UserCallback(cmd_list, pcmd);
+                // User callback, registered via ImDrawList::AddCallback()
+                // (ImDrawCallback_ResetRenderState is a special callback value used by the user to request the renderer to reset render state.)
+                if (pcmd->UserCallback == ImDrawCallback_ResetRenderState)
+                    ImGui_ImplDX9_SetupRenderState(draw_data);
+                else
+                    pcmd->UserCallback(cmd_list, pcmd);
             }
             else
             {
-                const RECT r = {(LONG)pcmd->ClipRect.x, (LONG)pcmd->ClipRect.y, (LONG)pcmd->ClipRect.z, (LONG)pcmd->ClipRect.w};
-                g_pd3dDevice->SetTexture(0, (LPDIRECT3DTEXTURE9)pcmd->TextureId);
-                g_pd3dDevice->SetScissorRect(&r);
-                g_pd3dDevice->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, vtx_offset, 0, (UINT)cmd_list->VtxBuffer.Size, idx_offset, pcmd->ElemCount / 3);
+                // Project scissor/clipping rectangles into framebuffer space
+                ImVec2 clip_min(pcmd->ClipRect.x - clip_off.x, pcmd->ClipRect.y - clip_off.y);
+                ImVec2 clip_max(pcmd->ClipRect.z - clip_off.x, pcmd->ClipRect.w - clip_off.y);
+                if (clip_max.x <= clip_min.x || clip_max.y <= clip_min.y)
+                    continue;
+
+                // Apply Scissor/clipping rectangle, Bind texture, Draw
+                const RECT r = { (LONG)clip_min.x, (LONG)clip_min.y, (LONG)clip_max.x, (LONG)clip_max.y };
+                const LPDIRECT3DTEXTURE9 texture = (LPDIRECT3DTEXTURE9)pcmd->GetTexID();
+                bd->pd3dDevice->SetTexture(0, texture);
+                bd->pd3dDevice->SetScissorRect(&r);
+                bd->pd3dDevice->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, pcmd->VtxOffset + global_vtx_offset, 0, (UINT)cmd_list->VtxBuffer.Size, pcmd->IdxOffset + global_idx_offset, pcmd->ElemCount / 3);
             }
-            idx_offset += pcmd->ElemCount;
         }
-        vtx_offset += cmd_list->VtxBuffer.Size;
+        global_idx_offset += cmd_list->IdxBuffer.Size;
+        global_vtx_offset += cmd_list->VtxBuffer.Size;
     }
 
     // Restore the DX9 transform
-    g_pd3dDevice->SetTransform(D3DTS_WORLD, &last_world);
-    g_pd3dDevice->SetTransform(D3DTS_VIEW, &last_view);
-    g_pd3dDevice->SetTransform(D3DTS_PROJECTION, &last_projection);
+    bd->pd3dDevice->SetTransform(D3DTS_WORLD, &last_world);
+    bd->pd3dDevice->SetTransform(D3DTS_VIEW, &last_view);
+    bd->pd3dDevice->SetTransform(D3DTS_PROJECTION, &last_projection);
 
     // Restore the DX9 state
     d3d9_state_block->Apply();
     d3d9_state_block->Release();
 }
 
-static bool ImGui_ImplWin32_UpdateMouseCursor()
+bool ImGui_ImplDX9_Init(IDirect3DDevice9* device)
 {
-    ImGuiIO &io = ImGui::GetIO();
-    if (io.ConfigFlags & ImGuiConfigFlags_NoMouseCursorChange)
-        return false;
+    ImGuiIO& io = ImGui::GetIO();
+    IM_ASSERT(io.BackendRendererUserData == NULL && "Already initialized a renderer backend!");
 
-    ImGuiMouseCursor imgui_cursor = io.MouseDrawCursor ? ImGuiMouseCursor_None : ImGui::GetMouseCursor();
-    if (imgui_cursor == ImGuiMouseCursor_None)
-    {
-        // Hide OS mouse cursor if imgui is drawing it or if it wants no cursor
-        ::SetCursor(NULL);
-    }
-    else
-    {
-        // Hardware cursor type
-        LPTSTR win32_cursor = IDC_ARROW;
-        switch (imgui_cursor)
-        {
-            case ImGuiMouseCursor_Arrow:
-                win32_cursor = IDC_ARROW;
-                break;
-            case ImGuiMouseCursor_TextInput:
-                win32_cursor = IDC_IBEAM;
-                break;
-            case ImGuiMouseCursor_ResizeAll:
-                win32_cursor = IDC_SIZEALL;
-                break;
-            case ImGuiMouseCursor_ResizeEW:
-                win32_cursor = IDC_SIZEWE;
-                break;
-            case ImGuiMouseCursor_ResizeNS:
-                win32_cursor = IDC_SIZENS;
-                break;
-            case ImGuiMouseCursor_ResizeNESW:
-                win32_cursor = IDC_SIZENESW;
-                break;
-            case ImGuiMouseCursor_ResizeNWSE:
-                win32_cursor = IDC_SIZENWSE;
-                break;
-        }
-        ::SetCursor(::LoadCursor(NULL, win32_cursor));
-    }
-    return true;
-}
+    // Setup backend capabilities flags
+    ImGui_ImplDX9_Data* bd = IM_NEW(ImGui_ImplDX9_Data)();
+    io.BackendRendererUserData = (void*)bd;
+    io.BackendRendererName = "imgui_impl_dx9";
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;  // We can honor the ImDrawCmd::VtxOffset field, allowing for large meshes.
 
-// Allow compilation with old Windows SDK. MinGW doesn't have default _WIN32_WINNT/WINVER versions.
-#ifndef WM_MOUSEHWHEEL
-#define WM_MOUSEHWHEEL 0x020E
-#endif
-
-// Process Win32 mouse/keyboard inputs.
-// You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to use your inputs.
-// - When io.WantCaptureMouse is true, do not dispatch mouse input data to your main application.
-// - When io.WantCaptureKeyboard is true, do not dispatch keyboard input data to your main application.
-// Generally you may always pass all inputs to dear imgui, and hide them from your application based on those two flags.
-// PS: In this Win32 handler, we use the capture API (GetCapture/SetCapture/ReleaseCapture) to be able to read mouse coordinations when dragging mouse outside of our window bounds.
-// PS: We treat DBLCLK messages as regular mouse down messages, so this code will work on windows classes that have the CS_DBLCLKS flag set. Our own example app code doesn't set this flag.
-IMGUI_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
-{
-    if (ImGui::GetCurrentContext() == NULL)
-        return 0;
-
-    ImGuiIO &io = ImGui::GetIO();
-    switch (msg)
-    {
-        case WM_LBUTTONDOWN:
-        case WM_LBUTTONDBLCLK:
-        case WM_RBUTTONDOWN:
-        case WM_RBUTTONDBLCLK:
-        case WM_MBUTTONDOWN:
-        case WM_MBUTTONDBLCLK:
-        {
-            int button = 0;
-            if (msg == WM_LBUTTONDOWN || msg == WM_LBUTTONDBLCLK)
-                button = 0;
-            if (msg == WM_RBUTTONDOWN || msg == WM_RBUTTONDBLCLK)
-                button = 1;
-            if (msg == WM_MBUTTONDOWN || msg == WM_MBUTTONDBLCLK)
-                button = 2;
-            if (!ImGui::IsAnyMouseDown() && ::GetCapture() == NULL)
-                ::SetCapture(hwnd);
-            io.MouseDown[button] = true;
-            return 0;
-        }
-        case WM_LBUTTONUP:
-        case WM_RBUTTONUP:
-        case WM_MBUTTONUP:
-        {
-            int button = 0;
-            if (msg == WM_LBUTTONUP)
-                button = 0;
-            if (msg == WM_RBUTTONUP)
-                button = 1;
-            if (msg == WM_MBUTTONUP)
-                button = 2;
-            io.MouseDown[button] = false;
-            if (!ImGui::IsAnyMouseDown() && ::GetCapture() == hwnd)
-                ::ReleaseCapture();
-            return 0;
-        }
-        case WM_MOUSEWHEEL:
-            io.MouseWheel += GET_WHEEL_DELTA_WPARAM(wParam) > 0 ? +1.0f : -1.0f;
-            return 0;
-        case WM_MOUSEHWHEEL:
-            io.MouseWheelH += GET_WHEEL_DELTA_WPARAM(wParam) > 0 ? +1.0f : -1.0f;
-            return 0;
-        case WM_MOUSEMOVE:
-            io.MousePos.x = (signed short)(lParam);
-            io.MousePos.y = (signed short)(lParam >> 16);
-            return 0;
-        case WM_KEYDOWN:
-        case WM_SYSKEYDOWN:
-            if (wParam < 256)
-                io.KeysDown[wParam] = 1;
-            return 0;
-        case WM_KEYUP:
-        case WM_SYSKEYUP:
-            if (wParam < 256)
-                io.KeysDown[wParam] = 0;
-            return 0;
-        case WM_CHAR:
-            // You can also use ToAscii()+GetKeyboardState() to retrieve characters.
-            if (wParam > 0 && wParam < 0x10000)
-                io.AddInputCharacter((unsigned short)wParam);
-            return 0;
-        case WM_SETCURSOR:
-            if (LOWORD(lParam) == HTCLIENT && ImGui_ImplWin32_UpdateMouseCursor())
-                return 1;
-            return 0;
-    }
-    return 0;
-}
-
-struct GWFontConfig
-{
-    uint32_t fontIndex = 0;
-    GW::TextMgr::BlitFontFlags blitFlags = (GW::TextMgr::BlitFontFlags)0;
-    int32_t glyphPadding = 0;
-    int32_t advanceAdjustment = 0;
-    ImVec2 glyphOffset = ImVec2(0, 0);
-    ImVec2 iconOffset = ImVec2(0, 0);
-    uint32_t color = 0xffffffff;
-    std::unordered_map<wchar_t, uint32_t> advanceAdjustmentOverrides;
-};
-
-struct FontBlitCommand
-{
-    struct Glyph
-    {
-        ImWchar ch;
-        int dstRect;
-        uint32_t x_offset;
-    };
-    struct IconFile
-    {
-        struct Mapping
-        {
-            int dstRect;
-            int atlasIndex;
-            uint32_t tint;
-        };
-        uint32_t gwImageFileId;
-        GW::Dims iconDims;
-        std::vector<Mapping> mappings;
-    };
-    GWFontConfig config;
-    ImFont *imFont;
-    std::vector<Glyph> glyphs;
-    std::vector<IconFile> icons;
-};
-std::vector<FontBlitCommand> font_blit_commands;
-
-ImFont *CreateGWFont(GWFontConfig cfg)
-{
-    auto &io = ImGui::GetIO();
-
-    GW::TextMgr::FontHandle fontHandle(cfg.fontIndex);
-    auto font = fontHandle.font;
-
-    auto padding = cfg.glyphPadding;
-    int32_t padded_height = font->glyphHeight + padding * 2;
-
-    ImFontConfig config;
-    config.SizePixels = padded_height;
-    auto imFont = io.Fonts->AddFontDefault(&config);
-    imFont->FallbackAdvanceX = font->advance_unit;
-
-    auto &command = font_blit_commands.emplace_back();
-    command.config = cfg;
-    command.imFont = imFont;
-
-    auto EnqueueRange = [&](ImWchar begin, ImWchar end)
-    {
-        for (ImWchar ch = begin; ch < end; ++ch)
-        {
-            auto glyph = GW::TextMgr::GetGlyphByChar(font, ch);
-            uint32_t glyph_offset_x, glyph_width;
-            if (glyph)
-            {
-                glyph_offset_x = std::numeric_limits<uint32_t>::max();
-                glyph_width = 0;
-                for (size_t i = 0; i < 4; ++i)
-                {
-                    // GW uses 4 collision lanes for each glyph to achieve nice kerning, but imgui uses only one: We take max of all lanes
-                    glyph_offset_x = std::min(glyph_offset_x, glyph->metrics.lane_start[i]);
-                    glyph_width = std::max(glyph_width, glyph->metrics.lane_width[i]);
-                }
-            }
-            else
-            {
-                glyph_offset_x = 0;
-                glyph_width = font->advance_unit;
-            }
-            uint32_t padded_width = glyph_width + padding * 2;
-            auto advanceOverrride_it = cfg.advanceAdjustmentOverrides.find(ch);
-            uint32_t advanceAdjustment = advanceOverrride_it != cfg.advanceAdjustmentOverrides.end() ? advanceOverrride_it->second : cfg.advanceAdjustment;
-            uint32_t advance = glyph_width + advanceAdjustment;
-            auto offset = ImVec2(-padding, 0) + cfg.glyphOffset;
-            auto id = io.Fonts->AddCustomRectFontGlyph(imFont, ch, padded_width, padded_height, advance, offset);
-            auto &g = command.glyphs.emplace_back();
-            g.ch = ch;
-            g.dstRect = id;
-            g.x_offset = glyph_offset_x;
-        }
-    };
-    auto defaultGlyphRanges = io.Fonts->GetGlyphRangesDefault();
-    auto r = defaultGlyphRanges;
-    while (*r)
-    {
-        auto begin = *r++;
-        assert(*r);
-        auto end = *r++;
-        EnqueueRange(begin, end);
-    }
-
-    ImWchar customCh = 0xE000;
-
-    { // Add custom icons
-        GW::Dims iconSize(16, 16);
-        auto &entry = command.icons.emplace_back();
-        entry.gwImageFileId = TextureModule::KnownFileIDs::UI_SkillStatsIcons;
-        entry.iconDims = iconSize;
-        ImVec2 iconOffset{-1, -1};
-        iconOffset.y += padding;
-        auto iconEffectiveHeight = (int32_t)iconSize.height - 2;
-        iconOffset.y += std::round(((float)font->glyphHeight * 0.8f - iconEffectiveHeight) / 2);
-        auto advanceAdjustment = -2;
-
-        auto AddIconGlyph = [&](size_t atlas_index, uint32_t tint = IM_COL32_WHITE)
-        {
-            auto advance = iconSize.width + advanceAdjustment;
-            auto offset = iconOffset + cfg.iconOffset;
-            auto id = io.Fonts->AddCustomRectFontGlyph(imFont, customCh++, iconSize.width, iconSize.height, advance, offset);
-            auto &mapping = entry.mappings.emplace_back();
-            mapping.atlasIndex = atlas_index;
-            mapping.dstRect = id;
-            mapping.tint = tint;
-        };
-
-        for (size_t atlas_index = 0; atlas_index <= 10; ++atlas_index)
-        {
-            AddIconGlyph(atlas_index);
-        }
-        AddIconGlyph(2, IM_COL32(77, 84, 179, 255));
-    }
-
-    return imFont;
-}
-
-void AddFonts(ImGuiIO &io)
-{
-    auto res_path = Constants::paths.resources();
-    // First font is used by default
-    Constants::Fonts::gw_font_16 = CreateGWFont(GWFontConfig{
-        .glyphPadding = 1,
-        .advanceAdjustment = 1,
-    });
-    Constants::Fonts::window_name_font = CreateGWFont(GWFontConfig{
-        .fontIndex = 1,
-        .blitFlags = GW::TextMgr::BlitFontFlags::AmbientOcclusion,
-        .glyphPadding = 2,
-        .advanceAdjustment = 1,
-        .color = 0xffdddddd,
-    });
-    Constants::Fonts::skill_thick_font_15 = CreateGWFont(GWFontConfig{
-        .fontIndex = 1,
-        .glyphPadding = 1,
-        .advanceAdjustmentOverrides = {
-            {L'*', -2},
-        },
-    });
-    Constants::Fonts::skill_name_font = CreateGWFont(GWFontConfig{
-        .fontIndex = 3,
-        .glyphPadding = 1,
-        .advanceAdjustment = 1,
-    });
-
-    ImFontConfig config;
-    config.GlyphOffset.y = 2;
-    Constants::Fonts::skill_thick_font_12 = io.Fonts->AddFontFromFileTTF((res_path / "friz-quadrata-std-bold-587034a220f9f.otf").string().c_str(), 12.0f, &config, io.Fonts->GetGlyphRangesDefault());
-    Constants::Fonts::skill_thick_font_9 = io.Fonts->AddFontFromFileTTF((res_path / "friz-quadrata-std-bold-587034a220f9f.otf").string().c_str(), 9.0f, &config, io.Fonts->GetGlyphRangesDefault());
-}
-
-void InvertDefaultStyleColors()
-{
-    auto &style = ImGui::GetStyle();
-    auto &colors = style.Colors;
-    // Inverting red and blue channels as a simple method for getting a unique style.
-    for (int i = 0; i < ImGuiCol_COUNT; i++)
-    {
-        ImVec4 &col = colors[i];
-        float temp = col.x;
-        col.x = col.z;
-        col.z = temp;
-    }
-}
-
-bool ImGui_ImplDX9_Init(void *hwnd, IDirect3DDevice9 *device)
-{
-    g_hWnd = (HWND)hwnd;
-    g_pd3dDevice = device;
-
-    if (!QueryPerformanceFrequency((LARGE_INTEGER *)&g_TicksPerSecond))
-        return false;
-    if (!QueryPerformanceCounter((LARGE_INTEGER *)&g_Time))
-        return false;
-
-    // Setup back-end capabilities flags
-    ImGuiIO &io = ImGui::GetIO();
-    io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors; // We can honor GetMouseCursor() values (optional)
-    io.BackendFlags |= ImGuiBackendFlags_HasSetMousePos;  // We can honor io.WantSetMousePos requests (optional, rarely used)
-
-    // Keyboard mapping. ImGui will use those indices to peek into the io.KeysDown[] array that we will update during the application lifetime.
-    io.KeyMap[ImGuiKey_Tab] = VK_TAB;
-    io.KeyMap[ImGuiKey_LeftArrow] = VK_LEFT;
-    io.KeyMap[ImGuiKey_RightArrow] = VK_RIGHT;
-    io.KeyMap[ImGuiKey_UpArrow] = VK_UP;
-    io.KeyMap[ImGuiKey_DownArrow] = VK_DOWN;
-    io.KeyMap[ImGuiKey_PageUp] = VK_PRIOR;
-    io.KeyMap[ImGuiKey_PageDown] = VK_NEXT;
-    io.KeyMap[ImGuiKey_Home] = VK_HOME;
-    io.KeyMap[ImGuiKey_End] = VK_END;
-    io.KeyMap[ImGuiKey_Insert] = VK_INSERT;
-    io.KeyMap[ImGuiKey_Delete] = VK_DELETE;
-    io.KeyMap[ImGuiKey_Backspace] = VK_BACK;
-    io.KeyMap[ImGuiKey_Space] = VK_SPACE;
-    io.KeyMap[ImGuiKey_Enter] = VK_RETURN;
-    io.KeyMap[ImGuiKey_Escape] = VK_ESCAPE;
-    io.KeyMap[ImGuiKey_A] = 'A';
-    io.KeyMap[ImGuiKey_C] = 'C';
-    io.KeyMap[ImGuiKey_V] = 'V';
-    io.KeyMap[ImGuiKey_X] = 'X';
-    io.KeyMap[ImGuiKey_Y] = 'Y';
-    io.KeyMap[ImGuiKey_Z] = 'Z';
-
-    io.ImeWindowHandle = g_hWnd;
-
-    io.ConfigWindowsMoveFromTitleBarOnly = true;
-
-    AddFonts(io);
-    // InvertDefaultStyleColors(); // Easy way to get unique style
+    bd->pd3dDevice = device;
+    bd->pd3dDevice->AddRef();
 
     return true;
 }
 
 void ImGui_ImplDX9_Shutdown()
 {
+    ImGui_ImplDX9_Data* bd = ImGui_ImplDX9_GetBackendData();
+    IM_ASSERT(bd != NULL && "No renderer backend to shutdown, or already shutdown?");
+    ImGuiIO& io = ImGui::GetIO();
+
     ImGui_ImplDX9_InvalidateDeviceObjects();
-    g_pd3dDevice = NULL;
-    g_hWnd = 0;
-}
-
-uint32_t ARGB4444ToARGB8888(uint16_t px)
-{
-    uint8_t a = (px >> 12) & 0xF; // high 4 bits
-    uint8_t r = (px >> 8) & 0xF;
-    uint8_t g = (px >> 4) & 0xF;
-    uint8_t b = px & 0xF;
-
-    // expand 4-bit to 8-bit
-    a = a * 0x11; // 0xF → 0xFF
-    r = r * 0x11;
-    g = g * 0x11;
-    b = b * 0x11;
-
-    return (a << 24) | (r << 16) | (g << 8) | b;
-}
-
-inline constexpr uint8_t MulChannel(uint8_t a, uint8_t b)
-{
-    // a*b ranges 0..65025
-    // add 127 for rounding, divide by 255 to scale back to 0..255
-    return (a * b + 127) / 255;
-}
-
-// Multiply two 32-bit colors (RGBA) channel-wise
-inline uint32_t MultiplyColors32(uint32_t c1, uint32_t c2)
-{
-    uint8_t x = MulChannel((c1 >> 0) & 0xFF, (c2 >> 0) & 0xFF);
-    uint8_t y = MulChannel((c1 >> 8) & 0xFF, (c2 >> 8) & 0xFF);
-    uint8_t z = MulChannel((c1 >> 16) & 0xFF, (c2 >> 16) & 0xFF);
-    uint8_t w = MulChannel((c1 >> 24) & 0xFF, (c2 >> 24) & 0xFF);
-
-    return (w << 24) | (z << 16) | (y << 8) | x;
-}
-
-static void BlitGWGlyphs(uint32_t *pixels, uint32_t width, uint32_t height)
-{
-    auto &io = ImGui::GetIO();
-
-    std::vector<uint8_t> glyphDataBuffer;
-    std::vector<uint16_t> blitDataBuffer;
-
-    GW::Ptr2D atlasDataPtr{pixels, width};
-
-    for (auto &com : font_blit_commands)
-    {
-        auto padding = com.config.glyphPadding;
-        GW::TextMgr::FontHandle fontHandle(com.config.fontIndex);
-        auto font = fontHandle.font;
-        auto blitWidth = font->glyphWidth + padding * 2;
-        auto blitHeight = font->glyphHeight + padding * 2;
-        auto blitSize = blitWidth * blitHeight;
-        GW::Dims glyphDims{blitWidth, blitHeight};
-        glyphDataBuffer.resize(blitSize);
-        blitDataBuffer.resize(blitSize);
-        GW::Ptr2D glyphDataPtr{glyphDataBuffer.data(), blitWidth};
-        GW::Ptr2D blitDataPtr{blitDataBuffer.data(), blitWidth};
-
-        for (auto &g : com.glyphs)
-        {
-            std::memset(glyphDataBuffer.data(), 0, blitSize * sizeof(decltype(glyphDataBuffer)::value_type));
-            // std::memset(blitDataBuffer.data(), 0, blitSize * sizeof(decltype(blitDataBuffer)::value_type));
-            auto encGlyph = GW::TextMgr::GetGlyphByChar(font, g.ch);
-            GW::TextMgr::DecodeGlyph(font, encGlyph, glyphDataPtr.Index(padding, padding));
-
-            auto rect = io.Fonts->GetCustomRectByIndex(g.dstRect);
-            auto slotPtr = atlasDataPtr.Index(rect->X, rect->Y);
-
-            GW::TextMgr::BlitFontARBG4444(font, blitDataPtr, glyphDataBuffer.data(), glyphDims, com.config.color, com.config.blitFlags);
-
-            for (int y = 0; y < rect->Height; y++)
-            {
-                for (int x = 0; x < rect->Width; x++)
-                {
-                    auto blittedValue = *blitDataPtr.Index(x + g.x_offset, y).data;
-                    auto dstPx = slotPtr.Index(x, y).data;
-                    *dstPx = ARGB4444ToARGB8888(blittedValue);
-                }
-            }
-        }
-
-        for (auto &entry : com.icons)
-        {
-            GW::AssetMgr::DecodedImage decoded(entry.gwImageFileId);
-            assert(decoded.image);
-            GW::Ptr2D<uint32_t> decodedPtr{(uint32_t *)decoded.image, decoded.dims.width};
-            ImVec2 uv0, uv1;
-            for (auto &mapping : entry.mappings)
-            {
-                auto rect = io.Fonts->GetCustomRectByIndex(mapping.dstRect);
-                auto slotPtr = atlasDataPtr.Index(rect->X, rect->Y);
-                TextureModule::GetImageUVsInAtlas(decoded.dims, entry.iconDims, mapping.atlasIndex, uv0, uv1);
-                auto srcPtr = decodedPtr.Index(
-                    std::round(uv0.x * decoded.dims.width),
-                    std::round(uv0.y * decoded.dims.height)
-                );
-                srcPtr.CopyTo(slotPtr, entry.iconDims);
-                if (mapping.tint != 0xFFFFFFFF)
-                {
-                    slotPtr.ForEach(
-                        [tint = mapping.tint](uint32_t &px)
-                        {
-                            px = MultiplyColors32(px, tint);
-                        },
-                        entry.iconDims
-                    );
-                }
-            }
-        }
-    }
+    if (bd->pd3dDevice) { bd->pd3dDevice->Release(); }
+    io.BackendRendererName = NULL;
+    io.BackendRendererUserData = NULL;
+    IM_DELETE(bd);
 }
 
 static bool ImGui_ImplDX9_CreateFontsTexture()
 {
     // Build texture atlas
-    ImGuiIO &io = ImGui::GetIO();
-    unsigned char *pixels;
+    ImGuiIO& io = ImGui::GetIO();
+    ImGui_ImplDX9_Data* bd = ImGui_ImplDX9_GetBackendData();
+    unsigned char* pixels;
     int width, height, bytes_per_pixel;
     io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height, &bytes_per_pixel);
-    assert(bytes_per_pixel == 4);
 
-    BlitGWGlyphs((uint32_t *)pixels, width, height);
+    // Convert RGBA32 to BGRA32 (because RGBA32 is not well supported by DX9 devices)
+#ifndef IMGUI_USE_BGRA_PACKED_COLOR
+    if (io.Fonts->TexPixelsUseColors)
+    {
+        ImU32* dst_start = (ImU32*)ImGui::MemAlloc((size_t)width * height * bytes_per_pixel);
+        for (ImU32* src = (ImU32*)pixels, *dst = dst_start, *dst_end = dst_start + (size_t)width * height; dst < dst_end; src++, dst++)
+            *dst = IMGUI_COL_TO_DX9_ARGB(*src);
+        pixels = (unsigned char*)dst_start;
+    }
+#endif
 
     // Upload texture to graphics system
-    g_FontTexture = NULL;
-    if (g_pd3dDevice->CreateTexture(width, height, 1, D3DUSAGE_DYNAMIC, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &g_FontTexture, NULL) < 0)
+    bd->FontTexture = NULL;
+    if (bd->pd3dDevice->CreateTexture(width, height, 1, D3DUSAGE_DYNAMIC, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &bd->FontTexture, NULL) < 0)
         return false;
     D3DLOCKED_RECT tex_locked_rect;
-    if (g_FontTexture->LockRect(0, &tex_locked_rect, NULL, 0) != D3D_OK)
+    if (bd->FontTexture->LockRect(0, &tex_locked_rect, NULL, 0) != D3D_OK)
         return false;
     for (int y = 0; y < height; y++)
-        memcpy((unsigned char *)tex_locked_rect.pBits + tex_locked_rect.Pitch * y, pixels + (width * bytes_per_pixel) * y, (width * bytes_per_pixel));
-    g_FontTexture->UnlockRect(0);
+        memcpy((unsigned char*)tex_locked_rect.pBits + (size_t)tex_locked_rect.Pitch * y, pixels + (size_t)width * bytes_per_pixel * y, (size_t)width * bytes_per_pixel);
+    bd->FontTexture->UnlockRect(0);
 
     // Store our identifier
-    io.Fonts->TexID = (void *)g_FontTexture;
+    io.Fonts->SetTexID((ImTextureID)bd->FontTexture);
+
+#ifndef IMGUI_USE_BGRA_PACKED_COLOR
+    if (io.Fonts->TexPixelsUseColors)
+        ImGui::MemFree(pixels);
+#endif
 
     return true;
 }
 
 bool ImGui_ImplDX9_CreateDeviceObjects()
 {
-    if (!g_pd3dDevice)
+    ImGui_ImplDX9_Data* bd = ImGui_ImplDX9_GetBackendData();
+    if (!bd || !bd->pd3dDevice)
         return false;
     if (!ImGui_ImplDX9_CreateFontsTexture())
         return false;
@@ -755,72 +360,19 @@ bool ImGui_ImplDX9_CreateDeviceObjects()
 
 void ImGui_ImplDX9_InvalidateDeviceObjects()
 {
-    if (!g_pd3dDevice)
+    ImGui_ImplDX9_Data* bd = ImGui_ImplDX9_GetBackendData();
+    if (!bd || !bd->pd3dDevice)
         return;
-    if (g_pVB)
-    {
-        g_pVB->Release();
-        g_pVB = NULL;
-    }
-    if (g_pIB)
-    {
-        g_pIB->Release();
-        g_pIB = NULL;
-    }
-
-    // At this point note that we set ImGui::GetIO().Fonts->TexID to be == g_FontTexture, so clear both.
-    ImGuiIO &io = ImGui::GetIO();
-    IM_ASSERT(g_FontTexture == io.Fonts->TexID);
-    if (g_FontTexture)
-        g_FontTexture->Release();
-    g_FontTexture = NULL;
-    io.Fonts->TexID = NULL;
+    if (bd->pVB) { bd->pVB->Release(); bd->pVB = NULL; }
+    if (bd->pIB) { bd->pIB->Release(); bd->pIB = NULL; }
+    if (bd->FontTexture) { bd->FontTexture->Release(); bd->FontTexture = NULL; ImGui::GetIO().Fonts->SetTexID(NULL); } // We copied bd->pFontTextureView to io.Fonts->TexID so let's clear that as well.
 }
 
 void ImGui_ImplDX9_NewFrame()
 {
-    if (!g_FontTexture)
+    ImGui_ImplDX9_Data* bd = ImGui_ImplDX9_GetBackendData();
+    IM_ASSERT(bd != NULL && "Did you call ImGui_ImplDX9_Init()?");
+
+    if (!bd->FontTexture)
         ImGui_ImplDX9_CreateDeviceObjects();
-
-    ImGuiIO &io = ImGui::GetIO();
-
-    // Setup display size (every frame to accommodate for window resizing)
-    RECT rect;
-    GetClientRect(g_hWnd, &rect);
-    io.DisplaySize = ImVec2((float)(rect.right - rect.left), (float)(rect.bottom - rect.top));
-
-    // Setup time step
-    INT64 current_time;
-    QueryPerformanceCounter((LARGE_INTEGER *)&current_time);
-    io.DeltaTime = (float)(current_time - g_Time) / g_TicksPerSecond;
-    g_Time = current_time;
-
-    // Read keyboard modifiers inputs
-    io.KeyCtrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
-    io.KeyShift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
-    io.KeyAlt = (GetKeyState(VK_MENU) & 0x8000) != 0;
-    io.KeySuper = false;
-    // io.KeysDown : filled by WM_KEYDOWN/WM_KEYUP events
-    // io.MousePos : filled by WM_MOUSEMOVE events
-    // io.MouseDown : filled by WM_*BUTTON* events
-    // io.MouseWheel : filled by WM_MOUSEWHEEL events
-
-    // Set OS mouse position if requested (only used when ImGuiConfigFlags_NavEnableSetMousePos is enabled by user)
-    if (io.WantSetMousePos)
-    {
-        POINT pos = {(int)io.MousePos.x, (int)io.MousePos.y};
-        ClientToScreen(g_hWnd, &pos);
-        SetCursorPos(pos.x, pos.y);
-    }
-
-    // Update OS mouse cursor with the cursor requested by imgui
-    ImGuiMouseCursor mouse_cursor = io.MouseDrawCursor ? ImGuiMouseCursor_None : ImGui::GetMouseCursor();
-    if (g_LastMouseCursor != mouse_cursor)
-    {
-        g_LastMouseCursor = mouse_cursor;
-        ImGui_ImplWin32_UpdateMouseCursor();
-    }
-
-    // Start the frame. This call will update the io.WantCaptureMouse, io.WantCaptureKeyboard flag that you can use to dispatch inputs (or not) to your application.
-    ImGui::NewFrame();
 }
