@@ -244,7 +244,7 @@ namespace HerosInsight::RichText
                         if (color_tag.color == 0)
                         {
                             if (!color_stack.empty()) // GW sometimes closes colors without opening
-                                color_stack.pop();
+                                color_stack.pop_back();
                         }
                         else
                         {
@@ -257,7 +257,7 @@ namespace HerosInsight::RichText
                         auto &tooltip_tag = tag.tag.tooltip_tag;
                         if (tooltip_tag.id == -1)
                         {
-                            tooltip_stack.pop();
+                            tooltip_stack.pop_back();
                         }
                         else
                         {

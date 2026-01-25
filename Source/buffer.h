@@ -90,7 +90,7 @@ namespace HerosInsight
             AppendRange(std::span<const T>(str));
         }
 
-        T pop()
+        T pop_back()
         {
             assert(!empty());
             size_t index = --Len();

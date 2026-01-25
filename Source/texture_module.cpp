@@ -585,7 +585,7 @@ namespace TextureModule
 
         while (digits.size() > 0)
         {
-            auto digit = digits.pop();
+            auto digit = digits.pop_back();
             DrawDigit(digit);
         }
 

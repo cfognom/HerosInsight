@@ -1900,7 +1900,7 @@ namespace HerosInsight
                     if (buffer.size() > 0)
                     {
                         while (buffer.size() > 0)
-                            PushParam(buffer.pop());
+                            PushParam(buffer.pop_back());
                         return;
                     }
                     PUSH_PARAM_AND_RETURN(ParsedSkillData::Type::Duration);

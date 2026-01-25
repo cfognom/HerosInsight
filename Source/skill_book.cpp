@@ -873,7 +873,7 @@ namespace HerosInsight::SkillBook
                     if (!args.empty())
                     {
                         // Cut off the last ", "
-                        args.pop();
+                        args.pop_back();
                     }
 
                     return b.ExplicitSequence(args);
