@@ -109,7 +109,7 @@ static void ImGui_ImplDX9_SetupRenderState(ImDrawData *draw_data)
     bd->pd3dDevice->SetRenderState(D3DRS_FOGENABLE, FALSE);
     bd->pd3dDevice->SetRenderState(D3DRS_RANGEFOGENABLE, FALSE);
     bd->pd3dDevice->SetRenderState(D3DRS_SPECULARENABLE, FALSE);
-    bd->pd3dDevice->SetRenderState(D3DRS_STENCILENABLE, FALSE);
+    // bd->pd3dDevice->SetRenderState(D3DRS_STENCILENABLE, FALSE);
     bd->pd3dDevice->SetRenderState(D3DRS_CLIPPING, TRUE);
     bd->pd3dDevice->SetRenderState(D3DRS_LIGHTING, FALSE);
     bd->pd3dDevice->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_MODULATE);
