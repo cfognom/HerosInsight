@@ -1901,7 +1901,7 @@ namespace HerosInsight::SkillBook
                 ImGui::PopStyleColor();
                 ImGui::Separator();
 
-                if (ImGui::BeginChild("SkillList"))
+                if (ImGui::BeginChild("SkillList", ImVec2(0, 0), false, ImGuiWindowFlags_NoMove))
                 {
                     auto est_item_height = 128.f;
                     // auto est_item_height = 1.f;
