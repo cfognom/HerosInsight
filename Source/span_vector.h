@@ -17,7 +17,7 @@
 namespace HerosInsight
 {
     template <typename T>
-    class StringArena // TODO: rename to SpanVector? (A vector of spans of data)
+    class SpanVector
     {
         // We use all bytes of T for eq and hashing, so T cannot have any padding etc...
         static_assert(std::has_unique_object_representations_v<T>, "T must have unique object representations");
@@ -61,7 +61,7 @@ namespace HerosInsight
                     return std::hash<std::string_view>{}(AsStringView(arena->Get(index)));
                 }
 
-                StringArena *arena;
+                SpanVector *arena;
             };
 
             struct Eq
@@ -71,11 +71,11 @@ namespace HerosInsight
                     return AsStringView(arena->Get(a)) == AsStringView(arena->Get(b));
                 }
 
-                StringArena *arena;
+                SpanVector *arena;
             };
 
             std::unordered_set<T_span_id, Hasher, Eq> uniques;
-            StringArena *arena = nullptr;
+            SpanVector *arena = nullptr;
 
             void clear()
             {
@@ -83,7 +83,7 @@ namespace HerosInsight
             }
 
             Deduper() = default;
-            Deduper(StringArena *arena, size_t n_buckets)
+            Deduper(SpanVector *arena, size_t n_buckets)
                 : uniques(n_buckets, Hasher{arena}, Eq{arena}), arena(arena) {}
         };
 
@@ -126,7 +126,7 @@ namespace HerosInsight
             ends.erase(ends.begin() + n_spans, ends.end());
         }
 
-        // Deduper is valid until the StringArena is moved!
+        // Deduper is valid until the SpanVector is moved!
         Deduper CreateDeduper(size_t n_buckets)
         {
             return Deduper(this, n_buckets);
@@ -282,10 +282,10 @@ namespace HerosInsight
             size_t Index() const { return index; }
 
         private:
-            friend class StringArena<T>;
-            StringArena *arena;
+            friend class SpanVector<T>;
+            SpanVector *arena;
             size_t index;
-            iterator(StringArena &arena, size_t index) : arena(&arena), index(index) {}
+            iterator(SpanVector &arena, size_t index) : arena(&arena), index(index) {}
         };
 
         struct const_iterator
@@ -319,10 +319,10 @@ namespace HerosInsight
             size_t Index() const { return index; }
 
         private:
-            friend class StringArena<T>;
-            const StringArena *arena;
+            friend class SpanVector<T>;
+            const SpanVector *arena;
             size_t index;
-            const_iterator(const StringArena &arena, size_t index) : arena(&arena), index(index) {}
+            const_iterator(const SpanVector &arena, size_t index) : arena(&arena), index(index) {}
         };
         iterator begin() { return iterator(*this, 0); }
         iterator end() { return iterator(*this, ends.size()); }
@@ -335,9 +335,9 @@ namespace HerosInsight
     // A datastructure that can associate ids with a set of unique spans of data.
     // Auto-dedupes equal entries.
     template <typename T>
-    class IndexedStringArena : public StringArena<T>
+    class IndexedStringArena : public SpanVector<T>
     {
-        using base = StringArena<T>;
+        using base = SpanVector<T>;
 
     public:
         using T_span_id = uint16_t;

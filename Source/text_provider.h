@@ -3,7 +3,7 @@
 #include <GWCA/Constants/Constants.h>
 #include <GWCA/Managers/AssetMgr.h>
 #include <rich_text.h>
-#include <string_arena.h>
+#include <span_vector.h>
 #include <string_manager.h>
 
 namespace HerosInsight::Text

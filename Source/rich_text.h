@@ -3,7 +3,7 @@
 #include <variant>
 
 #include <imgui.h>
-#include <string_arena.h>
+#include <span_vector.h>
 
 namespace HerosInsight::RichText
 {
@@ -132,12 +132,12 @@ namespace HerosInsight::RichText
 
     namespace Helpers
     {
-        inline void PushText(StringArena<char> &dst, std::string_view text)
+        inline void PushText(SpanVector<char> &dst, std::string_view text)
         {
             dst.Elements().append_range(text);
         }
 
-        inline void PushTag(StringArena<char> &dst, TextTag tag)
+        inline void PushTag(SpanVector<char> &dst, TextTag tag)
         {
             dst.AppendWriteBuffer(
                 64,
@@ -151,12 +151,12 @@ namespace HerosInsight::RichText
             );
         }
 
-        inline void PushColorTag(StringArena<char> &dst, ImU32 color)
+        inline void PushColorTag(SpanVector<char> &dst, ImU32 color)
         {
             PushTag(dst, TextTag(ColorTag{color}));
         }
 
-        inline void PushColoredText(StringArena<char> &dst, ImU32 color, std::string_view text)
+        inline void PushColoredText(SpanVector<char> &dst, ImU32 color, std::string_view text)
         {
             PushTag(dst, TextTag(ColorTag{color}));
             PushText(dst, text);

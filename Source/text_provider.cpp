@@ -14,7 +14,7 @@
 #include <bitview.h>
 #include <custom_skill_data.h>
 #include <parsing.h>
-#include <string_arena.h>
+#include <span_vector.h>
 #include <string_manager.h>
 #include <utils.h>
 
@@ -34,7 +34,7 @@ namespace HerosInsight::Text
         return *provider;
     }
 
-    void AppendWStrToStrArena(StringArena<char> &arena, std::wstring_view wstr)
+    void AppendWStrToStrArena(SpanVector<char> &arena, std::wstring_view wstr)
     {
         assert(!wstr.empty());
         arena.AppendWriteBuffer(

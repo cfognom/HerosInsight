@@ -98,7 +98,7 @@
 #include <matcher.h>
 #include <party_data.h>
 #include <rich_text.h>
-#include <string_arena.h>
+#include <span_vector.h>
 #include <string_manager.h>
 #include <texture_module.h>
 #include <update_manager.h>
@@ -524,7 +524,7 @@ namespace HerosInsight::SkillBook
         }
 
         template <auto Func>
-        static void GetSkillProp(StringArena<char> &dst, size_t skill_id)
+        static void GetSkillProp(SpanVector<char> &dst, size_t skill_id)
         {
             auto &cskill = CustomSkillDataModule::GetSkills()[skill_id];
             dst.Elements().append_range((cskill.*Func)());
@@ -594,7 +594,7 @@ namespace HerosInsight::SkillBook
             static_props[(size_t)SkillProp::Range].PopulateItems(
                 "SkillBookProp_Range",
                 GW::Constants::SkillMax,
-                [](StringArena<char> &dst, size_t skill_id)
+                [](SpanVector<char> &dst, size_t skill_id)
                 {
                     FixedVector<Utils::Range, 4> ranges;
                     auto &cskill = CustomSkillDataModule::GetSkills()[skill_id];
@@ -1012,7 +1012,7 @@ namespace HerosInsight::SkillBook
         struct ScrollTracking
         {
             std::vector<VariableSizeClipper::Position> scroll_positions;
-            StringArena<char> input_text_history;
+            SpanVector<char> input_text_history;
             size_t current_index = 0;
 
             ScrollTracking() { input_text_history.push_back(std::string_view("")); }

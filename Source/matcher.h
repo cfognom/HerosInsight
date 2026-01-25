@@ -7,7 +7,7 @@
 
 #include <bitview.h>
 #include <multibuffer.h>
-#include <string_arena.h>
+#include <span_vector.h>
 #include <string_manager.h>
 #include <utils.h>
 
@@ -65,7 +65,7 @@ namespace HerosInsight
 
     struct LoweredTextVector
     {
-        StringArena<char> arena;
+        SpanVector<char> arena;
         BitVector uppercase;
 
         LoweredTextVector() = default;
@@ -88,11 +88,11 @@ namespace HerosInsight
             }
             LowercaseFold();
         }
-        LoweredTextVector(const StringArena<char> &arena) : arena(arena)
+        LoweredTextVector(const SpanVector<char> &arena) : arena(arena)
         {
             LowercaseFold();
         }
-        LoweredTextVector(StringArena<char> &&arena) : arena(std::move(arena))
+        LoweredTextVector(SpanVector<char> &&arena) : arena(std::move(arena))
         {
             LowercaseFold();
         }

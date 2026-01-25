@@ -8,8 +8,8 @@
 #include <front_back_pair.h>
 #include <matcher.h>
 #include <multibuffer.h>
+#include <span_vector.h>
 #include <stopwatch.h>
-#include <string_arena.h>
 #include <string_manager.h>
 #include <text_provider.h>
 #include <utils.h>
@@ -78,8 +78,8 @@ namespace HerosInsight::Filtering
 
         Text::StringManager &mgr = Text::s_Manager;
         LoweredTextVector searchable_text;
-        StringArena<Text::StringTemplateAtom> stringTemplates;
-        StringArena<Text::StringTemplateAtom>::Deduper stringTemplates_deduper;
+        SpanVector<Text::StringTemplateAtom> stringTemplates;
+        SpanVector<Text::StringTemplateAtom>::Deduper stringTemplates_deduper;
         std::vector<uint16_t> item_to_str;
         void *buildTemplate_data;
         BuildTemplateFn BuildTemplate_fn;
@@ -108,7 +108,7 @@ namespace HerosInsight::Filtering
             item_to_str.reserve(count);
 
             std::string deduper_hint_key;
-            StringArena<char>::Deduper deduper;
+            SpanVector<char>::Deduper deduper;
             if (dedupe)
             {
                 deduper_hint_key = std::format("{}_deduper", hint_key);

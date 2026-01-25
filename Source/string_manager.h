@@ -2,7 +2,7 @@
 
 #include <bitview.h>
 #include <rich_text.h>
-#include <string_arena.h>
+#include <span_vector.h>
 
 namespace HerosInsight::Text
 {
@@ -365,11 +365,11 @@ namespace HerosInsight::Text
         //     uint16_t value;
         // };
 
-        StringArena<char> strings;
-        StringArena<StringTemplateAtom> sequences;
+        SpanVector<char> strings;
+        SpanVector<StringTemplateAtom> sequences;
 
-        StringArena<char>::Deduper strings_deduper = strings.CreateDeduper(0);
-        StringArena<StringTemplateAtom>::Deduper sequences_deduper = sequences.CreateDeduper(0);
+        SpanVector<char>::Deduper strings_deduper = strings.CreateDeduper(0);
+        SpanVector<StringTemplateAtom>::Deduper sequences_deduper = sequences.CreateDeduper(0);
 
         size_t AssimilateString(std::string_view str);
 

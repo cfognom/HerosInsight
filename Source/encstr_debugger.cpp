@@ -4,7 +4,7 @@
 #include <GWCA/Managers/AssetMgr.h>
 #include <GWCA/Managers/UIMgr.h>
 
-#include <string_arena.h>
+#include <span_vector.h>
 #include <update_manager.h>
 #include <utils.h>
 #include <variable_size_clipper.h>
@@ -129,7 +129,7 @@ namespace HerosInsight::EncstrDebugger
 
     void DrawExplorer()
     {
-        static StringArena<wchar_t> decoded_strings;
+        static SpanVector<wchar_t> decoded_strings;
         static VariableSizeClipper clipper{};
 
         struct Entry

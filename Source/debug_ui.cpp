@@ -52,7 +52,7 @@
 #include <imgui_impl_dx9.h>
 
 #include "debug_ui.h"
-#include <string_arena.h>
+#include <span_vector.h>
 #include <update_manager.h>
 
 namespace HerosInsight::DebugUI
@@ -60,7 +60,7 @@ namespace HerosInsight::DebugUI
     GW::HookEntry entry;
     GW::HookEntry creation_entry;
 
-    static StringArena<char> msgs;
+    static SpanVector<char> msgs;
     void DebugFrameCallback(GW::HookStatus *status, const GW::UI::Frame *frame, GW::UI::UIMessage msg, void *p1, void *p2)
     {
         if (!Utils::IsHoveringFrame(*frame))
