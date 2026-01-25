@@ -342,7 +342,7 @@ namespace HerosInsight::Filtering
 
             return true;
         }
-        bool TryReadCommand(std::string_view source, Command &command)
+        bool ParseCommand(std::string_view source, Command &command)
         {
             auto rem = source;
 
@@ -411,7 +411,7 @@ namespace HerosInsight::Filtering
                     auto com_src = stmt.substr(com_start);
 
                     auto &command = commands.emplace_back();
-                    if (TryReadCommand(com_src, command))
+                    if (ParseCommand(com_src, command))
                     {
                         stmt = stmt.substr(0, com_start);
                         Utils::TrimTrailingSpaces(stmt);
