@@ -65,7 +65,6 @@ namespace HerosInsight::Filtering
     {
         FixedVector<char, 512> text;
         std::vector<uint16_t> hl; // Highlight
-        bool is_zero = false;
     };
 
     struct IncrementalProp
@@ -818,12 +817,6 @@ namespace HerosInsight::Filtering
             auto str_id = prop.GetStrId(item_id);
             LoweredText lowered = prop.GetSearchableStr(str_id);
             ResultItem result;
-            if (lowered.text.size() >= sizeof(Text::EncodedNumber) &&
-                lowered.text.data()[0] == '\x1')
-            {
-                if (Text::DecodeSearchableNumber(*(Text::EncodedNumber *)(lowered.text.data())) == 0.f)
-                    result.is_zero = true;
-            }
             CalcHL(q, prop_id, lowered, result.hl);
             FixedVector<Text::PosDelta, 64> deltas;
             prop.GetRenderableString(str_id, result.text, deltas);
