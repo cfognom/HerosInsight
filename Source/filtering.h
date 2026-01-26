@@ -674,7 +674,7 @@ namespace HerosInsight::Filtering
             };
 
 #define ArgColor "<c=@skilldyn>"
-#define ControlColor "<c=#55ffdd>"
+#define ControlColor "<c=#64ffff>"
 #define ModifierColor "<c=#f0f080>"
 #define CloseColor "</c>"
 
