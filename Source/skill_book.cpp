@@ -1671,7 +1671,7 @@ namespace HerosInsight::SkillBook
                 ImGui::SetKeyboardFocusHere();
 
             ImGui::InputTextWithHint(
-                "",
+                "##SearchBox",
                 "Search for a skill...",
                 input_text, sizeof(input_text),
                 ImGuiInputTextFlags_CallbackEdit | ImGuiInputTextFlags_AutoSelectAll,
