@@ -1777,7 +1777,7 @@ namespace HerosInsight::SkillBook
             if (draw_alt)
             {
                 ImGui::Spacing();
-                ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
+                ImGui::PushStyleColor(ImGuiCol_Text, Constants::Colors::notify);
                 ImGui::TextUnformatted(settings.prefer_concise_descriptions ? "Additional matches in full description: " : "Additional matches in concise description: ");
                 ImGui::PopStyleColor();
                 ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 3);
