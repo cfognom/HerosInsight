@@ -49,15 +49,23 @@ namespace HerosInsight::Filtering
     template <class... Ts>
     VisitHelper(Ts...) -> VisitHelper<Ts...>;
 
+    struct SortAtom
+    {
+        uint16_t prop_id = 0;
+        bool is_negated = false;
+    };
+
     struct Query
     {
         std::vector<Filter> filters;
-        std::vector<Command> commands;
+        std::vector<SortAtom> sort_atoms;
+        std::vector<SortCommand::Arg> sort_args;
 
         void clear()
         {
             filters.clear();
-            commands.clear();
+            sort_atoms.clear();
+            sort_args.clear();
         }
     };
 
@@ -226,14 +234,13 @@ namespace HerosInsight::Filtering
     concept DeviceImpl =
         requires {
             typename I::index_type;
+            // call static constexpr functions on the type itself
+            { I::MaxSpanCount() } -> std::convertible_to<size_t>;
+            { I::PropCount() } -> std::convertible_to<size_t>;
         } &&
         requires(I &d, size_t metaId, size_t propId) {
-            // dataset shape
-            { d.MaxSpanCount() } -> std::convertible_to<size_t>;
-            { d.PropCount() } -> std::convertible_to<size_t>;
-            { d.MetaCount() } -> std::convertible_to<size_t>;
-
             // meta
+            { d.MetaCount() } -> std::convertible_to<size_t>;
             { d.GetMetaName(metaId) } -> std::same_as<LoweredText>;
             { d.GetMetaPropset(metaId) } -> std::same_as<BitView>;
 
@@ -395,6 +402,8 @@ namespace HerosInsight::Filtering
         {
             query.clear();
 
+            BitArray<I::PropCount() + 1> sorting_props;
+
             auto rem = source;
             while (!rem.empty())
             {
@@ -435,9 +444,36 @@ namespace HerosInsight::Filtering
                         break;
                     }
                 }
-                while (!commands.empty()) // Reverse
+                for (auto &command : std::views::reverse(commands))
                 {
-                    query.commands.emplace_back(std::move(commands.pop_back()));
+                    std::visit(
+                        VisitHelper{
+                            [&](SortCommand &sort_command)
+                            {
+                                for (auto &arg : sort_command.args)
+                                {
+                                    query.sort_args.emplace_back(std::move(arg));
+                                    auto propset = impl.GetMetaPropset(arg.target_meta_prop_id);
+                                    if (propset.All()) // Special case: Preserve order
+                                        continue;
+                                    for (auto prop_id : propset.IterSetBits())
+                                    {
+                                        if (prop_id == I::PropCount())
+                                            continue;
+                                        if (sorting_props[prop_id])
+                                            continue;
+                                        sorting_props[prop_id] = true;
+                                        query.sort_atoms.emplace_back((uint16_t)prop_id, arg.is_negated);
+                                    }
+                                }
+                            },
+                            [](auto &&)
+                            {
+                                assert(false);
+                            },
+                        },
+                        command
+                    );
                 }
 
                 auto &filter = query.filters.emplace_back();
@@ -452,7 +488,7 @@ namespace HerosInsight::Filtering
             size_t n_filters = filters.size();
             size_t n_items = items.size();
             size_t n_spans = impl.MaxSpanCount();
-            size_t n_props = impl.PropCount();
+            size_t n_props = I::PropCount();
             size_t n_meta = impl.MetaCount();
 
             // clang-format off
@@ -583,47 +619,29 @@ namespace HerosInsight::Filtering
             }
             stopwatch.Checkpoint("filters");
         }
-        void RunCommands(std::span<Command> commands, std::vector<typename I::index_type> &items)
+        void SortItems(std::span<SortAtom> atoms, std::span<typename I::index_type> items)
         {
-            Stopwatch stopwatch("RunCommands");
+            Stopwatch stopwatch("SortItems");
 
-            for (auto &command : commands)
-            {
-                std::visit(
-                    VisitHelper{
-                        [&](SortCommand &sort_command)
-                        {
-                            for (auto &arg : sort_command.args)
-                            {
-                                auto propset = impl.GetMetaPropset(arg.target_meta_prop_id);
-                                for (auto prop_id : propset.IterSetBits())
-                                {
-                                    if (prop_id == impl.PropCount())
-                                        continue;
-                                    auto &prop = *impl.GetProperty(prop_id);
-                                    std::stable_sort(
-                                        items.begin(), items.end(),
-                                        [&](size_t item_a, size_t item_b)
-                                        {
-                                            auto str_a = prop.GetSearchableStr(prop.GetStrId(item_a));
-                                            auto str_b = prop.GetSearchableStr(prop.GetStrId(item_b));
-                                            if (arg.is_negated)
-                                                return str_a.text > str_b.text;
-                                            else
-                                                return str_a.text < str_b.text;
-                                        }
-                                    );
-                                }
-                            }
-                        },
-                        [](auto &&)
-                        {
-                            assert(false);
-                        },
-                    },
-                    command
-                );
-            }
+            std::sort(
+                items.begin(), items.end(),
+                [&](size_t item_a, size_t item_b)
+                {
+                    for (auto &atom : atoms)
+                    {
+                        auto prop_id = atom.prop_id;
+                        auto &prop = *impl.GetProperty(prop_id);
+                        auto str_a = prop.GetSearchableStr(prop.GetStrId(item_a));
+                        auto str_b = prop.GetSearchableStr(prop.GetStrId(item_b));
+                        auto cmp = str_a.text <=> str_b.text;
+                        if (cmp == 0)
+                            continue;
+
+                        return atom.is_negated ? cmp > 0 : cmp < 0;
+                    }
+                    return false;
+                }
+            );
         }
         void RunQuery(Query &query, std::vector<typename I::index_type> &items)
         {
@@ -632,9 +650,9 @@ namespace HerosInsight::Filtering
                 RunFilters(query.filters, items);
             }
 
-            if (!query.commands.empty())
+            if (!query.sort_atoms.empty())
             {
-                RunCommands(query.commands, items);
+                SortItems(query.sort_atoms, items);
             }
         }
         void GetFeedback(Query &query, Feedback &out, bool verbose = false)
@@ -784,55 +802,35 @@ namespace HerosInsight::Filtering
                 }
             }
 
+            if (!query.sort_args.empty())
             {
                 auto &s = out.command_feedback;
                 s.clear();
                 auto inserter = std::back_inserter(s);
-                for (size_t c = 0; c < query.commands.size(); c++)
+
+                const auto n_args = query.sort_args.size();
+
+                std::format_to(inserter, ControlColor "Sort</c> ");
+                for (uint32_t a = 0; a < n_args; a++)
                 {
-                    auto &command = query.commands[c];
+                    const auto &arg = query.sort_args[a];
 
-                    std::visit(
-                        VisitHelper{
-                            [&](SortCommand &sort_command)
-                            {
-                                const auto n_args = sort_command.args.size();
+                    AppendJoin(s, a, n_args);
+                    s.append_range((std::string_view) "by ");
 
-                                std::format_to(inserter, ControlColor "Sort</c> ");
-                                for (uint32_t a = 0; a < n_args; a++)
-                                {
-                                    const auto &arg = sort_command.args[a];
+                    auto meta_name = impl.GetMetaName(arg.target_meta_prop_id);
+                    FixedVector<char, 128> name;
+                    meta_name.GetRenderableString(name);
 
-                                    AppendJoin(s, a, n_args);
-                                    s.append_range((std::string_view) "by ");
+                    std::format_to(inserter, ArgColor "{}</c>", (std::string_view)name);
 
-                                    auto meta_name = impl.GetMetaName(arg.target_meta_prop_id);
-                                    FixedVector<char, 128> name;
-                                    meta_name.GetRenderableString(name);
-
-                                    std::format_to(inserter, ArgColor "{}</c>", (std::string_view)name);
-
-                                    if (arg.is_negated)
-                                    {
-                                        std::format_to(inserter, ":" ModifierColor "descending</c>");
-                                    }
-                                    else
-                                    {
-                                        std::format_to(inserter, ":" ModifierColor "ascending</c>");
-                                    }
-                                }
-                            },
-                            [](auto &&)
-                            {
-                                assert(false);
-                            },
-                        },
-                        command
-                    );
-
-                    if (c + 1 < query.commands.size()) // all but last
+                    if (arg.is_negated)
                     {
-                        *inserter++ = '\n';
+                        std::format_to(inserter, ":" ModifierColor "descending</c>");
+                    }
+                    else
+                    {
+                        std::format_to(inserter, ":" ModifierColor "ascending</c>");
                     }
                 }
             }
@@ -854,7 +852,7 @@ namespace HerosInsight::Filtering
         ResultItem CalcMetaResult(Query &q, size_t meta)
         {
             LoweredText lowered = impl.GetMetaName(meta);
-            auto meta_prop_id = impl.PropCount();
+            auto meta_prop_id = I::PropCount();
             ResultItem result;
             CalcHL(q, meta_prop_id, lowered, result.hl);
             lowered.GetRenderableString(result.text);

@@ -1057,8 +1057,8 @@ namespace HerosInsight::SkillBook
         }
 
         using index_type = uint16_t;
-        size_t MaxSpanCount() const { return GW::Constants::SkillMax; }
-        size_t PropCount() const { return PROP_COUNT; }
+        constexpr static size_t MaxSpanCount() { return GW::Constants::SkillMax; }
+        constexpr static size_t PropCount() { return PROP_COUNT; }
         size_t MetaCount() const { return ts.meta_propsets.size(); }
 
         LoweredText GetMetaName(size_t meta) { return ts.meta_prop_names.Get(meta); }
