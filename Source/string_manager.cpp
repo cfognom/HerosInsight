@@ -308,7 +308,7 @@ namespace HerosInsight::Text
 #endif
                 if ((atom.header.constraint == StringTemplateAtom::Constraint::SingularOnly && plurality != Plurality::Singular) ||
                     (atom.header.constraint == StringTemplateAtom::Constraint::PluralOnly && plurality != Plurality::Plural))
-                    return;
+                    continue;
 
                 if constexpr (!is_renderable)
                 {
