@@ -264,7 +264,8 @@ namespace HerosInsight::SkillBook
     {
     public:
         GW::Constants::SkillID skill_id;
-        SkillTooltipProvider(GW::Constants::SkillID skill_id) : skill_id(skill_id) {}
+        int8_t attr_lvl;
+        SkillTooltipProvider(GW::Constants::SkillID skill_id, int8_t attr_lvl) : skill_id(skill_id), attr_lvl(attr_lvl) {}
         void DrawTooltip(uint32_t tooltip_id)
         {
             auto &custom_sd = CustomSkillDataModule::GetCustomSkillData(skill_id);
@@ -365,7 +366,7 @@ namespace HerosInsight::SkillBook
             struct Style
             {
                 ImFont *font;
-                uint32_t color;
+                ImU32 color;
             };
 
             auto GetStyle = [&](size_t col, size_t row)
@@ -449,11 +450,13 @@ namespace HerosInsight::SkillBook
             }
 
             constexpr auto x_padding = 3;
+            constexpr auto selector_box_padding = 2;
             constexpr auto separator_line_overextend = 1;
             constexpr auto separator_line_thickness = 1;
 
             for (size_t x = 0; x < cols; ++x)
             {
+                auto col_cursor = cursor;
                 cursor.x += x_padding;
                 for (size_t y = 0; y < rows; ++y)
                 {
@@ -478,6 +481,18 @@ namespace HerosInsight::SkillBook
                 }
                 cursor.x += x == 0 ? names_max_width : values_max_width;
                 cursor.x += x_padding;
+
+                if (x > 0)
+                {
+                    auto attr_lvl = x - 1;
+                    if (attr_lvl == this->attr_lvl)
+                    {
+                        // Draw selector box around current attribute
+                        auto min = col_cursor + ImVec2(x_padding - selector_box_padding, -selector_box_padding);
+                        auto max = cursor + ImVec2(selector_box_padding - x_padding, rows * text_height + selector_box_padding);
+                        draw_list->AddRect(min, max, ImGui::GetColorU32(Constants::Colors::highlight));
+                    }
+                }
 
                 if (x + 1 < cols)
                 {
@@ -1886,7 +1901,9 @@ namespace HerosInsight::SkillBook
 
         void DrawDescription(GW::Constants::SkillID skill_id, float work_width)
         {
-            auto tt_provider = SkillTooltipProvider(skill_id);
+            auto &cskill = CustomSkillDataModule::GetSkills()[(size_t)skill_id];
+            auto attr_lvl = settings.attr_src.GetAttrLvl(cskill.attribute);
+            auto tt_provider = SkillTooltipProvider(skill_id, attr_lvl);
             text_drawer.tooltip_provider = &tt_provider;
 
             auto type = settings.prefer_concise_descriptions ? SkillProp::Concise : SkillProp::Description;
