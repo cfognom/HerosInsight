@@ -311,7 +311,8 @@ namespace HerosInsight::Filtering
             {
                 filter.meta_prop_id = meta_prop_id.value();
                 rem = rem.substr(separator_pos);
-                if (separator_type == SeparatorType::Colon)
+                if (separator_type == SeparatorType::Colon ||
+                    separator_type == SeparatorType::Equal)
                 {
                     rem = rem.substr(1);
                 }
