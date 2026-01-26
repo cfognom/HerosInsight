@@ -669,4 +669,7 @@ namespace HerosInsight::Utils
     (decltype(SuperEnum)::_##Name##_START <= SuperEnum && SuperEnum <= decltype(SuperEnum)::_##Name##_LAST)
 
     bool IsModdingAllowed();
+
+    ImVec4 LerpColor(const ImVec4 &a, const ImVec4 &b, float t);
+    ImU32 LerpColorU32(ImU32 a, ImU32 b, float t);
 }

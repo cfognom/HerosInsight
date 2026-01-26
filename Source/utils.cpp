@@ -3562,4 +3562,22 @@ namespace HerosInsight::Utils
 
         return true;
     }
+
+    ImVec4 LerpColor(const ImVec4 &a, const ImVec4 &b, float t)
+    {
+        return ImVec4(
+            a.x + (b.x - a.x) * t,
+            a.y + (b.y - a.y) * t,
+            a.z + (b.z - a.z) * t,
+            a.w + (b.w - a.w) * t
+        );
+    }
+
+    ImU32 LerpColorU32(ImU32 a, ImU32 b, float t)
+    {
+        ImVec4 ca = ImGui::ColorConvertU32ToFloat4(a);
+        ImVec4 cb = ImGui::ColorConvertU32ToFloat4(b);
+        ImVec4 c = LerpColor(ca, cb, t);
+        return ImGui::ColorConvertFloat4ToU32(c);
+    }
 }
