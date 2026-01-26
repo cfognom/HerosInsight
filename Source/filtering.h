@@ -354,21 +354,27 @@ namespace HerosInsight::Filtering
             if (Utils::TryRead("SORT", rem))
             {
                 auto &sort_com = command.emplace<SortCommand>();
-                while (rem.size())
+                while (!rem.empty())
                 {
-                    if (!Utils::ReadSpaces(rem))
-                        break;
-                    sort_com.args.emplace_back();
-                    auto &sort_arg = sort_com.args.back();
-                    bool is_negated = Utils::TryRead('-', rem);
-                    auto comma_pos = rem.find(',');
-                    auto target_text = rem.substr(0, comma_pos);
+                    auto arg_end = rem.find(',');
+                    auto target_text = rem.substr(0, arg_end);
+                    Utils::ReadSpaces(target_text);
+                    Utils::TrimTrailingSpaces(target_text);
+                    bool is_negated = !target_text.empty() && target_text.back() == '!';
+                    if (is_negated)
+                        target_text = target_text.substr(0, target_text.size() - 1);
+                    Utils::TrimTrailingSpaces(target_text);
                     auto index = BestMatch(target_text);
-                    if (!index.has_value())
-                        return false;
-                    sort_arg.target_meta_prop_id = index.value();
+                    if (index.has_value())
+                    {
+                        auto &arg = sort_com.args.emplace_back();
+                        arg.is_negated = is_negated;
+                        arg.target_meta_prop_id = index.value();
+                    }
 
-                    rem = rem.substr(comma_pos + 1);
+                    if (arg_end == std::string_view::npos)
+                        break;
+                    rem = rem.substr(arg_end + 1);
                 }
             }
             else
