@@ -270,88 +270,232 @@ namespace HerosInsight::SkillBook
             auto &custom_sd = CustomSkillDataModule::GetCustomSkillData(skill_id);
             const auto attr_str = custom_sd.GetAttributeStr();
 
-            const auto buffer_size = 8;
-            char buffer1[buffer_size];
-            char buffer2[buffer_size];
-            std::string_view text1;
-            std::string_view text2;
-
             ImGui::BeginTooltip();
-            ImGui::PushFont(Constants::Fonts::gw_font_16);
+
             auto draw_list = ImGui::GetWindowDrawList();
             const auto init_cursor_ss = ImGui::GetCursorScreenPos();
             auto cursor = init_cursor_ss;
 
             auto text_height = ImGui::GetTextLineHeight();
-            const auto thick_font_offset = 0;
-            const auto x_padding = 3;
-            const auto separator_overflow = 1;
 
-            for (int32_t i = -1; i <= 21; i++)
+            enum Row
             {
-                bool thick = i == 0 || i == 12 || i == 15;
-                if (thick)
+                AttributeRow,
+                ValueRow,
+                DeltaRow,
+
+                COUNT,
+            };
+
+            struct Cell
+            {
+                union
                 {
-                    ImGui::PushFont(Constants::Fonts::skill_thick_font_15);
+                    const char *str;
+                    char chars[sizeof(str)];
+                };
+                float width;
+            };
+
+            constexpr uint32_t attr_lvls = 22;
+            constexpr uint32_t rows = Row::COUNT;
+            constexpr uint32_t cols = 1 + attr_lvls;
+            constexpr uint32_t cell_count = rows * cols;
+            std::array<Cell, cell_count> cells;
+            std::array<int32_t, attr_lvls - 1> deltas;
+
+            auto skill_param = custom_sd.GetSkillParam(tooltip_id);
+
+            { // Assign strings
+                cells[AttributeRow * cols + 0].str = attr_str.data();
+                cells[ValueRow * cols + 0].str = "Value";
+                cells[DeltaRow * cols + 0].str = "Change";
+
+                int32_t prev_value = 0;
+                for (size_t attr_lvl = 0; attr_lvl < attr_lvls; ++attr_lvl)
+                {
+                    auto value = skill_param.Resolve(attr_lvl);
+                    auto delta = (int32_t)value - prev_value;
+                    prev_value = value;
+
+                    auto x = 1 + attr_lvl;
+
+                    auto &attr_lvl_cell = cells[AttributeRow * cols + x];
+                    auto &value_cell = cells[ValueRow * cols + x];
+                    auto &delta_cell = cells[DeltaRow * cols + x];
+
+                    constexpr size_t buffer_size = sizeof(Cell::chars);
+                    snprintf(attr_lvl_cell.chars, buffer_size, "%d", attr_lvl);
+                    snprintf(value_cell.chars, buffer_size, "%d", value);
+                    if (attr_lvl == 0 || delta == 0)
+                    {
+                        delta_cell.chars[0] = '-';
+                        delta_cell.chars[1] = '\0';
+                    }
+                    else
+                    {
+                        deltas[attr_lvl - 1] = delta;
+                        snprintf(delta_cell.chars, buffer_size, "%+d", delta);
+                    }
+                }
+            }
+
+            int32_t majority_delta; // The most common delta
+            int32_t good_delta = std::numeric_limits<int32_t>::min();
+            int32_t bad_delta = std::numeric_limits<int32_t>::max();
+            { // Figure out majority, good and bad delta
+                size_t majority_delta_count = 0;
+                for (auto delta : deltas)
+                {
+                    bad_delta = std::min(bad_delta, delta);
+                    good_delta = std::max(good_delta, delta);
+
+                    // Boyer–Moore Voting Algorithm
+                    if (majority_delta_count == 0)
+                        majority_delta = delta;
+                    majority_delta_count += (delta == majority_delta) ? 1 : -1;
+                }
+                if (skill_param.IsDecreasing())
+                {
+                    std::swap(bad_delta, good_delta);
+                }
+            }
+            SOFT_ASSERT(majority_delta == bad_delta || majority_delta == good_delta);
+
+            struct Style
+            {
+                ImFont *font;
+                uint32_t color;
+            };
+
+            auto GetStyle = [&](size_t col, size_t row)
+            {
+                Style style{
+                    .font = Constants::Fonts::gw_font_16,
+                    .color = IM_COL32_WHITE
+                };
+
+                int32_t attr_lvl = (int32_t)col - 1;
+                bool is_special = attr_lvl == 0 || attr_lvl == 12 || attr_lvl == 15;
+                switch (row)
+                {
+                    case AttributeRow:
+                    {
+                        if (is_special)
+                        {
+                            style.color = Constants::Colors::highlight;
+                            style.font = Constants::Fonts::skill_thick_font_15;
+                        }
+                        break;
+                    }
+                    case ValueRow:
+                    {
+                        if (is_special)
+                        {
+                            style.font = Constants::Fonts::skill_thick_font_15;
+                        }
+                        style.color = Constants::GWColors::skill_dynamic_green;
+                        break;
+                    }
+                    case DeltaRow:
+                    {
+                        style.color = Constants::GWColors::skill_dull_gray;
+                        if (col >= 2 && (good_delta != bad_delta))
+                        {
+                            auto delta = deltas[col - 2];
+                            if (delta == good_delta)
+                            {
+                                style.color = Constants::GWColors::heal_blue;
+                            }
+                        }
+                        break;
+                    }
                 }
 
-                if (i == -1)
-                {
-                    text1 = attr_str;
-                    text2 = "Value";
-                }
-                else
-                {
-                    auto start = cursor + ImVec2(0, -separator_overflow);
-                    auto end = cursor + ImVec2(0, 2 * text_height + separator_overflow);
-                    float thickness = 1.0f;
-                    draw_list->AddLine(start, end, ImGui::GetColorU32(ImGuiCol_Border), thickness);
-                    cursor.x += thickness;
+                return style;
+            };
 
-                    snprintf(buffer1, buffer_size, "%d", i);
-                    snprintf(buffer2, buffer_size, "%d", custom_sd.GetSkillParam(tooltip_id).Resolve(i));
-                    text1 = buffer1;
-                    text2 = buffer2;
-                }
-                float width1 = ImGui::CalcTextSize(text1.data()).x;
-                float width2 = ImGui::CalcTextSize(text2.data()).x;
-                auto max_width = std::max(width1, width2);
+            // Calc widths
+            for (size_t i = 0; i < cell_count; ++i)
+            {
+                auto y = i / cols;
+                auto x = i % cols;
+                auto &cell = cells[i];
 
+                auto style = GetStyle(x, y);
+                ImGui::PushFont(style.font);
+                auto text = x == 0 ? cell.str : cell.chars;
+                cell.width = ImGui::CalcTextSize(text).x;
+                ImGui::PopFont();
+            }
+
+            float names_max_width = 0.f;
+            { // Calc names_max_width
+                for (size_t y = 0; y < rows; ++y)
+                {
+                    names_max_width = std::max(names_max_width, cells[y * cols + 0].width);
+                }
+            }
+
+            float values_max_width = 0.f;
+            { // Calc values_max_width
+                for (size_t x = 1; x < cols; ++x)
+                {
+                    for (size_t y = 0; y < rows; ++y)
+                    {
+                        values_max_width = std::max(values_max_width, cells[y * cols + x].width);
+                    }
+                }
+            }
+
+            constexpr auto x_padding = 3;
+            constexpr auto separator_line_overextend = 1;
+            constexpr auto separator_line_thickness = 1;
+
+            for (size_t x = 0; x < cols; ++x)
+            {
                 cursor.x += x_padding;
-                auto color = ImGui::GetColorU32(IM_COL32_WHITE);
-
-                auto text_cursor1 = cursor;
-
-                if (thick)
+                for (size_t y = 0; y < rows; ++y)
                 {
-                    text_cursor1.y += thick_font_offset;
-                }
-
-                auto text_cursor2 = text_cursor1;
-                text_cursor2.y += text_height;
-
-                text_cursor1.x += (max_width - width1) / 2;
-                draw_list->AddText(text_cursor1, ImGui::GetColorU32(IM_COL32_WHITE), text1.data(), text1.data() + text1.size());
-
-                text_cursor2.x += (max_width - width2) / 2;
-                draw_list->AddText(text_cursor2, ImGui::GetColorU32(Constants::GWColors::skill_dynamic_green), text2.data(), text2.data() + text2.size());
-
-                cursor.x += max_width + x_padding;
-
-                if (thick)
-                {
+                    auto &cell = cells[y * cols + x];
+                    auto style = GetStyle(x, y);
+                    ImGui::PushFont(style.font);
+                    auto color = ImGui::GetColorU32(style.color);
+                    auto c = cursor;
+                    c.y += y * text_height;
+                    if (x == 0)
+                    {
+                        c.x += (names_max_width - cell.width) / 2;
+                        auto &name = cell.str;
+                        draw_list->AddText(c, color, name);
+                    }
+                    else
+                    {
+                        c.x += (values_max_width - cell.width) / 2;
+                        draw_list->AddText(c, color, cell.chars);
+                    }
                     ImGui::PopFont();
+                }
+                cursor.x += x == 0 ? names_max_width : values_max_width;
+                cursor.x += x_padding;
+
+                if (x + 1 < cols)
+                {
+                    // Draw separator
+                    auto start = cursor + ImVec2(0, -separator_line_overextend);
+                    auto end = cursor + ImVec2(0, rows * text_height + separator_line_overextend);
+                    draw_list->AddLine(start, end, ImGui::GetColorU32(ImGuiCol_Border), separator_line_thickness);
+                    cursor.x += separator_line_thickness;
                 }
             }
 
             const auto min = init_cursor_ss;
-            const auto max = cursor + ImVec2(0, 2 * text_height);
+            const auto max = cursor + ImVec2(0, rows * text_height);
             ImRect rect(min, max);
 
             ImGui::ItemSize(rect);
             ImGui::ItemAdd(rect, 0);
 
-            ImGui::PopFont();
             ImGui::EndTooltip();
         }
     };
