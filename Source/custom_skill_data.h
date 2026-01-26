@@ -76,6 +76,11 @@ namespace HerosInsight
             return val0 == 0 && val15 == 0;
         }
 
+        bool IsDecreasing() const
+        {
+            return val0 > val15;
+        }
+
         explicit operator bool() const
         {
             return !IsNull();
