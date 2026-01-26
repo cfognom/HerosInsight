@@ -216,6 +216,12 @@ namespace HerosInsight::Filtering
         }
     };
 
+    struct Feedback
+    {
+        std::string filter_feedback;
+        std::string command_feedback;
+    };
+
     template <typename I>
     concept DeviceImpl =
         requires {
@@ -594,13 +600,16 @@ namespace HerosInsight::Filtering
                                     if (prop_id == impl.PropCount())
                                         continue;
                                     auto &prop = *impl.GetProperty(prop_id);
-                                    std::sort(
+                                    std::stable_sort(
                                         items.begin(), items.end(),
                                         [&](size_t item_a, size_t item_b)
                                         {
                                             auto str_a = prop.GetSearchableStr(prop.GetStrId(item_a));
                                             auto str_b = prop.GetSearchableStr(prop.GetStrId(item_b));
-                                            return str_a.text < str_b.text;
+                                            if (arg.is_negated)
+                                                return str_a.text > str_b.text;
+                                            else
+                                                return str_a.text < str_b.text;
                                         }
                                     );
                                 }
@@ -627,7 +636,7 @@ namespace HerosInsight::Filtering
                 RunCommands(query.commands, items);
             }
         }
-        void GetFeedback(Query &query, std::string &out, bool verbose = false)
+        void GetFeedback(Query &query, Feedback &out, bool verbose = false)
         {
             static auto GetDispStr = [](const Matcher::Atom &atom) -> std::string_view
             {
@@ -645,174 +654,185 @@ namespace HerosInsight::Filtering
                 }
                 return atom.src_str;
             };
-            out.clear();
-            auto inserter = std::back_inserter(out);
-            for (size_t f = 0; f < query.filters.size(); ++f)
+
+            static auto AppendJoin = [](std::string &s, size_t i, size_t count) -> void
             {
-                auto &filter = query.filters[f];
-
-                FixedVector<char, 128> meta_name;
-                impl.GetMetaName(filter.meta_prop_id).GetRenderableString(meta_name);
-                auto cond = filter.inverted ? "<c=#55ffdd>not</c> " : "";
-                std::format_to(inserter, "<c=#55ffdd>{}</c> must {}contain<c=#55ffdd>:</c> ", (std::string_view)meta_name, cond);
-                for (size_t m = 0; m < filter.matchers.size(); ++m)
+                if (i > 0)
                 {
-                    auto &matcher = filter.matchers[m];
-
-                    if (!verbose)
+                    std::string_view str;
+                    if (i + 1 < count)
                     {
-                        std::format_to(inserter, "<c=@skilldyn>'{}'</c>", matcher.src_str);
+                        str = ", then ";
                     }
                     else
                     {
-                        if (matcher.atoms.empty())
+                        str = " and then ";
+                    }
+                    s.append_range(str);
+                }
+            };
+
+#define ArgColor "<c=@skilldyn>"
+#define ControlColor "<c=#55ffdd>"
+#define ModifierColor "<c=#f0f080>"
+#define CloseColor "</c>"
+
+            {
+                auto &s = out.filter_feedback;
+                s.clear();
+                auto inserter = std::back_inserter(s);
+                for (size_t f = 0; f < query.filters.size(); ++f)
+                {
+                    auto &filter = query.filters[f];
+
+                    FixedVector<char, 128> meta_name;
+                    impl.GetMetaName(filter.meta_prop_id).GetRenderableString(meta_name);
+                    auto cond = filter.inverted ? ControlColor "not " CloseColor : "";
+                    std::format_to(inserter, ControlColor "{}</c> must {}contain" ControlColor ":</c> ", (std::string_view)meta_name, cond);
+                    for (size_t m = 0; m < filter.matchers.size(); ++m)
+                    {
+                        auto &matcher = filter.matchers[m];
+
+                        if (!verbose)
                         {
-                            std::format_to(inserter, "<c=@skilldyn>[Nothing]</c>");
+                            std::format_to(inserter, ArgColor "'{}'</c>", matcher.src_str);
                         }
                         else
                         {
-                            for (size_t a = 0; a < matcher.atoms.size(); ++a)
+                            if (matcher.atoms.empty())
                             {
-                                auto &atom = matcher.atoms[a];
-
-                                bool is_leading = Utils::HasAnyFlag(atom.post_check, Matcher::Atom::PostCheck::Distinct);
-                                if (is_leading)
-                                    std::format_to(inserter, "leading ");
-                                auto src_str = GetDispStr(atom);
-                                switch (atom.type)
+                                std::format_to(inserter, ArgColor "[Nothing]</c>");
+                            }
+                            else
+                            {
+                                for (size_t a = 0; a < matcher.atoms.size(); ++a)
                                 {
-                                    case Matcher::Atom::Type::String:
+                                    auto &atom = matcher.atoms[a];
+                                    AppendJoin(s, a, matcher.atoms.size());
+
+                                    bool is_leading = Utils::HasAnyFlag(atom.post_check, Matcher::Atom::PostCheck::Distinct);
+                                    if (is_leading)
                                     {
-                                        std::format_to(inserter, "<c=@skilldyn>'{}'</c>", atom.src_str);
-                                        break;
+                                        s.append_range((std::string_view)ModifierColor "leading</c> ");
                                     }
-                                    case Matcher::Atom::Type::AnyNumber:
-                                    case Matcher::Atom::Type::ExactNumber:
+                                    auto src_str = GetDispStr(atom);
+                                    switch (atom.type)
                                     {
-                                        std::string_view number_str = atom.src_str;
-                                        if (atom.type == Matcher::Atom::Type::AnyNumber)
+                                        case Matcher::Atom::Type::String:
                                         {
-                                            if (!Utils::HasAnyFlag(atom.post_check, Matcher::Atom::PostCheck::NumChecks))
-                                                number_str = "[AnyNumber]";
+                                            std::format_to(inserter, ArgColor "'{}'</c>", atom.src_str);
+                                            break;
                                         }
-                                        else if (atom.type == Matcher::Atom::Type::ExactNumber)
+                                        case Matcher::Atom::Type::AnyNumber:
+                                        case Matcher::Atom::Type::ExactNumber:
                                         {
-                                            if (!atom.src_str.empty() && atom.src_str[0] == '=')
-                                                number_str = atom.src_str.substr(1);
-                                        }
+                                            std::string_view number_str = atom.src_str;
+                                            if (atom.type == Matcher::Atom::Type::AnyNumber)
+                                            {
+                                                if (!Utils::HasAnyFlag(atom.post_check, Matcher::Atom::PostCheck::NumChecks))
+                                                    number_str = "[AnyNumber]";
+                                            }
+                                            else if (atom.type == Matcher::Atom::Type::ExactNumber)
+                                            {
+                                                if (!atom.src_str.empty() && atom.src_str[0] == '=')
+                                                    number_str = atom.src_str.substr(1);
+                                            }
 
-                                        std::format_to(inserter, "<c=@skilldyn>{}</c>", number_str);
-                                        break;
+                                            std::format_to(inserter, ArgColor "{}</c>", number_str);
+                                            break;
+                                        }
                                     }
-                                }
-                                switch (atom.search_bound)
-                                {
-                                    case Matcher::Atom::SearchBound::Anywhere:
-                                        // std::format_to(inserter, " <c=#ffff80>anywhere</c>");
-                                        break;
-                                    case Matcher::Atom::SearchBound::WithinXWords:
-                                        switch (atom.within_count)
-                                        {
-                                            case 0:
-                                                std::format_to(inserter, " <c=#ffff80>within same word</c>");
-                                                break;
-                                            case 1:
-                                                std::format_to(inserter, " <c=#ffff80>within 1 word</c>");
-                                                break;
-                                            default:
-                                                std::format_to(inserter, " <c=#ffff80>within {} words</c>", atom.within_count);
-                                                break;
-                                        }
-                                        break;
-                                }
-
-                                if (a + 2 < matcher.atoms.size())
-                                {
-                                    std::format_to(inserter, ", then ");
-                                }
-                                else if (a + 1 < matcher.atoms.size()) // second to last
-                                {
-                                    std::format_to(inserter, " and then ");
+                                    switch (atom.search_bound)
+                                    {
+                                        case Matcher::Atom::SearchBound::Anywhere:
+                                            // std::format_to(inserter, " <c=#ffff80>anywhere</c>");
+                                            break;
+                                        case Matcher::Atom::SearchBound::WithinXWords:
+                                            switch (atom.within_count)
+                                            {
+                                                case 0:
+                                                    std::format_to(inserter, ModifierColor " within same word</c>");
+                                                    break;
+                                                case 1:
+                                                    std::format_to(inserter, ModifierColor " within 1 word</c>");
+                                                    break;
+                                                default:
+                                                    std::format_to(inserter, ModifierColor " within {} words</c>", atom.within_count);
+                                                    break;
+                                            }
+                                            break;
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    if (m + 1 < filter.matchers.size()) // all but last
-                    {
-                        std::format_to(inserter, ", <c=#55ffdd>or</c> ");
-                    }
-                    else // last
-                    {
-                        *inserter++ = '.';
-                    }
-                }
-
-                if (f + 1 < query.filters.size()) // all but last
-                {
-                    *inserter++ = '\n';
-                }
-            }
-
-            if (!query.filters.empty())
-            {
-                *inserter++ = '\n';
-            }
-
-            for (size_t c = 0; c < query.commands.size(); c++)
-            {
-                auto &command = query.commands[c];
-
-                std::visit(
-                    VisitHelper{
-                        [&](SortCommand &sort_command)
+                        if (m + 1 < filter.matchers.size()) // all but last
                         {
-                            const auto n_args = sort_command.args.size();
+                            std::format_to(inserter, ", " ControlColor "or</c> ");
+                        }
+                        else // last
+                        {
+                            *inserter++ = '.';
+                        }
+                    }
 
-                            std::format_to(inserter, "<c=#55ffdd>Sort</c>");
-                            for (uint32_t a = 0; a < n_args; a++)
+                    if (f + 1 < query.filters.size()) // all but last
+                    {
+                        *inserter++ = '\n';
+                    }
+                }
+            }
+
+            {
+                auto &s = out.command_feedback;
+                s.clear();
+                auto inserter = std::back_inserter(s);
+                for (size_t c = 0; c < query.commands.size(); c++)
+                {
+                    auto &command = query.commands[c];
+
+                    std::visit(
+                        VisitHelper{
+                            [&](SortCommand &sort_command)
                             {
-                                const auto &arg = sort_command.args[a];
+                                const auto n_args = sort_command.args.size();
 
-                                if (a > 0)
+                                std::format_to(inserter, ControlColor "Sort</c> ");
+                                for (uint32_t a = 0; a < n_args; a++)
                                 {
-                                    if (a + 1 < n_args)
+                                    const auto &arg = sort_command.args[a];
+
+                                    AppendJoin(s, a, n_args);
+                                    s.append_range((std::string_view) "by ");
+
+                                    auto meta_name = impl.GetMetaName(arg.target_meta_prop_id);
+                                    FixedVector<char, 128> name;
+                                    meta_name.GetRenderableString(name);
+
+                                    std::format_to(inserter, ArgColor "{}</c>", (std::string_view)name);
+
+                                    if (arg.is_negated)
                                     {
-                                        std::format_to(inserter, ", then");
+                                        std::format_to(inserter, ":" ModifierColor "descending</c>");
                                     }
                                     else
                                     {
-                                        std::format_to(inserter, " and then");
+                                        std::format_to(inserter, ":" ModifierColor "ascending</c>");
                                     }
                                 }
-
-                                if (arg.is_negated)
-                                {
-                                    std::format_to(inserter, " descending by");
-                                }
-                                else
-                                {
-                                    std::format_to(inserter, " ascending by");
-                                }
-
-                                auto meta_name = impl.GetMetaName(arg.target_meta_prop_id);
-                                FixedVector<char, 64> name;
-                                meta_name.GetRenderableString(name);
-
-                                std::format_to(inserter, " <c=#55ffdd>{}</c>", (std::string_view)name);
-                            }
+                            },
+                            [](auto &&)
+                            {
+                                assert(false);
+                            },
                         },
-                        [](auto &&)
-                        {
-                            assert(false);
-                        },
-                    },
-                    command
-                );
+                        command
+                    );
 
-                if (c + 1 < query.commands.size()) // all but last
-                {
-                    *inserter++ = '\n';
+                    if (c + 1 < query.commands.size()) // all but last
+                    {
+                        *inserter++ = '\n';
+                    }
                 }
             }
         }

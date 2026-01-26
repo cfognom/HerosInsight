@@ -1056,7 +1056,7 @@ namespace HerosInsight::SkillBook
         ScrollTracking scroll_tracking;
         char input_text[1024] = {'\0'};
 
-        std::string feedback;
+        Filtering::Feedback feedback;
 
         VariableSizeClipper clipper{};
 
@@ -1717,8 +1717,7 @@ namespace HerosInsight::SkillBook
             //     }
             // }
 
-            if (settings.feedback_setting != BookSettings::FeedbackSetting::Hidden &&
-                !feedback.empty())
+            if (settings.feedback_setting != BookSettings::FeedbackSetting::Hidden)
             {
                 ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
 
@@ -1726,7 +1725,16 @@ namespace HerosInsight::SkillBook
                 // ImGui::SameLine(0, 0);
                 auto window = ImGui::GetCurrentWindow();
                 auto wrapping_max = window->WorkRect.GetWidth();
-                text_drawer.DrawRichText(feedback, 0, wrapping_max);
+                if (!feedback.filter_feedback.empty())
+                {
+                    text_drawer.DrawRichText(feedback.filter_feedback, 0, wrapping_max);
+                    ImGui::Spacing();
+                }
+                if (!feedback.command_feedback.empty())
+                {
+                    text_drawer.DrawRichText(feedback.command_feedback, 0, wrapping_max);
+                    ImGui::Spacing();
+                }
 
                 ImGui::PopStyleColor();
             }
