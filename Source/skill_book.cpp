@@ -1889,22 +1889,18 @@ namespace HerosInsight::SkillBook
             bool draw_alt = alt_r.hl.size() > main_r.hl.size();
             if (!draw_alt)
             {
-                // auto len = std::min(main_hl.size(), alt_hl.size());
-                // assert(len % 2 == 0);
-                // uint32_t i = 0;
-                // while (i < len)
-                // {
-                //     std::string_view hl_a = ((std::string_view)desc.str).substr(main_hl[i], main_hl[i + 1] - main_hl[i]);
-                //     std::string_view hl_b = ((std::string_view)desc_alt.str).substr(alt_hl[i], alt_hl[i + 1] - alt_hl[i]);
-                //     i += 2;
-                //     bool eq = (std::tolower(hl_a[0]) == std::tolower(hl_b[0])) &&
-                //               (hl_a.substr(1) == hl_b.substr(1));
-                //     if (!eq)
-                //     {
-                //         draw_alt = true;
-                //         break;
-                //     }
-                // }
+                auto len = std::min(main_r.hl.size(), alt_r.hl.size());
+                assert(len % 2 == 0);
+                for (size_t i = 0; i < len; i += 2)
+                {
+                    std::string_view main_hl_text = ((std::string_view)main_r.text).substr(main_r.hl[i], main_r.hl[i + 1] - main_r.hl[i]);
+                    std::string_view alt_hl_text = ((std::string_view)alt_r.text).substr(alt_r.hl[i], alt_r.hl[i + 1] - alt_r.hl[i]);
+                    if (main_hl_text != alt_hl_text)
+                    {
+                        draw_alt = true;
+                        break;
+                    }
+                }
             }
 
             if (draw_alt)
