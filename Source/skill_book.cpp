@@ -283,7 +283,7 @@ namespace HerosInsight::SkillBook
             auto cursor = init_cursor_ss;
 
             auto text_height = ImGui::GetTextLineHeight();
-            const auto thick_font_offset = 2;
+            const auto thick_font_offset = 0;
             const auto x_padding = 3;
             const auto separator_overflow = 1;
 
