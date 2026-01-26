@@ -319,8 +319,8 @@ namespace HerosInsight::Filtering
             }
             else
             {
-                if (separator_type == SeparatorType::Colon)
-                    return false;
+                // if (separator_type == SeparatorType::Colon)
+                //     return false;
             }
 
             Utils::ReadSpaces(rem);
