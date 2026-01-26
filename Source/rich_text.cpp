@@ -305,7 +305,7 @@ namespace HerosInsight::RichText
         auto window = ImGui::GetCurrentWindow();
         auto draw_list = window->DrawList;
 
-        const auto highlight_color = ImGui::GetColorU32(IM_COL32(250, 148, 54, 255));
+        const auto highlight_color = ImGui::GetColorU32(Constants::Colors::highlight);
         const auto highlight_text_color = ImGui::GetColorU32(IM_COL32_BLACK);
 
         // Screen-space bounding box
