@@ -171,6 +171,21 @@ namespace HerosInsight
             return false;
         }
 
+        bool All()
+        {
+            auto data = uncompress();
+            if (data.has_partial_head)
+                if (data.head.GetMaskedWord() != data.head.mask)
+                    return false;
+            for (auto word : data.whole_words)
+                if (word != std::numeric_limits<word_t>::max())
+                    return false;
+            if (data.has_partial_tail)
+                if (data.tail.GetMaskedWord() != data.tail.mask)
+                    return false;
+            return true;
+        }
+
         // Finds the index of the next set bit from the specificed index.
         // Returns n_bits if there are no more set bits.
         size_t FindNextSetBit(size_t index) const
