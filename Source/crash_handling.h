@@ -59,7 +59,7 @@ namespace HerosInsight::CrashHandling
         wchar_t msg[1024];
         SpanWriter<wchar_t> writer(msg);
 
-        writer.AppendString(L"HerosInsight encountered an error.");
+        writer.AppendString(L"Hero's Insight encountered an error.");
         if (e)
         {
             writer.AppendString(L"\nError message: \"");
@@ -82,7 +82,7 @@ namespace HerosInsight::CrashHandling
 
         HWND hWnd = GW::MemoryMgr::GetGWWindowHandle();
     retry:
-        int result = MessageBoxW(hWnd, msg, L"HerosInsight Error", MB_ABORTRETRYIGNORE | MB_ICONERROR);
+        int result = MessageBoxW(hWnd, msg, L"Hero's Insight Error", MB_ABORTRETRYIGNORE | MB_ICONERROR);
 
         switch (result)
         {
@@ -116,7 +116,7 @@ namespace HerosInsight::CrashHandling
         writer.AppendString(L"\n\nGame state might be unstable, please restart the game as soon as possible.");
         writer.push_back(L'\0');
 
-        MessageBoxW(nullptr, msg, L"HerosInsight Crash", MB_OK | MB_ICONERROR);
+        MessageBoxW(nullptr, msg, L"Hero's Insight Crash", MB_OK | MB_ICONERROR);
 
         return EXCEPTION_EXECUTE_HANDLER;
 #endif

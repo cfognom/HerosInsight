@@ -133,7 +133,7 @@ namespace HerosInsight
         {
             GW::RegisterLogHandler(&LogHandler, &log_context);
         }
-        GW::Chat::WriteChat(GW::Chat::CHANNEL_MODERATOR, L"HerosInsight: Initialized");
+        GW::Chat::WriteChat(GW::Chat::CHANNEL_MODERATOR, L"Hero's Insight: Initialized");
     }
 
     void UpdateManager::Terminate()
@@ -147,7 +147,7 @@ namespace HerosInsight
         HerosInsight::PacketStepper::Terminate();
         HerosInsight::EffectInitiator::Terminate();
         HerosInsight::EnergyDisplay::Terminate();
-        GW::Chat::WriteChat(GW::Chat::CHANNEL_MODERATOR, L"HerosInsight: Terminated");
+        GW::Chat::WriteChat(GW::Chat::CHANNEL_MODERATOR, L"Hero's Insight: Terminated");
     }
 
     void OnUpdate()
@@ -240,7 +240,7 @@ namespace HerosInsight
         auto current_font = ImGui::GetFont();
         ImGui::PushFont(Constants::Fonts::window_name_font);
 
-        auto window_name = "HerosInsight - Menu";
+        auto window_name = "Hero's Insight - Menu";
         auto window_name_width = ImGui::CalcTextSize(window_name).x //
                                  + style.WindowPadding.x * 2.0f     //
                                  + style.FramePadding.x * 2.0f      //

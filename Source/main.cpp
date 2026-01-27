@@ -296,7 +296,7 @@ static void OnRender_CheckPermission(void *data)
         }
         else if (!is_modding_allowed && hooks_enabled)
         {
-            GW::Chat::WriteChat(GW::Chat::CHANNEL_MODERATOR, L"HerosInsight: Modding is not allowed in this zone. HerosInsight has been disabled and will be re-enabled when you leave this area.");
+            GW::Chat::WriteChat(GW::Chat::CHANNEL_MODERATOR, L"Hero's Insight: Modding is not allowed in this zone. Hero's Insight has been disabled and will be re-enabled when you leave this area.");
             GW::DisableHooks();
             GW::EnableRenderHooks();
             hooks_enabled = false;

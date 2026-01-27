@@ -20,7 +20,7 @@
 
 std::string_view mod_dll_name = "HerosInsight.dll";
 std::string_view version_file_name = "HerosInsight.version";
-std::string_view github_agent_name = "HerosInsight Updater";
+std::string_view github_agent_name = "Hero's Insight Updater";
 bool check_for_updates = true;
 std::string launcher_exe_name;
 std::filesystem::path exePath;
@@ -382,7 +382,7 @@ std::optional<LocalInstallation> TryGetOrCreateLocalInstallation()
                 auto wtag = StrToWStr(latest_release->tag);
                 auto wbody = StrToWStr(latest_release->body);
                 auto message = std::format(
-                    L"There is a new version of HerosInsight available: {}"
+                    L"There is a new version of Hero's Insight available: {}"
                     "\n\n {}"
                     "\n\nPress OK to download and install.",
                     wtag,
@@ -501,7 +501,7 @@ bool TryInjectDLL(DWORD processId, const std::filesystem::path &dllPath)
         std::wcerr << "Failed to open target process. Error: " << last_error << std::endl;
         if (last_error == 5)
         {
-            std::wcerr << "(Maybe try adding the HerosInsight dll and launcher exe to your antivirus whitelist/exlusion list)" << std::endl;
+            std::wcerr << "(Maybe try adding HerosInsight.dll and Launch_HerosInsight.exe to your antivirus whitelist/exlusion list)" << std::endl;
         }
     }
     else
@@ -561,7 +561,7 @@ int RunNormalApp()
 
     if (IsDllLoaded(processId, installation->mod_dll))
     {
-        MessageBoxW(NULL, L"HerosInsight is already running.", L"Error", MB_ICONERROR | MB_OK);
+        MessageBoxW(NULL, L"Hero's Insight is already running.", L"Error", MB_ICONERROR | MB_OK);
         return 1;
     }
 
