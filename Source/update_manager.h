@@ -31,6 +31,7 @@ namespace HerosInsight
 #endif
         static bool open_main_menu;
         static bool open_skill_book;
+        static bool open_settings;
 #ifdef EXPERIMENTAL_FEATURES
         static bool open_damage;
 #endif

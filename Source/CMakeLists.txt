@@ -39,6 +39,7 @@ add_library(HerosInsight SHARED
     rich_text.cpp
     capacity_hints.cpp
     string_manager.cpp
+    settings.cpp
 )
 
 # Headers live here

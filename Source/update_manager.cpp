@@ -18,6 +18,7 @@
 #include <hero_ai.h>
 #include <packet_stepper.h>
 #include <party_data.h>
+#include <settings.h>
 #include <skill_book.h>
 #include <texture_module.h>
 #include <texture_viewer.h>
@@ -53,6 +54,7 @@ namespace HerosInsight
 #endif
     bool UpdateManager::open_skill_book = false;
     bool UpdateManager::open_main_menu = true;
+    bool UpdateManager::open_settings = false;
 #ifdef EXPERIMENTAL_FEATURES
     bool UpdateManager::open_damage = true;
 #endif
@@ -283,6 +285,7 @@ namespace HerosInsight
                 ImGui::Checkbox("Encoded String Debugger", &UpdateManager::open_encstr_debugger);
 #endif
                 ImGui::Checkbox("Skill Book", &UpdateManager::open_skill_book);
+                ImGui::Checkbox("Settings", &UpdateManager::open_settings);
 #ifdef EXPERIMENTAL_FEATURES
                 ImGui::Checkbox("Damage Display", &DamageDisplay::enabled);
                 ImGui::TextUnformatted("Settings");
@@ -351,6 +354,8 @@ namespace HerosInsight
 #endif
         if (open_skill_book)
             HerosInsight::SkillBook::Draw(device);
+        if (open_settings)
+            HerosInsight::g_settings.Draw(device);
 
         DrawMenu();
 

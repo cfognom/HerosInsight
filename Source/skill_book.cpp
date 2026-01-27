@@ -98,6 +98,7 @@
 #include <matcher.h>
 #include <party_data.h>
 #include <rich_text.h>
+#include <settings.h>
 #include <span_vector.h>
 #include <string_manager.h>
 #include <texture_module.h>
@@ -904,15 +905,6 @@ namespace HerosInsight::SkillBook
         bool use_exact_adrenaline = false;
         bool prefer_concise_descriptions = false;
         bool limit_to_characters_professions = false;
-        bool show_null_stats = false;
-        bool snap_to_skill = true;
-        enum struct FeedbackSetting : int
-        {
-            Hidden,
-            Concise,
-            Detailed,
-        };
-        FeedbackSetting feedback_setting = FeedbackSetting::Detailed;
     };
 
     struct FilteringAdapter
@@ -1171,6 +1163,14 @@ namespace HerosInsight::SkillBook
         bool props_dirty = true;
         bool first_draw = true;
 
+        ObservableSetting<int>::Subscription feedback_subs{
+            g_settings.skill_book.feedback,
+            [this](auto &new_value)
+            {
+                this->UpdateFeedback();
+            }
+        };
+
         struct ScrollTracking
         {
             std::vector<VariableSizeClipper::Position> scroll_positions;
@@ -1299,15 +1299,8 @@ namespace HerosInsight::SkillBook
 
                 props_dirty |= ImGui::Checkbox("Show exact adrenaline", &settings.use_exact_adrenaline);
                 // ImGui::Checkbox("Show null stats", &settings.show_null_stats);
-                ImGui::Checkbox("Snap to skill", &settings.snap_to_skill);
                 ImGui::Checkbox("Prefer concise descriptions", &settings.prefer_concise_descriptions);
                 filter_dirty |= ImGui::Checkbox("Limit to character's professions", &settings.limit_to_characters_professions);
-
-                const char *feedback_items[] = {"Hidden", "Concise", "Detailed"};
-                if (ImGui::Combo("Feedback", (int *)&settings.feedback_setting, feedback_items, IM_ARRAYSIZE(feedback_items)))
-                {
-                    UpdateFeedback();
-                }
 
                 ImGui::Columns(1);
             }
@@ -1408,7 +1401,7 @@ namespace HerosInsight::SkillBook
 
         void UpdateFeedback()
         {
-            bool verbose = settings.feedback_setting == BookSettings::FeedbackSetting::Detailed;
+            bool verbose = g_settings.skill_book.feedback.Get() == (int)Settings::SkillBook::FeedbackSetting::Detailed;
             filter_device.GetFeedback(query, feedback, verbose);
         }
 
@@ -1851,7 +1844,7 @@ namespace HerosInsight::SkillBook
             //     }
             // }
 
-            if (settings.feedback_setting != BookSettings::FeedbackSetting::Hidden)
+            if (g_settings.skill_book.feedback.Get() != (int)Settings::SkillBook::FeedbackSetting::Hidden)
             {
                 ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
 
@@ -2108,7 +2101,7 @@ namespace HerosInsight::SkillBook
                         ImGui::Separator();
                     };
 
-                    clipper.Draw(n_skills, est_item_height, settings.snap_to_skill, DrawItem);
+                    clipper.Draw(n_skills, est_item_height, g_settings.general.scroll_snap_to_item.Get(), DrawItem);
                 }
                 ImGui::EndChild();
                 ImGui::PopFont();
