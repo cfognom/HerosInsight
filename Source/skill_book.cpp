@@ -335,8 +335,11 @@ namespace HerosInsight::SkillBook
                     }
                     else
                     {
-                        deltas[attr_lvl - 1] = delta;
                         snprintf(delta_cell.chars, buffer_size, "%+d", delta);
+                    }
+                    if (attr_lvl > 0)
+                    {
+                        deltas[attr_lvl - 1] = delta;
                     }
                 }
             }
@@ -361,7 +364,7 @@ namespace HerosInsight::SkillBook
                     std::swap(bad_delta, good_delta);
                 }
             }
-            SOFT_ASSERT(majority_delta == bad_delta || majority_delta == good_delta);
+            SOFT_ASSERT(majority_delta == bad_delta || majority_delta == good_delta, L"Boyer–Moore Voting Algorithm invariant broken");
 
             struct Style
             {
