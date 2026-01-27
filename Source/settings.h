@@ -26,7 +26,7 @@ namespace HerosInsight
         template <typename T>
         T InitSetting(const std::string &key, T default_value)
         {
-            std::lock_guard<std::mutex> lock(m_mutex);
+            std::lock_guard<std::recursive_mutex> lock(m_mutex);
             ++m_active_settings;
             auto it = m_settings.find(key);
             if (it != m_settings.end())
@@ -44,14 +44,14 @@ namespace HerosInsight
         template <typename T>
         void TermSetting(const std::string &key, T value)
         {
-            std::lock_guard<std::mutex> lock(m_mutex);
+            std::lock_guard<std::recursive_mutex> lock(m_mutex);
             --m_active_settings;
             m_settings[key] = std::to_string(value);
         }
 
         std::unordered_map<std::string, std::string> m_settings;
         size_t m_active_settings = 0;
-        mutable std::mutex m_mutex;
+        mutable std::recursive_mutex m_mutex;
     };
 
     template <typename T>
@@ -70,13 +70,13 @@ namespace HerosInsight
 
         T Get() const
         {
-            std::lock_guard<std::mutex> lock(m_mutex);
+            std::lock_guard<std::recursive_mutex> lock(m_mutex);
             return m_value;
         }
 
         void Set(const T &new_value)
         {
-            std::lock_guard<std::mutex> lock(m_mutex);
+            std::lock_guard<std::recursive_mutex> lock(m_mutex);
             if (m_value != new_value)
             {
                 m_value = new_value;
@@ -91,13 +91,13 @@ namespace HerosInsight
             Subscription(ObservableSetting &setting, Callback cb)
                 : setting(setting)
             {
-                std::lock_guard<std::mutex> lock(setting.m_mutex);
+                std::lock_guard<std::recursive_mutex> lock(setting.m_mutex);
                 size_t id = setting.m_next_id++;
                 setting.m_callbacks[id] = std::move(cb);
             }
             ~Subscription()
             {
-                std::lock_guard<std::mutex> lock(setting.m_mutex);
+                std::lock_guard<std::recursive_mutex> lock(setting.m_mutex);
                 setting.m_callbacks.erase(id);
             }
         };
@@ -107,7 +107,7 @@ namespace HerosInsight
         T m_value;
         std::unordered_map<size_t, Callback> m_callbacks;
         size_t m_next_id = 0;
-        mutable std::mutex m_mutex;
+        mutable std::recursive_mutex m_mutex;
 
         friend struct Subscription;
 

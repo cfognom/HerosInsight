@@ -22,7 +22,7 @@ namespace HerosInsight
 
     SettingsManager::SettingsManager()
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         assert(m_active_settings == 0);
 
         auto filepath = GetSettingsFilePath();
@@ -42,7 +42,7 @@ namespace HerosInsight
 
     SettingsManager::~SettingsManager()
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         assert(m_active_settings == 0 && "Destroying SettingsManager before all settings have been destroyed!");
 
         auto filepath = GetSettingsFilePath();
