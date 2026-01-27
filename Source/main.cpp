@@ -379,7 +379,6 @@ static DWORD WINAPI ThreadProc(LPVOID lpModule)
     }
     GW::EnableRenderHooks();
 
-    Constants::paths.Init(hModule);
     HerosInsight::CapacityHints::LoadHints();
 
     GW::Render::SetRenderCallback(

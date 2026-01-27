@@ -15,8 +15,16 @@ namespace Constants
         std::filesystem::path &crash()     { return (*this)[3]; };
         // clang-format on
 
-        void Init(HMODULE hModule)
+        static HMODULE GetCurrentModule()
         {
+            HMODULE hModule = NULL;
+            GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCTSTR)&GetCurrentModule, &hModule);
+            return hModule;
+        }
+
+        Paths()
+        {
+            auto hModule = GetCurrentModule();
             wchar_t buffer[MAX_PATH];
             GetModuleFileNameW(hModule, buffer, MAX_PATH);
             auto dll_dir_path = std::filesystem::path(buffer).parent_path();
