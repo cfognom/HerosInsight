@@ -134,49 +134,65 @@ namespace HerosInsight::SkillBook
             base_skills.push_back(i);
         }
 
-        auto Comparer = [&text_provider](uint16_t a, uint16_t b)
+        auto skills = GW::SkillbarMgr::GetSkills();
+        auto cskills = CustomSkillDataModule::GetSkills();
+
+        auto Comparer = [&text_provider, skills, cskills](uint16_t a, uint16_t b)
         {
-            // auto &skill_a = *GW::SkillbarMgr::GetSkillConstantData((GW::Constants::SkillID)a);
-            // auto &skill_b = *GW::SkillbarMgr::GetSkillConstantData((GW::Constants::SkillID)b);
-            // auto a_id = skill_a.IsPvP() ? skill_a.skill_id_pvp : (GW::Constants::SkillID)a;
-            // auto b_id = skill_b.IsPvP() ? skill_b.skill_id_pvp : (GW::Constants::SkillID)b;
-            // if (a_id == b_id)
-            // {
-            //     assert(skill_a.IsPvP() != skill_b.IsPvP());
-            //     return skill_a.IsPvP() < skill_b.IsPvP();
-            // }
-            auto &custom_sd_a = CustomSkillDataModule::GetCustomSkillData((GW::Constants::SkillID)a);
-            auto &custom_sd_b = CustomSkillDataModule::GetCustomSkillData((GW::Constants::SkillID)b);
+            std::strong_ordering cmp;
 
-            auto ca = custom_sd_a.context;
-            auto cb = custom_sd_b.context;
-            if (ca != cb)
-                return ca < cb;
+            auto &skill_a = skills[a];
+            auto &skill_b = skills[b];
+            // If the skill is a pvp version, refer to the pve version
+            auto a_id = skill_a.IsPvP() ? (uint16_t)skill_a.skill_id_pvp : a;
+            auto b_id = skill_b.IsPvP() ? (uint16_t)skill_b.skill_id_pvp : b;
+            if (a_id == b_id)
+            {
+                cmp = skill_a.IsPvP() <=> skill_b.IsPvP();
+                if (cmp != 0)
+                    return cmp < 0;
+            }
+            else
+            {
+                auto &cskill_a = cskills[a_id];
+                auto &cskill_b = cskills[b_id];
 
-            auto pa = (uint32_t)custom_sd_a.skill->profession - 1; // We do this so that None comes last
-            auto pb = (uint32_t)custom_sd_b.skill->profession - 1;
-            if (pa != pb)
-                return pa < pb;
+                auto ca = cskill_a.context;
+                auto cb = cskill_b.context;
+                cmp = ca <=> cb;
+                if (cmp != 0)
+                    return cmp < 0;
 
-            auto attr_a = custom_sd_a.attribute.value;
-            auto attr_b = custom_sd_b.attribute.value;
-            if (attr_a != attr_b)
-                return attr_a < attr_b;
+                auto pa = (uint32_t)skill_a.profession - 1; // We do this so that None comes last
+                auto pb = (uint32_t)skill_b.profession - 1;
+                cmp = pa <=> pb;
+                if (cmp != 0)
+                    return cmp < 0;
 
-            auto ty_a = custom_sd_a.GetTypeString();
-            auto ty_b = custom_sd_b.GetTypeString();
-            if (ty_a != ty_b)
-                return ty_a < ty_b;
+                auto attr_a = cskill_a.attribute.value;
+                auto attr_b = cskill_b.attribute.value;
+                cmp = attr_a <=> attr_b;
+                if (cmp != 0)
+                    return cmp < 0;
 
-            auto camp_a = custom_sd_a.GetCampaignStr();
-            auto camp_b = custom_sd_b.GetCampaignStr();
-            if (camp_a != camp_b)
-                return camp_a < camp_b;
+                // auto ty_a = cskill_a.GetTypeString();
+                // auto ty_b = cskill_b.GetTypeString();
+                // cmp = ty_a <=> ty_b;
+                // if (cmp != 0)
+                //     return cmp < 0;
 
-            auto n_a = text_provider.GetName((GW::Constants::SkillID)a);
-            auto n_b = text_provider.GetName((GW::Constants::SkillID)b);
-            if (n_a != n_b)
-                return n_a < n_b;
+                // auto camp_a = cskill_a.GetCampaignStr();
+                // auto camp_b = cskill_b.GetCampaignStr();
+                // cmp = camp_a <=> camp_b;
+                // if (cmp != 0)
+                //     return cmp < 0;
+
+                auto n_a = text_provider.GetName((GW::Constants::SkillID)a);
+                auto n_b = text_provider.GetName((GW::Constants::SkillID)b);
+                cmp = n_a <=> n_b;
+                if (cmp != 0)
+                    return cmp < 0;
+            }
 
             return a < b;
         };
