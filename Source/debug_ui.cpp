@@ -195,11 +195,11 @@ namespace HerosInsight::DebugUI
 
     void Draw(IDirect3DDevice9 *device)
     {
-        auto all_frames = GW::UI::GetFrameArray();
+        auto all_frames = GW::UI::GetFrames();
 
         float hovered_area = std::numeric_limits<float>::max();
         GW::UI::Frame *hovered_frame = nullptr;
-        for (auto frame : *all_frames)
+        for (auto frame : all_frames)
         {
             if (!Utils::IsFrameValid(frame))
                 continue;

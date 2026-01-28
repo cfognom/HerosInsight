@@ -3254,9 +3254,9 @@ namespace HerosInsight::Utils
 
     void ForEachChildFrame(const GW::UI::Frame &parent_frame, std::function<void(GW::UI::Frame &)> func)
     {
-        auto all_frames = GW::UI::GetFrameArray();
-        assert(all_frames != nullptr);
-        for (auto pot_child : *all_frames)
+        auto all_frames = GW::UI::GetFrames();
+        assert(!all_frames.empty());
+        for (auto pot_child : all_frames)
         {
             if (!Utils::IsFrameValid(pot_child))
                 continue;
@@ -3287,8 +3287,8 @@ namespace HerosInsight::Utils
     // Get the corresponding frame for a skill in the "Skills and Attributes" window
     GetSkillFrameResult GetSkillFrame(GW::Constants::SkillID skill_id)
     {
-        auto all_frames = GW::UI::GetFrameArray();
-        assert(all_frames != nullptr);
+        auto all_frames = GW::UI::GetFrames();
+        assert(!all_frames.empty());
 
         auto skills_and_attributes_frame = GW::UI::GetFrameByLabel(L"DeckBuilder");
         if (!skills_and_attributes_frame)
@@ -3297,7 +3297,7 @@ namespace HerosInsight::Utils
         const auto skill = GW::SkillbarMgr::GetSkillConstantData(skill_id);
 
         GW::UI::Frame *found_frame = nullptr;
-        for (auto frame : *all_frames)
+        for (auto frame : all_frames)
         {
             if (!Utils::IsFrameValid(frame))
                 continue;
