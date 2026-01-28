@@ -575,7 +575,7 @@ namespace HerosInsight::Filtering
         {
             Stopwatch stopwatch("SortItems");
 
-            std::sort(
+            std::stable_sort(
                 items.begin(), items.end(),
                 [&](size_t item_a, size_t item_b)
                 {
