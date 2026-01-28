@@ -13,13 +13,13 @@ The following features available today.
 The skill book is a powerful tool for buildcrafters, or when you just want to find that one skill to equip. It allows filtering and sorting of all skills in the game.
 
 For example it could be used to:
-* Find all stance skills
-* Find all skills giving health regen
 * Find all skills related to knock-down
-* Find all skills giving +damage and sort by amount
+* Find all skills giving health regen, sort by amount
+* Find all skills giving +damage, sort by amount
+* Find all skills yet to be unlocked, sort by campaign
 
 Or even, if you've completely lost your mind:
-* Find all hexes, in prophecies or nightfall, yet to be unlocked, having a recharge of 10 seconds or less. Sort by energy cost, then by AoE range.
+* Find all hexes, in prophecies or nightfall, yet to be learned, having a recharge of 10 seconds or less. Sort by energy cost, then by AoE range.
 
 [gif showing skill book]
 
