@@ -141,54 +141,64 @@ namespace HerosInsight::SkillBook
         {
             std::strong_ordering cmp;
 
-            auto &skill_a = skills[a];
-            auto &skill_b = skills[b];
+            auto &a_skill = skills[a];
+            auto &b_skill = skills[b];
             // If the skill is a pvp version, refer to the pve version
-            auto a_id = skill_a.IsPvP() ? (uint16_t)skill_a.skill_id_pvp : a;
-            auto b_id = skill_b.IsPvP() ? (uint16_t)skill_b.skill_id_pvp : b;
-            if (a_id == b_id)
+            auto a_pve_id = a_skill.IsPvP() ? (uint16_t)a_skill.skill_id_pvp : a;
+            auto b_pve_id = b_skill.IsPvP() ? (uint16_t)b_skill.skill_id_pvp : b;
+            auto &a_pve_skill = skills[a_pve_id];
+            auto &b_pve_skill = skills[b_pve_id];
+            if (a_pve_id == b_pve_id)
             {
-                cmp = skill_a.IsPvP() <=> skill_b.IsPvP();
+                cmp = a_skill.IsPvP() <=> b_skill.IsPvP(); // Put pve version before pvp version
                 if (cmp != 0)
                     return cmp < 0;
             }
             else
             {
-                auto &cskill_a = cskills[a_id];
-                auto &cskill_b = cskills[b_id];
+                auto &a_pve_cskill = cskills[a_pve_id];
+                auto &b_pve_cskill = cskills[b_pve_id];
 
-                auto ca = cskill_a.context;
-                auto cb = cskill_b.context;
+                auto ca = a_pve_cskill.context;
+                auto cb = b_pve_cskill.context;
                 cmp = ca <=> cb;
                 if (cmp != 0)
                     return cmp < 0;
 
-                auto pa = (uint32_t)skill_a.profession - 1; // We do this so that None comes last
-                auto pb = (uint32_t)skill_b.profession - 1;
+                auto pa = (uint32_t)a_pve_skill.profession - 1; // We do this so that None comes last
+                auto pb = (uint32_t)b_pve_skill.profession - 1;
                 cmp = pa <=> pb;
                 if (cmp != 0)
                     return cmp < 0;
 
-                auto attr_a = cskill_a.attribute.value;
-                auto attr_b = cskill_b.attribute.value;
+                auto attr_a = a_pve_cskill.attribute.value;
+                auto attr_b = b_pve_cskill.attribute.value;
                 cmp = attr_a <=> attr_b;
                 if (cmp != 0)
                     return cmp < 0;
 
-                // auto ty_a = cskill_a.GetTypeString();
-                // auto ty_b = cskill_b.GetTypeString();
-                // cmp = ty_a <=> ty_b;
-                // if (cmp != 0)
-                //     return cmp < 0;
+                // Skills with neither profession nor attribute/title are sorted by type and campaign
+                if (a_pve_skill.profession == GW::Constants::ProfessionByte::None &&
+                    a_pve_cskill.attribute.IsNone())
+                {
+                    assert(b_pve_skill.profession == GW::Constants::ProfessionByte::None);
+                    assert(b_pve_cskill.attribute.IsNone());
 
-                // auto camp_a = cskill_a.GetCampaignStr();
-                // auto camp_b = cskill_b.GetCampaignStr();
-                // cmp = camp_a <=> camp_b;
-                // if (cmp != 0)
-                //     return cmp < 0;
+                    auto ty_a = a_pve_cskill.GetTypeString();
+                    auto ty_b = b_pve_cskill.GetTypeString();
+                    cmp = ty_a <=> ty_b;
+                    if (cmp != 0)
+                        return cmp < 0;
 
-                auto n_a = text_provider.GetName((GW::Constants::SkillID)a);
-                auto n_b = text_provider.GetName((GW::Constants::SkillID)b);
+                    auto ca = a_pve_skill.campaign;
+                    auto cb = b_pve_skill.campaign;
+                    cmp = ca <=> cb;
+                    if (cmp != 0)
+                        return cmp < 0;
+                }
+
+                auto n_a = text_provider.GetName((GW::Constants::SkillID)a_pve_id);
+                auto n_b = text_provider.GetName((GW::Constants::SkillID)b_pve_id);
                 cmp = n_a <=> n_b;
                 if (cmp != 0)
                     return cmp < 0;

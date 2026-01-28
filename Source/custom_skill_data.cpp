@@ -104,7 +104,7 @@ namespace HerosInsight
 
     bool IsDeveloperSkill(const GW::Skill &skill)
     {
-        constexpr auto dev_skills = MakeFixedSet<GW::Constants::SkillID>(
+        constexpr static auto dev_skills = MakeFixedSet<GW::Constants::SkillID>(
             GW::Constants::SkillID::No_Skill,
             GW::Constants::SkillID::Test_Buff,
             GW::Constants::SkillID::Impending_Dhuum,
@@ -118,7 +118,7 @@ namespace HerosInsight
 
     bool IsArchivedSkill(CustomSkillData &custom_sd)
     {
-        constexpr auto archived_skills = MakeFixedSet<GW::Constants::SkillID>(
+        constexpr static auto archived_skills = MakeFixedSet<GW::Constants::SkillID>(
             GW::Constants::SkillID::UNUSED_Complicate,
             GW::Constants::SkillID::UNUSED_Reapers_Mark,
             GW::Constants::SkillID::UNUSED_Enfeeble,
@@ -392,13 +392,27 @@ namespace HerosInsight
         if (skill.type != SkillType::Bounty)
             return false;
 
+        constexpr static auto bounties_with_non_rep_effects = MakeFixedSet<GW::Constants::SkillID>(
+            SkillID::Great_Dwarfs_Blessing,
+            SkillID::Great_Dwarfs_Blessing1,
+            SkillID::Energy_Channel,
+            SkillID::Energy_Channel1,
+            SkillID::Strength_of_the_Norn,
+            SkillID::Strength_of_the_Norn1,
+            SkillID::Vanguard_Commendation,
+            SkillID::Vanguard_Commendation1
+        );
+
         auto id = skill.skill_id;
+        if (bounties_with_non_rep_effects.has(id))
+            return false;
+
         if (SkillID::Skale_Hunt <= id && id <= SkillID::Undead_Hunt ||
             SkillID::Monster_Hunt <= id && id <= SkillID::Undead_Hunt1 ||
             SkillID::Monster_Hunt5 <= id && id <= SkillID::Undead_Hunt3 ||
+            SkillID::Anguish_Hunt == id ||
             SkillID::Dhuum_Battle1 <= id && id <= SkillID::Monster_Hunt8 ||
-            SkillID::Asuran_Bodyguard <= id && id <= SkillID::Dwarven_Raider3 ||
-            SkillID::Hunt_Rampage1 <= id && id <= SkillID::Asuran_Bodyguard3 ||
+            SkillID::Asuran_Bodyguard <= id && id <= SkillID::Asuran_Bodyguard3 ||
             SkillID::Veteran_Asuran_Bodyguard <= id && id <= SkillID::Time_Attack4)
             return true;
 
@@ -418,7 +432,7 @@ namespace HerosInsight
 
     bool EndsOnIncDamage(GW::Constants::SkillID skill_id)
     {
-        constexpr auto skills = MakeFixedSet<GW::Constants::SkillID>(
+        constexpr static auto skills = MakeFixedSet<GW::Constants::SkillID>(
             GW::Constants::SkillID::Reversal_of_Fortune,
             GW::Constants::SkillID::Reversal_of_Damage,
             GW::Constants::SkillID::Life_Sheath,
@@ -435,7 +449,7 @@ namespace HerosInsight
 
     bool IsProjectileSkill(GW::Skill &skill)
     {
-        constexpr auto skills = MakeFixedSet<GW::Constants::SkillID>(
+        constexpr static auto skills = MakeFixedSet<GW::Constants::SkillID>(
             GW::Constants::SkillID::Spear_of_Light,
             GW::Constants::SkillID::Lightning_Orb,
             GW::Constants::SkillID::Lightning_Orb_PvP,
@@ -531,7 +545,7 @@ namespace HerosInsight
 
     bool IsCandyCornInfantrySkill(GW::Constants::SkillID skill_id)
     {
-        constexpr auto skills = MakeFixedSet<GW::Constants::SkillID>(
+        constexpr static auto skills = MakeFixedSet<GW::Constants::SkillID>(
             (GW::Constants::SkillID)2757, // Candy Corn Infantry disguise
             GW::Constants::SkillID::Candy_Corn_Strike,
             GW::Constants::SkillID::Rocket_Propelled_Gobstopper,
@@ -565,7 +579,7 @@ namespace HerosInsight
 
     bool IsCelestialSkill(GW::Constants::SkillID skill_id)
     {
-        constexpr auto celestial_skills = MakeFixedSet<GW::Constants::SkillID>(
+        constexpr static auto celestial_skills = MakeFixedSet<GW::Constants::SkillID>(
             GW::Constants::SkillID::Celestial_Haste,
             GW::Constants::SkillID::Celestial_Stance,
             GW::Constants::SkillID::Celestial_Storm,
@@ -604,7 +618,7 @@ namespace HerosInsight
 
     bool IsUrsanSkill(GW::Constants::SkillID skill_id)
     {
-        constexpr auto ursan_skills = MakeFixedSet<GW::Constants::SkillID>(
+        constexpr static auto ursan_skills = MakeFixedSet<GW::Constants::SkillID>(
             GW::Constants::SkillID::Ursan_Strike,
             GW::Constants::SkillID::Ursan_Rage,
             GW::Constants::SkillID::Ursan_Roar,
@@ -656,7 +670,7 @@ namespace HerosInsight
 
     bool IsTogoSkill(GW::Constants::SkillID skill_id)
     {
-        constexpr auto togo_skills = MakeFixedSet<GW::Constants::SkillID>(
+        constexpr static auto togo_skills = MakeFixedSet<GW::Constants::SkillID>(
             GW::Constants::SkillID::Togo_disguise,
             GW::Constants::SkillID::Call_to_the_Spirit_Realm,
             GW::Constants::SkillID::Essence_Strike_Togo,
@@ -686,7 +700,7 @@ namespace HerosInsight
 
     bool IsSaulSkill(GW::Constants::SkillID skill_id)
     {
-        constexpr auto saul_skills = MakeFixedSet<GW::Constants::SkillID>(
+        constexpr static auto saul_skills = MakeFixedSet<GW::Constants::SkillID>(
             GW::Constants::SkillID::Saul_DAlessio_disguise,
             GW::Constants::SkillID::Signet_of_the_Unseen,
             GW::Constants::SkillID::Castigation_Signet_Saul_DAlessio,
@@ -700,7 +714,7 @@ namespace HerosInsight
 
     bool IsMissionSkill(GW::Constants::SkillID skill_id)
     {
-        constexpr auto mission_skills = MakeFixedSet<GW::Constants::SkillID>(
+        constexpr static auto mission_skills = MakeFixedSet<GW::Constants::SkillID>(
             GW::Constants::SkillID::Disarm_Trap,
             GW::Constants::SkillID::Vial_of_Purified_Water,
             GW::Constants::SkillID::Lit_Torch,
@@ -737,7 +751,7 @@ namespace HerosInsight
 
     bool IsBundleSkill(GW::Constants::SkillID skill_id)
     {
-        constexpr auto bundle_skills = MakeFixedSet<GW::Constants::SkillID>(
+        constexpr static auto bundle_skills = MakeFixedSet<GW::Constants::SkillID>(
             GW::Constants::SkillID::Asuran_Flame_Staff,
             GW::Constants::SkillID::Aura_of_the_Staff_of_the_Mists,
             GW::Constants::SkillID::Curse_of_the_Staff_of_the_Mists,
@@ -792,7 +806,7 @@ namespace HerosInsight
 
     bool IsPvPOnlySkill(const GW::Skill &skill)
     {
-        constexpr auto pvp_only_skills = MakeFixedSet<GW::Constants::SkillID>(
+        constexpr static auto pvp_only_skills = MakeFixedSet<GW::Constants::SkillID>(
             GW::Constants::SkillID::Charm_Animal_Codex
         );
 
@@ -801,7 +815,7 @@ namespace HerosInsight
 
     bool IsConsumableItemSkill(const GW::Skill &skill)
     {
-        constexpr auto item_skills = MakeFixedSet<GW::Constants::SkillID>(
+        constexpr static auto item_skills = MakeFixedSet<GW::Constants::SkillID>(
             (GW::Constants::SkillID)2366,              // Alkar's Concoction item skill
             GW::Constants::SkillID::Alkars_Concoction, // Effect after using the item
             GW::Constants::SkillID::Birthday_Cupcake_skill,
@@ -847,7 +861,7 @@ namespace HerosInsight
 
     bool IsEffectOnly(const GW::Skill &skill)
     {
-        constexpr auto effect_only_skills = MakeFixedSet<GW::Constants::SkillID>(
+        constexpr static auto effect_only_skills = MakeFixedSet<GW::Constants::SkillID>(
             GW::Constants::SkillID::Phase_Shield_effect
         );
 
@@ -866,7 +880,7 @@ namespace HerosInsight
 
     bool IsSpiritAttackSkill(const GW::Skill &skill)
     {
-        constexpr auto spirit_attack_skills = MakeFixedSet<GW::Constants::SkillID>(
+        constexpr static auto spirit_attack_skills = MakeFixedSet<GW::Constants::SkillID>(
             GW::Constants::SkillID::Gaze_of_Fury_attack,
             GW::Constants::SkillID::Bloodsong_attack,
             GW::Constants::SkillID::Pain_attack,
@@ -889,7 +903,7 @@ namespace HerosInsight
 
     bool IsEnvironmentSkill(const GW::Skill &skill)
     {
-        constexpr auto environment_skills = MakeFixedSet<GW::Constants::SkillID>(
+        constexpr static auto environment_skills = MakeFixedSet<GW::Constants::SkillID>(
             GW::Constants::SkillID::Stormcaller_skill,
             GW::Constants::SkillID::Teleport_Players,
             GW::Constants::SkillID::Rurik_Must_Live,
@@ -982,7 +996,7 @@ namespace HerosInsight
 
     bool IsMonsterSkill(const GW::Skill &skill)
     {
-        constexpr auto monster_skills_without_monster_icon = MakeFixedSet<GW::Constants::SkillID>(
+        constexpr static auto monster_skills_without_monster_icon = MakeFixedSet<GW::Constants::SkillID>(
             (GW::Constants::SkillID)1448, // Last Rites of Torment effect
             GW::Constants::SkillID::Torturous_Embers,
             GW::Constants::SkillID::Last_Rites_of_Torment,
@@ -1158,7 +1172,7 @@ namespace HerosInsight
             GW::Constants::SkillID::Its_Good_to_Be_King
         );
 
-        constexpr auto non_monster_skills_with_monster_icon = MakeFixedSet<GW::Constants::SkillID>(
+        constexpr static auto non_monster_skills_with_monster_icon = MakeFixedSet<GW::Constants::SkillID>(
             GW::Constants::SkillID::Spectral_Agony_Saul_DAlessio,
             GW::Constants::SkillID::Burden_Totem,
             GW::Constants::SkillID::Splinter_Mine_skill,
