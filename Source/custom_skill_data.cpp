@@ -104,12 +104,12 @@ namespace HerosInsight
 
     bool IsDeveloperSkill(const GW::Skill &skill)
     {
-        constexpr static auto dev_skills = MakeFixedSet<GW::Constants::SkillID>(
-            GW::Constants::SkillID::No_Skill,
-            GW::Constants::SkillID::Test_Buff,
-            GW::Constants::SkillID::Impending_Dhuum,
-            GW::Constants::SkillID::Dishonorable,
-            GW::Constants::SkillID::Unreliable
+        constexpr static auto dev_skills = MakeFixedSet<SkillID>(
+            SkillID::No_Skill,
+            SkillID::Test_Buff,
+            SkillID::Impending_Dhuum,
+            SkillID::Dishonorable,
+            SkillID::Unreliable
         );
 
         return skill.icon_file_id == 327614 || // Dev hax icon
@@ -118,234 +118,234 @@ namespace HerosInsight
 
     bool IsArchivedSkill(CustomSkillData &custom_sd)
     {
-        constexpr static auto archived_skills = MakeFixedSet<GW::Constants::SkillID>(
-            GW::Constants::SkillID::UNUSED_Complicate,
-            GW::Constants::SkillID::UNUSED_Reapers_Mark,
-            GW::Constants::SkillID::UNUSED_Enfeeble,
-            GW::Constants::SkillID::UNUSED_Desecrate_Enchantments,
-            GW::Constants::SkillID::UNUSED_Signet_of_Lost_Souls,
-            GW::Constants::SkillID::UNUSED_Insidious_Parasite,
-            GW::Constants::SkillID::UNUSED_Searing_Flames,
-            GW::Constants::SkillID::UNUSED_Glowing_Gaze,
-            GW::Constants::SkillID::UNUSED_Steam,
-            GW::Constants::SkillID::UNUSED_Flame_Djinns_Haste,
-            GW::Constants::SkillID::UNUSED_Liquid_Flame,
-            GW::Constants::SkillID::UNUSED_Blessed_Light,
-            GW::Constants::SkillID::UNUSED_Shield_of_Absorption,
-            GW::Constants::SkillID::UNUSED_Smite_Condition,
-            GW::Constants::SkillID::UNUSED_Crippling_Slash,
-            GW::Constants::SkillID::UNUSED_Sun_and_Moon_Slash,
-            GW::Constants::SkillID::UNUSED_Enraging_Charge,
-            GW::Constants::SkillID::UNUSED_Tiger_Stance,
-            GW::Constants::SkillID::UNUSED_Burning_Arrow,
-            GW::Constants::SkillID::UNUSED_Natural_Stride,
-            GW::Constants::SkillID::UNUSED_Falling_Lotus_Strike,
-            GW::Constants::SkillID::UNUSED_Anthem_of_Weariness,
-            GW::Constants::SkillID::UNUSED_Pious_Fury,
-            GW::Constants::SkillID::UNUSED_Amulet_of_Protection,
-            GW::Constants::SkillID::UNUSED_Eviscerate,
-            GW::Constants::SkillID::UNUSED_Rush,
-            GW::Constants::SkillID::UNUSED_Lions_Comfort,
-            GW::Constants::SkillID::UNUSED_Melandrus_Shot,
-            GW::Constants::SkillID::UNUSED_Sloth_Hunters_Shot,
-            GW::Constants::SkillID::UNUSED_Reversal_of_Damage,
-            GW::Constants::SkillID::UNUSED_Empathic_Removal,
-            GW::Constants::SkillID::UNUSED_Castigation_Signet,
-            GW::Constants::SkillID::UNUSED_Wail_of_Doom,
-            GW::Constants::SkillID::UNUSED_Rip_Enchantment,
-            GW::Constants::SkillID::UNUSED_Foul_Feast,
-            GW::Constants::SkillID::UNUSED_Plague_Sending,
-            GW::Constants::SkillID::UNUSED_Overload,
-            GW::Constants::SkillID::UNUSED_Wastrels_Worry,
-            GW::Constants::SkillID::UNUSED_Lyssas_Aura,
-            GW::Constants::SkillID::UNUSED_Empathy,
-            GW::Constants::SkillID::UNUSED_Shatterstone,
-            GW::Constants::SkillID::UNUSED_Glowing_Ice,
-            GW::Constants::SkillID::UNUSED_Freezing_Gust,
-            GW::Constants::SkillID::UNUSED_Glyph_of_Immolation,
-            GW::Constants::SkillID::UNUSED_Glyph_of_Restoration,
-            GW::Constants::SkillID::UNUSED_Hidden_Caltrops,
-            GW::Constants::SkillID::UNUSED_Black_Spider_Strike,
-            GW::Constants::SkillID::UNUSED_Caretakers_Charge,
-            GW::Constants::SkillID::UNUSED_Signet_of_Mystic_Speed,
-            GW::Constants::SkillID::UNUSED_Signet_of_Rage,
-            GW::Constants::SkillID::UNUSED_Signet_of_Judgement,
-            GW::Constants::SkillID::UNUSED_Vigorous_Spirit,
+        constexpr static auto archived_skills = MakeFixedSet<SkillID>(
+            SkillID::UNUSED_Complicate,
+            SkillID::UNUSED_Reapers_Mark,
+            SkillID::UNUSED_Enfeeble,
+            SkillID::UNUSED_Desecrate_Enchantments,
+            SkillID::UNUSED_Signet_of_Lost_Souls,
+            SkillID::UNUSED_Insidious_Parasite,
+            SkillID::UNUSED_Searing_Flames,
+            SkillID::UNUSED_Glowing_Gaze,
+            SkillID::UNUSED_Steam,
+            SkillID::UNUSED_Flame_Djinns_Haste,
+            SkillID::UNUSED_Liquid_Flame,
+            SkillID::UNUSED_Blessed_Light,
+            SkillID::UNUSED_Shield_of_Absorption,
+            SkillID::UNUSED_Smite_Condition,
+            SkillID::UNUSED_Crippling_Slash,
+            SkillID::UNUSED_Sun_and_Moon_Slash,
+            SkillID::UNUSED_Enraging_Charge,
+            SkillID::UNUSED_Tiger_Stance,
+            SkillID::UNUSED_Burning_Arrow,
+            SkillID::UNUSED_Natural_Stride,
+            SkillID::UNUSED_Falling_Lotus_Strike,
+            SkillID::UNUSED_Anthem_of_Weariness,
+            SkillID::UNUSED_Pious_Fury,
+            SkillID::UNUSED_Amulet_of_Protection,
+            SkillID::UNUSED_Eviscerate,
+            SkillID::UNUSED_Rush,
+            SkillID::UNUSED_Lions_Comfort,
+            SkillID::UNUSED_Melandrus_Shot,
+            SkillID::UNUSED_Sloth_Hunters_Shot,
+            SkillID::UNUSED_Reversal_of_Damage,
+            SkillID::UNUSED_Empathic_Removal,
+            SkillID::UNUSED_Castigation_Signet,
+            SkillID::UNUSED_Wail_of_Doom,
+            SkillID::UNUSED_Rip_Enchantment,
+            SkillID::UNUSED_Foul_Feast,
+            SkillID::UNUSED_Plague_Sending,
+            SkillID::UNUSED_Overload,
+            SkillID::UNUSED_Wastrels_Worry,
+            SkillID::UNUSED_Lyssas_Aura,
+            SkillID::UNUSED_Empathy,
+            SkillID::UNUSED_Shatterstone,
+            SkillID::UNUSED_Glowing_Ice,
+            SkillID::UNUSED_Freezing_Gust,
+            SkillID::UNUSED_Glyph_of_Immolation,
+            SkillID::UNUSED_Glyph_of_Restoration,
+            SkillID::UNUSED_Hidden_Caltrops,
+            SkillID::UNUSED_Black_Spider_Strike,
+            SkillID::UNUSED_Caretakers_Charge,
+            SkillID::UNUSED_Signet_of_Mystic_Speed,
+            SkillID::UNUSED_Signet_of_Rage,
+            SkillID::UNUSED_Signet_of_Judgement,
+            SkillID::UNUSED_Vigorous_Spirit,
 
-            GW::Constants::SkillID::REMOVE_Balthazars_Rage,
-            GW::Constants::SkillID::REMOVE_Boon_of_the_Gods,
-            GW::Constants::SkillID::REMOVE_Leadership_skill,
-            GW::Constants::SkillID::REMOVE_Queen_Armor,
-            GW::Constants::SkillID::Queen_Armor,
-            GW::Constants::SkillID::REMOVE_Queen_Wail,
-            GW::Constants::SkillID::Queen_Wail,
-            GW::Constants::SkillID::REMOVE_Wind_Prayers_skill,
-            GW::Constants::SkillID::REMOVE_With_Haste,
-            (GW::Constants::SkillID)807, // REMOVE_Soul_Reaping_Skill,
+            SkillID::REMOVE_Balthazars_Rage,
+            SkillID::REMOVE_Boon_of_the_Gods,
+            SkillID::REMOVE_Leadership_skill,
+            SkillID::REMOVE_Queen_Armor,
+            SkillID::Queen_Armor,
+            SkillID::REMOVE_Queen_Wail,
+            SkillID::Queen_Wail,
+            SkillID::REMOVE_Wind_Prayers_skill,
+            SkillID::REMOVE_With_Haste,
+            (SkillID)807, // REMOVE_Soul_Reaping_Skill,
 
-            GW::Constants::SkillID::Forge_the_Way,
-            GW::Constants::SkillID::Anthem_of_Aggression,
-            GW::Constants::SkillID::Mantra_of_Celerity,
-            GW::Constants::SkillID::Signet_of_Attainment,
-            GW::Constants::SkillID::Accelerated_Growth,
-            GW::Constants::SkillID::Aim_True,
-            GW::Constants::SkillID::Aura_of_the_Great_Destroyer,
-            GW::Constants::SkillID::Bloodletting,
-            GW::Constants::SkillID::Borrowed_Energy,
-            GW::Constants::SkillID::Charr_Buff,
-            GW::Constants::SkillID::Command_of_Torment,
-            GW::Constants::SkillID::Construct_Possession,
-            GW::Constants::SkillID::Conviction_PvP,
-            GW::Constants::SkillID::Cry_of_Lament,
-            GW::Constants::SkillID::Destroy_the_Humans,
-            GW::Constants::SkillID::Dissipation,
-            GW::Constants::SkillID::Desperate_Howl,
-            GW::Constants::SkillID::Dozen_Shot,
-            GW::Constants::SkillID::Embrace_the_Pain,
-            GW::Constants::SkillID::Empathy_Koro,
-            GW::Constants::SkillID::Energy_Font,
-            GW::Constants::SkillID::Everlasting_Mobstopper_skill,
-            GW::Constants::SkillID::Fake_Spell,
-            GW::Constants::SkillID::Fire_and_Brimstone,
-            GW::Constants::SkillID::Gaze_of_MoavuKaal,
-            GW::Constants::SkillID::Guild_Monument_Protected,
-            GW::Constants::SkillID::Headshot,
-            GW::Constants::SkillID::Ice_Skates,
-            GW::Constants::SkillID::Intimidating_Aura_beta_version,
-            GW::Constants::SkillID::Kraks_Charge,
-            GW::Constants::SkillID::Lichs_Phylactery,
-            GW::Constants::SkillID::Lightning_Storm,
-            GW::Constants::SkillID::Marble_Trap,
-            GW::Constants::SkillID::Mending_Shrine_Bonus,
-            GW::Constants::SkillID::Natures_Speed,
-            GW::Constants::SkillID::Oracle_Link,
-            GW::Constants::SkillID::Recurring_Scourge,
-            GW::Constants::SkillID::Rough_Current,
-            GW::Constants::SkillID::Scepter_of_Ether,
-            GW::Constants::SkillID::Shadow_Tripwire,
-            GW::Constants::SkillID::Shiver_Touch,
-            GW::Constants::SkillID::Shrine_Backlash,
-            GW::Constants::SkillID::Signal_Flare,
-            GW::Constants::SkillID::Star_Shards,
-            GW::Constants::SkillID::Suicidal_Impulse,
-            GW::Constants::SkillID::Summoning_of_the_Scepter,
-            GW::Constants::SkillID::Sundering_Soulcrush,
-            GW::Constants::SkillID::Sunspear_Siege,
-            GW::Constants::SkillID::To_the_Death,
-            GW::Constants::SkillID::Turbulent_Flow,
-            GW::Constants::SkillID::Twisted_Spikes,
-            GW::Constants::SkillID::Unlock_Cell,
-            GW::Constants::SkillID::Vanish,
-            GW::Constants::SkillID::Vital_Blessing_monster_skill,
-            GW::Constants::SkillID::Way_of_the_Mantis,
-            GW::Constants::SkillID::Weapon_of_Mastery,
-            (GW::Constants::SkillID)2915, // NOX_Rectifier
-            (GW::Constants::SkillID)20,   // Confusion,
-            GW::Constants::SkillID::Signet_of_Illusions_beta_version,
-            GW::Constants::SkillID::Mimic,
-            GW::Constants::SkillID::Disappear,
-            GW::Constants::SkillID::Unnatural_Signet_alpha_version,
-            GW::Constants::SkillID::Unnatural_Signet_alpha_version,
-            GW::Constants::SkillID::Dont_Believe_Their_Lies,
-            GW::Constants::SkillID::Call_of_Ferocity,
-            GW::Constants::SkillID::Call_of_Elemental_Protection,
-            GW::Constants::SkillID::Call_of_Vitality,
-            GW::Constants::SkillID::Call_of_Healing,
-            GW::Constants::SkillID::Call_of_Resilience,
-            GW::Constants::SkillID::Call_of_Feeding,
-            GW::Constants::SkillID::Call_of_the_Hunter,
-            GW::Constants::SkillID::Call_of_Brutality,
-            GW::Constants::SkillID::Call_of_Disruption,
-            GW::Constants::SkillID::High_Winds,
-            GW::Constants::SkillID::Coming_of_Spring,
-            GW::Constants::SkillID::Signet_of_Creation_PvP,
-            GW::Constants::SkillID::Quickening_Terrain,
-            GW::Constants::SkillID::Massive_Damage,
-            (GW::Constants::SkillID)2781, // Minion Explosion
-            GW::Constants::SkillID::Couriers_Haste,
-            (GW::Constants::SkillID)2811, // Hive Mind
-            (GW::Constants::SkillID)2812, // Blood Pact
-            GW::Constants::SkillID::Inverse_Ninja_Law,
-            (GW::Constants::SkillID)2814, // Keep yourself alive
-            (GW::Constants::SkillID)2815, // ...
-            (GW::Constants::SkillID)2816, // Bounty Hunter
-            (GW::Constants::SkillID)2817, // ...
-            (GW::Constants::SkillID)3275, // ...
-            (GW::Constants::SkillID)3276, // ...
-            (GW::Constants::SkillID)3277, // ...
-            (GW::Constants::SkillID)3278, // ...
-            (GW::Constants::SkillID)3279, // ...
-            (GW::Constants::SkillID)3280, // ...
-            (GW::Constants::SkillID)3281, // ...
-            GW::Constants::SkillID::Victorious_Renewal,
-            GW::Constants::SkillID::A_Dying_Curse,
-            (GW::Constants::SkillID)3284, // ...
-            (GW::Constants::SkillID)3285, // ...
-            (GW::Constants::SkillID)3286, // ...
-            (GW::Constants::SkillID)3287, // ...
-            GW::Constants::SkillID::Rage_of_the_Djinn,
-            GW::Constants::SkillID::Lone_Wolf,
-            GW::Constants::SkillID::Stand_Together,
-            GW::Constants::SkillID::Unyielding_Spirit,
-            GW::Constants::SkillID::Reckless_Advance,
-            GW::Constants::SkillID::Solidarity,
-            GW::Constants::SkillID::Fight_Against_Despair,
-            GW::Constants::SkillID::Deaths_Succor,
-            GW::Constants::SkillID::Battle_of_Attrition,
-            GW::Constants::SkillID::Fight_or_Flight,
-            GW::Constants::SkillID::Renewing_Escape,
-            GW::Constants::SkillID::Battle_Frenzy,
-            GW::Constants::SkillID::The_Way_of_One,
-            (GW::Constants::SkillID)3388, // ...
-            (GW::Constants::SkillID)3389, // ...
-            (GW::Constants::SkillID)656,  // Life draining on crit
-            (GW::Constants::SkillID)2362, // Unnamed skill
-            (GW::Constants::SkillID)2239, // Unnamed skill
-            (GW::Constants::SkillID)3255, // Shield of the Champions
-            (GW::Constants::SkillID)3256, // Shield of the Champions
-            (GW::Constants::SkillID)3257, // Shield of the Champions
-            (GW::Constants::SkillID)3258, // Shield of the Champions
-            GW::Constants::SkillID::Pains_Embrace,
-            GW::Constants::SkillID::Siege_Attack_Bombardment,
-            GW::Constants::SkillID::Advance,
-            GW::Constants::SkillID::Water_Pool,
-            GW::Constants::SkillID::Torturous_Embers,
-            GW::Constants::SkillID::Torturers_Inferno,
-            GW::Constants::SkillID::Talon_Strike,
-            GW::Constants::SkillID::Shroud_of_Ash,
-            GW::Constants::SkillID::Explosive_Force,
-            GW::Constants::SkillID::Stop_Pump,
-            GW::Constants::SkillID::Sacred_Branch,
-            GW::Constants::SkillID::From_Hell,
-            GW::Constants::SkillID::Corrupted_Roots,
-            GW::Constants::SkillID::Meditation_of_the_Reaper1,
-            (GW::Constants::SkillID)654, // Energy steal on crit
-            (GW::Constants::SkillID)655, // Energy steal chance on hit
-            GW::Constants::SkillID::Party_Time,
-            (GW::Constants::SkillID)3411, // Keep the flag flying I
-            (GW::Constants::SkillID)3412, // Keep the flag flying II
-            (GW::Constants::SkillID)721,  // Feigned Sacrifice
-            (GW::Constants::SkillID)735,  // Fluidity
-            (GW::Constants::SkillID)747,  // Fury
-            (GW::Constants::SkillID)744,  // Justice
-            (GW::Constants::SkillID)718,  // Necropathy
-            (GW::Constants::SkillID)740,  // Peace
-            (GW::Constants::SkillID)759,  // Preparation
-            (GW::Constants::SkillID)742,  // Rapid Healing
-            (GW::Constants::SkillID)757,  // Rapid Shot
-            (GW::Constants::SkillID)720,  // Sacrifice
-            (GW::Constants::SkillID)733,  // Scintillation
-            (GW::Constants::SkillID)729,  // Stone
-            (GW::Constants::SkillID)738,  // Blessings
-            (GW::Constants::SkillID)675,  // Cultist's
-            (GW::Constants::SkillID)716,  // Cursing
-            (GW::Constants::SkillID)758,  // Deadliness
-            (GW::Constants::SkillID)731,  // The Bibliophile
-            (GW::Constants::SkillID)719,  // The Plague
-            (GW::Constants::SkillID)727,  // Thunder
-            (GW::Constants::SkillID)723,  // Vampire
-            (GW::Constants::SkillID)3250, // Temple Strike but not elite
-            (GW::Constants::SkillID)756   // Barrage (passive effect)
+            SkillID::Forge_the_Way,
+            SkillID::Anthem_of_Aggression,
+            SkillID::Mantra_of_Celerity,
+            SkillID::Signet_of_Attainment,
+            SkillID::Accelerated_Growth,
+            SkillID::Aim_True,
+            SkillID::Aura_of_the_Great_Destroyer,
+            SkillID::Bloodletting,
+            SkillID::Borrowed_Energy,
+            SkillID::Charr_Buff,
+            SkillID::Command_of_Torment,
+            SkillID::Construct_Possession,
+            SkillID::Conviction_PvP,
+            SkillID::Cry_of_Lament,
+            SkillID::Destroy_the_Humans,
+            SkillID::Dissipation,
+            SkillID::Desperate_Howl,
+            SkillID::Dozen_Shot,
+            SkillID::Embrace_the_Pain,
+            SkillID::Empathy_Koro,
+            SkillID::Energy_Font,
+            SkillID::Everlasting_Mobstopper_skill,
+            SkillID::Fake_Spell,
+            SkillID::Fire_and_Brimstone,
+            SkillID::Gaze_of_MoavuKaal,
+            SkillID::Guild_Monument_Protected,
+            SkillID::Headshot,
+            SkillID::Ice_Skates,
+            SkillID::Intimidating_Aura_beta_version,
+            SkillID::Kraks_Charge,
+            SkillID::Lichs_Phylactery,
+            SkillID::Lightning_Storm,
+            SkillID::Marble_Trap,
+            SkillID::Mending_Shrine_Bonus,
+            SkillID::Natures_Speed,
+            SkillID::Oracle_Link,
+            SkillID::Recurring_Scourge,
+            SkillID::Rough_Current,
+            SkillID::Scepter_of_Ether,
+            SkillID::Shadow_Tripwire,
+            SkillID::Shiver_Touch,
+            SkillID::Shrine_Backlash,
+            SkillID::Signal_Flare,
+            SkillID::Star_Shards,
+            SkillID::Suicidal_Impulse,
+            SkillID::Summoning_of_the_Scepter,
+            SkillID::Sundering_Soulcrush,
+            SkillID::Sunspear_Siege,
+            SkillID::To_the_Death,
+            SkillID::Turbulent_Flow,
+            SkillID::Twisted_Spikes,
+            SkillID::Unlock_Cell,
+            SkillID::Vanish,
+            SkillID::Vital_Blessing_monster_skill,
+            SkillID::Way_of_the_Mantis,
+            SkillID::Weapon_of_Mastery,
+            (SkillID)2915, // NOX_Rectifier
+            (SkillID)20,   // Confusion,
+            SkillID::Signet_of_Illusions_beta_version,
+            SkillID::Mimic,
+            SkillID::Disappear,
+            SkillID::Unnatural_Signet_alpha_version,
+            SkillID::Unnatural_Signet_alpha_version,
+            SkillID::Dont_Believe_Their_Lies,
+            SkillID::Call_of_Ferocity,
+            SkillID::Call_of_Elemental_Protection,
+            SkillID::Call_of_Vitality,
+            SkillID::Call_of_Healing,
+            SkillID::Call_of_Resilience,
+            SkillID::Call_of_Feeding,
+            SkillID::Call_of_the_Hunter,
+            SkillID::Call_of_Brutality,
+            SkillID::Call_of_Disruption,
+            SkillID::High_Winds,
+            SkillID::Coming_of_Spring,
+            SkillID::Signet_of_Creation_PvP,
+            SkillID::Quickening_Terrain,
+            SkillID::Massive_Damage,
+            (SkillID)2781, // Minion Explosion
+            SkillID::Couriers_Haste,
+            (SkillID)2811, // Hive Mind
+            (SkillID)2812, // Blood Pact
+            SkillID::Inverse_Ninja_Law,
+            (SkillID)2814, // Keep yourself alive
+            (SkillID)2815, // ...
+            (SkillID)2816, // Bounty Hunter
+            (SkillID)2817, // ...
+            (SkillID)3275, // ...
+            (SkillID)3276, // ...
+            (SkillID)3277, // ...
+            (SkillID)3278, // ...
+            (SkillID)3279, // ...
+            (SkillID)3280, // ...
+            (SkillID)3281, // ...
+            SkillID::Victorious_Renewal,
+            SkillID::A_Dying_Curse,
+            (SkillID)3284, // ...
+            (SkillID)3285, // ...
+            (SkillID)3286, // ...
+            (SkillID)3287, // ...
+            SkillID::Rage_of_the_Djinn,
+            SkillID::Lone_Wolf,
+            SkillID::Stand_Together,
+            SkillID::Unyielding_Spirit,
+            SkillID::Reckless_Advance,
+            SkillID::Solidarity,
+            SkillID::Fight_Against_Despair,
+            SkillID::Deaths_Succor,
+            SkillID::Battle_of_Attrition,
+            SkillID::Fight_or_Flight,
+            SkillID::Renewing_Escape,
+            SkillID::Battle_Frenzy,
+            SkillID::The_Way_of_One,
+            (SkillID)3388, // ...
+            (SkillID)3389, // ...
+            (SkillID)656,  // Life draining on crit
+            (SkillID)2362, // Unnamed skill
+            (SkillID)2239, // Unnamed skill
+            (SkillID)3255, // Shield of the Champions
+            (SkillID)3256, // Shield of the Champions
+            (SkillID)3257, // Shield of the Champions
+            (SkillID)3258, // Shield of the Champions
+            SkillID::Pains_Embrace,
+            SkillID::Siege_Attack_Bombardment,
+            SkillID::Advance,
+            SkillID::Water_Pool,
+            SkillID::Torturous_Embers,
+            SkillID::Torturers_Inferno,
+            SkillID::Talon_Strike,
+            SkillID::Shroud_of_Ash,
+            SkillID::Explosive_Force,
+            SkillID::Stop_Pump,
+            SkillID::Sacred_Branch,
+            SkillID::From_Hell,
+            SkillID::Corrupted_Roots,
+            SkillID::Meditation_of_the_Reaper1,
+            (SkillID)654, // Energy steal on crit
+            (SkillID)655, // Energy steal chance on hit
+            SkillID::Party_Time,
+            (SkillID)3411, // Keep the flag flying I
+            (SkillID)3412, // Keep the flag flying II
+            (SkillID)721,  // Feigned Sacrifice
+            (SkillID)735,  // Fluidity
+            (SkillID)747,  // Fury
+            (SkillID)744,  // Justice
+            (SkillID)718,  // Necropathy
+            (SkillID)740,  // Peace
+            (SkillID)759,  // Preparation
+            (SkillID)742,  // Rapid Healing
+            (SkillID)757,  // Rapid Shot
+            (SkillID)720,  // Sacrifice
+            (SkillID)733,  // Scintillation
+            (SkillID)729,  // Stone
+            (SkillID)738,  // Blessings
+            (SkillID)675,  // Cultist's
+            (SkillID)716,  // Cursing
+            (SkillID)758,  // Deadliness
+            (SkillID)731,  // The Bibliophile
+            (SkillID)719,  // The Plague
+            (SkillID)727,  // Thunder
+            (SkillID)723,  // Vampire
+            (SkillID)3250, // Temple Strike but not elite
+            (SkillID)756   // Barrage (passive effect)
         );
 
         if (IsDeveloperSkill(*custom_sd.skill) ||
@@ -392,7 +392,7 @@ namespace HerosInsight
         if (skill.type != SkillType::Bounty)
             return false;
 
-        constexpr static auto bounties_with_non_rep_effects = MakeFixedSet<GW::Constants::SkillID>(
+        constexpr static auto bounties_with_non_rep_effects = MakeFixedSet<SkillID>(
             SkillID::Great_Dwarfs_Blessing,
             SkillID::Great_Dwarfs_Blessing1,
             SkillID::Energy_Channel,
@@ -421,27 +421,27 @@ namespace HerosInsight
 
     bool IsSpellSkill(GW::Skill &skill)
     {
-        return skill.type == GW::Constants::SkillType::Spell ||
-               skill.type == GW::Constants::SkillType::Enchantment ||
-               skill.type == GW::Constants::SkillType::Hex ||
-               skill.type == GW::Constants::SkillType::Well ||
-               skill.type == GW::Constants::SkillType::Ward ||
-               skill.type == GW::Constants::SkillType::ItemSpell ||
-               skill.type == GW::Constants::SkillType::WeaponSpell;
+        return skill.type == SkillType::Spell ||
+               skill.type == SkillType::Enchantment ||
+               skill.type == SkillType::Hex ||
+               skill.type == SkillType::Well ||
+               skill.type == SkillType::Ward ||
+               skill.type == SkillType::ItemSpell ||
+               skill.type == SkillType::WeaponSpell;
     }
 
-    bool EndsOnIncDamage(GW::Constants::SkillID skill_id)
+    bool EndsOnIncDamage(SkillID skill_id)
     {
-        constexpr static auto skills = MakeFixedSet<GW::Constants::SkillID>(
-            GW::Constants::SkillID::Reversal_of_Fortune,
-            GW::Constants::SkillID::Reversal_of_Damage,
-            GW::Constants::SkillID::Life_Sheath,
-            GW::Constants::SkillID::Reverse_Hex,
-            GW::Constants::SkillID::Weapon_of_Remedy,
-            GW::Constants::SkillID::Xinraes_Weapon,
-            GW::Constants::SkillID::Vengeful_Weapon,
-            GW::Constants::SkillID::Ballad_of_Restoration,
-            GW::Constants::SkillID::Ballad_of_Restoration_PvP
+        constexpr static auto skills = MakeFixedSet<SkillID>(
+            SkillID::Reversal_of_Fortune,
+            SkillID::Reversal_of_Damage,
+            SkillID::Life_Sheath,
+            SkillID::Reverse_Hex,
+            SkillID::Weapon_of_Remedy,
+            SkillID::Xinraes_Weapon,
+            SkillID::Vengeful_Weapon,
+            SkillID::Ballad_of_Restoration,
+            SkillID::Ballad_of_Restoration_PvP
         );
 
         return skills.has(skill_id);
@@ -449,63 +449,63 @@ namespace HerosInsight
 
     bool IsProjectileSkill(GW::Skill &skill)
     {
-        constexpr static auto skills = MakeFixedSet<GW::Constants::SkillID>(
-            GW::Constants::SkillID::Spear_of_Light,
-            GW::Constants::SkillID::Lightning_Orb,
-            GW::Constants::SkillID::Lightning_Orb_PvP,
-            GW::Constants::SkillID::Shock_Arrow,
-            GW::Constants::SkillID::Lightning_Bolt,
-            GW::Constants::SkillID::Lightning_Javelin,
-            GW::Constants::SkillID::Stone_Daggers,
-            GW::Constants::SkillID::Stoning,
-            GW::Constants::SkillID::Ebon_Hawk,
-            GW::Constants::SkillID::Glowstone,
-            GW::Constants::SkillID::Fireball,
-            GW::Constants::SkillID::Flare,
-            GW::Constants::SkillID::Lava_Arrows,
-            GW::Constants::SkillID::Phoenix,
-            GW::Constants::SkillID::Water_Trident,
-            GW::Constants::SkillID::Ice_Spear,
-            GW::Constants::SkillID::Shard_Storm,
-            GW::Constants::SkillID::Crippling_Dagger,
-            GW::Constants::SkillID::Dancing_Daggers,
-            GW::Constants::SkillID::Disrupting_Dagger,
-            GW::Constants::SkillID::Alkars_Alchemical_Acid,
-            GW::Constants::SkillID::Snaring_Web,
-            GW::Constants::SkillID::Corsairs_Net,
-            GW::Constants::SkillID::Bit_Golem_Breaker,
-            GW::Constants::SkillID::Fireball_obelisk,
-            GW::Constants::SkillID::NOX_Thunder,
-            GW::Constants::SkillID::Phased_Plasma_Burst,
-            GW::Constants::SkillID::Plasma_Shot,
-            GW::Constants::SkillID::Snowball_NPC,
-            GW::Constants::SkillID::Ultra_Snowball,
-            GW::Constants::SkillID::Ultra_Snowball1,
-            GW::Constants::SkillID::Ultra_Snowball2,
-            GW::Constants::SkillID::Ultra_Snowball3,
-            GW::Constants::SkillID::Ultra_Snowball4,
-            GW::Constants::SkillID::Fire_Dart,
-            GW::Constants::SkillID::Ice_Dart,
-            GW::Constants::SkillID::Poison_Dart,
-            GW::Constants::SkillID::Lightning_Orb1,
-            (GW::Constants::SkillID)2795, // Advanced Snowball
-            GW::Constants::SkillID::Mega_Snowball,
-            GW::Constants::SkillID::Snowball,
-            GW::Constants::SkillID::Snowball1,
-            (GW::Constants::SkillID)2796, // Super Mega Snowball
-            GW::Constants::SkillID::Rocket_Propelled_Gobstopper,
-            GW::Constants::SkillID::Polymock_Fireball,
-            GW::Constants::SkillID::Polymock_Flare,
-            GW::Constants::SkillID::Polymock_Frozen_Trident,
-            GW::Constants::SkillID::Polymock_Ice_Spear,
-            GW::Constants::SkillID::Polymock_Lightning_Orb,
-            GW::Constants::SkillID::Polymock_Piercing_Light_Spear,
-            GW::Constants::SkillID::Polymock_Shock_Arrow,
-            GW::Constants::SkillID::Polymock_Stone_Daggers,
-            GW::Constants::SkillID::Polymock_Stoning
+        constexpr static auto skills = MakeFixedSet<SkillID>(
+            SkillID::Spear_of_Light,
+            SkillID::Lightning_Orb,
+            SkillID::Lightning_Orb_PvP,
+            SkillID::Shock_Arrow,
+            SkillID::Lightning_Bolt,
+            SkillID::Lightning_Javelin,
+            SkillID::Stone_Daggers,
+            SkillID::Stoning,
+            SkillID::Ebon_Hawk,
+            SkillID::Glowstone,
+            SkillID::Fireball,
+            SkillID::Flare,
+            SkillID::Lava_Arrows,
+            SkillID::Phoenix,
+            SkillID::Water_Trident,
+            SkillID::Ice_Spear,
+            SkillID::Shard_Storm,
+            SkillID::Crippling_Dagger,
+            SkillID::Dancing_Daggers,
+            SkillID::Disrupting_Dagger,
+            SkillID::Alkars_Alchemical_Acid,
+            SkillID::Snaring_Web,
+            SkillID::Corsairs_Net,
+            SkillID::Bit_Golem_Breaker,
+            SkillID::Fireball_obelisk,
+            SkillID::NOX_Thunder,
+            SkillID::Phased_Plasma_Burst,
+            SkillID::Plasma_Shot,
+            SkillID::Snowball_NPC,
+            SkillID::Ultra_Snowball,
+            SkillID::Ultra_Snowball1,
+            SkillID::Ultra_Snowball2,
+            SkillID::Ultra_Snowball3,
+            SkillID::Ultra_Snowball4,
+            SkillID::Fire_Dart,
+            SkillID::Ice_Dart,
+            SkillID::Poison_Dart,
+            SkillID::Lightning_Orb1,
+            (SkillID)2795, // Advanced Snowball
+            SkillID::Mega_Snowball,
+            SkillID::Snowball,
+            SkillID::Snowball1,
+            (SkillID)2796, // Super Mega Snowball
+            SkillID::Rocket_Propelled_Gobstopper,
+            SkillID::Polymock_Fireball,
+            SkillID::Polymock_Flare,
+            SkillID::Polymock_Frozen_Trident,
+            SkillID::Polymock_Ice_Spear,
+            SkillID::Polymock_Lightning_Orb,
+            SkillID::Polymock_Piercing_Light_Spear,
+            SkillID::Polymock_Shock_Arrow,
+            SkillID::Polymock_Stone_Daggers,
+            SkillID::Polymock_Stoning
         );
 
-        if (skill.type == GW::Constants::SkillType::Attack &&
+        if (skill.type == SkillType::Attack &&
             skill.weapon_req & 70)
         {
             return true;
@@ -514,285 +514,285 @@ namespace HerosInsight
         return skills.has(skill.skill_id);
     }
 
-    bool IsDragonArenaSkill(GW::Constants::SkillID skill_id)
+    bool IsDragonArenaSkill(SkillID skill_id)
     {
-        return (skill_id >= GW::Constants::SkillID::Spirit_of_the_Festival && skill_id <= GW::Constants::SkillID::Imperial_Majesty);
+        return (skill_id >= SkillID::Spirit_of_the_Festival && skill_id <= SkillID::Imperial_Majesty);
     }
 
-    bool IsRollerBeetleSkill(GW::Constants::SkillID skill_id)
+    bool IsRollerBeetleSkill(SkillID skill_id)
     {
-        return (skill_id >= GW::Constants::SkillID::Rollerbeetle_Racer && skill_id <= GW::Constants::SkillID::Spit_Rocks);
+        return (skill_id >= SkillID::Rollerbeetle_Racer && skill_id <= SkillID::Spit_Rocks);
     }
 
-    bool IsYuletideSkill(GW::Constants::SkillID skill_id)
+    bool IsYuletideSkill(SkillID skill_id)
     {
-        return (skill_id >= GW::Constants::SkillID::Blinding_Snow &&
-                skill_id <= GW::Constants::SkillID::Flurry_of_Ice) ||
+        return (skill_id >= SkillID::Blinding_Snow &&
+                skill_id <= SkillID::Flurry_of_Ice) ||
 
-               (skill_id >= GW::Constants::SkillID::Side_Step &&
-                skill_id <= GW::Constants::SkillID::Rudis_Red_Nose) ||
+               (skill_id >= SkillID::Side_Step &&
+                skill_id <= SkillID::Rudis_Red_Nose) ||
 
-               (skill_id >= (GW::Constants::SkillID)2795 && // Advanced Snowball
-                skill_id <= (GW::Constants::SkillID)2802) ||
+               (skill_id >= (SkillID)2795 && // Advanced Snowball
+                skill_id <= (SkillID)2802) ||
 
-               skill_id == (GW::Constants::SkillID)2964; // Snowball but with 1s aftercast
+               skill_id == (SkillID)2964; // Snowball but with 1s aftercast
     }
 
-    bool IsAgentOfTheMadKingSkill(GW::Constants::SkillID skill_id)
+    bool IsAgentOfTheMadKingSkill(SkillID skill_id)
     {
-        return (skill_id >= GW::Constants::SkillID::Agent_of_the_Mad_King && skill_id <= GW::Constants::SkillID::The_Mad_Kings_Influence);
+        return (skill_id >= SkillID::Agent_of_the_Mad_King && skill_id <= SkillID::The_Mad_Kings_Influence);
     }
 
-    bool IsCandyCornInfantrySkill(GW::Constants::SkillID skill_id)
+    bool IsCandyCornInfantrySkill(SkillID skill_id)
     {
-        constexpr static auto skills = MakeFixedSet<GW::Constants::SkillID>(
-            (GW::Constants::SkillID)2757, // Candy Corn Infantry disguise
-            GW::Constants::SkillID::Candy_Corn_Strike,
-            GW::Constants::SkillID::Rocket_Propelled_Gobstopper,
-            GW::Constants::SkillID::Rain_of_Terror_spell,
-            GW::Constants::SkillID::Cry_of_Madness,
-            GW::Constants::SkillID::Sugar_Infusion,
-            GW::Constants::SkillID::Feast_of_Vengeance,
-            GW::Constants::SkillID::Animate_Candy_Minions, // Animate Candy Golem
-            (GW::Constants::SkillID)2789                   // Summon Candy Golem
+        constexpr static auto skills = MakeFixedSet<SkillID>(
+            (SkillID)2757, // Candy Corn Infantry disguise
+            SkillID::Candy_Corn_Strike,
+            SkillID::Rocket_Propelled_Gobstopper,
+            SkillID::Rain_of_Terror_spell,
+            SkillID::Cry_of_Madness,
+            SkillID::Sugar_Infusion,
+            SkillID::Feast_of_Vengeance,
+            SkillID::Animate_Candy_Minions, // Animate Candy Golem
+            (SkillID)2789                   // Summon Candy Golem
         );
         return skills.has(skill_id);
     }
 
-    bool IsBrawlingSkill(GW::Constants::SkillID skill_id)
+    bool IsBrawlingSkill(SkillID skill_id)
     {
-        return (skill_id >= GW::Constants::SkillID::Brawling &&
-                skill_id <= GW::Constants::SkillID::STAND_UP) ||
+        return (skill_id >= SkillID::Brawling &&
+                skill_id <= SkillID::STAND_UP) ||
 
-               (skill_id >= GW::Constants::SkillID::Falkens_Fire_Fist &&
-                skill_id <= GW::Constants::SkillID::Falken_Quick);
+               (skill_id >= SkillID::Falkens_Fire_Fist &&
+                skill_id <= SkillID::Falken_Quick);
     }
 
-    bool IsPolymockSkill(GW::Constants::SkillID skill_id)
+    bool IsPolymockSkill(SkillID skill_id)
     {
-        return (skill_id >= GW::Constants::SkillID::Polymock_Power_Drain &&
-                skill_id <= GW::Constants::SkillID::Polymock_Mind_Wreck) ||
+        return (skill_id >= SkillID::Polymock_Power_Drain &&
+                skill_id <= SkillID::Polymock_Mind_Wreck) ||
 
-               (skill_id >= GW::Constants::SkillID::Polymock_Deathly_Chill &&
-                skill_id <= GW::Constants::SkillID::Mursaat_Elementalist_Form);
+               (skill_id >= SkillID::Polymock_Deathly_Chill &&
+                skill_id <= SkillID::Mursaat_Elementalist_Form);
     }
 
-    bool IsCelestialSkill(GW::Constants::SkillID skill_id)
+    bool IsCelestialSkill(SkillID skill_id)
     {
-        constexpr static auto celestial_skills = MakeFixedSet<GW::Constants::SkillID>(
-            GW::Constants::SkillID::Celestial_Haste,
-            GW::Constants::SkillID::Celestial_Stance,
-            GW::Constants::SkillID::Celestial_Storm,
-            GW::Constants::SkillID::Celestial_Summoning,
-            GW::Constants::SkillID::Star_Servant,
-            GW::Constants::SkillID::Star_Shine,
-            GW::Constants::SkillID::Star_Strike,
-            GW::Constants::SkillID::Storm_of_Swords
+        constexpr static auto celestial_skills = MakeFixedSet<SkillID>(
+            SkillID::Celestial_Haste,
+            SkillID::Celestial_Stance,
+            SkillID::Celestial_Storm,
+            SkillID::Celestial_Summoning,
+            SkillID::Star_Servant,
+            SkillID::Star_Shine,
+            SkillID::Star_Strike,
+            SkillID::Storm_of_Swords
         );
         return celestial_skills.has(skill_id);
     }
 
-    bool IsCommandoSkill(GW::Constants::SkillID skill_id)
+    bool IsCommandoSkill(SkillID skill_id)
     {
-        return skill_id == GW::Constants::SkillID::Going_Commando ||
-               (skill_id >= GW::Constants::SkillID::Stun_Grenade &&
-                skill_id <= GW::Constants::SkillID::Tango_Down);
+        return skill_id == SkillID::Going_Commando ||
+               (skill_id >= SkillID::Stun_Grenade &&
+                skill_id <= SkillID::Tango_Down);
     }
 
-    bool IsGolemSkill(GW::Constants::SkillID skill_id)
+    bool IsGolemSkill(SkillID skill_id)
     {
-        return (skill_id >= GW::Constants::SkillID::GOLEM_disguise &&
-                skill_id <= GW::Constants::SkillID::Annihilator_Toss) ||
+        return (skill_id >= SkillID::GOLEM_disguise &&
+                skill_id <= SkillID::Annihilator_Toss) ||
 
-               skill_id == GW::Constants::SkillID::Sky_Net;
+               skill_id == SkillID::Sky_Net;
     }
 
-    bool IsRavenSkill(GW::Constants::SkillID skill_id)
+    bool IsRavenSkill(SkillID skill_id)
     {
-        return (skill_id >= GW::Constants::SkillID::Raven_Talons &&
-                skill_id <= GW::Constants::SkillID::Raven_Flight) ||
+        return (skill_id >= SkillID::Raven_Talons &&
+                skill_id <= SkillID::Raven_Flight) ||
 
-               (skill_id >= GW::Constants::SkillID::Raven_Blessing_A_Gate_Too_Far &&
-                skill_id <= GW::Constants::SkillID::Raven_Talons_A_Gate_Too_Far);
+               (skill_id >= SkillID::Raven_Blessing_A_Gate_Too_Far &&
+                skill_id <= SkillID::Raven_Talons_A_Gate_Too_Far);
     }
 
-    bool IsUrsanSkill(GW::Constants::SkillID skill_id)
+    bool IsUrsanSkill(SkillID skill_id)
     {
-        constexpr static auto ursan_skills = MakeFixedSet<GW::Constants::SkillID>(
-            GW::Constants::SkillID::Ursan_Strike,
-            GW::Constants::SkillID::Ursan_Rage,
-            GW::Constants::SkillID::Ursan_Roar,
-            GW::Constants::SkillID::Ursan_Force,
-            GW::Constants::SkillID::Ursan_Roar_Blood_Washes_Blood,
-            GW::Constants::SkillID::Ursan_Force_Blood_Washes_Blood,
-            GW::Constants::SkillID::Ursan_Aura,
-            GW::Constants::SkillID::Ursan_Rage_Blood_Washes_Blood,
-            GW::Constants::SkillID::Ursan_Strike_Blood_Washes_Blood,
-            (GW::Constants::SkillID)2115 // Ursan blessing effect (blood washes blood)
+        constexpr static auto ursan_skills = MakeFixedSet<SkillID>(
+            SkillID::Ursan_Strike,
+            SkillID::Ursan_Rage,
+            SkillID::Ursan_Roar,
+            SkillID::Ursan_Force,
+            SkillID::Ursan_Roar_Blood_Washes_Blood,
+            SkillID::Ursan_Force_Blood_Washes_Blood,
+            SkillID::Ursan_Aura,
+            SkillID::Ursan_Rage_Blood_Washes_Blood,
+            SkillID::Ursan_Strike_Blood_Washes_Blood,
+            (SkillID)2115 // Ursan blessing effect (blood washes blood)
         );
 
         return ursan_skills.has(skill_id);
     }
 
-    bool IsVolfenSkill(GW::Constants::SkillID skill_id)
+    bool IsVolfenSkill(SkillID skill_id)
     {
-        return (skill_id >= GW::Constants::SkillID::Volfen_Claw &&
-                skill_id <= GW::Constants::SkillID::Volfen_Agility) ||
+        return (skill_id >= SkillID::Volfen_Claw &&
+                skill_id <= SkillID::Volfen_Agility) ||
 
-               (skill_id >= GW::Constants::SkillID::Volfen_Pounce_Curse_of_the_Nornbear &&
-                skill_id <= GW::Constants::SkillID::Volfen_Blessing_Curse_of_the_Nornbear);
+               (skill_id >= SkillID::Volfen_Pounce_Curse_of_the_Nornbear &&
+                skill_id <= SkillID::Volfen_Blessing_Curse_of_the_Nornbear);
     }
 
-    bool IsNornAspectSkill(GW::Constants::SkillID skill_id)
+    bool IsNornAspectSkill(SkillID skill_id)
     {
-        return (IsUrsanSkill(skill_id) || IsVolfenSkill(skill_id) || IsRavenSkill(skill_id) || skill_id == GW::Constants::SkillID::Totem_of_Man);
+        return (IsUrsanSkill(skill_id) || IsVolfenSkill(skill_id) || IsRavenSkill(skill_id) || skill_id == SkillID::Totem_of_Man);
     }
 
-    bool IsKeiranSkill(GW::Constants::SkillID skill_id)
+    bool IsKeiranSkill(SkillID skill_id)
     {
-        return (skill_id >= GW::Constants::SkillID::Keiran_Thackeray_disguise &&
-                skill_id <= GW::Constants::SkillID::Rain_of_Arrows) ||
+        return (skill_id >= SkillID::Keiran_Thackeray_disguise &&
+                skill_id <= SkillID::Rain_of_Arrows) ||
 
-               (skill_id >= GW::Constants::SkillID::Keirans_Sniper_Shot_Hearts_of_the_North &&
-                skill_id <= GW::Constants::SkillID::Theres_Nothing_to_Fear_Thackeray);
+               (skill_id >= SkillID::Keirans_Sniper_Shot_Hearts_of_the_North &&
+                skill_id <= SkillID::Theres_Nothing_to_Fear_Thackeray);
     }
 
-    bool IsGwenSkill(GW::Constants::SkillID skill_id)
+    bool IsGwenSkill(SkillID skill_id)
     {
-        return skill_id == GW::Constants::SkillID::Gwen_disguise ||
+        return skill_id == SkillID::Gwen_disguise ||
 
-               (skill_id >= GW::Constants::SkillID::Distortion_Gwen &&
-                skill_id <= GW::Constants::SkillID::Sum_of_All_Fears_Gwen) ||
+               (skill_id >= SkillID::Distortion_Gwen &&
+                skill_id <= SkillID::Sum_of_All_Fears_Gwen) ||
 
-               (skill_id >= GW::Constants::SkillID::Hide &&
-                skill_id <= GW::Constants::SkillID::Throw_Rock);
+               (skill_id >= SkillID::Hide &&
+                skill_id <= SkillID::Throw_Rock);
     }
 
-    bool IsTogoSkill(GW::Constants::SkillID skill_id)
+    bool IsTogoSkill(SkillID skill_id)
     {
-        constexpr static auto togo_skills = MakeFixedSet<GW::Constants::SkillID>(
-            GW::Constants::SkillID::Togo_disguise,
-            GW::Constants::SkillID::Call_to_the_Spirit_Realm,
-            GW::Constants::SkillID::Essence_Strike_Togo,
-            GW::Constants::SkillID::Spirit_Burn_Togo,
-            GW::Constants::SkillID::Spirit_Rift_Togo,
-            GW::Constants::SkillID::Mend_Body_and_Soul_Togo,
-            GW::Constants::SkillID::Offering_of_Spirit_Togo,
-            GW::Constants::SkillID::Disenchantment_Togo,
-            GW::Constants::SkillID::Dragon_Empire_Rage,
-            GW::Constants::SkillID::Pain1,
-            GW::Constants::SkillID::Pain_attack_Togo,
-            GW::Constants::SkillID::Pain_attack_Togo1,
-            GW::Constants::SkillID::Pain_attack_Togo2
+        constexpr static auto togo_skills = MakeFixedSet<SkillID>(
+            SkillID::Togo_disguise,
+            SkillID::Call_to_the_Spirit_Realm,
+            SkillID::Essence_Strike_Togo,
+            SkillID::Spirit_Burn_Togo,
+            SkillID::Spirit_Rift_Togo,
+            SkillID::Mend_Body_and_Soul_Togo,
+            SkillID::Offering_of_Spirit_Togo,
+            SkillID::Disenchantment_Togo,
+            SkillID::Dragon_Empire_Rage,
+            SkillID::Pain1,
+            SkillID::Pain_attack_Togo,
+            SkillID::Pain_attack_Togo1,
+            SkillID::Pain_attack_Togo2
         );
         return togo_skills.has(skill_id);
     }
 
-    bool IsTuraiSkill(GW::Constants::SkillID skill_id)
+    bool IsTuraiSkill(SkillID skill_id)
     {
-        return skill_id == GW::Constants::SkillID::Turai_Ossa_disguise ||
+        return skill_id == SkillID::Turai_Ossa_disguise ||
 
-               (skill_id >= GW::Constants::SkillID::For_Elona &&
-                skill_id <= GW::Constants::SkillID::Whirlwind_Attack_Turai_Ossa) ||
+               (skill_id >= SkillID::For_Elona &&
+                skill_id <= SkillID::Whirlwind_Attack_Turai_Ossa) ||
 
-               skill_id == GW::Constants::SkillID::Dragon_Slash_Turai_Ossa;
+               skill_id == SkillID::Dragon_Slash_Turai_Ossa;
     }
 
-    bool IsSaulSkill(GW::Constants::SkillID skill_id)
+    bool IsSaulSkill(SkillID skill_id)
     {
-        constexpr static auto saul_skills = MakeFixedSet<GW::Constants::SkillID>(
-            GW::Constants::SkillID::Saul_DAlessio_disguise,
-            GW::Constants::SkillID::Signet_of_the_Unseen,
-            GW::Constants::SkillID::Castigation_Signet_Saul_DAlessio,
-            GW::Constants::SkillID::Unnatural_Signet_Saul_DAlessio,
-            GW::Constants::SkillID::Spectral_Agony_Saul_DAlessio,
-            GW::Constants::SkillID::Banner_of_the_Unseen,
-            GW::Constants::SkillID::Form_Up_and_Advance
+        constexpr static auto saul_skills = MakeFixedSet<SkillID>(
+            SkillID::Saul_DAlessio_disguise,
+            SkillID::Signet_of_the_Unseen,
+            SkillID::Castigation_Signet_Saul_DAlessio,
+            SkillID::Unnatural_Signet_Saul_DAlessio,
+            SkillID::Spectral_Agony_Saul_DAlessio,
+            SkillID::Banner_of_the_Unseen,
+            SkillID::Form_Up_and_Advance
         );
         return saul_skills.has(skill_id);
     }
 
-    bool IsMissionSkill(GW::Constants::SkillID skill_id)
+    bool IsMissionSkill(SkillID skill_id)
     {
-        constexpr static auto mission_skills = MakeFixedSet<GW::Constants::SkillID>(
-            GW::Constants::SkillID::Disarm_Trap,
-            GW::Constants::SkillID::Vial_of_Purified_Water,
-            GW::Constants::SkillID::Lit_Torch,
-            (GW::Constants::SkillID)2366,             // Alkar's Concoction item skill
-            GW::Constants::SkillID::Alkars_Concoction // Alkar's Concoction effect
+        constexpr static auto mission_skills = MakeFixedSet<SkillID>(
+            SkillID::Disarm_Trap,
+            SkillID::Vial_of_Purified_Water,
+            SkillID::Lit_Torch,
+            (SkillID)2366,             // Alkar's Concoction item skill
+            SkillID::Alkars_Concoction // Alkar's Concoction effect
         );
 
         return mission_skills.has(skill_id);
     }
 
-    bool IsSpiritFormSkill(GW::Constants::SkillID skill_id)
+    bool IsSpiritFormSkill(SkillID skill_id)
     {
-        return (skill_id >= GW::Constants::SkillID::Dhuums_Rest &&
-                skill_id <= GW::Constants::SkillID::Ghostly_Fury) ||
+        return (skill_id >= SkillID::Dhuums_Rest &&
+                skill_id <= SkillID::Ghostly_Fury) ||
 
-               skill_id == GW::Constants::SkillID::Spirit_Form_disguise;
+               skill_id == SkillID::Spirit_Form_disguise;
     }
 
-    bool IsSiegeDevourerSkill(GW::Constants::SkillID skill_id)
+    bool IsSiegeDevourerSkill(SkillID skill_id)
     {
-        return (skill_id >= GW::Constants::SkillID::Siege_Devourer && skill_id <= GW::Constants::SkillID::Dismount_Siege_Devourer);
+        return (skill_id >= SkillID::Siege_Devourer && skill_id <= SkillID::Dismount_Siege_Devourer);
     }
 
-    bool IsJununduSkill(GW::Constants::SkillID skill_id)
+    bool IsJununduSkill(SkillID skill_id)
     {
-        return (skill_id >= GW::Constants::SkillID::Choking_Breath &&
-                skill_id <= GW::Constants::SkillID::Junundu_Wail) ||
+        return (skill_id >= SkillID::Choking_Breath &&
+                skill_id <= SkillID::Junundu_Wail) ||
 
-               (skill_id >= GW::Constants::SkillID::Desert_Wurm_disguise &&
-                skill_id <= GW::Constants::SkillID::Leave_Junundu) ||
+               (skill_id >= SkillID::Desert_Wurm_disguise &&
+                skill_id <= SkillID::Leave_Junundu) ||
 
-               skill_id == GW::Constants::SkillID::Unknown_Junundu_Ability;
+               skill_id == SkillID::Unknown_Junundu_Ability;
     }
 
-    bool IsBundleSkill(GW::Constants::SkillID skill_id)
+    bool IsBundleSkill(SkillID skill_id)
     {
-        constexpr static auto bundle_skills = MakeFixedSet<GW::Constants::SkillID>(
-            GW::Constants::SkillID::Asuran_Flame_Staff,
-            GW::Constants::SkillID::Aura_of_the_Staff_of_the_Mists,
-            GW::Constants::SkillID::Curse_of_the_Staff_of_the_Mists,
-            GW::Constants::SkillID::Power_of_the_Staff_of_the_Mists,
-            GW::Constants::SkillID::Balm_Bomb,
-            GW::Constants::SkillID::Barbed_Bomb,
-            GW::Constants::SkillID::Burden_Totem,
-            GW::Constants::SkillID::Courageous_Was_Saidra,
-            GW::Constants::SkillID::Dwarven_Powder_Keg,
-            GW::Constants::SkillID::Entanglement,
-            GW::Constants::SkillID::Explosives,
-            GW::Constants::SkillID::Firebomb_Explosion,
-            GW::Constants::SkillID::Flux_Overload,
-            GW::Constants::SkillID::Gelatinous_Material_Explosion,
-            GW::Constants::SkillID::Gift_of_Battle,
-            GW::Constants::SkillID::Healing_Salve,
-            (GW::Constants::SkillID)2833, // Improvised Fire Bomb
-            (GW::Constants::SkillID)2834, // Improvised Fire Trap
-            GW::Constants::SkillID::Invigorating_Mist,
-            GW::Constants::SkillID::Light_of_Seborhin,
-            GW::Constants::SkillID::Rations,
-            GW::Constants::SkillID::Scepter_of_Orrs_Aura,
-            GW::Constants::SkillID::Scepter_of_Orrs_Power,
-            GW::Constants::SkillID::Seed_of_Resurrection,
-            GW::Constants::SkillID::Seed_of_Resurrection1,
-            GW::Constants::SkillID::Urn_of_Saint_Viktor_Level_1,
-            GW::Constants::SkillID::Urn_of_Saint_Viktor_Level_2,
-            GW::Constants::SkillID::Urn_of_Saint_Viktor_Level_3,
-            GW::Constants::SkillID::Urn_of_Saint_Viktor_Level_4,
-            GW::Constants::SkillID::Urn_of_Saint_Viktor_Level_5,
-            GW::Constants::SkillID::Shield_of_Saint_Viktor,
-            GW::Constants::SkillID::Shield_of_Saint_Viktor_Celestial_Summoning,
-            GW::Constants::SkillID::Shielding_Urn_skill,
-            GW::Constants::SkillID::Spear_of_Archemorus_Level_1,
-            GW::Constants::SkillID::Spear_of_Archemorus_Level_2,
-            GW::Constants::SkillID::Spear_of_Archemorus_Level_3,
-            GW::Constants::SkillID::Spear_of_Archemorus_Level_4,
-            GW::Constants::SkillID::Spear_of_Archemorus_Level_5,
-            GW::Constants::SkillID::Splinter_Mine_skill,
-            GW::Constants::SkillID::Stun_Bomb,
-            GW::Constants::SkillID::Volatile_Charr_Crystal
+        constexpr static auto bundle_skills = MakeFixedSet<SkillID>(
+            SkillID::Asuran_Flame_Staff,
+            SkillID::Aura_of_the_Staff_of_the_Mists,
+            SkillID::Curse_of_the_Staff_of_the_Mists,
+            SkillID::Power_of_the_Staff_of_the_Mists,
+            SkillID::Balm_Bomb,
+            SkillID::Barbed_Bomb,
+            SkillID::Burden_Totem,
+            SkillID::Courageous_Was_Saidra,
+            SkillID::Dwarven_Powder_Keg,
+            SkillID::Entanglement,
+            SkillID::Explosives,
+            SkillID::Firebomb_Explosion,
+            SkillID::Flux_Overload,
+            SkillID::Gelatinous_Material_Explosion,
+            SkillID::Gift_of_Battle,
+            SkillID::Healing_Salve,
+            (SkillID)2833, // Improvised Fire Bomb
+            (SkillID)2834, // Improvised Fire Trap
+            SkillID::Invigorating_Mist,
+            SkillID::Light_of_Seborhin,
+            SkillID::Rations,
+            SkillID::Scepter_of_Orrs_Aura,
+            SkillID::Scepter_of_Orrs_Power,
+            SkillID::Seed_of_Resurrection,
+            SkillID::Seed_of_Resurrection1,
+            SkillID::Urn_of_Saint_Viktor_Level_1,
+            SkillID::Urn_of_Saint_Viktor_Level_2,
+            SkillID::Urn_of_Saint_Viktor_Level_3,
+            SkillID::Urn_of_Saint_Viktor_Level_4,
+            SkillID::Urn_of_Saint_Viktor_Level_5,
+            SkillID::Shield_of_Saint_Viktor,
+            SkillID::Shield_of_Saint_Viktor_Celestial_Summoning,
+            SkillID::Shielding_Urn_skill,
+            SkillID::Spear_of_Archemorus_Level_1,
+            SkillID::Spear_of_Archemorus_Level_2,
+            SkillID::Spear_of_Archemorus_Level_3,
+            SkillID::Spear_of_Archemorus_Level_4,
+            SkillID::Spear_of_Archemorus_Level_5,
+            SkillID::Splinter_Mine_skill,
+            SkillID::Stun_Bomb,
+            SkillID::Volatile_Charr_Crystal
         );
         return bundle_skills.has(skill_id);
     }
@@ -806,8 +806,8 @@ namespace HerosInsight
 
     bool IsPvPOnlySkill(const GW::Skill &skill)
     {
-        constexpr static auto pvp_only_skills = MakeFixedSet<GW::Constants::SkillID>(
-            GW::Constants::SkillID::Charm_Animal_Codex
+        constexpr static auto pvp_only_skills = MakeFixedSet<SkillID>(
+            SkillID::Charm_Animal_Codex
         );
 
         return pvp_only_skills.has(skill.skill_id);
@@ -815,45 +815,45 @@ namespace HerosInsight
 
     bool IsConsumableItemSkill(const GW::Skill &skill)
     {
-        constexpr static auto item_skills = MakeFixedSet<GW::Constants::SkillID>(
-            (GW::Constants::SkillID)2366,              // Alkar's Concoction item skill
-            GW::Constants::SkillID::Alkars_Concoction, // Effect after using the item
-            GW::Constants::SkillID::Birthday_Cupcake_skill,
-            GW::Constants::SkillID::Candy_Apple_skill,
-            GW::Constants::SkillID::Candy_Corn_skill,
-            GW::Constants::SkillID::Golden_Egg_skill,
-            GW::Constants::SkillID::Lucky_Aura,
-            GW::Constants::SkillID::Lunar_Blessing,
-            GW::Constants::SkillID::Spiritual_Possession,
-            GW::Constants::SkillID::Party_Mode,
-            GW::Constants::SkillID::Pie_Induced_Ecstasy,
-            GW::Constants::SkillID::Blue_Rock_Candy_Rush,
-            GW::Constants::SkillID::Green_Rock_Candy_Rush,
-            GW::Constants::SkillID::Red_Rock_Candy_Rush,
-            GW::Constants::SkillID::Adventurers_Insight,
-            GW::Constants::SkillID::Berserkers_Insight,
-            GW::Constants::SkillID::Heros_Insight,
-            GW::Constants::SkillID::Hunters_Insight,
-            GW::Constants::SkillID::Lightbringers_Insight,
-            GW::Constants::SkillID::Rampagers_Insight,
-            GW::Constants::SkillID::Slayers_Insight,
-            GW::Constants::SkillID::Sugar_Rush_short,
-            GW::Constants::SkillID::Sugar_Rush_medium,
-            GW::Constants::SkillID::Sugar_Rush_long,
-            GW::Constants::SkillID::Sugar_Jolt_short,
-            GW::Constants::SkillID::Sugar_Jolt_long,
-            GW::Constants::SkillID::Grail_of_Might_item_effect,
-            GW::Constants::SkillID::Essence_of_Celerity_item_effect,
-            GW::Constants::SkillID::Armor_of_Salvation_item_effect,
-            GW::Constants::SkillID::Skale_Vigor,
-            GW::Constants::SkillID::Pahnai_Salad_item_effect,
-            GW::Constants::SkillID::Drake_Skin,
-            GW::Constants::SkillID::Yo_Ho_Ho_and_a_Bottle_of_Grog,
-            GW::Constants::SkillID::Well_Supplied,
-            GW::Constants::SkillID::Weakened_by_Dhuum,
-            GW::Constants::SkillID::Tonic_Tipsiness,
-            GW::Constants::SkillID::Summoning_Sickness,
-            (GW::Constants::SkillID)3407 // Summoning_Sickness
+        constexpr static auto item_skills = MakeFixedSet<SkillID>(
+            (SkillID)2366,              // Alkar's Concoction item skill
+            SkillID::Alkars_Concoction, // Effect after using the item
+            SkillID::Birthday_Cupcake_skill,
+            SkillID::Candy_Apple_skill,
+            SkillID::Candy_Corn_skill,
+            SkillID::Golden_Egg_skill,
+            SkillID::Lucky_Aura,
+            SkillID::Lunar_Blessing,
+            SkillID::Spiritual_Possession,
+            SkillID::Party_Mode,
+            SkillID::Pie_Induced_Ecstasy,
+            SkillID::Blue_Rock_Candy_Rush,
+            SkillID::Green_Rock_Candy_Rush,
+            SkillID::Red_Rock_Candy_Rush,
+            SkillID::Adventurers_Insight,
+            SkillID::Berserkers_Insight,
+            SkillID::Heros_Insight,
+            SkillID::Hunters_Insight,
+            SkillID::Lightbringers_Insight,
+            SkillID::Rampagers_Insight,
+            SkillID::Slayers_Insight,
+            SkillID::Sugar_Rush_short,
+            SkillID::Sugar_Rush_medium,
+            SkillID::Sugar_Rush_long,
+            SkillID::Sugar_Jolt_short,
+            SkillID::Sugar_Jolt_long,
+            SkillID::Grail_of_Might_item_effect,
+            SkillID::Essence_of_Celerity_item_effect,
+            SkillID::Armor_of_Salvation_item_effect,
+            SkillID::Skale_Vigor,
+            SkillID::Pahnai_Salad_item_effect,
+            SkillID::Drake_Skin,
+            SkillID::Yo_Ho_Ho_and_a_Bottle_of_Grog,
+            SkillID::Well_Supplied,
+            SkillID::Weakened_by_Dhuum,
+            SkillID::Tonic_Tipsiness,
+            SkillID::Summoning_Sickness,
+            (SkillID)3407 // Summoning_Sickness
         );
 
         return item_skills.has(skill.skill_id);
@@ -861,41 +861,41 @@ namespace HerosInsight
 
     bool IsEffectOnly(const GW::Skill &skill)
     {
-        constexpr static auto effect_only_skills = MakeFixedSet<GW::Constants::SkillID>(
-            GW::Constants::SkillID::Phase_Shield_effect
+        constexpr static auto effect_only_skills = MakeFixedSet<SkillID>(
+            SkillID::Phase_Shield_effect
         );
 
         return skill.special & (uint32_t)Utils::SkillSpecialFlags::Effect ||
-               skill.type == GW::Constants::SkillType::Bounty ||
-               skill.type == GW::Constants::SkillType::Scroll ||
-               skill.type == GW::Constants::SkillType::Condition ||
-               skill.type == GW::Constants::SkillType::Title ||
-               skill.type == GW::Constants::SkillType::Passive ||
-               skill.type == GW::Constants::SkillType::Environmental ||
-               skill.type == GW::Constants::SkillType::EnvironmentalTrap ||
-               skill.type == GW::Constants::SkillType::Disguise ||
+               skill.type == SkillType::Bounty ||
+               skill.type == SkillType::Scroll ||
+               skill.type == SkillType::Condition ||
+               skill.type == SkillType::Title ||
+               skill.type == SkillType::Passive ||
+               skill.type == SkillType::Environmental ||
+               skill.type == SkillType::EnvironmentalTrap ||
+               skill.type == SkillType::Disguise ||
                effect_only_skills.has(skill.skill_id) ||
                IsConsumableItemSkill(skill);
     }
 
     bool IsSpiritAttackSkill(const GW::Skill &skill)
     {
-        constexpr static auto spirit_attack_skills = MakeFixedSet<GW::Constants::SkillID>(
-            GW::Constants::SkillID::Gaze_of_Fury_attack,
-            GW::Constants::SkillID::Bloodsong_attack,
-            GW::Constants::SkillID::Pain_attack,
-            GW::Constants::SkillID::Pain_attack_Signet_of_Spirits,
-            GW::Constants::SkillID::Pain_attack_Signet_of_Spirits1,
-            GW::Constants::SkillID::Pain_attack_Signet_of_Spirits2,
-            GW::Constants::SkillID::Pain_attack_Togo,
-            GW::Constants::SkillID::Pain_attack_Togo1,
-            GW::Constants::SkillID::Pain_attack_Togo2,
-            GW::Constants::SkillID::Shadowsong_attack,
-            GW::Constants::SkillID::Anguish_attack,
-            GW::Constants::SkillID::Vampirism_attack,
-            GW::Constants::SkillID::Disenchantment_attack,
-            GW::Constants::SkillID::Wanderlust_attack,
-            GW::Constants::SkillID::Dissonance_attack
+        constexpr static auto spirit_attack_skills = MakeFixedSet<SkillID>(
+            SkillID::Gaze_of_Fury_attack,
+            SkillID::Bloodsong_attack,
+            SkillID::Pain_attack,
+            SkillID::Pain_attack_Signet_of_Spirits,
+            SkillID::Pain_attack_Signet_of_Spirits1,
+            SkillID::Pain_attack_Signet_of_Spirits2,
+            SkillID::Pain_attack_Togo,
+            SkillID::Pain_attack_Togo1,
+            SkillID::Pain_attack_Togo2,
+            SkillID::Shadowsong_attack,
+            SkillID::Anguish_attack,
+            SkillID::Vampirism_attack,
+            SkillID::Disenchantment_attack,
+            SkillID::Wanderlust_attack,
+            SkillID::Dissonance_attack
         );
 
         return spirit_attack_skills.has(skill.skill_id);
@@ -903,92 +903,92 @@ namespace HerosInsight
 
     bool IsEnvironmentSkill(const GW::Skill &skill)
     {
-        constexpr static auto environment_skills = MakeFixedSet<GW::Constants::SkillID>(
-            GW::Constants::SkillID::Stormcaller_skill,
-            GW::Constants::SkillID::Teleport_Players,
-            GW::Constants::SkillID::Rurik_Must_Live,
-            GW::Constants::SkillID::Torch_Degeneration_Hex,
-            GW::Constants::SkillID::Torch_Enchantment,
-            GW::Constants::SkillID::Torch_Hex,
-            GW::Constants::SkillID::Spectral_Infusion,
-            GW::Constants::SkillID::Call_of_the_Eye,
-            GW::Constants::SkillID::Altar_Buff,
-            GW::Constants::SkillID::Capture_Point,
-            GW::Constants::SkillID::Curse_of_Dhuum,
-            GW::Constants::SkillID::Fireball_obelisk,
-            GW::Constants::SkillID::Mad_Kings_Fan,
-            GW::Constants::SkillID::Resurrect_Party,
-            GW::Constants::SkillID::Rock_Slide,
-            GW::Constants::SkillID::Avalanche_effect,
-            GW::Constants::SkillID::Exploding_Barrel,
-            GW::Constants::SkillID::Water,
-            GW::Constants::SkillID::Chimera_of_Intensity,
-            GW::Constants::SkillID::Curse_of_the_Bloodstone,
-            GW::Constants::SkillID::Fount_Of_Maguuma,
-            GW::Constants::SkillID::Healing_Fountain,
-            GW::Constants::SkillID::Icy_Ground,
-            GW::Constants::SkillID::Divine_Fire,
-            GW::Constants::SkillID::Domain_of_Elements,
-            GW::Constants::SkillID::Domain_of_Energy_Draining,
-            GW::Constants::SkillID::Domain_of_Health_Draining,
-            GW::Constants::SkillID::Domain_of_Skill_Damage,
-            GW::Constants::SkillID::Domain_of_Slow,
-            GW::Constants::SkillID::Chain_Lightning_environment,
-            GW::Constants::SkillID::Eruption_environment,
-            GW::Constants::SkillID::Fire_Storm_environment,
-            GW::Constants::SkillID::Maelstrom_environment,
-            GW::Constants::SkillID::Mursaat_Tower_skill,
-            GW::Constants::SkillID::Obelisk_Lightning,
-            GW::Constants::SkillID::Quest_Skill,
-            GW::Constants::SkillID::Quest_skill_for_Coastal_Exam,
-            GW::Constants::SkillID::Quicksand_environment_effect,
-            GW::Constants::SkillID::Siege_Attack1,
-            GW::Constants::SkillID::Siege_Attack3,
-            GW::Constants::SkillID::Chomper,
-            GW::Constants::SkillID::Blast_Furnace,
-            GW::Constants::SkillID::Sorrows_Fist,
-            GW::Constants::SkillID::Sorrows_Flame,
-            GW::Constants::SkillID::Statues_Blessing,
-            GW::Constants::SkillID::Swamp_Water,
-            GW::Constants::SkillID::Tar,
-            GW::Constants::SkillID::Archemorus_Strike,
-            GW::Constants::SkillID::Elemental_Defense_Zone,
-            GW::Constants::SkillID::Melee_Defense_Zone,
-            GW::Constants::SkillID::Rage_of_the_Sea,
-            GW::Constants::SkillID::Gods_Blessing,
-            GW::Constants::SkillID::Madness_Dart,
-            GW::Constants::SkillID::Sentry_Trap_skill,
-            GW::Constants::SkillID::Spirit_Form_Remains_of_Sahlahja,
-            GW::Constants::SkillID::The_Elixir_of_Strength,
-            GW::Constants::SkillID::Untouchable,
-            GW::Constants::SkillID::Battle_Cry,
-            GW::Constants::SkillID::Battle_Cry1,
-            GW::Constants::SkillID::Energy_Shrine_Bonus,
-            GW::Constants::SkillID::To_the_Pain_Hero_Battles,
-            GW::Constants::SkillID::Northern_Health_Shrine_Bonus,
-            GW::Constants::SkillID::Southern_Health_Shrine_Bonus,
-            GW::Constants::SkillID::Western_Health_Shrine_Bonus,
-            GW::Constants::SkillID::Eastern_Health_Shrine_Bonus,
-            GW::Constants::SkillID::Boulder,
-            GW::Constants::SkillID::Burning_Ground,
-            GW::Constants::SkillID::Dire_Snowball,
-            GW::Constants::SkillID::Fire_Boulder,
-            GW::Constants::SkillID::Fire_Dart,
-            GW::Constants::SkillID::Fire_Jet,
-            GW::Constants::SkillID::Fire_Spout,
-            GW::Constants::SkillID::Freezing_Ground,
-            GW::Constants::SkillID::Haunted_Ground,
-            GW::Constants::SkillID::Ice_Dart,
-            GW::Constants::SkillID::Poison_Dart,
-            GW::Constants::SkillID::Poison_Ground,
-            GW::Constants::SkillID::Poison_Jet,
-            GW::Constants::SkillID::Poison_Spout,
-            GW::Constants::SkillID::Sarcophagus_Spores,
-            GW::Constants::SkillID::Fire_Dart1
+        constexpr static auto environment_skills = MakeFixedSet<SkillID>(
+            SkillID::Stormcaller_skill,
+            SkillID::Teleport_Players,
+            SkillID::Rurik_Must_Live,
+            SkillID::Torch_Degeneration_Hex,
+            SkillID::Torch_Enchantment,
+            SkillID::Torch_Hex,
+            SkillID::Spectral_Infusion,
+            SkillID::Call_of_the_Eye,
+            SkillID::Altar_Buff,
+            SkillID::Capture_Point,
+            SkillID::Curse_of_Dhuum,
+            SkillID::Fireball_obelisk,
+            SkillID::Mad_Kings_Fan,
+            SkillID::Resurrect_Party,
+            SkillID::Rock_Slide,
+            SkillID::Avalanche_effect,
+            SkillID::Exploding_Barrel,
+            SkillID::Water,
+            SkillID::Chimera_of_Intensity,
+            SkillID::Curse_of_the_Bloodstone,
+            SkillID::Fount_Of_Maguuma,
+            SkillID::Healing_Fountain,
+            SkillID::Icy_Ground,
+            SkillID::Divine_Fire,
+            SkillID::Domain_of_Elements,
+            SkillID::Domain_of_Energy_Draining,
+            SkillID::Domain_of_Health_Draining,
+            SkillID::Domain_of_Skill_Damage,
+            SkillID::Domain_of_Slow,
+            SkillID::Chain_Lightning_environment,
+            SkillID::Eruption_environment,
+            SkillID::Fire_Storm_environment,
+            SkillID::Maelstrom_environment,
+            SkillID::Mursaat_Tower_skill,
+            SkillID::Obelisk_Lightning,
+            SkillID::Quest_Skill,
+            SkillID::Quest_skill_for_Coastal_Exam,
+            SkillID::Quicksand_environment_effect,
+            SkillID::Siege_Attack1,
+            SkillID::Siege_Attack3,
+            SkillID::Chomper,
+            SkillID::Blast_Furnace,
+            SkillID::Sorrows_Fist,
+            SkillID::Sorrows_Flame,
+            SkillID::Statues_Blessing,
+            SkillID::Swamp_Water,
+            SkillID::Tar,
+            SkillID::Archemorus_Strike,
+            SkillID::Elemental_Defense_Zone,
+            SkillID::Melee_Defense_Zone,
+            SkillID::Rage_of_the_Sea,
+            SkillID::Gods_Blessing,
+            SkillID::Madness_Dart,
+            SkillID::Sentry_Trap_skill,
+            SkillID::Spirit_Form_Remains_of_Sahlahja,
+            SkillID::The_Elixir_of_Strength,
+            SkillID::Untouchable,
+            SkillID::Battle_Cry,
+            SkillID::Battle_Cry1,
+            SkillID::Energy_Shrine_Bonus,
+            SkillID::To_the_Pain_Hero_Battles,
+            SkillID::Northern_Health_Shrine_Bonus,
+            SkillID::Southern_Health_Shrine_Bonus,
+            SkillID::Western_Health_Shrine_Bonus,
+            SkillID::Eastern_Health_Shrine_Bonus,
+            SkillID::Boulder,
+            SkillID::Burning_Ground,
+            SkillID::Dire_Snowball,
+            SkillID::Fire_Boulder,
+            SkillID::Fire_Dart,
+            SkillID::Fire_Jet,
+            SkillID::Fire_Spout,
+            SkillID::Freezing_Ground,
+            SkillID::Haunted_Ground,
+            SkillID::Ice_Dart,
+            SkillID::Poison_Dart,
+            SkillID::Poison_Ground,
+            SkillID::Poison_Jet,
+            SkillID::Poison_Spout,
+            SkillID::Sarcophagus_Spores,
+            SkillID::Fire_Dart1
         );
 
-        if (skill.type == GW::Constants::SkillType::Environmental ||
-            skill.type == GW::Constants::SkillType::EnvironmentalTrap)
+        if (skill.type == SkillType::Environmental ||
+            skill.type == SkillType::EnvironmentalTrap)
             return true;
 
         return environment_skills.has(skill.skill_id);
@@ -996,187 +996,187 @@ namespace HerosInsight
 
     bool IsMonsterSkill(const GW::Skill &skill)
     {
-        constexpr static auto monster_skills_without_monster_icon = MakeFixedSet<GW::Constants::SkillID>(
-            (GW::Constants::SkillID)1448, // Last Rites of Torment effect
-            GW::Constants::SkillID::Torturous_Embers,
-            GW::Constants::SkillID::Last_Rites_of_Torment,
-            GW::Constants::SkillID::Healing_Breeze_Agnars_Rage,
-            GW::Constants::SkillID::Crystal_Bonds,
-            GW::Constants::SkillID::Jagged_Crystal_Skin,
-            GW::Constants::SkillID::Crystal_Hibernation,
-            GW::Constants::SkillID::Life_Vortex,
-            GW::Constants::SkillID::Soul_Vortex2,
-            (GW::Constants::SkillID)1425,
-            (GW::Constants::SkillID)1712,
-            (GW::Constants::SkillID)1713,
-            (GW::Constants::SkillID)1714,
-            GW::Constants::SkillID::Corsairs_Net,
-            GW::Constants::SkillID::Lose_your_Head,
-            GW::Constants::SkillID::Wandering_Mind,
-            (GW::Constants::SkillID)1877,
-            (GW::Constants::SkillID)1932,
-            GW::Constants::SkillID::Embrace_the_Pain,
-            GW::Constants::SkillID::Earth_Shattering_Blow,
-            GW::Constants::SkillID::Corrupt_Power,
-            GW::Constants::SkillID::Words_of_Madness,
-            GW::Constants::SkillID::Words_of_Madness_Qwytzylkak,
-            GW::Constants::SkillID::Presence_of_the_Skale_Lord,
-            GW::Constants::SkillID::The_Apocrypha_is_changing_to_another_form,
-            GW::Constants::SkillID::Reform_Carvings,
-            GW::Constants::SkillID::Soul_Torture,
-            GW::Constants::SkillID::Maddened_Strike,
-            GW::Constants::SkillID::Maddened_Stance,
-            GW::Constants::SkillID::Kournan_Siege,
-            GW::Constants::SkillID::Bonds_of_Torment,
-            (GW::Constants::SkillID)1883, // Bonds of Torment passive
-            GW::Constants::SkillID::Shadow_Smash,
-            GW::Constants::SkillID::Banish_Enchantment,
-            GW::Constants::SkillID::Jadoths_Storm_of_Judgment,
-            GW::Constants::SkillID::Twisting_Jaws,
-            GW::Constants::SkillID::Snaring_Web,
-            GW::Constants::SkillID::Ceiling_Collapse,
-            GW::Constants::SkillID::Wurm_Bile,
-            GW::Constants::SkillID::Shattered_Spirit,
-            GW::Constants::SkillID::Spirit_Roar,
-            GW::Constants::SkillID::Unseen_Aggression,
-            GW::Constants::SkillID::Charging_Spirit,
-            GW::Constants::SkillID::Powder_Keg_Explosion,
-            GW::Constants::SkillID::Unstable_Ooze_Explosion,
-            GW::Constants::SkillID::Golem_Shrapnel,
-            GW::Constants::SkillID::Crystal_Snare,
-            GW::Constants::SkillID::Paranoid_Indignation,
-            GW::Constants::SkillID::Searing_Breath,
-            GW::Constants::SkillID::Call_of_Destruction,
-            GW::Constants::SkillID::Flame_Jet,
-            GW::Constants::SkillID::Lava_Ground,
-            GW::Constants::SkillID::Lava_Wave,
-            GW::Constants::SkillID::Lava_Blast,
-            GW::Constants::SkillID::Thunderfist_Strike,
-            GW::Constants::SkillID::Murakais_Consumption,
-            GW::Constants::SkillID::Murakais_Censure,
-            GW::Constants::SkillID::Filthy_Explosion,
-            GW::Constants::SkillID::Murakais_Call,
-            GW::Constants::SkillID::Enraged_Blast,
-            GW::Constants::SkillID::Fungal_Explosion,
-            GW::Constants::SkillID::Bear_Form,
-            GW::Constants::SkillID::Tongue_Lash,
-            GW::Constants::SkillID::Soulrending_Shriek,
-            GW::Constants::SkillID::Reverse_Polarity_Fire_Shield,
-            GW::Constants::SkillID::Forgewights_Blessing,
-            GW::Constants::SkillID::Selvetarms_Blessing,
-            GW::Constants::SkillID::Thommiss_Blessing,
-            GW::Constants::SkillID::Tongue_Whip,
-            GW::Constants::SkillID::Reactor_Blast,
-            GW::Constants::SkillID::Reactor_Blast_Timer,
-            GW::Constants::SkillID::Internal_Power_Engaged,
-            GW::Constants::SkillID::Target_Acquisition,
-            GW::Constants::SkillID::NOX_Beam,
-            GW::Constants::SkillID::NOX_Field_Dash,
-            GW::Constants::SkillID::NOXion_Buster,
-            GW::Constants::SkillID::Countdown,
-            GW::Constants::SkillID::Bit_Golem_Breaker,
-            GW::Constants::SkillID::Bit_Golem_Rectifier,
-            GW::Constants::SkillID::Bit_Golem_Crash,
-            GW::Constants::SkillID::Bit_Golem_Force,
-            (GW::Constants::SkillID)1915,
-            GW::Constants::SkillID::NOX_Phantom,
-            GW::Constants::SkillID::NOX_Thunder,
-            GW::Constants::SkillID::NOX_Lock_On,
-            GW::Constants::SkillID::NOX_Fire,
-            GW::Constants::SkillID::NOX_Knuckle,
-            GW::Constants::SkillID::NOX_Divider_Drive,
-            GW::Constants::SkillID::Theres_not_enough_time,
-            GW::Constants::SkillID::Keirans_Sniper_Shot,
-            GW::Constants::SkillID::Falken_Punch,
-            GW::Constants::SkillID::Drunken_Stumbling,
-            GW::Constants::SkillID::Koros_Gaze,
-            GW::Constants::SkillID::Adoration,
-            GW::Constants::SkillID::Isaiahs_Balance,
-            GW::Constants::SkillID::Toriimos_Burning_Fury,
-            GW::Constants::SkillID::Promise_of_Death,
-            GW::Constants::SkillID::Withering_Blade,
-            GW::Constants::SkillID::Deaths_Embrace,
-            GW::Constants::SkillID::Venom_Fang,
-            GW::Constants::SkillID::Survivors_Will,
-            GW::Constants::SkillID::Charm_Animal_Ashlyn_Spiderfriend,
-            GW::Constants::SkillID::Charm_Animal_Charr_Demolisher,
-            GW::Constants::SkillID::Charm_Animal_White_Mantle,
-            GW::Constants::SkillID::Charm_Animal_monster,
-            GW::Constants::SkillID::Charm_Animal_monster1,
-            GW::Constants::SkillID::Charm_Animal1,
-            GW::Constants::SkillID::Charm_Animal2,
-            (GW::Constants::SkillID)1868, // Monster charm animal
-            (GW::Constants::SkillID)1869, // Monster charm animal
-            (GW::Constants::SkillID)1870, // Monster charm animal
-            (GW::Constants::SkillID)1906, // Monster charm animal
-            (GW::Constants::SkillID)1907, // Monster charm animal
-            (GW::Constants::SkillID)1908, // Monster charm animal
-            (GW::Constants::SkillID)1909, // Monster charm animal
-            GW::Constants::SkillID::Ehzah_from_Above,
-            GW::Constants::SkillID::Rise_From_Your_Grave,
-            GW::Constants::SkillID::Resurrect_monster_skill,
-            GW::Constants::SkillID::Charm_Animal_monster_skill,
-            GW::Constants::SkillID::Phase_Shield_monster_skill,
-            GW::Constants::SkillID::Phase_Shield_effect,
-            GW::Constants::SkillID::Vitality_Transfer,
-            GW::Constants::SkillID::Restore_Life_monster_skill,
-            GW::Constants::SkillID::Splinter_Shot_monster_skill,
-            GW::Constants::SkillID::Junundu_Tunnel_monster_skill,
-            GW::Constants::SkillID::Vital_Blessing_monster_skill,
-            GW::Constants::SkillID::Snowball_NPC,
-            GW::Constants::SkillID::Veratas_Promise,
-            GW::Constants::SkillID::Ebon_Vanguard_Assassin_Support_NPC,
-            GW::Constants::SkillID::Ebon_Vanguard_Battle_Standard_of_Power,
-            GW::Constants::SkillID::Diamondshard_Mist,
-            GW::Constants::SkillID::Diamondshard_Mist_environment_effect,
-            GW::Constants::SkillID::Diamondshard_Grave,
-            GW::Constants::SkillID::Dhuums_Rest_Reaper_skill,
-            GW::Constants::SkillID::Ghostly_Fury_Reaper_skill,
-            GW::Constants::SkillID::Spiritual_Healing_Reaper_skill,
-            GW::Constants::SkillID::Golem_Pilebunker,
-            GW::Constants::SkillID::Putrid_Flames,
-            GW::Constants::SkillID::Whirling_Fires,
-            GW::Constants::SkillID::Wave_of_Torment,
-            GW::Constants::SkillID::REMOVE_Queen_Wail,
-            GW::Constants::SkillID::Queen_Wail,
-            GW::Constants::SkillID::REMOVE_Queen_Armor,
-            GW::Constants::SkillID::Queen_Armor,
-            GW::Constants::SkillID::Queen_Heal,
-            GW::Constants::SkillID::Queen_Bite,
-            GW::Constants::SkillID::Queen_Thump,
-            GW::Constants::SkillID::Queen_Siege,
-            GW::Constants::SkillID::Infernal_Rage,
-            GW::Constants::SkillID::Flame_Call,
-            GW::Constants::SkillID::Skin_of_Stone,
-            GW::Constants::SkillID::From_Hell,
-            GW::Constants::SkillID::Feeding_Frenzy_skill,
-            GW::Constants::SkillID::Frost_Vortex,
-            GW::Constants::SkillID::Earth_Vortex,
-            GW::Constants::SkillID::Enemies_Must_Die,
-            GW::Constants::SkillID::Enchantment_Collapse,
-            GW::Constants::SkillID::Call_of_Sacrifice,
-            GW::Constants::SkillID::Corrupted_Strength,
-            GW::Constants::SkillID::Corrupted_Roots,
-            GW::Constants::SkillID::Corrupted_Healing,
-            GW::Constants::SkillID::Caltrops_monster,
-            GW::Constants::SkillID::Call_to_the_Torment,
-            GW::Constants::SkillID::Abaddons_Favor,
-            GW::Constants::SkillID::Abaddons_Chosen,
-            GW::Constants::SkillID::Suicide_Health,
-            GW::Constants::SkillID::Suicide_Energy,
-            GW::Constants::SkillID::Meditation_of_the_Reaper,
-            GW::Constants::SkillID::Meditation_of_the_Reaper1,
-            GW::Constants::SkillID::Corrupted_Breath,
-            GW::Constants::SkillID::Kilroy_Stonekin,
-            GW::Constants::SkillID::Janthirs_Gaze,
-            GW::Constants::SkillID::Its_Good_to_Be_King
+        constexpr static auto monster_skills_without_monster_icon = MakeFixedSet<SkillID>(
+            (SkillID)1448, // Last Rites of Torment effect
+            SkillID::Torturous_Embers,
+            SkillID::Last_Rites_of_Torment,
+            SkillID::Healing_Breeze_Agnars_Rage,
+            SkillID::Crystal_Bonds,
+            SkillID::Jagged_Crystal_Skin,
+            SkillID::Crystal_Hibernation,
+            SkillID::Life_Vortex,
+            SkillID::Soul_Vortex2,
+            (SkillID)1425,
+            (SkillID)1712,
+            (SkillID)1713,
+            (SkillID)1714,
+            SkillID::Corsairs_Net,
+            SkillID::Lose_your_Head,
+            SkillID::Wandering_Mind,
+            (SkillID)1877,
+            (SkillID)1932,
+            SkillID::Embrace_the_Pain,
+            SkillID::Earth_Shattering_Blow,
+            SkillID::Corrupt_Power,
+            SkillID::Words_of_Madness,
+            SkillID::Words_of_Madness_Qwytzylkak,
+            SkillID::Presence_of_the_Skale_Lord,
+            SkillID::The_Apocrypha_is_changing_to_another_form,
+            SkillID::Reform_Carvings,
+            SkillID::Soul_Torture,
+            SkillID::Maddened_Strike,
+            SkillID::Maddened_Stance,
+            SkillID::Kournan_Siege,
+            SkillID::Bonds_of_Torment,
+            (SkillID)1883, // Bonds of Torment passive
+            SkillID::Shadow_Smash,
+            SkillID::Banish_Enchantment,
+            SkillID::Jadoths_Storm_of_Judgment,
+            SkillID::Twisting_Jaws,
+            SkillID::Snaring_Web,
+            SkillID::Ceiling_Collapse,
+            SkillID::Wurm_Bile,
+            SkillID::Shattered_Spirit,
+            SkillID::Spirit_Roar,
+            SkillID::Unseen_Aggression,
+            SkillID::Charging_Spirit,
+            SkillID::Powder_Keg_Explosion,
+            SkillID::Unstable_Ooze_Explosion,
+            SkillID::Golem_Shrapnel,
+            SkillID::Crystal_Snare,
+            SkillID::Paranoid_Indignation,
+            SkillID::Searing_Breath,
+            SkillID::Call_of_Destruction,
+            SkillID::Flame_Jet,
+            SkillID::Lava_Ground,
+            SkillID::Lava_Wave,
+            SkillID::Lava_Blast,
+            SkillID::Thunderfist_Strike,
+            SkillID::Murakais_Consumption,
+            SkillID::Murakais_Censure,
+            SkillID::Filthy_Explosion,
+            SkillID::Murakais_Call,
+            SkillID::Enraged_Blast,
+            SkillID::Fungal_Explosion,
+            SkillID::Bear_Form,
+            SkillID::Tongue_Lash,
+            SkillID::Soulrending_Shriek,
+            SkillID::Reverse_Polarity_Fire_Shield,
+            SkillID::Forgewights_Blessing,
+            SkillID::Selvetarms_Blessing,
+            SkillID::Thommiss_Blessing,
+            SkillID::Tongue_Whip,
+            SkillID::Reactor_Blast,
+            SkillID::Reactor_Blast_Timer,
+            SkillID::Internal_Power_Engaged,
+            SkillID::Target_Acquisition,
+            SkillID::NOX_Beam,
+            SkillID::NOX_Field_Dash,
+            SkillID::NOXion_Buster,
+            SkillID::Countdown,
+            SkillID::Bit_Golem_Breaker,
+            SkillID::Bit_Golem_Rectifier,
+            SkillID::Bit_Golem_Crash,
+            SkillID::Bit_Golem_Force,
+            (SkillID)1915,
+            SkillID::NOX_Phantom,
+            SkillID::NOX_Thunder,
+            SkillID::NOX_Lock_On,
+            SkillID::NOX_Fire,
+            SkillID::NOX_Knuckle,
+            SkillID::NOX_Divider_Drive,
+            SkillID::Theres_not_enough_time,
+            SkillID::Keirans_Sniper_Shot,
+            SkillID::Falken_Punch,
+            SkillID::Drunken_Stumbling,
+            SkillID::Koros_Gaze,
+            SkillID::Adoration,
+            SkillID::Isaiahs_Balance,
+            SkillID::Toriimos_Burning_Fury,
+            SkillID::Promise_of_Death,
+            SkillID::Withering_Blade,
+            SkillID::Deaths_Embrace,
+            SkillID::Venom_Fang,
+            SkillID::Survivors_Will,
+            SkillID::Charm_Animal_Ashlyn_Spiderfriend,
+            SkillID::Charm_Animal_Charr_Demolisher,
+            SkillID::Charm_Animal_White_Mantle,
+            SkillID::Charm_Animal_monster,
+            SkillID::Charm_Animal_monster1,
+            SkillID::Charm_Animal1,
+            SkillID::Charm_Animal2,
+            (SkillID)1868, // Monster charm animal
+            (SkillID)1869, // Monster charm animal
+            (SkillID)1870, // Monster charm animal
+            (SkillID)1906, // Monster charm animal
+            (SkillID)1907, // Monster charm animal
+            (SkillID)1908, // Monster charm animal
+            (SkillID)1909, // Monster charm animal
+            SkillID::Ehzah_from_Above,
+            SkillID::Rise_From_Your_Grave,
+            SkillID::Resurrect_monster_skill,
+            SkillID::Charm_Animal_monster_skill,
+            SkillID::Phase_Shield_monster_skill,
+            SkillID::Phase_Shield_effect,
+            SkillID::Vitality_Transfer,
+            SkillID::Restore_Life_monster_skill,
+            SkillID::Splinter_Shot_monster_skill,
+            SkillID::Junundu_Tunnel_monster_skill,
+            SkillID::Vital_Blessing_monster_skill,
+            SkillID::Snowball_NPC,
+            SkillID::Veratas_Promise,
+            SkillID::Ebon_Vanguard_Assassin_Support_NPC,
+            SkillID::Ebon_Vanguard_Battle_Standard_of_Power,
+            SkillID::Diamondshard_Mist,
+            SkillID::Diamondshard_Mist_environment_effect,
+            SkillID::Diamondshard_Grave,
+            SkillID::Dhuums_Rest_Reaper_skill,
+            SkillID::Ghostly_Fury_Reaper_skill,
+            SkillID::Spiritual_Healing_Reaper_skill,
+            SkillID::Golem_Pilebunker,
+            SkillID::Putrid_Flames,
+            SkillID::Whirling_Fires,
+            SkillID::Wave_of_Torment,
+            SkillID::REMOVE_Queen_Wail,
+            SkillID::Queen_Wail,
+            SkillID::REMOVE_Queen_Armor,
+            SkillID::Queen_Armor,
+            SkillID::Queen_Heal,
+            SkillID::Queen_Bite,
+            SkillID::Queen_Thump,
+            SkillID::Queen_Siege,
+            SkillID::Infernal_Rage,
+            SkillID::Flame_Call,
+            SkillID::Skin_of_Stone,
+            SkillID::From_Hell,
+            SkillID::Feeding_Frenzy_skill,
+            SkillID::Frost_Vortex,
+            SkillID::Earth_Vortex,
+            SkillID::Enemies_Must_Die,
+            SkillID::Enchantment_Collapse,
+            SkillID::Call_of_Sacrifice,
+            SkillID::Corrupted_Strength,
+            SkillID::Corrupted_Roots,
+            SkillID::Corrupted_Healing,
+            SkillID::Caltrops_monster,
+            SkillID::Call_to_the_Torment,
+            SkillID::Abaddons_Favor,
+            SkillID::Abaddons_Chosen,
+            SkillID::Suicide_Health,
+            SkillID::Suicide_Energy,
+            SkillID::Meditation_of_the_Reaper,
+            SkillID::Meditation_of_the_Reaper1,
+            SkillID::Corrupted_Breath,
+            SkillID::Kilroy_Stonekin,
+            SkillID::Janthirs_Gaze,
+            SkillID::Its_Good_to_Be_King
         );
 
-        constexpr static auto non_monster_skills_with_monster_icon = MakeFixedSet<GW::Constants::SkillID>(
-            GW::Constants::SkillID::Spectral_Agony_Saul_DAlessio,
-            GW::Constants::SkillID::Burden_Totem,
-            GW::Constants::SkillID::Splinter_Mine_skill,
-            GW::Constants::SkillID::Entanglement
+        constexpr static auto non_monster_skills_with_monster_icon = MakeFixedSet<SkillID>(
+            SkillID::Spectral_Agony_Saul_DAlessio,
+            SkillID::Burden_Totem,
+            SkillID::Splinter_Mine_skill,
+            SkillID::Entanglement
         );
 
         const auto skill_id = skill.skill_id;
@@ -2078,7 +2078,7 @@ namespace HerosInsight
         // Hardcoded cases
         switch (cskill.skill_id)
         {
-            case GW::Constants::SkillID::Unseen_Fury:
+            case SkillID::Unseen_Fury:
             {
                 pd.type = ParsedSkillData::Type::Blind;
                 pd.param = {3, 10};
@@ -2089,9 +2089,9 @@ namespace HerosInsight
                 return;
             }
 
-            case GW::Constants::SkillID::Ursan_Roar_Blood_Washes_Blood:
+            case SkillID::Ursan_Roar_Blood_Washes_Blood:
                 pd.param = {4, 4};
-            case GW::Constants::SkillID::Ursan_Roar:
+            case SkillID::Ursan_Roar:
             {
                 if (!pd.param)
                     pd.param = {2, 5};
@@ -2104,7 +2104,7 @@ namespace HerosInsight
                 return;
             }
 
-            case GW::Constants::SkillID::Ash_Blast:
+            case SkillID::Ash_Blast:
             {
                 pd.type = ParsedSkillData::Type::Damage;
                 pd.damage_type = DamageType::Earth;
@@ -2120,7 +2120,7 @@ namespace HerosInsight
                 return;
             }
 
-            case GW::Constants::SkillID::Crippling_Victory: // Has weird formatting for a skill which applies a condition
+            case SkillID::Crippling_Victory: // Has weird formatting for a skill which applies a condition
             {
                 pd.type = ParsedSkillData::Type::Crippled;
                 pd.param = {3, 8};
@@ -2132,7 +2132,7 @@ namespace HerosInsight
                 return;
             }
 
-            case GW::Constants::SkillID::Hungers_Bite:
+            case SkillID::Hungers_Bite:
             {
                 pd.type = ParsedSkillData::Type::HealthSteal;
                 pd.param = 30;
@@ -2315,22 +2315,22 @@ namespace HerosInsight
         }
     }
 
-    GW::Constants::SkillID ParsedSkillData::GetCondition() const
+    SkillID ParsedSkillData::GetCondition() const
     {
         // clang-format off
         switch (type) {
-            case Type::Bleeding:     return GW::Constants::SkillID::Bleeding;
-            case Type::Blind:        return GW::Constants::SkillID::Blind;
-            case Type::Burning:      return GW::Constants::SkillID::Burning;
-            case Type::CrackedArmor: return GW::Constants::SkillID::Cracked_Armor;
-            case Type::Crippled:     return GW::Constants::SkillID::Crippled;
-            case Type::Dazed:        return GW::Constants::SkillID::Dazed;
-            case Type::DeepWound:    return GW::Constants::SkillID::Deep_Wound;
-            case Type::Disease:      return GW::Constants::SkillID::Disease;
-            case Type::Poison:       return GW::Constants::SkillID::Poison;
-            case Type::Weakness:     return GW::Constants::SkillID::Weakness;
+            case Type::Bleeding:     return SkillID::Bleeding;
+            case Type::Blind:        return SkillID::Blind;
+            case Type::Burning:      return SkillID::Burning;
+            case Type::CrackedArmor: return SkillID::Cracked_Armor;
+            case Type::Crippled:     return SkillID::Crippled;
+            case Type::Dazed:        return SkillID::Dazed;
+            case Type::DeepWound:    return SkillID::Deep_Wound;
+            case Type::Disease:      return SkillID::Disease;
+            case Type::Poison:       return SkillID::Poison;
+            case Type::Weakness:     return SkillID::Weakness;
             
-            default:                 return GW::Constants::SkillID::No_Skill;
+            default:                 return SkillID::No_Skill;
         }
         // clang-format on
     }
@@ -2440,7 +2440,7 @@ namespace HerosInsight
             return custom_skill_datas;
         }
 
-        CustomSkillData &GetCustomSkillData(GW::Constants::SkillID skill_id)
+        CustomSkillData &GetCustomSkillData(SkillID skill_id)
         {
             assert((uint32_t)skill_id < GW::Constants::SkillMax);
             return custom_skill_datas[(uint32_t)skill_id];
@@ -2457,8 +2457,8 @@ namespace HerosInsight
         // Special cases
         switch (cskill.skill_id)
         {
-            case GW::Constants::SkillID::Pious_Assault:
-            case GW::Constants::SkillID::Pious_Assault_PvP:
+            case SkillID::Pious_Assault:
+            case SkillID::Pious_Assault_PvP:
                 return {0, 0};
             default:
             {
@@ -2468,7 +2468,7 @@ namespace HerosInsight
                 }
 
                 if (!base_duration.IsNull() &&
-                    cskill.skill->type == GW::Constants::SkillType::Attack)
+                    cskill.skill->type == SkillType::Attack)
                 {
                     auto desc = Text::GetTextProvider(GW::Constants::Language::English).GetRawDescription(cskill.skill_id, true);
                     if (desc.contains("nock"))
@@ -2513,18 +2513,18 @@ namespace HerosInsight
         // Ignored skill types
         switch (skill.type)
         {
-            case GW::Constants::SkillType::Well:
-            case GW::Constants::SkillType::Ward:
-            case GW::Constants::SkillType::Trap:
-            case GW::Constants::SkillType::Ritual:
-            case GW::Constants::SkillType::Condition:
-            case GW::Constants::SkillType::Bounty:
-            case GW::Constants::SkillType::Disguise:
-            case GW::Constants::SkillType::Scroll:
-            case GW::Constants::SkillType::Environmental:
-            case GW::Constants::SkillType::EnvironmentalTrap:
-            case GW::Constants::SkillType::Passive:
-            case GW::Constants::SkillType::Title:
+            case SkillType::Well:
+            case SkillType::Ward:
+            case SkillType::Trap:
+            case SkillType::Ritual:
+            case SkillType::Condition:
+            case SkillType::Bounty:
+            case SkillType::Disguise:
+            case SkillType::Scroll:
+            case SkillType::Environmental:
+            case SkillType::EnvironmentalTrap:
+            case SkillType::Passive:
+            case SkillType::Title:
                 return;
         }
 
@@ -2602,43 +2602,43 @@ namespace HerosInsight
             switch (skill_id) // CONDITIONS
             {
                 // Skills inflicting initial conditions on foes around target
-                case GW::Constants::SkillID::Youre_All_Alone:
-                case GW::Constants::SkillID::Throw_Dirt:
-                case GW::Constants::SkillID::Barbed_Signet:
-                case GW::Constants::SkillID::Oppressive_Gaze:
-                case GW::Constants::SkillID::Enfeebling_Blood:
-                case GW::Constants::SkillID::Enfeebling_Blood_PvP:
-                case GW::Constants::SkillID::Weaken_Armor:
-                case GW::Constants::SkillID::Signet_of_Weariness:
-                case GW::Constants::SkillID::Ride_the_Lightning:
-                case (GW::Constants::SkillID)2807: // Ride the lightning (PvP)
-                case GW::Constants::SkillID::Blinding_Surge:
-                case GW::Constants::SkillID::Blinding_Surge_PvP:
-                case GW::Constants::SkillID::Thunderclap:
-                case GW::Constants::SkillID::Lightning_Touch:
-                case GW::Constants::SkillID::Teinais_Crystals:
-                case GW::Constants::SkillID::Eruption:
-                case GW::Constants::SkillID::Mind_Burn:
-                case GW::Constants::SkillID::UNUSED_Searing_Flames:
-                case GW::Constants::SkillID::Star_Burst:
-                case GW::Constants::SkillID::Burning_Speed:
-                case GW::Constants::SkillID::Searing_Flames:
-                case GW::Constants::SkillID::Rodgorts_Invocation:
-                case GW::Constants::SkillID::Caltrops:
-                case GW::Constants::SkillID::Blinding_Powder:
-                case GW::Constants::SkillID::Unseen_Fury: // Only stance that applies a condition on activation
-                case GW::Constants::SkillID::Holy_Spear:
-                case GW::Constants::SkillID::Finish_Him:
-                case GW::Constants::SkillID::You_Are_All_Weaklings:
-                case GW::Constants::SkillID::You_Move_Like_a_Dwarf:
-                case GW::Constants::SkillID::Maddening_Laughter:
-                case GW::Constants::SkillID::Queen_Wail:
-                case GW::Constants::SkillID::REMOVE_Queen_Wail:
-                case GW::Constants::SkillID::Raven_Shriek:
-                case GW::Constants::SkillID::Raven_Shriek_A_Gate_Too_Far:
-                case GW::Constants::SkillID::Ursan_Roar:
-                case GW::Constants::SkillID::Ursan_Roar_Blood_Washes_Blood:
-                case GW::Constants::SkillID::Armor_of_Sanctity:
+                case SkillID::Youre_All_Alone:
+                case SkillID::Throw_Dirt:
+                case SkillID::Barbed_Signet:
+                case SkillID::Oppressive_Gaze:
+                case SkillID::Enfeebling_Blood:
+                case SkillID::Enfeebling_Blood_PvP:
+                case SkillID::Weaken_Armor:
+                case SkillID::Signet_of_Weariness:
+                case SkillID::Ride_the_Lightning:
+                case (SkillID)2807: // Ride the lightning (PvP)
+                case SkillID::Blinding_Surge:
+                case SkillID::Blinding_Surge_PvP:
+                case SkillID::Thunderclap:
+                case SkillID::Lightning_Touch:
+                case SkillID::Teinais_Crystals:
+                case SkillID::Eruption:
+                case SkillID::Mind_Burn:
+                case SkillID::UNUSED_Searing_Flames:
+                case SkillID::Star_Burst:
+                case SkillID::Burning_Speed:
+                case SkillID::Searing_Flames:
+                case SkillID::Rodgorts_Invocation:
+                case SkillID::Caltrops:
+                case SkillID::Blinding_Powder:
+                case SkillID::Unseen_Fury: // Only stance that applies a condition on activation
+                case SkillID::Holy_Spear:
+                case SkillID::Finish_Him:
+                case SkillID::You_Are_All_Weaklings:
+                case SkillID::You_Move_Like_a_Dwarf:
+                case SkillID::Maddening_Laughter:
+                case SkillID::Queen_Wail:
+                case SkillID::REMOVE_Queen_Wail:
+                case SkillID::Raven_Shriek:
+                case SkillID::Raven_Shriek_A_Gate_Too_Far:
+                case SkillID::Ursan_Roar:
+                case SkillID::Ursan_Roar_Blood_Washes_Blood:
+                case SkillID::Armor_of_Sanctity:
                 {
                     effect.mask = EffectMask::Foes;
                     effect.location = EffectLocation::Target;
@@ -2649,14 +2649,14 @@ namespace HerosInsight
                 }
 
                 // Skills inflicting condition on self
-                case GW::Constants::SkillID::Headbutt:
-                case GW::Constants::SkillID::Signet_of_Agony:
-                case GW::Constants::SkillID::Signet_of_Agony_PvP:
-                case GW::Constants::SkillID::Blood_Drinker:
-                case GW::Constants::SkillID::Chilblains:
-                case GW::Constants::SkillID::Shadow_Sanctuary_kurzick:
-                case GW::Constants::SkillID::Shadow_Sanctuary_luxon:
-                case GW::Constants::SkillID::Wearying_Spear:
+                case SkillID::Headbutt:
+                case SkillID::Signet_of_Agony:
+                case SkillID::Signet_of_Agony_PvP:
+                case SkillID::Blood_Drinker:
+                case SkillID::Chilblains:
+                case SkillID::Shadow_Sanctuary_kurzick:
+                case SkillID::Shadow_Sanctuary_luxon:
+                case SkillID::Wearying_Spear:
                 {
                     effect.mask = EffectMask::Caster;
                     effect.location = EffectLocation::Caster;
@@ -2665,40 +2665,40 @@ namespace HerosInsight
                     return;
                 }
 
-                case GW::Constants::SkillID::Signet_of_Suffering:
+                case SkillID::Signet_of_Suffering:
                 {
                     effect.mask = EffectMask::Caster;
                     effect.location = EffectLocation::Caster;
-                    effect.skill_id_or_removal = GW::Constants::SkillID::Bleeding;
+                    effect.skill_id_or_removal = SkillID::Bleeding;
                     effect.duration_or_count = {6, 6};
                     cskill.init_effects.push_back(effect);
                 }
 
-                case GW::Constants::SkillID::Shockwave:
+                case SkillID::Shockwave:
                 {
                     effect.mask = EffectMask::Foes;
                     effect.location = EffectLocation::Caster;
                     effect.duration_or_count = {1, 10};
 
                     effect.radius = Utils::Range::Nearby;
-                    effect.skill_id_or_removal = GW::Constants::SkillID::Cracked_Armor;
+                    effect.skill_id_or_removal = SkillID::Cracked_Armor;
                     cskill.init_effects.push_back(effect);
 
                     effect.radius = Utils::Range::InTheArea;
-                    effect.skill_id_or_removal = GW::Constants::SkillID::Weakness;
+                    effect.skill_id_or_removal = SkillID::Weakness;
                     cskill.init_effects.push_back(effect);
 
                     effect.radius = Utils::Range::Adjacent;
-                    effect.skill_id_or_removal = GW::Constants::SkillID::Blind;
+                    effect.skill_id_or_removal = SkillID::Blind;
                     cskill.init_effects.push_back(effect);
                     return;
                 }
 
-                case GW::Constants::SkillID::Stone_Sheath:
+                case SkillID::Stone_Sheath:
                 {
                     effect.mask = EffectMask::Foes;
                     effect.radius = Utils::Range::Nearby;
-                    effect.skill_id_or_removal = GW::Constants::SkillID::Weakness;
+                    effect.skill_id_or_removal = SkillID::Weakness;
                     effect.duration_or_count = {5, 20};
 
                     effect.location = EffectLocation::Caster;
@@ -2709,7 +2709,7 @@ namespace HerosInsight
                     return;
                 }
 
-                case GW::Constants::SkillID::Poisoned_Heart:
+                case SkillID::Poisoned_Heart:
                 {
                     effect.mask = EffectMask::Foes | EffectMask::Caster;
                     effect.location = EffectLocation::Caster;
@@ -2719,7 +2719,7 @@ namespace HerosInsight
                     return;
                 }
 
-                case GW::Constants::SkillID::Earthen_Shackles:
+                case SkillID::Earthen_Shackles:
                 {
                     effect.mask = EffectMask::Foes;
                     effect.location = EffectLocation::Target;
@@ -2727,10 +2727,10 @@ namespace HerosInsight
                     MakeAndPushEffect(cskill.end_effects, conditions);
                 }
 
-                case GW::Constants::SkillID::Signet_of_Midnight:
+                case SkillID::Signet_of_Midnight:
                 {
                     effect.mask = EffectMask::Foes | EffectMask::Caster;
-                    effect.skill_id_or_removal = GW::Constants::SkillID::Blind;
+                    effect.skill_id_or_removal = SkillID::Blind;
 
                     effect.location = EffectLocation::Caster;
                     cskill.init_effects.push_back(effect);
@@ -2741,8 +2741,8 @@ namespace HerosInsight
                 }
 
                 // Conditions on foes around caster
-                case GW::Constants::SkillID::Return:
-                case GW::Constants::SkillID::Vipers_Defense:
+                case SkillID::Return:
+                case SkillID::Vipers_Defense:
                 {
                     effect.mask = EffectMask::Foes;
                     effect.location = EffectLocation::Caster;
@@ -2752,7 +2752,7 @@ namespace HerosInsight
                 }
 
                 // Conditions on foes around spirit-ally closest to target
-                case GW::Constants::SkillID::Rupture_Soul:
+                case SkillID::Rupture_Soul:
                 {
                     effect.mask = EffectMask::Foes;
                     effect.location = EffectLocation::SpiritAllyClosestToTarget;
@@ -2762,60 +2762,60 @@ namespace HerosInsight
                 }
 
                 // Discards / Handled elsewhere
-                case GW::Constants::SkillID::Swift_Chop:
-                case GW::Constants::SkillID::Seeking_Blade:
-                case GW::Constants::SkillID::Drunken_Blow:     // We discard this because of randomness
-                case GW::Constants::SkillID::Desperation_Blow: // We discard this because of randomness
-                case GW::Constants::SkillID::Hungers_Bite:     // We discard this because of randomness
-                case GW::Constants::SkillID::Deflect_Arrows:
-                case GW::Constants::SkillID::Strike_as_One:
-                case GW::Constants::SkillID::Putrid_Flesh:
-                case GW::Constants::SkillID::Necrotic_Traversal:
-                case GW::Constants::SkillID::Ulcerous_Lungs:
-                case GW::Constants::SkillID::Fevered_Dreams:
-                case GW::Constants::SkillID::Ineptitude:
-                case GW::Constants::SkillID::Illusion_of_Haste:
-                case GW::Constants::SkillID::Illusion_of_Haste_PvP:
-                case GW::Constants::SkillID::Double_Dragon:
-                case GW::Constants::SkillID::Elemental_Flame:
-                case GW::Constants::SkillID::Elemental_Flame_PvP:
-                case GW::Constants::SkillID::Mark_of_Rodgort:
-                case GW::Constants::SkillID::Bed_of_Coals:
-                case GW::Constants::SkillID::Searing_Heat:
-                case GW::Constants::SkillID::Augury_of_Death:
-                case GW::Constants::SkillID::Shadow_Fang:
-                case GW::Constants::SkillID::UNUSED_Hidden_Caltrops:
-                case GW::Constants::SkillID::Hidden_Caltrops:
-                case GW::Constants::SkillID::Smoke_Powder_Defense:
-                case GW::Constants::SkillID::Sharpen_Daggers:
-                case GW::Constants::SkillID::Shadowsong:
-                case GW::Constants::SkillID::Shadowsong_Master_Riyo:
-                case GW::Constants::SkillID::Shadowsong_PvP:
-                case GW::Constants::SkillID::Sundering_Weapon:
-                case GW::Constants::SkillID::Blind_Was_Mingson:
-                case GW::Constants::SkillID::Weapon_of_Shadow:
-                case GW::Constants::SkillID::Spirit_Rift:
-                case GW::Constants::SkillID::UNUSED_Anthem_of_Weariness:
-                case GW::Constants::SkillID::Anthem_of_Weariness:
-                case GW::Constants::SkillID::Crippling_Anthem:
-                case GW::Constants::SkillID::Find_Their_Weakness:
-                case GW::Constants::SkillID::Find_Their_Weakness_PvP:
-                case GW::Constants::SkillID::Find_Their_Weakness_Thackeray:
-                case GW::Constants::SkillID::Anthem_of_Flame:
-                case GW::Constants::SkillID::Blazing_Finale:
-                case GW::Constants::SkillID::Blazing_Finale_PvP:
-                case GW::Constants::SkillID::Burning_Refrain:
-                case GW::Constants::SkillID::Burning_Shield:
-                case GW::Constants::SkillID::Cautery_Signet:
-                case GW::Constants::SkillID::Wearying_Strike:
-                case GW::Constants::SkillID::Grenths_Grasp:
-                case GW::Constants::SkillID::REMOVE_Wind_Prayers_skill:
-                case GW::Constants::SkillID::Attackers_Insight:
-                case GW::Constants::SkillID::Rending_Aura:
-                case GW::Constants::SkillID::Signet_of_Pious_Restraint:
-                case GW::Constants::SkillID::Test_of_Faith:
-                case GW::Constants::SkillID::Ebon_Dust_Aura_PvP:
-                case GW::Constants::SkillID::Shield_of_Force:
+                case SkillID::Swift_Chop:
+                case SkillID::Seeking_Blade:
+                case SkillID::Drunken_Blow:     // We discard this because of randomness
+                case SkillID::Desperation_Blow: // We discard this because of randomness
+                case SkillID::Hungers_Bite:     // We discard this because of randomness
+                case SkillID::Deflect_Arrows:
+                case SkillID::Strike_as_One:
+                case SkillID::Putrid_Flesh:
+                case SkillID::Necrotic_Traversal:
+                case SkillID::Ulcerous_Lungs:
+                case SkillID::Fevered_Dreams:
+                case SkillID::Ineptitude:
+                case SkillID::Illusion_of_Haste:
+                case SkillID::Illusion_of_Haste_PvP:
+                case SkillID::Double_Dragon:
+                case SkillID::Elemental_Flame:
+                case SkillID::Elemental_Flame_PvP:
+                case SkillID::Mark_of_Rodgort:
+                case SkillID::Bed_of_Coals:
+                case SkillID::Searing_Heat:
+                case SkillID::Augury_of_Death:
+                case SkillID::Shadow_Fang:
+                case SkillID::UNUSED_Hidden_Caltrops:
+                case SkillID::Hidden_Caltrops:
+                case SkillID::Smoke_Powder_Defense:
+                case SkillID::Sharpen_Daggers:
+                case SkillID::Shadowsong:
+                case SkillID::Shadowsong_Master_Riyo:
+                case SkillID::Shadowsong_PvP:
+                case SkillID::Sundering_Weapon:
+                case SkillID::Blind_Was_Mingson:
+                case SkillID::Weapon_of_Shadow:
+                case SkillID::Spirit_Rift:
+                case SkillID::UNUSED_Anthem_of_Weariness:
+                case SkillID::Anthem_of_Weariness:
+                case SkillID::Crippling_Anthem:
+                case SkillID::Find_Their_Weakness:
+                case SkillID::Find_Their_Weakness_PvP:
+                case SkillID::Find_Their_Weakness_Thackeray:
+                case SkillID::Anthem_of_Flame:
+                case SkillID::Blazing_Finale:
+                case SkillID::Blazing_Finale_PvP:
+                case SkillID::Burning_Refrain:
+                case SkillID::Burning_Shield:
+                case SkillID::Cautery_Signet:
+                case SkillID::Wearying_Strike:
+                case SkillID::Grenths_Grasp:
+                case SkillID::REMOVE_Wind_Prayers_skill:
+                case SkillID::Attackers_Insight:
+                case SkillID::Rending_Aura:
+                case SkillID::Signet_of_Pious_Restraint:
+                case SkillID::Test_of_Faith:
+                case SkillID::Ebon_Dust_Aura_PvP:
+                case SkillID::Shield_of_Force:
                     return;
 
                 default:
@@ -2835,22 +2835,22 @@ namespace HerosInsight
 
                     switch (skill.type)
                     {
-                        case GW::Constants::SkillType::Enchantment:
-                        case GW::Constants::SkillType::PetAttack:
-                        case GW::Constants::SkillType::Preparation:
-                        case GW::Constants::SkillType::Glyph:
-                        case GW::Constants::SkillType::Form:
-                        case GW::Constants::SkillType::Well:
-                        case GW::Constants::SkillType::Ward:
+                        case SkillType::Enchantment:
+                        case SkillType::PetAttack:
+                        case SkillType::Preparation:
+                        case SkillType::Glyph:
+                        case SkillType::Form:
+                        case SkillType::Well:
+                        case SkillType::Ward:
                             return;
                     }
 
-                    if (skill.type == GW::Constants::SkillType::Attack ||
-                        skill.type == GW::Constants::SkillType::Spell ||
-                        skill.type == GW::Constants::SkillType::Hex ||
-                        skill.type == GW::Constants::SkillType::Signet ||
-                        skill.type == GW::Constants::SkillType::Skill ||
-                        skill.type == GW::Constants::SkillType::Skill2 ||
+                    if (skill.type == SkillType::Attack ||
+                        skill.type == SkillType::Spell ||
+                        skill.type == SkillType::Hex ||
+                        skill.type == SkillType::Signet ||
+                        skill.type == SkillType::Skill ||
+                        skill.type == SkillType::Skill2 ||
                         skill.special & (uint32_t)Utils::SkillSpecialFlags::Touch)
                     {
                         effect.location = EffectLocation::Target;
@@ -2872,10 +2872,10 @@ namespace HerosInsight
             switch (skill_id) // DURATIONAL SKILLS
             {
                 // Skills affecting both caster and pet
-                case GW::Constants::SkillID::Never_Rampage_Alone:
-                case GW::Constants::SkillID::Run_as_One:
-                case GW::Constants::SkillID::Rampage_as_One:
-                case GW::Constants::SkillID::Strike_as_One:
+                case SkillID::Never_Rampage_Alone:
+                case SkillID::Run_as_One:
+                case SkillID::Rampage_as_One:
+                case SkillID::Strike_as_One:
                 {
                     effect.mask = EffectMask::CasterAndPet;
                     effect.location = EffectLocation::Null;
@@ -2885,33 +2885,33 @@ namespace HerosInsight
                 }
 
                 // Affects allies
-                case GW::Constants::SkillID::Dwaynas_Sorrow:
+                case SkillID::Dwaynas_Sorrow:
                     effect.radius = Utils::Range::Nearby;
-                case GW::Constants::SkillID::Charge:
-                case GW::Constants::SkillID::Storm_of_Swords:
-                case GW::Constants::SkillID::Cant_Touch_This:
-                case GW::Constants::SkillID::Fall_Back:
-                case GW::Constants::SkillID::Fall_Back_PvP:
-                case GW::Constants::SkillID::Go_for_the_Eyes:
-                case GW::Constants::SkillID::Go_for_the_Eyes_PvP:
-                case GW::Constants::SkillID::Godspeed:
-                case GW::Constants::SkillID::The_Power_Is_Yours:
-                case GW::Constants::SkillID::Angelic_Bond:
-                case GW::Constants::SkillID::Its_Good_to_Be_King:
-                case GW::Constants::SkillID::Advance:
-                case GW::Constants::SkillID::Song_of_the_Mists:
-                case GW::Constants::SkillID::Enemies_Must_Die:
-                case GW::Constants::SkillID::Rands_Attack:
-                case GW::Constants::SkillID::Lets_Get_Em:
-                case GW::Constants::SkillID::Cry_of_Madness:
-                case GW::Constants::SkillID::Ursan_Roar:
-                case GW::Constants::SkillID::Ursan_Roar_Blood_Washes_Blood:
-                case GW::Constants::SkillID::Volfen_Bloodlust:
-                case GW::Constants::SkillID::Volfen_Bloodlust_Curse_of_the_Nornbear:
-                case GW::Constants::SkillID::Theres_Nothing_to_Fear_Thackeray:
-                case GW::Constants::SkillID::Natures_Blessing:
-                case GW::Constants::SkillID::For_Elona:
-                case GW::Constants::SkillID::Form_Up_and_Advance:
+                case SkillID::Charge:
+                case SkillID::Storm_of_Swords:
+                case SkillID::Cant_Touch_This:
+                case SkillID::Fall_Back:
+                case SkillID::Fall_Back_PvP:
+                case SkillID::Go_for_the_Eyes:
+                case SkillID::Go_for_the_Eyes_PvP:
+                case SkillID::Godspeed:
+                case SkillID::The_Power_Is_Yours:
+                case SkillID::Angelic_Bond:
+                case SkillID::Its_Good_to_Be_King:
+                case SkillID::Advance:
+                case SkillID::Song_of_the_Mists:
+                case SkillID::Enemies_Must_Die:
+                case SkillID::Rands_Attack:
+                case SkillID::Lets_Get_Em:
+                case SkillID::Cry_of_Madness:
+                case SkillID::Ursan_Roar:
+                case SkillID::Ursan_Roar_Blood_Washes_Blood:
+                case SkillID::Volfen_Bloodlust:
+                case SkillID::Volfen_Bloodlust_Curse_of_the_Nornbear:
+                case SkillID::Theres_Nothing_to_Fear_Thackeray:
+                case SkillID::Natures_Blessing:
+                case SkillID::For_Elona:
+                case SkillID::Form_Up_and_Advance:
                 {
                     effect.mask = EffectMask::Allies;
                     effect.location = EffectLocation::Target;
@@ -2921,8 +2921,8 @@ namespace HerosInsight
                     return;
                 }
 
-                case GW::Constants::SkillID::Save_Yourselves_kurzick:
-                case GW::Constants::SkillID::Save_Yourselves_luxon:
+                case SkillID::Save_Yourselves_kurzick:
+                case SkillID::Save_Yourselves_luxon:
                 {
                     effect.mask = EffectMask::OtherPartyMembers;
                     effect.location = EffectLocation::Caster;
@@ -2932,49 +2932,49 @@ namespace HerosInsight
                 }
 
                 // AOE hexes
-                case GW::Constants::SkillID::Parasitic_Bite:
-                case GW::Constants::SkillID::Scourge_Sacrifice:
-                case GW::Constants::SkillID::Life_Transfer:
-                case GW::Constants::SkillID::Blood_Bond:
-                case GW::Constants::SkillID::Lingering_Curse:
-                case GW::Constants::SkillID::Suffering:
-                case GW::Constants::SkillID::Reckless_Haste:
-                case GW::Constants::SkillID::Meekness:
-                case GW::Constants::SkillID::Ulcerous_Lungs:
-                case GW::Constants::SkillID::Vocal_Minority:
-                case GW::Constants::SkillID::Shadow_of_Fear:
-                case GW::Constants::SkillID::Stolen_Speed:
-                case GW::Constants::SkillID::Stolen_Speed_PvP:
-                case GW::Constants::SkillID::Shared_Burden:
-                case GW::Constants::SkillID::Shared_Burden_PvP:
-                case GW::Constants::SkillID::Air_of_Disenchantment:
-                case GW::Constants::SkillID::Ineptitude:
-                case GW::Constants::SkillID::Arcane_Conundrum:
-                case GW::Constants::SkillID::Clumsiness:
-                case GW::Constants::SkillID::Fragility:
-                case GW::Constants::SkillID::Soothing_Images:
-                case GW::Constants::SkillID::Visions_of_Regret:
-                case GW::Constants::SkillID::Visions_of_Regret_PvP:
-                case GW::Constants::SkillID::Panic:
-                case GW::Constants::SkillID::Panic_PvP:
-                case GW::Constants::SkillID::Earthen_Shackles:
-                case GW::Constants::SkillID::Ash_Blast:
-                case GW::Constants::SkillID::Mark_of_Rodgort:
-                case GW::Constants::SkillID::Blurred_Vision:
-                case GW::Constants::SkillID::Deep_Freeze:
-                case GW::Constants::SkillID::Ice_Spikes:
-                case GW::Constants::SkillID::Rust:
-                case GW::Constants::SkillID::Binding_Chains:
-                case GW::Constants::SkillID::Dulled_Weapon:
-                case GW::Constants::SkillID::Lamentation:
-                case GW::Constants::SkillID::Painful_Bond:
-                case GW::Constants::SkillID::Isaiahs_Balance:
-                case GW::Constants::SkillID::Snaring_Web:
-                case GW::Constants::SkillID::Spirit_World_Retreat:
-                case GW::Constants::SkillID::Corsairs_Net:
-                case GW::Constants::SkillID::Crystal_Haze:
-                case GW::Constants::SkillID::Icicles:
-                case GW::Constants::SkillID::Shared_Burden_Gwen:
+                case SkillID::Parasitic_Bite:
+                case SkillID::Scourge_Sacrifice:
+                case SkillID::Life_Transfer:
+                case SkillID::Blood_Bond:
+                case SkillID::Lingering_Curse:
+                case SkillID::Suffering:
+                case SkillID::Reckless_Haste:
+                case SkillID::Meekness:
+                case SkillID::Ulcerous_Lungs:
+                case SkillID::Vocal_Minority:
+                case SkillID::Shadow_of_Fear:
+                case SkillID::Stolen_Speed:
+                case SkillID::Stolen_Speed_PvP:
+                case SkillID::Shared_Burden:
+                case SkillID::Shared_Burden_PvP:
+                case SkillID::Air_of_Disenchantment:
+                case SkillID::Ineptitude:
+                case SkillID::Arcane_Conundrum:
+                case SkillID::Clumsiness:
+                case SkillID::Fragility:
+                case SkillID::Soothing_Images:
+                case SkillID::Visions_of_Regret:
+                case SkillID::Visions_of_Regret_PvP:
+                case SkillID::Panic:
+                case SkillID::Panic_PvP:
+                case SkillID::Earthen_Shackles:
+                case SkillID::Ash_Blast:
+                case SkillID::Mark_of_Rodgort:
+                case SkillID::Blurred_Vision:
+                case SkillID::Deep_Freeze:
+                case SkillID::Ice_Spikes:
+                case SkillID::Rust:
+                case SkillID::Binding_Chains:
+                case SkillID::Dulled_Weapon:
+                case SkillID::Lamentation:
+                case SkillID::Painful_Bond:
+                case SkillID::Isaiahs_Balance:
+                case SkillID::Snaring_Web:
+                case SkillID::Spirit_World_Retreat:
+                case SkillID::Corsairs_Net:
+                case SkillID::Crystal_Haze:
+                case SkillID::Icicles:
+                case SkillID::Shared_Burden_Gwen:
                 {
                     effect.mask = EffectMask::Foes;
                     effect.location = EffectLocation::Target;
@@ -2984,12 +2984,12 @@ namespace HerosInsight
                 }
 
                 // AOE hexes around caster
-                case GW::Constants::SkillID::Amity:
-                case GW::Constants::SkillID::Grasping_Earth:
-                case GW::Constants::SkillID::Frozen_Burst:
-                case GW::Constants::SkillID::Wurm_Bile:
-                case GW::Constants::SkillID::Suicidal_Impulse:
-                case GW::Constants::SkillID::Last_Rites_of_Torment:
+                case SkillID::Amity:
+                case SkillID::Grasping_Earth:
+                case SkillID::Frozen_Burst:
+                case SkillID::Wurm_Bile:
+                case SkillID::Suicidal_Impulse:
+                case SkillID::Last_Rites_of_Torment:
                 {
                     effect.mask = EffectMask::Foes;
                     effect.location = EffectLocation::Caster;
@@ -2998,7 +2998,7 @@ namespace HerosInsight
                     return;
                 }
 
-                case GW::Constants::SkillID::Mirror_of_Ice:
+                case SkillID::Mirror_of_Ice:
                 {
                     effect.mask = EffectMask::Foes;
                     effect.radius = (Utils::Range)skill.aoe_range;
@@ -3010,31 +3010,31 @@ namespace HerosInsight
                 }
 
                 // Party wide skills
-                case GW::Constants::SkillID::Retreat:
-                case GW::Constants::SkillID::Celestial_Stance:
-                case GW::Constants::SkillID::Celestial_Haste:
-                case GW::Constants::SkillID::Order_of_the_Vampire:
-                case GW::Constants::SkillID::Order_of_Pain:
-                case GW::Constants::SkillID::Dark_Fury:
-                case GW::Constants::SkillID::Order_of_Apostasy:
+                case SkillID::Retreat:
+                case SkillID::Celestial_Stance:
+                case SkillID::Celestial_Haste:
+                case SkillID::Order_of_the_Vampire:
+                case SkillID::Order_of_Pain:
+                case SkillID::Dark_Fury:
+                case SkillID::Order_of_Apostasy:
                     effect.radius = Utils::Range::CompassRange;
-                case GW::Constants::SkillID::Shields_Up:
-                case GW::Constants::SkillID::Watch_Yourself:
-                case GW::Constants::SkillID::Watch_Yourself_PvP:
-                case GW::Constants::SkillID::Aegis:
-                case GW::Constants::SkillID::Shield_Guardian:
-                case GW::Constants::SkillID::Magnetic_Surge: // The desc is wrong: this is a party wide skill
-                case GW::Constants::SkillID::Magnetic_Aura:
-                case GW::Constants::SkillID::Swirling_Aura:
-                case GW::Constants::SkillID::Never_Surrender:
-                case GW::Constants::SkillID::Never_Surrender_PvP:
-                case GW::Constants::SkillID::Stand_Your_Ground:
-                case GW::Constants::SkillID::Stand_Your_Ground_PvP:
-                case GW::Constants::SkillID::We_Shall_Return_PvP:
-                case GW::Constants::SkillID::Theyre_on_Fire:
-                case GW::Constants::SkillID::Theres_Nothing_to_Fear:
-                case GW::Constants::SkillID::By_Urals_Hammer:
-                case GW::Constants::SkillID::Dont_Trip:
+                case SkillID::Shields_Up:
+                case SkillID::Watch_Yourself:
+                case SkillID::Watch_Yourself_PvP:
+                case SkillID::Aegis:
+                case SkillID::Shield_Guardian:
+                case SkillID::Magnetic_Surge: // The desc is wrong: this is a party wide skill
+                case SkillID::Magnetic_Aura:
+                case SkillID::Swirling_Aura:
+                case SkillID::Never_Surrender:
+                case SkillID::Never_Surrender_PvP:
+                case SkillID::Stand_Your_Ground:
+                case SkillID::Stand_Your_Ground_PvP:
+                case SkillID::We_Shall_Return_PvP:
+                case SkillID::Theyre_on_Fire:
+                case SkillID::Theres_Nothing_to_Fear:
+                case SkillID::By_Urals_Hammer:
+                case SkillID::Dont_Trip:
                 {
                     effect.mask = EffectMask::PartyMembers;
                     effect.location = EffectLocation::Caster;
@@ -3044,7 +3044,7 @@ namespace HerosInsight
                     return;
                 }
 
-                case GW::Constants::SkillID::Together_as_one:
+                case SkillID::Together_as_one:
                 {
                     effect.mask = EffectMask::PartyMembers | EffectMask::PartyPets;
                     effect.radius = Utils::Range::InTheArea;
@@ -3057,9 +3057,9 @@ namespace HerosInsight
                     return;
                 }
 
-                case GW::Constants::SkillID::Weight_of_Dhuum:
+                case SkillID::Weight_of_Dhuum:
                 {
-                    effect.skill_id_or_removal = GW::Constants::SkillID::Weight_of_Dhuum_hex;
+                    effect.skill_id_or_removal = SkillID::Weight_of_Dhuum_hex;
                     effect.mask = EffectMask::Target;
                     effect.location = EffectLocation::Target;
                     cskill.init_effects.push_back(effect);
@@ -3067,13 +3067,13 @@ namespace HerosInsight
                 }
 
                 // Discards / Handled elsewhere
-                case GW::Constants::SkillID::Arcane_Mimicry:
-                case GW::Constants::SkillID::Jaundiced_Gaze:
-                case GW::Constants::SkillID::Corrupt_Enchantment:
-                case GW::Constants::SkillID::Flurry_of_Splinters:
-                case (GW::Constants::SkillID)3001:
-                case GW::Constants::SkillID::Brutal_Mauling:
-                case GW::Constants::SkillID::Frost_Vortex:
+                case SkillID::Arcane_Mimicry:
+                case SkillID::Jaundiced_Gaze:
+                case SkillID::Corrupt_Enchantment:
+                case SkillID::Flurry_of_Splinters:
+                case (SkillID)3001:
+                case SkillID::Brutal_Mauling:
+                case SkillID::Frost_Vortex:
                     return;
 
                 default:
@@ -3086,10 +3086,10 @@ namespace HerosInsight
                     {
                         switch (skill.type)
                         {
-                            case GW::Constants::SkillType::Shout:
-                            case GW::Constants::SkillType::Skill:
-                            case GW::Constants::SkillType::Skill2:
-                            case GW::Constants::SkillType::PetAttack:
+                            case SkillType::Shout:
+                            case SkillType::Skill:
+                            case SkillType::Skill2:
+                            case SkillType::PetAttack:
                             {
                                 effect.mask = EffectMask::CastersPet;
                                 effect.location = EffectLocation::Caster;
@@ -3102,11 +3102,11 @@ namespace HerosInsight
 
                     switch (skill.type)
                     {
-                        case GW::Constants::SkillType::ItemSpell:
-                        case GW::Constants::SkillType::Preparation:
-                        case GW::Constants::SkillType::Form:
-                        case GW::Constants::SkillType::Stance:
-                        case GW::Constants::SkillType::Glyph:
+                        case SkillType::ItemSpell:
+                        case SkillType::Preparation:
+                        case SkillType::Form:
+                        case SkillType::Stance:
+                        case SkillType::Glyph:
                         {
                             effect.mask = EffectMask::Caster;
                             effect.location = EffectLocation::Caster;
@@ -3114,15 +3114,15 @@ namespace HerosInsight
                             return;
                         }
 
-                        case GW::Constants::SkillType::Shout:
-                        case GW::Constants::SkillType::Signet:
-                        case GW::Constants::SkillType::WeaponSpell:
-                        case GW::Constants::SkillType::Enchantment:
-                        case GW::Constants::SkillType::Hex:
-                        case GW::Constants::SkillType::Spell:
-                        case GW::Constants::SkillType::Skill:
-                        case GW::Constants::SkillType::Skill2:
-                        case GW::Constants::SkillType::EchoRefrain:
+                        case SkillType::Shout:
+                        case SkillType::Signet:
+                        case SkillType::WeaponSpell:
+                        case SkillType::Enchantment:
+                        case SkillType::Hex:
+                        case SkillType::Spell:
+                        case SkillType::Skill:
+                        case SkillType::Skill2:
+                        case SkillType::EchoRefrain:
                         {
                             effect.mask = EffectMask::Target;
                             effect.location = EffectLocation::Target;
@@ -3130,7 +3130,7 @@ namespace HerosInsight
                             return;
                         }
 
-                        case GW::Constants::SkillType::Chant:
+                        case SkillType::Chant:
                         {
                             auto desc = Text::GetTextProvider(GW::Constants::Language::English).GetRawDescription(skill_id, true);
 
@@ -3156,8 +3156,8 @@ namespace HerosInsight
             switch (skill_id) // REMOVALS
             {
                 // Party wide
-                case GW::Constants::SkillID::Extinguish:
-                case GW::Constants::SkillID::Star_Shine:
+                case SkillID::Extinguish:
+                case SkillID::Star_Shine:
                 {
                     effect.mask = EffectMask::PartyMembers;
                     effect.location = EffectLocation::Caster;
@@ -3167,11 +3167,11 @@ namespace HerosInsight
                 }
 
                 // AoE at target
-                case GW::Constants::SkillID::Withdraw_Hexes:
-                case GW::Constants::SkillID::Pure_Was_Li_Ming:
+                case SkillID::Withdraw_Hexes:
+                case SkillID::Pure_Was_Li_Ming:
                     effect.mask = EffectMask::Allies;
-                case GW::Constants::SkillID::Chilblains:
-                case GW::Constants::SkillID::Air_of_Disenchantment:
+                case SkillID::Chilblains:
+                case SkillID::Air_of_Disenchantment:
                 {
                     if (effect.mask == EffectMask::None)
                         effect.mask = EffectMask::Foes;
@@ -3182,9 +3182,9 @@ namespace HerosInsight
                 }
 
                 // Self removal
-                case GW::Constants::SkillID::Ether_Prodigy:
-                case GW::Constants::SkillID::Energy_Font:
-                case GW::Constants::SkillID::Second_Wind:
+                case SkillID::Ether_Prodigy:
+                case SkillID::Energy_Font:
+                case SkillID::Second_Wind:
                 {
                     effect.mask = EffectMask::Caster;
                     effect.location = EffectLocation::Caster;
@@ -3192,7 +3192,7 @@ namespace HerosInsight
                     return;
                 }
 
-                case GW::Constants::SkillID::Antidote_Signet:
+                case SkillID::Antidote_Signet:
                 {
                     effect.mask = EffectMask::Target;
                     effect.location = EffectLocation::Target;
@@ -3206,7 +3206,7 @@ namespace HerosInsight
                     return;
                 }
 
-                case GW::Constants::SkillID::Crystal_Wave:
+                case SkillID::Crystal_Wave:
                 {
                     effect.mask = EffectMask::Foes;
                     effect.location = EffectLocation::Caster;
@@ -3215,8 +3215,8 @@ namespace HerosInsight
                     return;
                 }
 
-                case GW::Constants::SkillID::UNUSED_Empathic_Removal:
-                case GW::Constants::SkillID::Empathic_Removal:
+                case SkillID::UNUSED_Empathic_Removal:
+                case SkillID::Empathic_Removal:
                 {
                     effect.mask = EffectMask::Target;
                     effect.location = EffectLocation::Target;
@@ -3229,40 +3229,40 @@ namespace HerosInsight
                 }
 
                 // Discards / Handled elsewhere
-                case GW::Constants::SkillID::Spotless_Mind:
-                case GW::Constants::SkillID::Spotless_Soul:
-                case GW::Constants::SkillID::Divert_Hexes:
-                case GW::Constants::SkillID::Purifying_Veil:
-                case GW::Constants::SkillID::Draw_Conditions:
-                case GW::Constants::SkillID::Peace_and_Harmony:
-                case GW::Constants::SkillID::Contemplation_of_Purity:
-                case GW::Constants::SkillID::Deny_Hexes:
-                case GW::Constants::SkillID::Martyr:
-                case GW::Constants::SkillID::Holy_Veil:
-                case GW::Constants::SkillID::Veratas_Sacrifice:
-                case GW::Constants::SkillID::Well_of_the_Profane:
-                case GW::Constants::SkillID::UNUSED_Foul_Feast:
-                case GW::Constants::SkillID::Foul_Feast:
-                case GW::Constants::SkillID::Order_of_Apostasy:
-                case GW::Constants::SkillID::Plague_Signet:
-                case GW::Constants::SkillID::UNUSED_Plague_Sending:
-                case GW::Constants::SkillID::Plague_Sending:
-                case GW::Constants::SkillID::Plague_Touch:
-                case GW::Constants::SkillID::Hex_Eater_Vortex:
-                case GW::Constants::SkillID::Shatter_Delusions:
-                case GW::Constants::SkillID::Shatter_Delusions_PvP:
-                case GW::Constants::SkillID::Drain_Delusions:
-                case GW::Constants::SkillID::Hex_Eater_Signet:
-                case GW::Constants::SkillID::Hypochondria:
-                case GW::Constants::SkillID::Dark_Apostasy:
-                case GW::Constants::SkillID::Assassins_Remedy:
-                case GW::Constants::SkillID::Assassins_Remedy_PvP:
-                case GW::Constants::SkillID::Signet_of_Malice:
-                case GW::Constants::SkillID::Signet_of_Twilight:
-                case GW::Constants::SkillID::Lift_Enchantment:
-                case GW::Constants::SkillID::Disenchantment:
-                case GW::Constants::SkillID::Disenchantment_PvP:
-                case GW::Constants::SkillID::Weapon_of_Remedy:
+                case SkillID::Spotless_Mind:
+                case SkillID::Spotless_Soul:
+                case SkillID::Divert_Hexes:
+                case SkillID::Purifying_Veil:
+                case SkillID::Draw_Conditions:
+                case SkillID::Peace_and_Harmony:
+                case SkillID::Contemplation_of_Purity:
+                case SkillID::Deny_Hexes:
+                case SkillID::Martyr:
+                case SkillID::Holy_Veil:
+                case SkillID::Veratas_Sacrifice:
+                case SkillID::Well_of_the_Profane:
+                case SkillID::UNUSED_Foul_Feast:
+                case SkillID::Foul_Feast:
+                case SkillID::Order_of_Apostasy:
+                case SkillID::Plague_Signet:
+                case SkillID::UNUSED_Plague_Sending:
+                case SkillID::Plague_Sending:
+                case SkillID::Plague_Touch:
+                case SkillID::Hex_Eater_Vortex:
+                case SkillID::Shatter_Delusions:
+                case SkillID::Shatter_Delusions_PvP:
+                case SkillID::Drain_Delusions:
+                case SkillID::Hex_Eater_Signet:
+                case SkillID::Hypochondria:
+                case SkillID::Dark_Apostasy:
+                case SkillID::Assassins_Remedy:
+                case SkillID::Assassins_Remedy_PvP:
+                case SkillID::Signet_of_Malice:
+                case SkillID::Signet_of_Twilight:
+                case SkillID::Lift_Enchantment:
+                case SkillID::Disenchantment:
+                case SkillID::Disenchantment_PvP:
+                case SkillID::Weapon_of_Remedy:
                     return;
 
                 default:
@@ -3310,7 +3310,7 @@ namespace HerosInsight
         if (IsPvEOnlySkill(*skill))        tags.PvEOnly = true;
         if (IsPvPOnlySkill(*skill))        tags.PvPOnly = true;
         if (skill->IsPvP())                tags.PvPVersion = true;
-        if (skill->skill_id_pvp < GW::Constants::SkillID::Count &&
+        if (skill->skill_id_pvp < SkillID::Count &&
            !skill->IsPvP())                tags.PvEVersion = true;
         if (IsConsumableItemSkill(*skill)) tags.Consumable = true;
         if (IsMaintainedSkill(*skill))     tags.Maintained = true;
@@ -3343,12 +3343,12 @@ namespace HerosInsight
             tags.Unlockable = true;
 
         if (skill->special & (uint32_t)Utils::SkillSpecialFlags::ExploitsCorpse ||
-            skill_id == GW::Constants::SkillID::Well_of_Ruin ||
-            skill_id == GW::Constants::SkillID::Aura_of_the_Lich)
+            skill_id == SkillID::Well_of_Ruin ||
+            skill_id == SkillID::Aura_of_the_Lich)
             tags.ExploitsCorpse = true;
 
-        if ((tags.Projectile && skill_id != GW::Constants::SkillID::Ice_Spear) ||
-            skill->type == GW::Constants::SkillType::Attack)
+        if ((tags.Projectile && skill_id != SkillID::Ice_Spear) ||
+            skill->type == SkillType::Attack)
             tags.HitBased = true;
 
         ParseSkillData(*this);
@@ -3393,13 +3393,13 @@ namespace HerosInsight
         }
     }
 
-    void GetConditionsFromSpan(std::span<const ParsedSkillData> parsed_data, GW::Constants::SkillID source_skill_id, uint8_t attr_lvl, OutBuf<SkillEffect> result)
+    void GetConditionsFromSpan(std::span<const ParsedSkillData> parsed_data, SkillID source_skill_id, uint8_t attr_lvl, OutBuf<SkillEffect> result)
     {
         bool success = true;
         for (const auto &pd : parsed_data)
         {
             const auto condition_skill_id = pd.GetCondition();
-            if (condition_skill_id == GW::Constants::SkillID::No_Skill)
+            if (condition_skill_id == SkillID::No_Skill)
                 continue;
             success &= result.try_push({condition_skill_id, source_skill_id, pd.param.Resolve(attr_lvl)});
         }
@@ -3460,7 +3460,7 @@ namespace HerosInsight
 
     bool CustomSkillData::IsAttack() const
     {
-        return skill->type == GW::Constants::SkillType::Attack;
+        return skill->type == SkillType::Attack;
     }
 
     bool CustomSkillData::IsRangedAttack() const
@@ -3483,18 +3483,18 @@ namespace HerosInsight
 
         switch (skill_id)
         {
-            case GW::Constants::SkillID::Signet_of_Illusions:
+            case SkillID::Signet_of_Illusions:
             {
                 caster.signet_of_illusions_charges = custom_sd.GetSkillParam(0).Resolve(attr_lvl);
                 break;
             }
 
-            case GW::Constants::SkillID::Barrage:
-            case GW::Constants::SkillID::Volley:
+            case SkillID::Barrage:
+            case SkillID::Volley:
             {
                 EffectTracking::RemoveTrackers(caster_id, [](EffectTracking::EffectTracker &effect)
                                                {
-                                                   return GW::SkillbarMgr::GetSkillConstantData(effect.skill_id)->type == GW::Constants::SkillType::Preparation; //
+                                                   return GW::SkillbarMgr::GetSkillConstantData(effect.skill_id)->type == SkillType::Preparation; //
                                                });
             }
         }
@@ -3509,7 +3509,7 @@ namespace HerosInsight
         auto range = (float)custom_sd.GetAoE();
 
         std::vector<uint32_t> target_ids; // May become large, so we use a heap allocated buffer
-        if (custom_sd.skill->type == GW::Constants::SkillType::Enchantment &&
+        if (custom_sd.skill->type == SkillType::Enchantment &&
             Utils::GetAgentRelations(caster_id, target_id) == Utils::AgentRelations::Hostile)
         {
             // This handles some special enchantments that require a foe (e.g. "Vampiric Spirit")
@@ -3528,8 +3528,8 @@ namespace HerosInsight
                 {
                     switch (skill_id)
                     {
-                        case GW::Constants::SkillID::Extend_Conditions:
-                        case GW::Constants::SkillID::Epidemic:
+                        case SkillID::Extend_Conditions:
+                        case SkillID::Epidemic:
                         {
                             if (a.agent_id == caster_id)
                                 return false;
@@ -3569,7 +3569,7 @@ namespace HerosInsight
 
             switch (skill_id)
             {
-                case GW::Constants::SkillID::Shockwave:
+                case SkillID::Shockwave:
                 {
                     auto caster = GW::Agents::GetAgentByID(caster_id);
                     auto target = GW::Agents::GetAgentByID(t_id);
@@ -3680,7 +3680,7 @@ namespace HerosInsight
     {
         switch (skill_id) // Special cases
         {
-            case GW::Constants::SkillID::Cultists_Fervor:
+            case SkillID::Cultists_Fervor:
             {
                 auto soul_reaping = caster.GetOrEstimateAttribute(GW::Constants::AttributeByte::SoulReaping);
                 return 5 + 3 * soul_reaping;
@@ -3694,7 +3694,7 @@ namespace HerosInsight
 
             switch (skill_id)
             {
-                case GW::Constants::SkillID::Lead_the_Way:
+                case SkillID::Lead_the_Way:
                 {
                     auto caster_agent = Utils::GetAgentLivingByID(caster.agent_id);
 
@@ -3723,9 +3723,9 @@ namespace HerosInsight
         // We dont have the string cached, generate it
 
         auto skill_type = skill->type;
-        if (skill_type == GW::Constants::SkillType::Skill2)
+        if (skill_type == SkillType::Skill2)
         {
-            skill_type = GW::Constants::SkillType::Skill;
+            skill_type = SkillType::Skill;
         }
 
         bool is_elite = skill->IsElite();
@@ -3741,37 +3741,37 @@ namespace HerosInsight
         if (is_flash)                                   str += "Flash ";
         if (is_touch)                                   str += "Touch ";
         switch (skill_type) {
-            case GW::Constants::SkillType::Bounty:      str += "Blessing";    break;
-            case GW::Constants::SkillType::Scroll:      str += "Party Bonus"; break;
-            case GW::Constants::SkillType::Stance:      str += "Stance";      break;
-            case GW::Constants::SkillType::Signet:      str += "Signet";      break;
-            case GW::Constants::SkillType::Condition:   str += "Condition";   break;
-            case GW::Constants::SkillType::Glyph:       str += "Glyph";       break;
-            case GW::Constants::SkillType::Shout:       str += "Shout";       break;
-            case GW::Constants::SkillType::Preparation: str += "Preparation"; break;
-            case GW::Constants::SkillType::Trap:        str += "Trap";        break;
-            case GW::Constants::SkillType::Form:        str += "Form";        break;
-            case GW::Constants::SkillType::Chant:       str += "Chant";       break;
-            case GW::Constants::SkillType::EchoRefrain: str += "Echo";        break;
-            case GW::Constants::SkillType::Disguise:    str += "Disguise";    break;
+            case SkillType::Bounty:      str += "Blessing";    break;
+            case SkillType::Scroll:      str += "Party Bonus"; break;
+            case SkillType::Stance:      str += "Stance";      break;
+            case SkillType::Signet:      str += "Signet";      break;
+            case SkillType::Condition:   str += "Condition";   break;
+            case SkillType::Glyph:       str += "Glyph";       break;
+            case SkillType::Shout:       str += "Shout";       break;
+            case SkillType::Preparation: str += "Preparation"; break;
+            case SkillType::Trap:        str += "Trap";        break;
+            case SkillType::Form:        str += "Form";        break;
+            case SkillType::Chant:       str += "Chant";       break;
+            case SkillType::EchoRefrain: str += "Echo";        break;
+            case SkillType::Disguise:    str += "Disguise";    break;
 
-            case GW::Constants::SkillType::Hex:         str += "Hex ";         goto spell;
-            case GW::Constants::SkillType::Enchantment: str += "Enchantment "; goto spell;
-            case GW::Constants::SkillType::Well:        str += "Well ";        goto spell;
-            case GW::Constants::SkillType::Ward:        str += "Ward ";        goto spell;
-            case GW::Constants::SkillType::WeaponSpell: str += "Weapon ";      goto spell;
-            case GW::Constants::SkillType::ItemSpell:   str += "Item ";        goto spell;
-            case GW::Constants::SkillType::Spell:
+            case SkillType::Hex:         str += "Hex ";         goto spell;
+            case SkillType::Enchantment: str += "Enchantment "; goto spell;
+            case SkillType::Well:        str += "Well ";        goto spell;
+            case SkillType::Ward:        str += "Ward ";        goto spell;
+            case SkillType::WeaponSpell: str += "Weapon ";      goto spell;
+            case SkillType::ItemSpell:   str += "Item ";        goto spell;
+            case SkillType::Spell:
                 spell:
                 str += "Spell";
                 break;
 
-            case GW::Constants::SkillType::Skill:
-            // case GW::Constants::SkillType::Skill2: if (is_effect_only) { str += "Effect"; } else { str += "Skill"; } break;
-            case GW::Constants::SkillType::Skill2: str += "Skill"; break;
+            case SkillType::Skill:
+            // case SkillType::Skill2: if (is_effect_only) { str += "Effect"; } else { str += "Skill"; } break;
+            case SkillType::Skill2: str += "Skill"; break;
 
-            case GW::Constants::SkillType::PetAttack: str += "Pet "; goto attack;
-            case GW::Constants::SkillType::Attack:
+            case SkillType::PetAttack: str += "Pet "; goto attack;
+            case SkillType::Attack:
                 switch (skill->weapon_req) {
                     case 1: str += "Axe "; break;
                     case 2: str += "Bow "; break;
@@ -3794,15 +3794,15 @@ namespace HerosInsight
                 str += "Attack";
                 break;
 
-            case GW::Constants::SkillType::Title:             str += "Title ";              goto effect;
-            case GW::Constants::SkillType::Passive:           str += "Passive ";            goto effect;
-            case GW::Constants::SkillType::Environmental:     str += "Environmental ";      goto effect;
-            case GW::Constants::SkillType::EnvironmentalTrap: str += "Environmental Area ";
+            case SkillType::Title:             str += "Title ";              goto effect;
+            case SkillType::Passive:           str += "Passive ";            goto effect;
+            case SkillType::Environmental:     str += "Environmental ";      goto effect;
+            case SkillType::EnvironmentalTrap: str += "Environmental Area ";
                 effect:
                 str += "Effect";
                 break;
 
-            case GW::Constants::SkillType::Ritual:
+            case SkillType::Ritual:
                 switch (skill->profession) {
                     case GW::Constants::ProfessionByte::Ritualist: str += "Binding "; break;
                     case GW::Constants::ProfessionByte::Ranger:    str += "Nature ";  break;
@@ -3982,7 +3982,7 @@ namespace HerosInsight
         };
 
         auto duration_or_count_resolved = duration_or_count.Resolve(attr_lvl);
-        if (auto skill_id = std::get_if<GW::Constants::SkillID>(&skill_id_or_removal))
+        if (auto skill_id = std::get_if<SkillID>(&skill_id_or_removal))
         {
             auto base_duration = duration_or_count_resolved;
             auto &skill = *GW::SkillbarMgr::GetSkillConstantData(*skill_id);
@@ -4026,7 +4026,7 @@ namespace HerosInsight
         duration_or_count.Print(-1, buffer);
         auto dur_or_count_string = Utils::StrToWStr(buffer);
 
-        if (auto skill_id = std::get_if<GW::Constants::SkillID>(&skill_id_or_removal))
+        if (auto skill_id = std::get_if<SkillID>(&skill_id_or_removal))
         {
             out += std::format(L"skill_id={}, duration={}", (uint32_t)*skill_id, dur_or_count_string);
         }
