@@ -57,6 +57,7 @@ namespace HerosInsight
 
     void Settings::Draw(IDirect3DDevice9 *device)
     {
+        ImGui::SetNextWindowSize(ImVec2(400, 200), ImGuiCond_FirstUseEver);
         if (ImGui::Begin("Settings", &HerosInsight::UpdateManager::open_settings))
         {
             // Make tabs: General, Skillbook
