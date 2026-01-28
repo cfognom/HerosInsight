@@ -374,7 +374,7 @@ static DWORD WINAPI ThreadProc(LPVOID lpModule)
     bool success = GW::Initialize();
     if (!success)
     {
-        MessageBoxW(nullptr, L"GWCA failed to initialize.", L"Error", MB_OK | MB_ICONERROR);
+        MessageBoxW(nullptr, L"Hero's Insight failed to initialize.\n\nIf this happened after a game update, it means the mod is incompatible with this Guild Wars build. Please wait until the mod developer has fixed the mod and then try again.", L"Error", MB_OK | MB_ICONERROR);
         FreeLibraryAndExitThread(hModule, EXIT_FAILURE);
     }
     GW::EnableRenderHooks();
