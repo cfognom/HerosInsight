@@ -760,10 +760,10 @@ namespace HerosInsight::Filtering
                 }
             }
 
+            auto &s = out.command_feedback;
+            s.clear();
             if (!query.sort_args.empty())
             {
-                auto &s = out.command_feedback;
-                s.clear();
                 auto inserter = std::back_inserter(s);
 
                 const auto n_args = query.sort_args.size();
