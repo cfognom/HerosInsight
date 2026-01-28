@@ -1063,6 +1063,7 @@ namespace HerosInsight::SkillBook
     };
 
     bool is_dragging = false;
+    bool IsDragging() { return is_dragging; }
     std::atomic<GW::Constants::SkillID> skill_id_to_drag = GW::Constants::SkillID::No_Skill;
     void RequestSkillDragging(GW::Constants::SkillID skill_id)
     {

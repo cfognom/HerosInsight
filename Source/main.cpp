@@ -223,7 +223,7 @@ IDirect3DStateBlock9 *TryPrepareStencil(IDirect3DDevice9 *device)
     }
 
     auto tt_frame = HerosInsight::Utils::GetTooltipFrame();
-    if (tt_frame && !ImGui::GetIO().WantCaptureMouse)
+    if (tt_frame && (HerosInsight::SkillBook::IsDragging() || !ImGui::GetIO().WantCaptureMouse))
     {
         auto rect = HerosInsight::Utils::GetFrameRect(*tt_frame);
         rect.Min.y -= 1.f;

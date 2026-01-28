@@ -2,6 +2,7 @@
 
 namespace HerosInsight::SkillBook
 {
+    bool IsDragging(); // True when we are doing a skill drag operation.
     void Initialize();
     void Terminate();
     void Enable();
