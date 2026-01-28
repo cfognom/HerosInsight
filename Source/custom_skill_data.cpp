@@ -342,6 +342,7 @@ namespace HerosInsight
             (GW::Constants::SkillID)727,  // Thunder
             (GW::Constants::SkillID)723,  // Vampire
             (GW::Constants::SkillID)3250  // Temple Strike but not elite
+            (GW::Constants::SkillID)756,  // Barrage (passive effect)
         );
 
         if (IsDeveloperSkill(*custom_sd.skill) ||
