@@ -356,26 +356,8 @@ namespace HerosInsight::Filtering
 
             BitArray<I::PropCount() + 1> sorting_props;
 
-            auto rem = source;
-            while (!rem.empty())
+            auto ParseTrailingCommands = [&](std::string_view &stmt)
             {
-                auto stmt_end = rem.find('&');
-                std::string_view stmt;
-                if (stmt_end == std::string_view::npos)
-                {
-                    stmt = rem;
-                    rem = "";
-                }
-                else
-                {
-                    stmt = rem.substr(0, stmt_end);
-                    rem = rem.substr(stmt_end + 1);
-                }
-                Utils::ReadSpaces(stmt);
-                Utils::TrimTrailingSpaces(stmt);
-                if (stmt.empty())
-                    continue;
-
                 FixedVector<Command, 32> commands;
                 while (true) // Loop that eats commands from end
                 {
@@ -427,6 +409,30 @@ namespace HerosInsight::Filtering
                         command
                     );
                 }
+            };
+
+            auto rem = source;
+            while (!rem.empty())
+            {
+                auto stmt_end = rem.find('&');
+                std::string_view stmt;
+                if (stmt_end == std::string_view::npos)
+                {
+                    stmt = rem;
+                    rem = "";
+                }
+                else
+                {
+                    stmt = rem.substr(0, stmt_end);
+                    rem = rem.substr(stmt_end + 1);
+                }
+                Utils::ReadSpaces(stmt);
+                Utils::TrimTrailingSpaces(stmt);
+
+                ParseTrailingCommands(stmt);
+
+                if (stmt.empty())
+                    continue;
 
                 auto &filter = query.filters.emplace_back();
                 if (!ParseFilter(stmt, filter))
