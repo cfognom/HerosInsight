@@ -457,6 +457,7 @@ namespace HerosInsight
         bool Celestial : 1;
         bool Mission : 1;
         bool Bundle : 1;
+        bool Bounty : 1;
 
         bool Spell : 1;
         bool ConditionSource : 1;

@@ -917,6 +917,7 @@ namespace HerosInsight::SkillBook
         bool include_npc_skills = false;
         bool include_archived_skills = false;
         bool include_disguises = false;
+        bool include_bounties = false;
 
         bool use_exact_adrenaline = false;
         bool prefer_concise_descriptions = false;
@@ -1027,6 +1028,7 @@ namespace HerosInsight::SkillBook
                     if (tags.PvPOnly)          PushTag("PvP-only");
                     if (tags.PvEVersion)       PushTag("PvE Version");
                     if (tags.PvPVersion)       PushTag("PvP Version");
+                    if (tags.Bounty)           PushTag("Bounty");
 
                     if (tags.DeveloperSkill)   PushTag("Developer Skill");
                     if (tags.EnvironmentSkill) PushTag("Environment Skill");
@@ -1311,6 +1313,7 @@ namespace HerosInsight::SkillBook
                 filter_dirty |= ImGui::Checkbox("Include NPC skills", &settings.include_npc_skills);
                 filter_dirty |= ImGui::Checkbox("Include Archived skills", &settings.include_archived_skills);
                 filter_dirty |= ImGui::Checkbox("Include Disguises", &settings.include_disguises);
+                filter_dirty |= ImGui::Checkbox("Include Bounties", &settings.include_bounties);
 
                 ImGui::NextColumn();
 
@@ -1402,6 +1405,11 @@ namespace HerosInsight::SkillBook
                 {
                     if (custom_sd.skill->type == GW::Constants::SkillType::Disguise ||
                         custom_sd.skill_id == GW::Constants::SkillID::Tonic_Tipsiness)
+                        continue;
+                }
+                if (!settings.include_disguises)
+                {
+                    if (custom_sd.tags.Bounty)
                         continue;
                 }
 

@@ -99,6 +99,9 @@
 
 namespace HerosInsight
 {
+    using SkillID = GW::Constants::SkillID;
+    using SkillType = GW::Constants::SkillType;
+
     bool IsDeveloperSkill(const GW::Skill &skill)
     {
         constexpr auto dev_skills = MakeFixedSet<GW::Constants::SkillID>(
@@ -341,8 +344,8 @@ namespace HerosInsight
             (GW::Constants::SkillID)719,  // The Plague
             (GW::Constants::SkillID)727,  // Thunder
             (GW::Constants::SkillID)723,  // Vampire
-            (GW::Constants::SkillID)3250  // Temple Strike but not elite
-            (GW::Constants::SkillID)756,  // Barrage (passive effect)
+            (GW::Constants::SkillID)3250, // Temple Strike but not elite
+            (GW::Constants::SkillID)756   // Barrage (passive effect)
         );
 
         if (IsDeveloperSkill(*custom_sd.skill) ||
@@ -380,6 +383,24 @@ namespace HerosInsight
             // We assume that the skill is archived if the any string starts with "(TEMP)".
             return true;
         }
+
+        return false;
+    }
+
+    bool IsBounty(GW::Skill &skill)
+    {
+        if (skill.type != SkillType::Bounty)
+            return false;
+
+        auto id = skill.skill_id;
+        if (SkillID::Skale_Hunt <= id && id <= SkillID::Undead_Hunt ||
+            SkillID::Monster_Hunt <= id && id <= SkillID::Undead_Hunt1 ||
+            SkillID::Monster_Hunt5 <= id && id <= SkillID::Undead_Hunt3 ||
+            SkillID::Dhuum_Battle1 <= id && id <= SkillID::Monster_Hunt8 ||
+            SkillID::Asuran_Bodyguard <= id && id <= SkillID::Dwarven_Raider3 ||
+            SkillID::Hunt_Rampage1 <= id && id <= SkillID::Asuran_Bodyguard3 ||
+            SkillID::Veteran_Asuran_Bodyguard <= id && id <= SkillID::Time_Attack4)
+            return true;
 
         return false;
     }
@@ -3282,6 +3303,7 @@ namespace HerosInsight
         if (IsMissionSkill(skill_id))      tags.Mission = true;
         if (IsCelestialSkill(skill_id))    tags.Celestial = true;
         if (IsBundleSkill(skill_id))       tags.Bundle = true;
+        if (IsBounty(*skill))              tags.Bounty = true;
 
         if (IsSpellSkill(*skill))          tags.Spell = true;
         if (EndsOnIncDamage(skill_id))     tags.EndsOnIncDamage = true;
