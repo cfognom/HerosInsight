@@ -279,8 +279,6 @@ namespace HerosInsight
                 return arena == other.arena && index == other.index;
             }
 
-            size_t Index() const { return index; }
-
         private:
             friend class SpanVector<T>;
             SpanVector *arena;
