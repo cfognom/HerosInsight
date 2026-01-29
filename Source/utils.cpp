@@ -3516,9 +3516,13 @@ namespace HerosInsight::Utils
         }
     }
 
-    bool IsSkillEquipable(GW::Skill &skill, uint32_t agent_id)
+    bool IsSkillEquipable(GW::Skill &skill, uint32_t agent_id, bool *out_is_learned)
     {
-        if (!IsSkillLearned(skill, agent_id))
+        bool is_learned = IsSkillLearned(skill, agent_id);
+        if (out_is_learned)
+            *out_is_learned = is_learned;
+
+        if (!is_learned)
             return false;
 
         auto prof_mask = Utils::GetProfessionMask(agent_id);
