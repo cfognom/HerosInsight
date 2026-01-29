@@ -3498,6 +3498,22 @@ namespace HerosInsight::Utils
         return prof_mask;
     }
 
+    bool IsSkillLearnable(CustomSkillData &skill, uint32_t agent_id)
+    {
+        auto skill_id = skill.skill_id;
+        if (!skill.tags.Learnable)
+            return false;
+
+        bool is_player = agent_id == GW::Agents::GetControlledCharacterId();
+        if (!is_player)
+        {
+            if (skill.skill->IsPvE()) // Heroes cannot learn PvE skills
+                return false;
+        }
+
+        return true;
+    }
+
     bool IsSkillLearned(GW::Skill &skill, uint32_t agent_id)
     {
         auto skill_id = skill.skill_id;
