@@ -3330,16 +3330,18 @@ namespace HerosInsight
             tags.Bundle)
             tags.Temporary = true;
 
-        if (skill->profession != GW::Constants::ProfessionByte::None &&
-            !tags.EffectOnly &&
+        if (!tags.EffectOnly &&
             !tags.DeveloperSkill &&
             !tags.MonsterSkill &&
             !tags.EnvironmentSkill &&
             !tags.SpiritAttack &&
-            !tags.PvEOnly &&
-            !tags.PvPOnly &&
             !tags.Consumable &&
             !tags.Temporary)
+            tags.Learnable = true;
+
+        if (skill->profession != GW::Constants::ProfessionByte::None &&
+            tags.Learnable &&
+            !tags.PvEOnly)
             tags.Unlockable = true;
 
         if (skill->special & (uint32_t)Utils::SkillSpecialFlags::ExploitsCorpse ||

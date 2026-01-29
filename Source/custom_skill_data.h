@@ -442,6 +442,7 @@ namespace HerosInsight
 
         bool EffectOnly : 1;
         bool Unlockable : 1;
+        bool Learnable : 1;
         bool Temporary : 1;
         bool MonsterSkill : 1;
         bool EnvironmentSkill : 1;
