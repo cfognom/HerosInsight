@@ -119,7 +119,7 @@ namespace HerosInsight
             ends.clear();
         }
 
-        void Prune(size_t n_spans)
+        void resize(size_t n_spans)
         {
             assert(n_spans <= SpanCount());
             elements.erase(elements.begin() + GetSpanStart(n_spans), elements.end());

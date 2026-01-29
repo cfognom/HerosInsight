@@ -1225,13 +1225,13 @@ namespace HerosInsight::SkillBook
                         return a.size() < b.size();
                     }
                 );
-                current_index = it.Index();
+                current_index = std::distance(input_text_history.begin(), it);
                 if (it == input_text_history.end() ||
                     std::string_view(*it) != input_text) // Not found
                 {
                     // Discard diverging history
                     scroll_positions.resize(current_index);
-                    input_text_history.Prune(current_index);
+                    input_text_history.resize(current_index);
                     input_text_history.push_back(input_text);
                     // Reset scroll
                     clipper.Reset();
