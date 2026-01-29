@@ -1192,9 +1192,19 @@ namespace HerosInsight::SkillBook
 
         Text::Provider &text_provider = Text::GetTextProvider(GW::Constants::Language::English);
 
+        enum struct DirtyFlags : uint32_t
+        {
+            None = 0,
+            Filter = 1 << 0,
+            SkillList = 1 << 1,
+            Props = 1 << 2,
+
+            FilterAndList = Filter | SkillList,
+            ALL = Filter | SkillList | Props,
+        };
+
         bool is_opened = true;
-        bool filter_dirty = true;
-        bool props_dirty = true;
+        DirtyFlags dirty_flags = DirtyFlags::ALL;
         bool first_draw = true;
 
         ObservableSetting<int>::Subscription feedback_subs{
@@ -1259,17 +1269,10 @@ namespace HerosInsight::SkillBook
 
         void Update()
         {
-            bool filtered_outdated = props_dirty || filter_dirty;
-            if (props_dirty)
-            {
-                adapter.RefreshDynamicProps(this->settings.attr_src);
-                props_dirty = false;
-            }
-            if (filtered_outdated)
+            if (dirty_flags != DirtyFlags::None)
             {
                 UpdateQuery();
             }
-            filter_dirty = false;
         }
 
         void CopyStateFrom(const BookState &other)
@@ -1324,19 +1327,19 @@ namespace HerosInsight::SkillBook
             {
                 ImGui::Columns(2, nullptr, false);
 
-                filter_dirty |= ImGui::Checkbox("Include PvE-only skills", &settings.include_pve_only_skills);
-                filter_dirty |= ImGui::Checkbox("Include Temporary skills", &settings.include_temporary_skills);
-                filter_dirty |= ImGui::Checkbox("Include NPC skills", &settings.include_npc_skills);
-                filter_dirty |= ImGui::Checkbox("Include Archived skills", &settings.include_archived_skills);
-                filter_dirty |= ImGui::Checkbox("Include Disguises", &settings.include_disguises);
-                filter_dirty |= ImGui::Checkbox("Include Bounties", &settings.include_bounties);
+                dirty_flags |= ImGui::Checkbox("Include PvE-only skills", &settings.include_pve_only_skills) ? DirtyFlags::FilterAndList : DirtyFlags::None;
+                dirty_flags |= ImGui::Checkbox("Include Temporary skills", &settings.include_temporary_skills) ? DirtyFlags::FilterAndList : DirtyFlags::None;
+                dirty_flags |= ImGui::Checkbox("Include NPC skills", &settings.include_npc_skills) ? DirtyFlags::FilterAndList : DirtyFlags::None;
+                dirty_flags |= ImGui::Checkbox("Include Archived skills", &settings.include_archived_skills) ? DirtyFlags::FilterAndList : DirtyFlags::None;
+                dirty_flags |= ImGui::Checkbox("Include Disguises", &settings.include_disguises) ? DirtyFlags::FilterAndList : DirtyFlags::None;
+                dirty_flags |= ImGui::Checkbox("Include Bounties", &settings.include_bounties) ? DirtyFlags::FilterAndList : DirtyFlags::None;
 
                 ImGui::NextColumn();
 
-                props_dirty |= ImGui::Checkbox("Show exact adrenaline", &settings.use_exact_adrenaline);
+                dirty_flags |= ImGui::Checkbox("Show exact adrenaline", &settings.use_exact_adrenaline) ? DirtyFlags::Props : DirtyFlags::None;
                 // ImGui::Checkbox("Show null stats", &settings.show_null_stats);
                 ImGui::Checkbox("Prefer concise descriptions", &settings.prefer_concise_descriptions);
-                filter_dirty |= ImGui::Checkbox("Limit to character's professions", &settings.limit_to_characters_professions);
+                dirty_flags |= ImGui::Checkbox("Limit to character's professions", &settings.limit_to_characters_professions) ? DirtyFlags::FilterAndList : DirtyFlags::None;
 
                 ImGui::Columns(1);
             }
@@ -1354,14 +1357,14 @@ namespace HerosInsight::SkillBook
             {
                 settings.attr_src.type = AttributeSource::Type::Constant;
                 settings.attr_src.value = -1;
-                props_dirty = true;
+                dirty_flags |= DirtyFlags::Props;
             }
 
             ImGui::SameLine();
             if (ImGui::RadioButton("Character's", settings.IsCharacters()))
             {
                 settings.attr_src.type = AttributeSource::Type::FromAgent;
-                props_dirty = true;
+                dirty_flags |= DirtyFlags::Props;
             }
 
             ImGui::SameLine();
@@ -1369,7 +1372,7 @@ namespace HerosInsight::SkillBook
             {
                 settings.attr_src.type = AttributeSource::Type::Constant;
                 settings.attr_src.value = settings.attr_lvl_slider;
-                props_dirty = true;
+                dirty_flags |= DirtyFlags::Props;
             }
 
             if (settings.IsManual())
@@ -1377,7 +1380,7 @@ namespace HerosInsight::SkillBook
                 if (ImGui::SliderInt("Attribute level", &settings.attr_lvl_slider, 0, 21))
                 {
                     settings.attr_src.value = settings.attr_lvl_slider;
-                    props_dirty = true;
+                    dirty_flags |= DirtyFlags::Props;
                 }
             }
         }
@@ -1448,15 +1451,27 @@ namespace HerosInsight::SkillBook
 
         void UpdateQuery()
         {
-            auto input_text_view = std::string_view(input_text, strlen(input_text));
-            scroll_tracking.UpdateScrollTracking(input_text_view, clipper);
-            filter_device.ParseQuery(input_text_view, query);
+            if (Utils::HasAnyFlag(dirty_flags, DirtyFlags::Props))
+            {
+                adapter.RefreshDynamicProps(this->settings.attr_src);
+            }
+            if (Utils::HasAnyFlag(dirty_flags, DirtyFlags::SkillList))
+            {
+                clipper.Reset();
+                scroll_tracking = ScrollTracking();
+            }
+            if (Utils::HasAnyFlag(dirty_flags, DirtyFlags::Filter))
+            {
+                auto input_text_view = std::string_view(input_text, strlen(input_text));
+                scroll_tracking.UpdateScrollTracking(input_text_view, clipper);
+                filter_device.ParseQuery(input_text_view, query);
 
-            InitFilterList();
+                InitFilterList();
+                this->filter_device.RunQuery(this->query, this->filtered_skills);
 
-            this->filter_device.RunQuery(this->query, this->filtered_skills);
-
-            UpdateFeedback();
+                UpdateFeedback();
+            }
+            dirty_flags = DirtyFlags::None;
         }
 
         void DrawSkillStats(const GW::Skill &skill)
@@ -1845,7 +1860,7 @@ namespace HerosInsight::SkillBook
                 [](ImGuiInputTextCallbackData *data)
                 {
                     auto &book = *static_cast<BookState *>(data->UserData);
-                    book.filter_dirty = true;
+                    book.dirty_flags |= DirtyFlags::Filter;
 
                     return 0;
                 },
@@ -2164,7 +2179,7 @@ namespace HerosInsight::SkillBook
                 {
                     // auto attr = AttributeOrTitle((GW::Constants::AttributeByte)p->attribute);
                     // attributes[attr.value] = p->value;
-                    book->props_dirty = true;
+                    book->dirty_flags |= BookState::DirtyFlags::Props;
                     // book->FetchDescriptions();
                 }
             }
@@ -2178,7 +2193,7 @@ namespace HerosInsight::SkillBook
             {
                 // auto attr = AttributeOrTitle((GW::Constants::TitleID)packet->title_id);
                 // attributes[attr.value] = packet->new_value;
-                book->props_dirty = true;
+                book->dirty_flags |= BookState::DirtyFlags::Props;
             }
         }
     }
@@ -2193,7 +2208,7 @@ namespace HerosInsight::SkillBook
             focused_agent_id = agent_id;
             for (auto &book : books)
             {
-                book->props_dirty = true;
+                book->dirty_flags |= BookState::DirtyFlags::Props;
             }
         }
     }
@@ -2224,7 +2239,7 @@ namespace HerosInsight::SkillBook
         focused_agent_id = GW::Agents::GetControlledCharacterId();
         for (auto &book : books)
         {
-            book->props_dirty = true;
+            book->dirty_flags |= BookState::DirtyFlags::Props;
         }
     }
 
@@ -2235,7 +2250,7 @@ namespace HerosInsight::SkillBook
         {
             for (auto &book : books)
             {
-                book->props_dirty = true;
+                book->dirty_flags |= BookState::DirtyFlags::Props;
             }
         }
     }
