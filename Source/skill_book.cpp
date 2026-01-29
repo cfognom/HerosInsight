@@ -1417,7 +1417,7 @@ namespace HerosInsight::SkillBook
                         custom_sd.skill_id == GW::Constants::SkillID::Tonic_Tipsiness)
                         continue;
                 }
-                if (!settings.include_disguises)
+                if (!settings.include_bounties)
                 {
                     if (custom_sd.tags.Bounty)
                         continue;
