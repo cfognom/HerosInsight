@@ -1002,8 +1002,11 @@ namespace HerosInsight::SkillBook
                     auto skill_id_to_check = skill.IsPvP() ? skill.skill_id_pvp : skill.skill_id;
 
                     bool is_unlocked = GW::SkillbarMgr::GetIsSkillUnlocked(skill_id_to_check);
-                    bool is_learned = Utils::IsSkillLearned(skill, focused_agent_id);
+                    bool is_learned;
+                    bool is_equipable = Utils::IsSkillEquipable(skill, focused_agent_id, &is_learned);
                     bool is_locked = tags.Unlockable && !is_unlocked;
+                    bool is_learnable = Utils::IsSkillLearnable(cskill, focused_agent_id);
+                    bool is_unlearned = is_learnable && !is_learned;
 
                     FixedVector<Text::StringTemplateAtom, 16> args;
 
@@ -1024,17 +1027,19 @@ namespace HerosInsight::SkillBook
                     };
 
                     // clang-format off
-                    if (is_learned)            PushTag("Learned"  , IM_COL32(100, 255, 255, 255));
+                    if (tags.PvEOnly)          PushTag("PvE-only");
                     if (is_unlocked)           PushTag("Unlocked" , IM_COL32(143, 255, 143, 255));
-                    if (tags.Temporary)        PushTag("Temporary"                              );
                     if (is_locked)             PushTag("Locked"   , IM_COL32(255, 100, 100, 255));
+                    if (is_learned)            PushTag("Learned"  , IM_COL32(143, 255, 143, 255));
+                    if (is_unlearned)          PushTag("Unlearned", IM_COL32(255, 100, 100, 255));
+                    if (tags.Temporary)        PushTag("Temporary");
+                    if (is_equipable)          PushTag("Equipable", IM_COL32(100, 255, 255, 255));
                     
                     if (cskill.context != Utils::SkillContext::Null)
                         PushTag(Utils::GetSkillContextString(cskill.context));
 
                     if (tags.Archived)         PushTag("Archived");
                     if (tags.EffectOnly)       PushTag("Effect-only");
-                    if (tags.PvEOnly)          PushTag("PvE-only");
                     if (tags.PvPOnly)          PushTag("PvP-only");
                     if (tags.PvEVersion)       PushTag("PvE Version");
                     if (tags.PvPVersion)       PushTag("PvP Version");
@@ -1210,6 +1215,7 @@ namespace HerosInsight::SkillBook
 
             void UpdateScrollTracking(std::string_view input_text, VariableSizeClipper &clipper)
             {
+                // Save current scroll
                 auto target_scroll = clipper.GetTargetScroll();
                 if (scroll_positions.size() < current_index + 1)
                     scroll_positions.resize(current_index + 1, target_scroll);
@@ -1225,7 +1231,7 @@ namespace HerosInsight::SkillBook
                         return a.size() < b.size();
                     }
                 );
-                current_index = std::distance(input_text_history.begin(), it);
+                current_index = std::distance(input_text_history.begin(), it); // this may increment index
                 if (it == input_text_history.end() ||
                     std::string_view(*it) != input_text) // Not found
                 {
@@ -1239,8 +1245,8 @@ namespace HerosInsight::SkillBook
                 else
                 {
                     // Restore old scroll
-                    auto old_scoll = scroll_positions[current_index];
-                    clipper.SetScroll(old_scoll);
+                    auto old_scroll = scroll_positions[current_index];
+                    clipper.SetScroll(old_scroll);
                 }
             }
         };
@@ -1559,7 +1565,6 @@ namespace HerosInsight::SkillBook
                     ImGui::PushStyleColor(ImGuiCol_Text, name_color);
 
                     auto r = filter_device.CalcItemResult(query, (size_t)SkillProp::Name, (size_t)skill_id);
-                    // auto name_hl = GetHL(SkillProp::Name, skill_id);
                     FixedVector<RichText::TextSegment, 32> segments;
                     text_drawer.MakeTextSegments(r.text, segments, r.hl);
                     text_drawer.DrawTextSegments(segments, wrapping_min, wrapping_max);
@@ -2076,8 +2081,6 @@ namespace HerosInsight::SkillBook
 
                     auto draw_list = ImGui::GetWindowDrawList();
 
-                    auto instance_type = GW::Map::GetInstanceType();
-
                     auto DrawItem = [&](uint32_t i)
                     {
                         const auto skill_id = static_cast<GW::Constants::SkillID>(filtered_skills[i]);
@@ -2088,8 +2091,7 @@ namespace HerosInsight::SkillBook
                         const auto window = ImGui::GetCurrentWindow();
                         const auto work_width = window->WorkRect.GetWidth();
 
-                        bool is_learned = Utils::IsSkillLearned(*custom_sd.skill, focused_agent_id);
-                        bool is_equipable = is_learned && instance_type == GW::Constants::InstanceType::Outpost;
+                        bool is_equipable = Utils::IsSkillEquipable(*custom_sd.skill, focused_agent_id);
 
                         DrawSkillHeader(custom_sd, is_equipable);
                         DrawDescription(skill_id, work_width);
