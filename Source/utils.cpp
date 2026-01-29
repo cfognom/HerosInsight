@@ -3512,12 +3512,24 @@ namespace HerosInsight::Utils
             if (skill.IsPvE()) // Heroes cannot equip PvE skills
                 return false;
 
-            auto prof_mask = Utils::GetProfessionMask(agent_id);
-            if ((prof_mask & (1 << (uint8_t)skill.profession)) == 0)
-                return false;
-
             return GW::SkillbarMgr::GetIsSkillUnlocked(skill_id);
         }
+    }
+
+    bool IsSkillEquipable(GW::Skill &skill, uint32_t agent_id)
+    {
+        if (!IsSkillLearned(skill, agent_id))
+            return false;
+
+        auto prof_mask = Utils::GetProfessionMask(agent_id);
+        if ((prof_mask & (1 << (uint8_t)skill.profession)) == 0)
+            return false;
+
+        auto instance_type = GW::Map::GetInstanceType();
+        if (instance_type != GW::Constants::InstanceType::Outpost)
+            return false;
+
+        return true;
     }
 
     GW::UI::Frame *GetTooltipFrame()

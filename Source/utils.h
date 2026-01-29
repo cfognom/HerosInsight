@@ -626,6 +626,7 @@ namespace HerosInsight::Utils
 
     uint32_t GetProfessionMask(uint32_t agent_id);
     bool IsSkillLearned(GW::Skill &skill, uint32_t agent_id);
+    bool IsSkillEquipable(GW::Skill &skill, uint32_t agent_id);
 
     GW::UI::Frame *GetTooltipFrame();
     GW::UI::Frame *GetDraggedSkillFrame();
