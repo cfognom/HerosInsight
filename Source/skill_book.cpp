@@ -995,16 +995,20 @@ namespace HerosInsight::SkillBook
                 &settings,
                 +[](Text::StringTemplateAtom::Builder &b, size_t skill_id, void *data) -> Text::StringTemplateAtom
                 {
-                    auto &skill = GW::SkillbarMgr::GetSkills()[skill_id];
-                    auto &cskill = CustomSkillDataModule::GetSkills()[skill_id];
-                    auto &tags = cskill.tags;
+                    auto skills = GW::SkillbarMgr::GetSkills();
+                    auto cskills = CustomSkillDataModule::GetSkills();
+                    auto &skill = skills[skill_id];
+                    auto &cskill = cskills[skill_id];
                     auto skill_id_to_check = skill.IsPvP() ? skill.skill_id_pvp : skill.skill_id;
+                    auto &pve_skill = skills[(uint32_t)skill_id_to_check];
+                    auto &pve_cskill = cskills[(uint32_t)skill_id_to_check];
 
+                    auto &tags = cskill.tags;
                     bool is_unlocked = GW::SkillbarMgr::GetIsSkillUnlocked(skill_id_to_check);
-                    bool is_learned;
-                    bool is_equipable = Utils::IsSkillEquipable(skill, focused_agent_id, &is_learned);
+                    bool is_learned = Utils::IsSkillLearned(pve_skill, focused_agent_id);
+                    bool is_equipable = Utils::IsSkillEquipable(skill, focused_agent_id);
                     bool is_locked = tags.Unlockable && !is_unlocked;
-                    bool is_learnable = Utils::IsSkillLearnable(cskill, focused_agent_id);
+                    bool is_learnable = Utils::IsSkillLearnable(pve_cskill, focused_agent_id);
                     bool is_unlearned = is_learnable && !is_learned;
 
                     FixedVector<Text::StringTemplateAtom, 16> args;
