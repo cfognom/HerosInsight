@@ -864,6 +864,8 @@ namespace HerosInsight::Filtering
             {
                 for (auto &filter : q.filters)
                 {
+                    if (filter.inverted)
+                        continue;
                     auto propset = impl.GetMetaPropset(filter.meta_prop_id);
                     if (propset[prop_id])
                     {
