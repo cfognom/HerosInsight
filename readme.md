@@ -46,9 +46,7 @@ Track stats for you and your party
 - ### Could using ***Hero’s Insight*** result in a ban?
   It is not possible to guarantee that using ***Hero’s Insight*** will not result in a ban. Any use of the mod is at your own risk!
 
-  Hero’s Insight is designed to comply, as closely as possible, with ***ArenaNet's*** [*Code of Conduct*](https://www.arena.net/en/legal/code-of-conduct) and [*User Agreement*](https://www.arena.net/en/legal/user-agreement).
-  
-  In particular:
+  Hero’s Insight is designed to comply, as closely as possible, with ***ArenaNet's*** [*Code of Conduct*](https://www.arena.net/en/legal/code-of-conduct) and [*User Agreement*](https://www.arena.net/en/legal/user-agreement). In particular:
   - The mod disables itself entirely in PvP areas and lobbies (with the sole exception of a hook used to detect when it is permitted to re-enable).
   - It does not automate gameplay or provide botting functionality.
 
