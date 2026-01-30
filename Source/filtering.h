@@ -21,6 +21,35 @@ namespace HerosInsight::Filtering
     void SortHighlighting(std::span<uint16_t> &hl);
     void ConnectHighlighting(std::string_view text, std::span<uint16_t> &hl);
 
+    // Returns the index of the "best" match
+    template <typename TextGetter>
+    std::optional<size_t> BestMatch(std::string_view subject, TextGetter &&getter, size_t count)
+    {
+        size_t index;
+
+        auto matcher = Matcher(subject);
+
+        size_t best_match_cost = std::numeric_limits<size_t>::max();
+        for (size_t i = 0; i < count; ++i)
+        {
+            auto target = getter(i);
+            if (matcher.Match(target, 0))
+            {
+                float match_cost = target.text.size();
+                if (match_cost < best_match_cost)
+                {
+                    best_match_cost = match_cost;
+                    index = i;
+                }
+            }
+        }
+
+        if (best_match_cost == std::numeric_limits<size_t>::max())
+            return std::nullopt;
+
+        return index;
+    }
+
     struct Filter
     {
         size_t meta_prop_id = 0;
@@ -270,7 +299,7 @@ namespace HerosInsight::Filtering
                     auto target_str = rem.substr(0, separator_pos);
                     if (!target_str.empty())
                     {
-                        auto opt_meta_prop_id = BestMatch(target_str);
+                        auto opt_meta_prop_id = TryGetMetaIndexFromName(target_str);
                         if (opt_meta_prop_id.has_value())
                         {
                             filter.meta_prop_id = opt_meta_prop_id.value();
@@ -317,7 +346,21 @@ namespace HerosInsight::Filtering
             if (!Utils::TryRead('/', rem))
                 return false;
 
-            if (Utils::TryRead("SORT", rem))
+            LoweredTextOwned sort_command_name("SORT");
+
+            auto command_name_end = std::min(rem.find(' '), rem.size());
+            auto command_name = rem.substr(0, command_name_end);
+            auto command_id_opt = BestMatch(
+                command_name,
+                [&](size_t index)
+                {
+                    return (LoweredText)sort_command_name;
+                },
+                1
+            );
+            rem = rem.substr(command_name_end);
+
+            if (command_id_opt.has_value())
             {
                 auto &sort_com = command.emplace<SortCommand>();
                 while (!rem.empty())
@@ -330,7 +373,7 @@ namespace HerosInsight::Filtering
                     if (is_negated)
                         target_text = target_text.substr(0, target_text.size() - 1);
                     Utils::TrimTrailingSpaces(target_text);
-                    auto index = BestMatch(target_text);
+                    auto index = TryGetMetaIndexFromName(target_text);
                     if (index.has_value())
                     {
                         auto &arg = sort_com.args.emplace_back();
@@ -844,33 +887,16 @@ namespace HerosInsight::Filtering
             }
         }
 
-        // Returns the index of the "best" match
-        inline std::optional<size_t> BestMatch(std::string_view subject)
+        inline std::optional<size_t> TryGetMetaIndexFromName(std::string_view subject)
         {
-            size_t index;
-
-            auto matcher = Matcher(subject);
-
-            size_t best_match_cost = std::numeric_limits<size_t>::max();
-            for (size_t i = 0; i < impl.MetaCount(); ++i)
-            {
-                auto target = impl.GetMetaName(i);
-                if (matcher.Match(target, 0))
+            return BestMatch(
+                subject,
+                [this](size_t metaId)
                 {
-                    float match_cost = target.text.size();
-                    if (match_cost < best_match_cost)
-                    {
-                        best_match_cost = match_cost;
-                        index = i;
-                    }
-                }
-            }
-
-            if (best_match_cost == std::numeric_limits<size_t>::max())
-                return std::nullopt;
-
-            return index;
+                    return this->impl.GetMetaName(metaId);
+                },
+                impl.MetaCount()
+            );
         }
     };
-
 }
