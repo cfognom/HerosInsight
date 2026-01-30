@@ -25,12 +25,33 @@ namespace HerosInsight
         return c;
     }
 
-    struct LoweredText
+    struct LoweredText;
+    // CRTP base
+    template <class Derived>
+    struct LoweredTextBase
     {
-        std::string_view text;
-        BitView uppercase;
+        constexpr std::string_view Text() const
+        {
+            return static_cast<const Derived *>(this)->TextView();
+        }
 
-        static void FoldText(std::span<char> text, BitView uppercase)
+        constexpr BitView Uppercase() const
+        {
+            return static_cast<const Derived *>(this)->UppercaseView();
+        }
+
+        void GetRenderableString(OutBuf<char> out) const
+        {
+            out.AppendRange(Text());
+            for (auto index : Uppercase().IterSetBits())
+            {
+                out[index] -= 32;
+            }
+        }
+
+        constexpr LoweredText SubStr(size_t offset, size_t count);
+
+        constexpr static void FoldText(std::span<char> text, BitView uppercase)
         {
             auto n_chars = text.size();
             for (size_t i = 0; i < n_chars; ++i)
@@ -44,22 +65,46 @@ namespace HerosInsight
                 text[i] = c;
             }
         }
+    };
 
-        void GetRenderableString(OutBuf<char> out)
-        {
-            out.AppendRange(text);
-            for (auto index : uppercase.IterSetBits())
-            {
-                out[index] -= 32;
-            }
-        }
+    struct LoweredText : LoweredTextBase<LoweredText>
+    {
+        std::string_view text;
+        BitView uppercase;
 
-        LoweredText SubStr(size_t offset, size_t count)
+        LoweredText() = default;
+        LoweredText(std::string_view text, BitView uppercase) : text(text), uppercase(uppercase) {}
+
+        constexpr std::string_view TextView() const { return text; }
+        constexpr BitView UppercaseView() const { return uppercase; }
+    };
+
+    template <typename Derived>
+    constexpr LoweredText LoweredTextBase<Derived>::SubStr(size_t offset, size_t count)
+    {
+        return LoweredText{
+            Text().substr(offset, count),
+            Uppercase().Subview(offset, count)
+        };
+    }
+
+    template <size_t N>
+    struct LoweredTextOwned : LoweredTextBase<LoweredTextOwned<N>>
+    {
+        std::array<char, N> text;
+        BitArray<N> uppercase;
+
+        constexpr std::string_view TextView() const { return {text.data(), N}; }
+
+        constexpr BitView UppercaseView() { return (BitView)uppercase; }
+
+        constexpr operator LoweredText() { return LoweredText(TextView(), UppercaseView()); }
+
+        constexpr explicit LoweredTextOwned(const char (&chars)[N])
         {
-            return LoweredText(
-                text.substr(offset, count),
-                uppercase.Subview(offset, count)
-            );
+            for (size_t i = 0; i < N; ++i)
+                text[i] = chars[i];
+            LoweredTextBase<LoweredTextOwned<N>>::FoldText(std::span<char>(text.data(), N), (BitView)uppercase);
         }
     };
 
