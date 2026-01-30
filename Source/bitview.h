@@ -33,7 +33,7 @@ namespace HerosInsight
             return CalcWordCount(n_bits) * sizeof(word_t);
         }
 
-        void SetAll(bool value)
+        constexpr void SetAll(bool value)
         {
             if constexpr (std::is_same<Derived, BitView>::value)
             {
@@ -55,7 +55,7 @@ namespace HerosInsight
             }
         }
 
-        void Flip()
+        constexpr void Flip()
         {
             auto data = uncompress();
             if (data.has_partial_head)
@@ -68,7 +68,7 @@ namespace HerosInsight
 
         struct reference
         {
-            void Set(bool value)
+            constexpr void Set(bool value)
             {
                 if (value)
                 {
@@ -80,39 +80,39 @@ namespace HerosInsight
                 }
             }
 
-            bool Get() const
+            constexpr bool Get() const
             {
                 return GetMaskedWord() != 0;
             }
 
-            reference &operator=(bool value)
+            constexpr reference &operator=(bool value)
             {
                 this->Set(value);
                 return *this;
             }
 
-            reference &operator=(const reference &other)
+            constexpr reference &operator=(const reference &other)
             {
                 this->Set(other.Get());
                 return *this;
             }
 
-            bool operator~() const
+            constexpr bool operator~() const
             {
                 return !this->Get();
             }
 
-            operator bool() const
+            constexpr operator bool() const
             {
                 return this->Get();
             }
 
         private:
-            reference(word_t *word, word_t bit)
+            constexpr reference(word_t *word, word_t bit)
                 : word(word), mask(bit) {}
 
-            word_t GetMaskedWord() const { return *word & mask; }
-            void SetMaskedWord(word_t value) { *word = (*word & ~mask) | (value & mask); }
+            constexpr word_t GetMaskedWord() const { return *word & mask; }
+            constexpr void SetMaskedWord(word_t value) { *word = (*word & ~mask) | (value & mask); }
 
             word_t *word;
             word_t mask;
@@ -122,28 +122,28 @@ namespace HerosInsight
             friend struct BitVector;
         };
 
-        reference operator[](size_t index)
+        constexpr reference operator[](size_t index)
         {
             assert(index < size());
             return ref_unchecked(index);
         }
 
-        bool operator[](size_t index) const
+        constexpr bool operator[](size_t index) const
         {
             auto pos = get_bit_pos(index);
             return (data()[pos.word_offset] & (word_t(1) << pos.bit_offset)) != word_t(0);
         }
 
-        word_t *data() { return as_derived().data(); }
-        const word_t *data() const { return as_derived().data(); }
-        size_t WordCount() const { return CalcWordCount(size()); }
-        std::span<word_t> Words() const { return std::span<word_t>(data(), CalcWordCount(size())); }
-        size_t size() const { return as_derived().size(); }
+        constexpr word_t *data() { return as_derived().data(); }
+        constexpr const word_t *data() const { return as_derived().data(); }
+        constexpr size_t WordCount() const { return CalcWordCount(size()); }
+        constexpr std::span<word_t> Words() const { return std::span<word_t>(data(), CalcWordCount(size())); }
+        constexpr size_t size() const { return as_derived().size(); }
 
         // We will impl this after the BitView class is defined
         BitView Subview(size_t offset, size_t count);
 
-        size_t PopCount()
+        constexpr size_t PopCount()
         {
             auto data = uncompress();
             size_t count = 0;
@@ -156,7 +156,7 @@ namespace HerosInsight
             return count;
         }
 
-        bool Any()
+        constexpr bool Any()
         {
             auto data = uncompress();
             if (data.has_partial_head)
@@ -171,7 +171,7 @@ namespace HerosInsight
             return false;
         }
 
-        bool All()
+        constexpr bool All()
         {
             auto data = uncompress();
             if (data.has_partial_head)
@@ -296,12 +296,12 @@ namespace HerosInsight
         IteratorAdapter IterSetBits() const { return IteratorAdapter{as_derived()}; }
 
     protected:
-        Derived &as_derived() { return *static_cast<Derived *>(this); }
-        const Derived &as_derived() const { return *static_cast<const Derived *>(this); }
+        constexpr Derived &as_derived() { return *static_cast<Derived *>(this); }
+        constexpr const Derived &as_derived() const { return *static_cast<const Derived *>(this); }
 
         // Initializes all bits to value
         // WARNING: This will overwrite any head/tail bits not belonging to this bitview
-        void init_bits(bool value)
+        constexpr void init_bits(bool value)
         {
             std::memset(data(), value ? 0xFF : 0, CalcReqMemSize(size()));
         }
@@ -312,7 +312,7 @@ namespace HerosInsight
             size_t bit_offset;
         };
 
-        inline BitPos get_bit_pos(size_t index) const
+        constexpr inline BitPos get_bit_pos(size_t index) const
         {
             size_t physical_index = bit_offset() + index;
             size_t word_offset = physical_index / BITS_PER_WORD;
@@ -320,7 +320,7 @@ namespace HerosInsight
             return BitPos{word_offset, bit_offset};
         }
 
-        reference ref_unchecked(size_t index)
+        constexpr reference ref_unchecked(size_t index)
         {
             auto pos = get_bit_pos(index);
             return reference(data() + pos.word_offset, word_t(1) << pos.bit_offset);
@@ -335,7 +335,7 @@ namespace HerosInsight
             std::span<word_t> whole_words;
         };
 
-        inline Properties uncompress()
+        constexpr inline Properties uncompress()
         {
             const auto end = get_bit_pos(size());
             const auto start_bit_offset = bit_offset();
@@ -364,7 +364,7 @@ namespace HerosInsight
             };
         }
 
-        size_t bit_offset() const { return as_derived().bit_offset(); }
+        constexpr size_t bit_offset() const { return as_derived().bit_offset(); }
     };
 
     class BitView : public BitViewBase<BitView>
@@ -375,7 +375,7 @@ namespace HerosInsight
 
         BitView() : words(nullptr), _bit_offset(0), n_bits(0) {}
 
-        BitView(word_t *words, size_t n_bits, bool init_val)
+        constexpr BitView(word_t *words, size_t n_bits, bool init_val)
             : BitView(words, size_t(0), n_bits)
         {
             init_bits(init_val);
@@ -384,17 +384,17 @@ namespace HerosInsight
 #endif
         }
 
-        BitView(word_t *words, size_t bit_offset, size_t n_bits)
+        constexpr BitView(word_t *words, size_t bit_offset, size_t n_bits)
             : words(words), _bit_offset(bit_offset), n_bits(n_bits)
         {
             assert(bit_offset <= MAX_BIT_OFFSET);
             assert(n_bits <= MAX_LENGTH);
         }
 
-        word_t *data() { return words; }
-        const word_t *data() const { return words; }
-        size_t size() const { return n_bits; }
-        size_t bit_offset() const { return _bit_offset; }
+        constexpr word_t *data() { return words; }
+        constexpr const word_t *data() const { return words; }
+        constexpr size_t size() const { return n_bits; }
+        constexpr size_t bit_offset() const { return _bit_offset; }
 
     private:
         word_t *words;
@@ -412,17 +412,17 @@ namespace HerosInsight
         using base = typename BitViewBase<BitArray<N>>;
         using word_t = typename base::word_t;
 
-        operator BitView() { return BitView(words.data(), 0, N); }
+        constexpr operator BitView() { return BitView(words.data(), 0, N); }
 
-        word_t *data() { return words.data(); }
-        const word_t *data() const { return words.data(); }
-        size_t size() const { return N; }
+        constexpr word_t *data() { return words.data(); }
+        constexpr const word_t *data() const { return words.data(); }
+        constexpr size_t size() const { return N; }
 
         constexpr BitArray() : BitArray(false) {}
         constexpr BitArray(bool inital_value) : words{inital_value ? std::numeric_limits<word_t>::max() : 0} {}
 
     private:
-        size_t bit_offset() const { return 0; }
+        constexpr size_t bit_offset() const { return 0; }
 
         std::array<word_t, base::CalcWordCount(N)> words;
     };
@@ -456,13 +456,13 @@ namespace HerosInsight
             this->words.resize(CalcWordCount(n_bits), value ? std::numeric_limits<word_t>::max() : word_t(0));
             this->n_bits = n_bits;
         }
-        word_t *data() { return words.data(); }
-        const word_t *data() const { return words.data(); }
-        size_t size() const { return n_bits; }
-        bool is_empty() const { return n_bits == 0; }
+        constexpr word_t *data() { return words.data(); }
+        constexpr const word_t *data() const { return words.data(); }
+        constexpr size_t size() const { return n_bits; }
+        constexpr bool is_empty() const { return n_bits == 0; }
 
     private:
-        size_t bit_offset() const { return 0; }
+        constexpr size_t bit_offset() const { return 0; }
 
         std::vector<word_t> words;
         size_t n_bits = 0;

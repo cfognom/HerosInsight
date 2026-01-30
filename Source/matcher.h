@@ -13,7 +13,7 @@
 
 namespace HerosInsight
 {
-    FORCE_INLINE bool IsUpper(char c)
+    FORCE_INLINE constexpr bool IsUpper(char c)
     {
         return c >= 'A' && c <= 'Z';
     }
