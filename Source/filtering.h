@@ -350,6 +350,8 @@ namespace HerosInsight::Filtering
 
             auto command_name_end = std::min(rem.find(' '), rem.size());
             auto command_name = rem.substr(0, command_name_end);
+            if (command_name.empty())
+                return true;
             auto command_id_opt = BestMatch(
                 command_name,
                 [&](size_t index)
@@ -358,37 +360,32 @@ namespace HerosInsight::Filtering
                 },
                 1
             );
+            if (!command_id_opt.has_value())
+                return false;
             rem = rem.substr(command_name_end);
 
-            if (command_id_opt.has_value())
+            auto &sort_com = command.emplace<SortCommand>();
+            while (true)
             {
-                auto &sort_com = command.emplace<SortCommand>();
-                while (!rem.empty())
+                auto arg_end = rem.find(',');
+                auto target_text = rem.substr(0, arg_end);
+                Utils::ReadSpaces(target_text);
+                Utils::TrimTrailingSpaces(target_text);
+                bool is_negated = !target_text.empty() && target_text.back() == '!';
+                if (is_negated)
+                    target_text = target_text.substr(0, target_text.size() - 1);
+                Utils::TrimTrailingSpaces(target_text);
+                auto index = target_text.empty() ? 0 : TryGetMetaIndexFromName(target_text);
+                if (index.has_value())
                 {
-                    auto arg_end = rem.find(',');
-                    auto target_text = rem.substr(0, arg_end);
-                    Utils::ReadSpaces(target_text);
-                    Utils::TrimTrailingSpaces(target_text);
-                    bool is_negated = !target_text.empty() && target_text.back() == '!';
-                    if (is_negated)
-                        target_text = target_text.substr(0, target_text.size() - 1);
-                    Utils::TrimTrailingSpaces(target_text);
-                    auto index = TryGetMetaIndexFromName(target_text);
-                    if (index.has_value())
-                    {
-                        auto &arg = sort_com.args.emplace_back();
-                        arg.is_negated = is_negated;
-                        arg.target_meta_prop_id = index.value();
-                    }
-
-                    if (arg_end == std::string_view::npos)
-                        break;
-                    rem = rem.substr(arg_end + 1);
+                    auto &arg = sort_com.args.emplace_back();
+                    arg.is_negated = is_negated;
+                    arg.target_meta_prop_id = index.value();
                 }
-            }
-            else
-            {
-                return false;
+
+                if (arg_end == std::string_view::npos)
+                    break;
+                rem = rem.substr(arg_end + 1);
             }
 
             return true;
