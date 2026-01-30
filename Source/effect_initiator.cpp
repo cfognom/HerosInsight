@@ -48,7 +48,6 @@
 #include <GWCA/Utilities/Hook.h>
 #include <GWCA/Utilities/Hooker.h>
 
-#include <StoC_packets.h>
 #include <attribute_or_title.h>
 #include <autovec.h>
 #include <custom_agent_data.h>

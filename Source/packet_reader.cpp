@@ -34,7 +34,6 @@
 #include <GWCA/Utilities/Hook.h>
 #include <GWCA/Utilities/Hooker.h>
 
-#include <StoC_packets.h>
 #include <attribute_or_title.h>
 #include <custom_agent_data.h>
 #include <custom_skill_data.h>
@@ -58,7 +57,7 @@ const uint32_t headers_to_debug[] = {
     StoC::ProjectileCreated::STATIC_HEADER,
     StoC::ProjectileDestroyed::STATIC_HEADER,
     StoC::AddEffect::STATIC_HEADER,
-    GAME_SMSG_EFFECT_RENEWED,
+    (uint32_t)GAME_SMSG::EFFECT_RENEWED,
     StoC::RemoveEffect::STATIC_HEADER,
     // StoC::SkillActivate::STATIC_HEADER,
     // StoC::SkillRecharge::STATIC_HEADER,
@@ -67,7 +66,7 @@ const uint32_t headers_to_debug[] = {
     // StoC::AgentState::STATIC_HEADER,
     // StoC::AgentAdd::STATIC_HEADER,
     // StoC::InstanceLoadInfo::STATIC_HEADER,
-    // GAME_SMSG_AGENT_UPDATE_ATTRIBUTE,
+    // (uint32_t)GAME_SMSG::AGENT_UPDATE_ATTRIBUTE,
     // StoC::UpdateTitle::STATIC_HEADER,
 };
 
@@ -327,7 +326,7 @@ namespace HerosInsight::PacketReader
                 );
                 break;
             }
-            case GAME_SMSG_EFFECT_RENEWED:
+            case (uint32_t)GAME_SMSG::EFFECT_RENEWED:
             {
                 auto p = reinterpret_cast<const StoC::AddEffect *>(packet);
                 ids_to_check.push_back(p->agent_id);
@@ -1100,15 +1099,15 @@ namespace HerosInsight::PacketReader
             // for (auto &header : headers_to_debug)
             for (uint32_t header = 0; header < 500; header++)
             {
-                if (header == GAME_SMSG_AGENT_MOVEMENT_TICK ||
-                    header == GAME_SMSG_AGENT_MOVE_TO_POINT ||
-                    header == GAME_SMSG_AGENT_STOP_MOVING ||
-                    header == GAME_SMSG_AGENT_UPDATE_EFFECTS ||
-                    header == GAME_SMSG_AGENT_UPDATE_ROTATION ||
-                    header == GAME_SMSG_PING_REQUEST ||
-                    header == GAME_SMSG_PING_REPLY ||
+                if (header == (uint32_t)GAME_SMSG::AGENT_MOVEMENT_TICK ||
+                    header == (uint32_t)GAME_SMSG::AGENT_MOVE_TO_POINT ||
+                    header == (uint32_t)GAME_SMSG::AGENT_STOP_MOVING ||
+                    header == (uint32_t)GAME_SMSG::AGENT_UPDATE_EFFECTS ||
+                    header == (uint32_t)GAME_SMSG::AGENT_UPDATE_ROTATION ||
+                    header == (uint32_t)GAME_SMSG::PING_REQUEST ||
+                    header == (uint32_t)GAME_SMSG::PING_REPLY ||
                     header == StoC::UnkOnMapLoad::STATIC_HEADER ||
-                    header == GAME_SMSG_AGENT_UPDATE_DESTINATION)
+                    header == (uint32_t)GAME_SMSG::AGENT_UPDATE_DESTINATION)
                     continue;
                 GW::StoC::RegisterPacketCallback(&packet_reader_debug_entry, header, &WritePacketDebugInfo, 0);
             }

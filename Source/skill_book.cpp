@@ -85,7 +85,6 @@
 #include <GWCA/Utilities/MemoryPatcher.h>
 #include <GWCA/Utilities/Scanner.h>
 
-#include <StoC_packets.h>
 #include <attribute_or_title.h>
 #include <attribute_store.h>
 #include <capacity_hints.h>
@@ -2166,10 +2165,9 @@ namespace HerosInsight::SkillBook
     GW::HookEntry attribute_update_entry;
     GW::HookEntry select_hero_entry;
 
-    void AttributeUpdatedCallback(GW::HookStatus *, const GW::Packet::StoC::PacketBase *packet)
+    void AttributeUpdatedCallback(GW::HookStatus *, const GW::Packet::StoC::AttributeUpdatePacket *packet)
     {
-        const auto p = reinterpret_cast<const GW::Packet::StoC::AttributeUpdatePacket *>(packet);
-        auto packet_agent_id = p->agent_id;
+        auto packet_agent_id = packet->agent_id;
 
         if (packet_agent_id == focused_agent_id)
         {
@@ -2292,7 +2290,7 @@ namespace HerosInsight::SkillBook
 
     void Enable()
     {
-        GW::StoC::RegisterPacketCallback(&attribute_update_entry, GAME_SMSG_AGENT_UPDATE_ATTRIBUTE, AttributeUpdatedCallback);
+        GW::StoC::RegisterPacketCallback<GW::Packet::StoC::AttributeUpdatePacket>(&attribute_update_entry, AttributeUpdatedCallback);
         GW::StoC::RegisterPacketCallback<GW::Packet::StoC::UpdateTitle>(&attribute_update_entry, TitleUpdateCallback);
 
         GW::UI::RegisterUIMessageCallback(&select_hero_entry, GW::UI::UIMessage::kLoadAgentSkills, LoadAgentSkillsCallback);

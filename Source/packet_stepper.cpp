@@ -48,7 +48,6 @@
 #include <GWCA/Utilities/Hook.h>
 #include <GWCA/Utilities/Hooker.h>
 
-#include <StoC_packets.h>
 #include <attribute_or_title.h>
 #include <autovec.h>
 #include <custom_agent_data.h>
@@ -134,7 +133,8 @@ namespace HerosInsight::PacketStepper
             StoC::GenericValueID::effect_on_agent,
             StoC::GenericValueID::change_health_regen,
             StoC::GenericValueID::max_hp_update,
-            StoC::GenericValueID::effect_on_target);
+            StoC::GenericValueID::effect_on_target
+        );
 
         auto IsRelated = [=](uint32_t agent_id)
         {
@@ -294,14 +294,16 @@ namespace HerosInsight::PacketStepper
                 {
                     OmniHandler(packet, Altitude::Before);
                 },
-                -2);
+                -2
+            );
             GW::StoC::RegisterPacketCallback(
                 &entry2, i,
                 [](GW::HookStatus *, const StoC::PacketBase *packet)
                 {
                     OmniHandler(packet, Altitude::After);
                 },
-                2);
+                2
+            );
         }
         GW::GameThread::RegisterGameThreadCallback(&entry, &OnFrameEnd, -1);
     }
@@ -355,14 +357,14 @@ namespace HerosInsight::PacketStepper
         this->handle = handle;
         // Do binary search to insert in order: lower to higher
         auto it = std::lower_bound(delayed_coros.begin(), delayed_coros.end(), timestamp_resume, [](const DelayedCoro &a, DWORD b)
-            { return a.timestamp_resume < b; });
+                                   { return a.timestamp_resume < b; });
         delayed_coros.insert(it, DelayedCoro{handle, timestamp_resume});
     }
     void DelayAwaiter::stop() const
     {
         assert(handle && "handle is null");
         auto it = std::find_if(delayed_coros.begin(), delayed_coros.end(), [=](const DelayedCoro &a)
-            { return a.handle == handle; });
+                               { return a.handle == handle; });
         if (it != delayed_coros.end())
             delayed_coros.erase(it);
         this->handle.resume();
