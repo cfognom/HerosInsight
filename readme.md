@@ -1,10 +1,12 @@
 ## What is it?
-***Hero’s Insight*** is a mod for the game ***Guild Wars*** focused on improving buildcrafting and gameplay through helpful ingame tools and statistics.
+***Hero’s Insight*** is a mod for the game ***Guild Wars*** focused on making gameplay and buildcrafting more enjoyable through helpful ingame tools and statistics.
 
 The mod is named after the Guild Wars item [*Hero's Insight*](https://wiki.guildwars.com/wiki/Hero%27s_Insight), which grants the player's character double experience while active. In the same spirit, the mod aims to do the same, but for the actual player this time 😁.
 
 ## How to install
 Download the lastest release [link to latest release]. Unzip it to wherever you want to install the mod. Done. Now you can launch the mod by running the exe.
+
+Before using the mod please check out the [Faq] section.
 
 ## What it does
 The following features available today.
@@ -41,6 +43,16 @@ Track stats for you and your party
 * And more...
 
 ## FAQ
+- ### Could using ***Hero’s Insight*** result in a ban?
+  It is not possible to guarantee that using ***Hero’s Insight*** will not result in a ban. Use the mod at your own risk.
+
+  Hero’s Insight is designed to comply, as closely as possible, with ***ArenaNet's*** [*Code of Conduct*](https://www.arena.net/en/legal/code-of-conduct) and [*User Agreement*](https://www.arena.net/en/legal/user-agreement)
+  In particular:
+  - The mod disables itself entirely in PvP areas and lobbies (with the sole exception of a hook used to detect when it is permitted to re-enable).
+  - It does not automate gameplay or provide botting functionality.
+
+  That said, ArenaNet retains full discretion over enforcement of its policies, and may suspend or ban accounts at any time, for any reason. You are encouraged to review the [*Code of Conduct*](https://www.arena.net/en/legal/code-of-conduct) and [*User Agreement*](https://www.arena.net/en/legal/user-agreement) yourself and decide whether you are comfortable using the mod.
+
 - ### Help! My antivirus software is flagging ***Hero’s Insight*** as Malware. Have I been infected?
   If you have downloaded the mod from this Github repository: No you have not been infected. You can safely add **Launch_HerosInsight.exe** to you antivirus software's whitelist/exlusion list and keep using the mod.
 
@@ -50,5 +62,3 @@ Track stats for you and your party
 You are very welcome to report bugs by opening issues and provide feedback and/or feature requests using discussions here in Github.
 
 However, contributing to ***Hero’s Insight*** is currently hard because it is dependent on a closed source fork of GWCA. You cannot build the project it without it.
-
-(Author note: As I understand it, GWCA was made private to prevent misuse (botting, cheating, etc.), so for that reason I have decided not to publish my fork of it either. We'll see how this changes in the future.)
