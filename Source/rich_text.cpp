@@ -372,7 +372,7 @@ namespace HerosInsight::RichText
 
                 if (seg.has_hidden_hl)
                 {
-                    auto min_aligned = ImFloor(ImVec2(min.x, min.y + 1));
+                    auto min_aligned = ImFloor(ImVec2(min.x - 1, min.y + 1));
                     auto max_aligned = ImFloor(ImVec2(min.x + 1, max.y));
                     draw_list->AddRectFilled(min_aligned, max_aligned, highlight_color);
                 }
