@@ -38,6 +38,14 @@ namespace HerosInsight::RichText
         return false;
     }
 
+    void TooltipTag::ToChars(OutBuf<char> output) const
+    {
+        if (id != -1)
+            Parsing::write_pattern<TooltipOpenPattern>(output, this);
+        else
+            Parsing::write_pattern<TooltipClosePattern>(output, this);
+    }
+
     bool TooltipTag::TryRead(std::string_view &remaining, TooltipTag &out)
     {
         if (Parsing::read_pattern<TooltipOpenPattern>(remaining, &out))
@@ -454,10 +462,7 @@ namespace HerosInsight::RichText
                 break;
 
             case TextTagType::Tooltip:
-                if (tag.tooltip_tag.id == -1)
-                    Parsing::write_pattern<TooltipClosePattern>(output, &tag.tooltip_tag);
-                else
-                    Parsing::write_pattern<TooltipOpenPattern>(output, &tag.tooltip_tag);
+                tag.tooltip_tag.ToChars(output);
                 break;
 
             case TextTagType::Frac:

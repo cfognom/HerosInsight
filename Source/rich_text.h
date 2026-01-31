@@ -19,6 +19,7 @@ namespace HerosInsight::RichText
     {
         int32_t id; // -1 = close tooltip
 
+        void ToChars(OutBuf<char> output) const;
         static bool TryRead(std::string_view &remaining, TooltipTag &out);
         static std::string_view Find(std::string_view text, TooltipTag &out);
     };
