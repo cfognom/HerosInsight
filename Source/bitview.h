@@ -435,6 +435,9 @@ namespace HerosInsight
         // using base = typename BitViewBase<BitVector>;
         // using word_t = typename base::word_t;
 
+        BitVector() = default;
+        BitVector(size_t n_bits, bool value) : words(CalcWordCount(n_bits), value ? std::numeric_limits<word_t>::max() : 0), n_bits(n_bits) {};
+
         operator BitView() { return BitView(words.data(), 0, n_bits); }
 
         void clear() { words.clear(); }
