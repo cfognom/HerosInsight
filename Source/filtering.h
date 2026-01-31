@@ -98,6 +98,12 @@ namespace HerosInsight::Filtering
         }
     };
 
+    struct RelevantMeta
+    {
+        uint32_t meta_id;
+        uint32_t popcount;
+    };
+
     struct ResultItem
     {
         FixedVector<char, 512> text;
@@ -281,6 +287,36 @@ namespace HerosInsight::Filtering
     struct Device
     {
         I &impl;
+        SpanVector<RelevantMeta> relevant_metas_per_prop; // For each prop this is sorted from most specific to least
+
+        Device(I &impl) : impl(impl)
+        {
+            auto n_meta = impl.MetaCount();
+            auto n_props = I::PropCount();
+            auto deduper = relevant_metas_per_prop.CreateDeduper(n_props);
+            relevant_metas_per_prop.Reserve(n_props, n_props * 2);
+            for (size_t prop_id = 0; prop_id <= n_props; ++prop_id)
+            {
+                for (size_t meta_id = 0; meta_id < n_meta; ++meta_id)
+                {
+                    auto propset = impl.GetMetaPropset(meta_id);
+                    if (propset[prop_id])
+                    {
+                        relevant_metas_per_prop.Elements().emplace_back(meta_id, propset.PopCount());
+                    }
+                }
+                auto pending = relevant_metas_per_prop.GetPendingSpan();
+                std::stable_sort(
+                    pending.begin(),
+                    pending.end(),
+                    [](auto a, auto b)
+                    {
+                        return a.popcount < b.popcount;
+                    }
+                );
+                relevant_metas_per_prop.CommitWritten(&deduper);
+            }
+        }
 
         bool ParseFilter(std::string_view source, Filter &filter)
         {
@@ -689,6 +725,7 @@ namespace HerosInsight::Filtering
                 }
             };
 
+#define SkillDull "<c=@skilldull>"
 #define ArgColor "<c=@skilldyn>"
 #define ControlColor "<c=#64ffff>"
 #define ModifierColor "<c=#f0f080>"
@@ -841,19 +878,44 @@ namespace HerosInsight::Filtering
             LoweredText lowered = prop.GetSearchableStr(str_id);
             ResultItem result;
             CalcHL(q, prop_id, lowered, result.hl);
-            FixedVector<Text::PosDelta, 64> deltas;
+            FixedVector<Text::PosDelta, 128> deltas;
             prop.GetRenderableString(str_id, result.text, deltas);
             Text::PatchPositions(result.hl, deltas);
             return result;
         }
 
-        ResultItem CalcMetaResult(Query &q, size_t meta)
+        ResultItem CalcPropResult(Query &q, size_t prop_id)
         {
-            LoweredText lowered = impl.GetMetaName(meta);
-            auto meta_prop_id = I::PropCount();
             ResultItem result;
-            CalcHL(q, meta_prop_id, lowered, result.hl);
-            lowered.GetRenderableString(result.text);
+            auto meta_prop_id = I::PropCount();
+            auto relevant_metas = relevant_metas_per_prop.Get(prop_id);
+            if (!relevant_metas.empty())
+            {
+                for (size_t i = 0;;)
+                {
+                    auto &relevant_meta = relevant_metas[i];
+
+                    size_t offset = result.text.size();
+                    LoweredText lowered = impl.GetMetaName(relevant_meta.meta_id);
+                    auto size = result.hl.size();
+                    CalcHL(q, meta_prop_id, lowered, result.hl);
+                    lowered.GetRenderableString(result.text);
+                    if (offset > 0)
+                    {
+                        for (size_t i = size; i < result.hl.size(); i++)
+                        {
+                            result.hl[i] += offset;
+                        }
+                    }
+
+                    ++i;
+                    if (i == relevant_metas.size())
+                        break;
+
+                    result.text.AppendString(SkillDull ", " CloseColor);
+                }
+            }
+
             return result;
         }
 
@@ -862,6 +924,7 @@ namespace HerosInsight::Filtering
         {
             if (!lowered.text.empty())
             {
+                auto hl_size_before = hl.size();
                 for (auto &filter : q.filters)
                 {
                     if (filter.inverted)
@@ -881,8 +944,9 @@ namespace HerosInsight::Filtering
                     }
                 }
                 std::span<uint16_t> hl_span = hl;
+                hl_span = hl_span.subspan(hl_size_before);
                 SortHighlighting(hl_span);
-                hl.resize(hl_span.size());
+                hl.resize(hl_size_before + hl_span.size());
             }
         }
 

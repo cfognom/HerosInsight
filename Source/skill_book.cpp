@@ -812,14 +812,6 @@ namespace HerosInsight::SkillBook
             );
         }
 
-        struct MetaPropSection
-        {
-            uint32_t start_index = 0;
-            uint32_t end_index = 0;
-        };
-
-        MetaPropSection footer_meta_section;
-
         template <typename... Ts>
         static Propset CreatePropset(Ts... args)
         {
@@ -834,22 +826,6 @@ namespace HerosInsight::SkillBook
             {
                 meta_prop_names.arena.push_back(name);
                 meta_propsets.push_back(propset);
-            };
-
-            struct SectionRecordingScope
-            {
-                SectionRecordingScope(MetaPropSection *dst, std::vector<Propset> &meta_propsets) : dst(dst), meta_propsets(meta_propsets)
-                {
-                    dst->start_index = static_cast<uint32_t>(meta_propsets.size());
-                }
-                ~SectionRecordingScope()
-                {
-                    dst->end_index = static_cast<uint32_t>(meta_propsets.size());
-                }
-
-            private:
-                MetaPropSection *dst;
-                std::vector<Propset> &meta_propsets;
             };
 
             std::string_view capacity_hint_key = "meta_prop_names";
@@ -872,14 +848,10 @@ namespace HerosInsight::SkillBook
             SetupMetaProp("Full Description", CreatePropset(SkillProp::Description));
             SetupMetaProp("Concise Description", CreatePropset(SkillProp::Concise));
             SetupMetaProp("Description", CreatePropset(SkillProp::Description, SkillProp::Concise));
-
-            {
-                SectionRecordingScope section(&footer_meta_section, meta_propsets);
-                SetupMetaProp("Attribute", CreatePropset(SkillProp::Attribute));
-                SetupMetaProp("Profession", CreatePropset(SkillProp::Profession));
-                SetupMetaProp("Campaign", CreatePropset(SkillProp::Campaign));
-                SetupMetaProp("Range", CreatePropset(SkillProp::Range));
-            }
+            SetupMetaProp("Attribute", CreatePropset(SkillProp::Attribute));
+            SetupMetaProp("Profession", CreatePropset(SkillProp::Profession));
+            SetupMetaProp("Campaign", CreatePropset(SkillProp::Campaign));
+            SetupMetaProp("Range", CreatePropset(SkillProp::Range));
 
             SetupMetaProp("Id", CreatePropset(SkillProp::Id));
 
@@ -1029,12 +1001,15 @@ namespace HerosInsight::SkillBook
                         args.push_back(b.ExplicitString(", "));
                     };
 
+                    constexpr auto soft_red = IM_COL32(255, 100, 100, 255);
+                    constexpr auto soft_green = IM_COL32(143, 255, 143, 255);
+
                     // clang-format off
                     if (tags.PvEOnly)          PushTag("PvE-only");
-                    if (is_unlocked)           PushTag("Unlocked" , IM_COL32(143, 255, 143, 255));
-                    if (is_locked)             PushTag("Locked"   , IM_COL32(255, 100, 100, 255));
-                    if (is_learned)            PushTag("Learned"  , IM_COL32(143, 255, 143, 255));
-                    if (is_unlearned)          PushTag("Unlearned", IM_COL32(255, 100, 100, 255));
+                    if (is_unlocked)           PushTag("Unlocked" , soft_green);
+                    if (is_locked)             PushTag("Locked"   , soft_red);
+                    if (is_learned)            PushTag("Learned"  , soft_green);
+                    if (is_unlearned)          PushTag("Unlearned", soft_red);
                     if (tags.Temporary)        PushTag("Temporary");
                     if (is_equipable)          PushTag("Equipable", IM_COL32(100, 255, 255, 255));
                     
@@ -1477,6 +1452,67 @@ namespace HerosInsight::SkillBook
             dirty_flags = DirtyFlags::None;
         }
 
+        template <typename DrawContent>
+        void DrawProperty(DrawContent &&draw_content, size_t prop_id, bool is_hidden_header = false)
+        {
+            auto meta_names = filter_device.CalcPropResult(query, prop_id);
+            std::string_view header{};
+            if (!is_hidden_header)
+            {
+                std::string_view span = meta_names.text;
+                header = span.substr(0, span.find(','));
+            }
+
+            auto DrawTooltip = [](std::string_view text, std::span<uint16_t> highlighting)
+            {
+                ImGui::BeginTooltip();
+                ImGui::PushFont(Constants::Fonts::gw_font_16);
+                ImGui::PushStyleColor(ImGuiCol_Text, 0xff64ffff);
+                text_drawer.DrawRichText(text, 0, -1, highlighting);
+                ImGui::PopStyleColor();
+                ImGui::PopFont();
+                ImGui::EndTooltip();
+            };
+
+            text_drawer.DrawRichText(header, 0, -1, meta_names.hl);
+            bool is_header_hovered = ImGui::IsItemHovered();
+            if (is_header_hovered)
+            {
+                auto meta_prop_id = adapter.PropCount();
+                auto meta_meta_names = filter_device.CalcPropResult(query, meta_prop_id);
+                DrawTooltip(meta_meta_names.text, meta_meta_names.hl);
+            }
+            ImGui::SameLine(0, 0);
+
+            if (!is_hidden_header)
+            {
+                ImGui::TextUnformatted(": ");
+                ImGui::SameLine(0, 0);
+            }
+
+            draw_content();
+            if (!is_header_hovered && ImGui::IsItemHovered())
+            {
+                DrawTooltip(meta_names.text, meta_names.hl);
+            }
+        }
+
+        void DrawProperty(size_t prop_id, size_t skill_id, float wrapping_min, float wrapping_max, bool is_hidden_header = false)
+        {
+            auto content = filter_device.CalcItemResult(query, prop_id, skill_id);
+            if (content.text.empty())
+                return;
+
+            DrawProperty(
+                [&]()
+                {
+                    text_drawer.DrawRichText(content.text, wrapping_min, wrapping_max, content.hl);
+                },
+                prop_id,
+                is_hidden_header
+            );
+        }
+
         void DrawSkillStats(const GW::Skill &skill)
         {
             ImGui::BeginGroup();
@@ -1507,7 +1543,7 @@ namespace HerosInsight::SkillBook
                 size_t pos_from_right;
             };
 
-            Layout layout[]{
+            static constexpr Layout layout[]{
                 {SkillProp::Overcast, 4},
                 {SkillProp::Sacrifice, 4},
                 {SkillProp::Upkeep, 4},
@@ -1531,7 +1567,14 @@ namespace HerosInsight::SkillBook
                 const auto stat_line_cursor = ImVec2(current_x, base_pos_y + 1);
                 ImGui::SetCursorPos(stat_line_cursor);
 
-                text_drawer.DrawTextSegments(segments, 0, -1);
+                DrawProperty(
+                    [&]()
+                    {
+                        text_drawer.DrawTextSegments(segments, 0, -1);
+                    },
+                    (size_t)l.id,
+                    true
+                );
 
                 current_x += text_width;
                 min_pos_x = current_x + 5;
@@ -1585,7 +1628,14 @@ namespace HerosInsight::SkillBook
                     auto r = filter_device.CalcItemResult(query, (size_t)SkillProp::Name, (size_t)skill_id);
                     FixedVector<RichText::TextSegment, 32> segments;
                     text_drawer.MakeTextSegments(r.text, segments, r.hl);
-                    text_drawer.DrawTextSegments(segments, wrapping_min, wrapping_max);
+                    DrawProperty(
+                        [&]()
+                        {
+                            text_drawer.DrawTextSegments(segments, wrapping_min, wrapping_max);
+                        },
+                        (size_t)SkillProp::Name,
+                        true
+                    );
 
                     auto size = ImGui::GetItemRectSize();
 
@@ -1634,16 +1684,12 @@ namespace HerosInsight::SkillBook
                 }
 
                 { // Draw skill type
-                    auto r = filter_device.CalcItemResult(query, (size_t)SkillProp::Type, (size_t)skill_id);
-                    // auto hl = GetHL(SkillProp::Type, skill_id);
-                    text_drawer.DrawRichText(r.text, wrapping_min, wrapping_max, r.hl);
+                    DrawProperty((size_t)SkillProp::Type, (size_t)skill_id, wrapping_min, wrapping_max, true);
                 }
 
                 { // Draw skill tags
-                    auto r = filter_device.CalcItemResult(query, (size_t)SkillProp::Tag, (size_t)skill_id);
-                    // auto hl = GetHL(SkillProp::Tag, skill_id);
                     ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
-                    text_drawer.DrawRichText(r.text, wrapping_min, wrapping_max, r.hl);
+                    DrawProperty((size_t)SkillProp::Tag, (size_t)skill_id, wrapping_min, wrapping_max, true);
                     ImGui::PopStyleColor();
                 }
 
@@ -1932,13 +1978,20 @@ namespace HerosInsight::SkillBook
             auto tt_provider = SkillTooltipProvider(skill_id, attr_lvl);
             text_drawer.tooltip_provider = &tt_provider;
 
-            auto type = settings.prefer_concise_descriptions ? SkillProp::Concise : SkillProp::Description;
-            auto alt_type = settings.prefer_concise_descriptions ? SkillProp::Description : SkillProp::Concise;
+            auto main_prop = settings.prefer_concise_descriptions ? SkillProp::Concise : SkillProp::Description;
+            auto alt_prop = settings.prefer_concise_descriptions ? SkillProp::Description : SkillProp::Concise;
 
-            auto main_r = filter_device.CalcItemResult(query, (size_t)type, (size_t)skill_id);
-            auto alt_r = filter_device.CalcItemResult(query, (size_t)alt_type, (size_t)skill_id);
+            auto main_r = filter_device.CalcItemResult(query, (size_t)main_prop, (size_t)skill_id);
+            auto alt_r = filter_device.CalcItemResult(query, (size_t)alt_prop, (size_t)skill_id);
 
-            text_drawer.DrawRichText(main_r.text, 0, work_width, main_r.hl);
+            DrawProperty(
+                [&]
+                {
+                    text_drawer.DrawRichText(main_r.text, 0, work_width, main_r.hl);
+                },
+                (size_t)main_prop,
+                true
+            );
 
             bool draw_alt = alt_r.hl.size() > main_r.hl.size();
             if (!draw_alt)
@@ -1967,7 +2020,14 @@ namespace HerosInsight::SkillBook
                 // ImGui::SameLine(0, 0);
                 // auto wrapping_min = ImGui::GetCursorPosX();
 
-                text_drawer.DrawRichText(alt_r.text, 0, work_width, alt_r.hl);
+                DrawProperty(
+                    [&]
+                    {
+                        text_drawer.DrawRichText(alt_r.text, 0, work_width, alt_r.hl);
+                    },
+                    (size_t)alt_prop,
+                    true
+                );
             }
         }
 
@@ -1978,30 +2038,21 @@ namespace HerosInsight::SkillBook
             ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
 
-            auto &section = adapter.ts.footer_meta_section;
-            for (auto i_meta = section.start_index; i_meta < section.end_index; ++i_meta)
+            struct Layout
             {
-                auto meta_propset = adapter.GetMetaPropset(i_meta);
-                bool has_drawn_header = false;
-                for (auto prop : meta_propset.IterSetBits())
-                {
-                    auto r = filter_device.CalcItemResult(query, (size_t)prop, (size_t)skill_id);
-                    if (r.text.empty())
-                        continue;
+                SkillProp id;
+            };
 
-                    if (!has_drawn_header)
-                    {
-                        auto r = filter_device.CalcMetaResult(query, i_meta);
-                        // auto meta_hl = GetMetaHL(i_meta);
-                        text_drawer.DrawRichText(r.text, 0, work_width, r.hl);
-                        ImGui::SameLine();
-                        text_drawer.DrawRichText(": ", 0, work_width);
-                        ImGui::SameLine();
-                        has_drawn_header = true;
-                    }
-                    // auto str_hl = GetHL(prop, skill_id);
-                    text_drawer.DrawRichText(r.text, 0, work_width, r.hl);
-                }
+            static constexpr Layout layout[]{
+                {SkillProp::Attribute},
+                {SkillProp::Profession},
+                {SkillProp::Campaign},
+                {SkillProp::Range},
+            };
+
+            for (auto &l : layout)
+            {
+                DrawProperty((size_t)l.id, (size_t)skill_id, 0, work_width, false);
             }
 
             ImGui::PopStyleVar();
@@ -2014,7 +2065,13 @@ namespace HerosInsight::SkillBook
                 ImGui::SetCursorPosX(work_width - id_str_size.x - 4);
                 ImVec4 color(1, 1, 1, 0.3f);
                 ImGui::PushStyleColor(ImGuiCol_Text, color);
-                text_drawer.DrawRichText(r.text, 0, work_width, r.hl);
+                DrawProperty(
+                    [&]()
+                    {
+                        text_drawer.DrawRichText(r.text, 0, -1, r.hl);
+                    },
+                    (size_t)SkillProp::Id, true
+                );
                 ImGui::PopStyleColor();
                 ImGui::SetWindowFontScale(1.f);
             }
