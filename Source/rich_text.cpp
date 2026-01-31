@@ -298,11 +298,8 @@ namespace HerosInsight::RichText
         assert(color_stack.empty());
     }
 
-    bool Drawer::DrawTextSegments(std::span<TextSegment> segments, float wrapping_min, float wrapping_max)
+    void Drawer::DrawTextSegments(std::span<TextSegment> segments, float wrapping_min, float wrapping_max)
     {
-        if (segments.empty())
-            return false;
-
         float max_width = wrapping_max < 0 ? std::numeric_limits<float>::max() : wrapping_max - wrapping_min;
         float used_width = ImGui::GetCursorPosX() - wrapping_min;
         auto ss_cursor = ImGui::GetCursorScreenPos();
@@ -316,10 +313,7 @@ namespace HerosInsight::RichText
         const auto highlight_text_color = ImGui::GetColorU32(IM_COL32_BLACK);
 
         // Screen-space bounding box
-        ImRect bb = ImRect(
-            std::numeric_limits<float>::max(), std::numeric_limits<float>::max(),
-            std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest()
-        );
+        ImRect bb = ImRect(ss_cursor, ss_cursor);
 
         size_t n_segments = segments.size();
         // i_rem is the start of remaining segments or end of done segments
@@ -436,15 +430,13 @@ namespace HerosInsight::RichText
         ImGui::ItemAdd(bb, 0);
         ss_cursor.y += style.ItemSpacing.y;
         ImGui::SetCursorScreenPos(ss_cursor);
-
-        return true;
     }
 
-    bool Drawer::DrawRichText(std::string_view text, float wrapping_min, float wrapping_max, std::span<uint16_t> highlighting, TextSegment::WrapMode first_segment_wrap_mode)
+    void Drawer::DrawRichText(std::string_view text, float wrapping_min, float wrapping_max, std::span<uint16_t> highlighting, TextSegment::WrapMode first_segment_wrap_mode)
     {
         FixedVector<TextSegment, 512> segments;
         MakeTextSegments(text, segments, highlighting, first_segment_wrap_mode);
-        return DrawTextSegments(segments, wrapping_min, wrapping_max);
+        DrawTextSegments(segments, wrapping_min, wrapping_max);
     }
 
     float CalcTextSegmentsWidth(std::span<TextSegment> segments)
