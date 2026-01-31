@@ -325,14 +325,13 @@ namespace HerosInsight::RichText
             for (size_t i = i_rem; i < n_segments; ++i)
             {
                 auto &seg = segments[i];
+                if (seg.wrap_mode == TextSegment::WrapMode::Force)
+                {
+                    i_wrap = i + 1;
+                    break;
+                }
                 if (used_width > 0.f) // We only allow wrapping if we are not directly at the start
                 {
-                    if (seg.wrap_mode == TextSegment::WrapMode::Force)
-                    {
-                        i_wrap = i;
-                        break;
-                    }
-
                     if (seg.wrap_mode == TextSegment::WrapMode::Allow)
                     {
                         i_wrap_allowed = i;
