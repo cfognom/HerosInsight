@@ -1466,11 +1466,15 @@ namespace HerosInsight::SkillBook
             auto DrawTooltip = [](std::string_view text, std::span<uint16_t> highlighting)
             {
                 ImGui::BeginTooltip();
-                ImGui::PushFont(Constants::Fonts::gw_font_16);
-                ImGui::PushStyleColor(ImGuiCol_Text, 0xff64ffff);
-                text_drawer.DrawRichText(text, 0, -1, highlighting);
-                ImGui::PopStyleColor();
-                ImGui::PopFont();
+                auto window = ImGui::GetCurrentWindow();
+                if (window->BeginCount == 1) // We only draw a tooltip if it wasn't written already
+                {
+                    ImGui::PushFont(Constants::Fonts::gw_font_16);
+                    ImGui::PushStyleColor(ImGuiCol_Text, 0xff64ffff);
+                    text_drawer.DrawRichText(text, 0, -1, highlighting);
+                    ImGui::PopStyleColor();
+                    ImGui::PopFont();
+                }
                 ImGui::EndTooltip();
             };
 
