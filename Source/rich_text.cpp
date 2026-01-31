@@ -126,11 +126,6 @@ namespace HerosInsight::RichText
 
     void Drawer::MakeTextSegments(std::string_view text, OutBuf<TextSegment> result, std::span<uint16_t> highlighting, TextSegment::WrapMode first_segment_wrap_mode)
     {
-        if (text.empty())
-        {
-            return;
-        }
-
         FixedVector<ImU32, 32> color_stack;
         FixedVector<uint32_t, 32> tooltip_stack;
 
@@ -290,6 +285,10 @@ namespace HerosInsight::RichText
             {
                 ++i;
             }
+        }
+        if (!has_hidden_hl)
+        {
+            has_hidden_hl = i_hl < highlighting.size();
         }
         if (has_hidden_hl)
         {
