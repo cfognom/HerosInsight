@@ -268,10 +268,10 @@ namespace HerosInsight
                 }
 
             private:
-                iterator(const BitView &bitview, size_t index)
+                iterator(const BitViewBase<Derived> &bitview, size_t index)
                     : bitview(bitview), index(index) {}
 
-                const BitView &bitview;
+                const BitViewBase<Derived> &bitview;
                 size_t index;
 
                 friend struct IteratorAdapter;
@@ -290,10 +290,10 @@ namespace HerosInsight
                 return iterator(this->bitview, this->bitview.size());
             }
 
-            const Derived &bitview;
+            const BitViewBase<Derived> &bitview;
         };
 
-        IteratorAdapter IterSetBits() const { return IteratorAdapter{as_derived()}; }
+        IteratorAdapter IterSetBits() const { return IteratorAdapter{*this}; }
 
     protected:
         constexpr Derived &as_derived() { return *static_cast<Derived *>(this); }
