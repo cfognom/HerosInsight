@@ -171,8 +171,8 @@ namespace HerosInsight::RichText
         TextFracProvider *frac_provider = nullptr;
 
         void MakeTextSegments(std::string_view text, OutBuf<TextSegment> result, std::span<uint16_t> highlighting = {}, TextSegment::WrapMode first_segment_wrap_mode = TextSegment::WrapMode::Disallow);
-        void DrawTextSegments(std::span<TextSegment> segments, float wrapping_min = 0, float wrapping_max = -1);
-        void DrawRichText(std::string_view text, float wrapping_min = 0, float wrapping_max = -1, std::span<uint16_t> highlighting = {}, TextSegment::WrapMode first_segment_wrap_mode = TextSegment::WrapMode::Disallow);
+        bool DrawTextSegments(std::span<TextSegment> segments, float wrapping_min = 0, float wrapping_max = -1);
+        bool DrawRichText(std::string_view text, float wrapping_min = 0, float wrapping_max = -1, std::span<uint16_t> highlighting = {}, TextSegment::WrapMode first_segment_wrap_mode = TextSegment::WrapMode::Disallow);
     };
 
     float CalcTextSegmentsWidth(std::span<TextSegment> segments);
