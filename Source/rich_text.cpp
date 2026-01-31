@@ -191,7 +191,7 @@ namespace HerosInsight::RichText
             else
             {
                 seg.tag = std::monostate{};
-                seg.width = Utils::CalcExactTextSize(seg.text.data(), seg.text.data() + seg.text.size()).x;
+                seg.width = seg.text.empty() ? 0.f : Utils::CalcExactTextSize(seg.text.data(), seg.text.data() + seg.text.size()).x;
                 // seg.width = ImGui::CalcTextSize(seg.text.data(), seg.text.data() + seg.text.size()).x;
             }
         };
@@ -387,7 +387,10 @@ namespace HerosInsight::RichText
                 if (std::holds_alternative<std::monostate>(seg.tag))
                 {
                     ImU32 text_color = ImGui::GetColorU32(ImGuiCol_Text);
-                    draw_list->AddText(min, text_color, seg.text.data(), seg.text.data() + seg.text.size());
+                    if (!seg.text.empty())
+                    {
+                        draw_list->AddText(min, text_color, seg.text.data(), seg.text.data() + seg.text.size());
+                    }
                 }
                 else if (auto frac_tag = std::get_if<FracTag>(&seg.tag))
                 {
