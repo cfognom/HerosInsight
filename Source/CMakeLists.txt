@@ -30,7 +30,6 @@ add_library(HerosInsight SHARED
     custom_agent_data.cpp
     attribute_or_title.cpp
     effect_initiator.cpp
-    StoC_packets.h
     autovec.h
     packet_stepper.cpp
     matcher.cpp
