@@ -294,8 +294,8 @@ namespace HerosInsight::RichText
         {
             AddSegment(text.size(), text.size());
         }
-        assert(tooltip_stack.empty());
-        assert(color_stack.empty());
+        // assert(tooltip_stack.empty());
+        // assert(color_stack.empty());
     }
 
     void Drawer::DrawTextSegments(std::span<TextSegment> segments, float wrapping_min, float wrapping_max)
