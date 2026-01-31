@@ -42,10 +42,11 @@ namespace HerosInsight
 
         void GetRenderableString(OutBuf<char> out) const
         {
+            auto size = out.size();
             out.AppendRange(Text());
             for (auto index : Uppercase().IterSetBits())
             {
-                out[index] -= 32;
+                out[size + index] -= 32;
             }
         }
 
