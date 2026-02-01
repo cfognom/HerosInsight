@@ -62,7 +62,7 @@ namespace HerosInsight::Filtering
     {
         struct Arg
         {
-            size_t target_meta_prop_id;
+            size_t meta_id;
             bool is_negated;
         };
 
@@ -87,12 +87,21 @@ namespace HerosInsight::Filtering
     struct Query
     {
         std::vector<Filter> filters;
+        std::vector<size_t> filters_in_decl_order;
+        std::span<Filter> exclusion_filters;
+        std::span<Filter> inclusion_filters;
         std::vector<SortAtom> sort_atoms;
         std::vector<SortCommand::Arg> sort_args;
+
+        Filter &GetFilterInDeclOrder(size_t index)
+        {
+            return filters[filters_in_decl_order[index]];
+        }
 
         void clear()
         {
             filters.clear();
+            filters_in_decl_order.clear();
             sort_atoms.clear();
             sort_args.clear();
         }
@@ -318,8 +327,9 @@ namespace HerosInsight::Filtering
             }
         }
 
-        bool ParseFilter(std::string_view source, Filter &filter)
+        std::optional<Filter> ParseFilter(std::string_view source)
         {
+            Filter filter;
             filter.source_text = source;
             auto rem = source;
             Utils::ReadSpaces(rem);
@@ -371,7 +381,7 @@ namespace HerosInsight::Filtering
                 filter.matchers.emplace_back(Matcher(content));
             } while (!rem.empty());
 
-            return true;
+            return filter;
         }
         bool ParseCommand(std::string_view source, Command &command)
         {
@@ -416,7 +426,7 @@ namespace HerosInsight::Filtering
                 {
                     auto &arg = sort_com.args.emplace_back();
                     arg.is_negated = is_negated;
-                    arg.target_meta_prop_id = index.value();
+                    arg.meta_id = index.value();
                 }
 
                 if (arg_end == std::string_view::npos)
@@ -463,7 +473,7 @@ namespace HerosInsight::Filtering
                                 for (auto &arg : sort_command.args)
                                 {
                                     query.sort_args.emplace_back(std::move(arg));
-                                    auto propset = impl.GetMetaPropset(arg.target_meta_prop_id);
+                                    auto propset = impl.GetMetaPropset(arg.meta_id);
                                     if (propset.All()) // Special case: Preserve order
                                         continue;
                                     for (auto prop_id : propset.IterSetBits())
@@ -486,6 +496,10 @@ namespace HerosInsight::Filtering
                     );
                 }
             };
+
+            // inclusion filters go into temporary storage
+            std::vector<Filter> inclusion_filters_temp;
+            constexpr uint32_t InclusionMarkerBit = 0x80000000;
 
             auto rem = source;
             while (!rem.empty())
@@ -510,11 +524,46 @@ namespace HerosInsight::Filtering
                 if (stmt.empty())
                     continue;
 
-                auto &filter = query.filters.emplace_back();
-                if (!ParseFilter(stmt, filter))
-                    query.filters.pop_back();
+                auto filter_opt = ParseFilter(stmt);
+                if (filter_opt.has_value())
+                {
+                    auto &filter = filter_opt.value();
+                    uint32_t index;
+                    if (filter.inverted)
+                    {
+                        index = query.filters.size();
+                        query.filters.emplace_back(std::move(filter));
+                    }
+                    else
+                    {
+                        index = inclusion_filters_temp.size();
+                        index |= InclusionMarkerBit;
+                        inclusion_filters_temp.emplace_back(std::move(filter));
+                    }
+                    query.filters_in_decl_order.push_back(index);
+                }
             }
+
+            auto offset = query.filters.size();
+            // Copy in the inclusion filters
+            for (auto &f : inclusion_filters_temp)
+            {
+                query.filters.emplace_back(std::move(f));
+            }
+            // Fix their indices
+            for (auto &index : query.filters_in_decl_order)
+            {
+                if (index & InclusionMarkerBit)
+                {
+                    index &= ~InclusionMarkerBit;
+                    index += offset;
+                }
+            }
+            // Make the spans
+            query.exclusion_filters = std::span<Filter>(query.filters.data(), offset);
+            query.inclusion_filters = std::span<Filter>(query.filters.data() + offset, query.filters.size() - offset);
         }
+        template <bool is_exclusion>
         void RunFilters(std::span<Filter> filters, std::vector<typename I::index_type> &items)
         {
             Stopwatch stopwatch("RunFilters");
@@ -566,7 +615,7 @@ namespace HerosInsight::Filtering
                                         continue;
                                     auto &prop = *impl.GetProperty(prop_id);
                                     // Iterate the items and check which ones "has values" in this property
-                                    bool all_confirmed = true;
+                                    bool all_matched = true;
                                     for (auto index : unconfirmed_match.IterSetBits())
                                     {
                                         auto item = items[index];
@@ -578,10 +627,20 @@ namespace HerosInsight::Filtering
                                             unconfirmed_match[index] = false;
                                             continue;
                                         }
-                                        all_confirmed = false;
+                                        all_matched = false;
                                     }
-                                    if (all_confirmed)
-                                        goto next_filter;
+                                    if (all_matched)
+                                    {
+                                        if constexpr (is_exclusion)
+                                        {
+                                            items.clear();
+                                            return;
+                                        }
+                                        else
+                                        {
+                                            goto next_filter;
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -618,7 +677,7 @@ namespace HerosInsight::Filtering
                         stopwatch.Checkpoint(std::format("prop_{} matching", prop_id));
 
                         // Iterate the items and record which ones' spans matched
-                        bool all_confirmed = true;
+                        bool all_matched = true;
                         for (auto index : unconfirmed_match.IterSetBits())
                         {
                             auto item = items[index];
@@ -629,19 +688,31 @@ namespace HerosInsight::Filtering
                                 unconfirmed_match[index] = false;
                                 continue;
                             }
-                            all_confirmed = false;
+                            all_matched = false;
                         }
                         stopwatch.Checkpoint(std::format("prop_{} checking", prop_id));
-                        if (all_confirmed)
-                            goto next_filter;
+                        if (all_matched)
+                        {
+                            if constexpr (is_exclusion)
+                            {
+                                items.clear();
+                                return;
+                            }
+                            else
+                            {
+                                goto next_filter;
+                            }
+                        }
                     }
                 }
 
                 {
                     // Iterate the matched items and repopulate the items vector with them
                     size_t new_items_size = 0;
-                    if (!filter.inverted)
+                    if constexpr (!is_exclusion)
+                    {
                         unconfirmed_match.Flip(); // It becomes "confirmed match"
+                    }
                     for (auto index : unconfirmed_match.IterSetBits())
                     {
                         items[new_items_size++] = items[index];
@@ -679,9 +750,14 @@ namespace HerosInsight::Filtering
         }
         void RunQuery(Query &query, std::vector<typename I::index_type> &items)
         {
-            if (!query.filters.empty())
+            if (!query.exclusion_filters.empty())
             {
-                RunFilters(query.filters, items);
+                RunFilters<true>(query.exclusion_filters, items);
+            }
+
+            if (!query.inclusion_filters.empty())
+            {
+                RunFilters<false>(query.inclusion_filters, items);
             }
 
             if (!query.sort_atoms.empty())
@@ -735,9 +811,10 @@ namespace HerosInsight::Filtering
                 auto &s = out.filter_feedback;
                 s.clear();
                 auto inserter = std::back_inserter(s);
-                for (size_t f = 0; f < query.filters.size(); ++f)
+                const auto n_filters = query.filters_in_decl_order.size();
+                for (size_t f = 0; f < n_filters; ++f)
                 {
-                    auto &filter = query.filters[f];
+                    auto &filter = query.GetFilterInDeclOrder(f);
 
                     FixedVector<char, 128> meta_name;
                     impl.GetMetaName(filter.meta_prop_id).GetRenderableString(meta_name);
@@ -830,7 +907,7 @@ namespace HerosInsight::Filtering
                         }
                     }
 
-                    if (f + 1 < query.filters.size()) // all but last
+                    if (f + 1 < n_filters) // all but last
                     {
                         *inserter++ = '\n';
                     }
@@ -853,7 +930,7 @@ namespace HerosInsight::Filtering
                     AppendJoin(s, a, n_args);
                     s.append_range((std::string_view) "by ");
 
-                    auto meta_name = impl.GetMetaName(arg.target_meta_prop_id);
+                    auto meta_name = impl.GetMetaName(arg.meta_id);
                     FixedVector<char, 128> name;
                     meta_name.GetRenderableString(name);
 
@@ -925,10 +1002,8 @@ namespace HerosInsight::Filtering
             if (!lowered.text.empty())
             {
                 auto hl_size_before = hl.size();
-                for (auto &filter : q.filters)
+                for (auto &filter : q.inclusion_filters)
                 {
-                    if (filter.inverted)
-                        continue;
                     auto propset = impl.GetMetaPropset(filter.meta_prop_id);
                     if (propset[prop_id])
                     {
