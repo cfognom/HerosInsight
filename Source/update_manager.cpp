@@ -285,14 +285,11 @@ namespace HerosInsight
                 ImGui::Checkbox("Encoded String Debugger", &UpdateManager::open_encstr_debugger);
 #endif
                 ImGui::Checkbox("Skill Book", &UpdateManager::open_skill_book);
+                Utils::ImGuiDisabledCheckboxWithTooltip("Party statistics", "This feature is not yet stabilized.");
+                Utils::ImGuiDisabledCheckboxWithTooltip("Effect UI", "This feature is not yet stabilized.");
                 ImGui::Checkbox("Settings", &UpdateManager::open_settings);
 #ifdef EXPERIMENTAL_FEATURES
                 ImGui::Checkbox("Damage Display", &DamageDisplay::enabled);
-                ImGui::TextUnformatted("Settings");
-#endif
-#ifdef _DEBUG
-                ImGui::TextUnformatted("Debug Info");
-                ImGui::TextUnformatted("Alt + End => Terminate addon");
 #endif
                 // const auto content_size = ImGui::GetItemRectMax();
                 // window->Size = content_size - ImVec2(0, 50);
@@ -300,6 +297,9 @@ namespace HerosInsight
                 ImGui::Spacing();
 
                 ImGui::Text("Version: %s", HEROSINSIGHT_VERSION_STRING);
+#ifdef _DEBUG
+                ImGui::TextUnformatted("Alt + End => Terminate addon");
+#endif
                 ImGui::PopFont();
             }
             ImGui::End();
@@ -331,16 +331,16 @@ namespace HerosInsight
             bg_draw_list->PushClipRect(ImVec2(0, 0), ImVec2(0, 0), true); // Clip everything in bg_draw_list
         }
 
+#ifdef EXPERIMENTAL_FEATURES
         HerosInsight::EnergyDisplay::Draw(device);
 
         if (game_state == GameState::InExplorable)
         {
             HerosInsight::WorldSpaceUI::Draw(device);
-#ifdef EXPERIMENTAL_FEATURES
             if (DamageDisplay::enabled)
                 HerosInsight::DamageDisplay::Draw(device);
-#endif
         }
+#endif
 
 #ifdef _DEBUG
         if (open_texture_viewer)

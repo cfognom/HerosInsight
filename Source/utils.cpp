@@ -3612,4 +3612,17 @@ namespace HerosInsight::Utils
         ImVec4 c = LerpColor(ca, cb, t);
         return ImGui::ColorConvertFloat4ToU32(c);
     }
+
+    void ImGuiDisabledCheckboxWithTooltip(const char *label, const char *tooltip)
+    {
+        bool dummy = false;
+        ImGui::BeginDisabled(true); // greyed out + non-interactive
+        ImGui::Checkbox(label, &dummy);
+        ImGui::EndDisabled();
+
+        if (tooltip && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        {
+            ImGui::SetTooltip(tooltip);
+        }
+    }
 }
