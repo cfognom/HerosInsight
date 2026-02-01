@@ -17,6 +17,7 @@ struct GWFontConfig
     ImVec2 glyphOffset = ImVec2(0, 0);
     ImVec2 iconOffset = ImVec2(0, 0);
     uint32_t color = 0xffffffff;
+    float scale = 1.f;
     std::unordered_map<wchar_t, uint32_t> advanceAdjustmentOverrides;
 };
 
@@ -60,6 +61,7 @@ ImFont *CreateGWFont(GWFontConfig cfg)
     ImFontConfig config;
     config.SizePixels = padded_height;
     auto imFont = io.Fonts->AddFontDefault(&config);
+    imFont->Scale = cfg.scale;
     imFont->FallbackAdvanceX = font->advance_unit;
 
     auto &command = font_blit_commands.emplace_back();
@@ -172,10 +174,26 @@ void AddFonts(ImGuiIO &io)
         .advanceAdjustment = 1,
     });
 
-    ImFontConfig config;
-    config.GlyphOffset.y = 2;
-    Constants::Fonts::skill_thick_font_12 = io.Fonts->AddFontFromFileTTF((res_path / "friz-quadrata-std-bold-587034a220f9f.otf").string().c_str(), 12.0f, &config, io.Fonts->GetGlyphRangesDefault());
-    Constants::Fonts::skill_thick_font_9 = io.Fonts->AddFontFromFileTTF((res_path / "friz-quadrata-std-bold-587034a220f9f.otf").string().c_str(), 9.0f, &config, io.Fonts->GetGlyphRangesDefault());
+    // ImFontConfig config;
+    // config.GlyphOffset.y = 2;
+    // Constants::Fonts::skill_thick_font_12 = io.Fonts->AddFontFromFileTTF((res_path / "friz-quadrata-std-bold-587034a220f9f.otf").string().c_str(), 12.0f, &config, io.Fonts->GetGlyphRangesDefault());
+    // Constants::Fonts::skill_thick_font_9 = io.Fonts->AddFontFromFileTTF((res_path / "friz-quadrata-std-bold-587034a220f9f.otf").string().c_str(), 9.0f, &config, io.Fonts->GetGlyphRangesDefault());
+    Constants::Fonts::skill_thick_font_12 = CreateGWFont(GWFontConfig{
+        .fontIndex = 1,
+        .glyphPadding = 1,
+        .scale = 0.8f,
+        .advanceAdjustmentOverrides = {
+            {L'*', -2},
+        },
+    });
+    Constants::Fonts::skill_thick_font_9 = CreateGWFont(GWFontConfig{
+        .fontIndex = 1,
+        .glyphPadding = 1,
+        .scale = 0.6f,
+        .advanceAdjustmentOverrides = {
+            {L'*', -2},
+        },
+    });
 }
 
 uint32_t ARGB4444ToARGB8888(uint16_t px)
