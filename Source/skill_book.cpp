@@ -1704,14 +1704,128 @@ namespace HerosInsight::SkillBook
             ImGui::EndGroup();
         }
 
-        void DrawFilterTooltip()
+        void DrawHelpTooltip()
         {
             ImGui::BeginTooltip();
-            // Temporary fix start
-            ImGui::TextUnformatted("[Here should be help information (not yet implemented!)]");
+
+            auto DrawTable = [](auto &&cells)
+            {
+                constexpr auto elems = std::size(cells);
+                constexpr auto cols = 2;
+                constexpr auto rows = elems / cols;
+                constexpr auto padding = 5;
+
+                float widths[elems];
+
+                for (size_t i = 0; i < elems; i++)
+                {
+                    FixedVector<RichText::TextSegment, 32> segments;
+                    text_drawer.MakeTextSegments(cells[i], segments);
+                    widths[i] = RichText::CalcTextSegmentsWidth(segments);
+                }
+
+                float col_widths[cols]{0, 0};
+
+                for (size_t x = 0; x < cols; ++x)
+                {
+                    col_widths[x] = 0;
+                    for (size_t y = 0; y < rows; ++y)
+                    {
+                        col_widths[x] = std::max(col_widths[x], widths[y * cols + x]);
+                    }
+                }
+
+                auto init_cursor = ImGui::GetCursorScreenPos();
+                auto cursor = init_cursor;
+
+                for (size_t y = 0; y < rows; ++y)
+                {
+                    cursor.x = init_cursor.x;
+                    for (size_t x = 0; x < cols; ++x)
+                    {
+                        cursor.x += padding;
+                        auto cell = cells[y * cols + x];
+                        auto width = widths[y * cols + x];
+                        auto write_cursor = cursor;
+                        if (x == 0)
+                        {
+                            auto offset = (col_widths[x] - width) / 2;
+                            write_cursor.x += offset;
+                        }
+                        ImGui::SetCursorScreenPos(write_cursor);
+                        text_drawer.DrawRichText(cell);
+                        cursor.x += col_widths[x] + padding;
+                    }
+                    cursor.y += ImGui::GetTextLineHeight();
+                }
+            };
+
+            ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
+            ImGui::Text("Examples");
+            ImGui::PopStyleColor();
+            // clang-format off
+            constexpr std::string_view examples[] = {
+                "<c=@skilldyn>knock...down</c>", "Finds any skills related to knock down",
+                "<c=@skilldyn>h reg</c>", "Finds any skills related to knock down",
+            };
+            // clang-format on
+            DrawTable(examples);
+            ImGui::Spacing();
+
+            ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
+            ImGui::Text("Special control characters");
+            ImGui::PopStyleColor();
+            // clang-format off
+            constexpr std::string_view control_chars[] = {
+                "<c=@skilldyn>:</c> or <c=@skilldyn>=</c>", "Used as a separator between the target and the body of the filter.",
+                "<c=@skilldyn>!</c>", "\"Not\". Used to invert a filter so that it excludes anything matching it.",
+                "<c=@skilldyn>&</c>", "\"And\". Used to combine multiple statements in a query",
+                "<c=@skilldyn>|</c>", "\"Or\". Used to specify multiple options in a filter",
+            };
+            // clang-format on
+            DrawTable(control_chars);
+            ImGui::Spacing();
+
+            ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
+            ImGui::Text("Special keywords");
+            ImGui::PopStyleColor();
+            // clang-format off
+            constexpr std::string_view keywords[] = {
+                "(Space)", "Optionally skip to the next word.",
+                "<c=@skilldyn>..</c>", "Optionally skip non-space characters.",
+                "<c=@skilldyn>...</c>", "Optionally skip anything.",
+                "<c=@skilldyn>#</c>", "Matches any number.",
+            };
+            // clang-format on
+            DrawTable(keywords);
+            ImGui::Spacing();
+
+            ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
+            ImGui::Text("Special number prefixes");
+            ImGui::PopStyleColor();
+            ImGui::Text("When used before numbers it changes how they are matched.");
+            // clang-format off
+            constexpr std::string_view number_prefixes[] = {
+                "<c=@skilldyn><</c>", "\"Less than\".",
+                "<c=@skilldyn>></c>", "\"Greater than\".",
+                "<c=@skilldyn><=</c>", "\"Less than or equal to\".",
+                "<c=@skilldyn>>=</c>", "\"Greater than or equal to\".",
+            };
+            // clang-format on
+            DrawTable(number_prefixes);
+
+            ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
+            ImGui::Text("Special commands");
+            ImGui::PopStyleColor();
+            // clang-format off
+            constexpr std::string_view commands[] = {
+                "<c=@skilldyn>/sort</c>", "Sorts the results according to the comma separated list of targets following it.",
+            };
+            // clang-format on
+            DrawTable(commands);
+
             ImGui::EndTooltip();
             return;
-            // Temporary fix end
 
             auto width = 600;
             std::string_view text;
@@ -1926,7 +2040,7 @@ namespace HerosInsight::SkillBook
             ImGui::TextUnformatted("(?)");
             if (ImGui::IsItemHovered())
             {
-                DrawFilterTooltip();
+                DrawHelpTooltip();
             }
 
             // if (state_update_start_timestamp)
