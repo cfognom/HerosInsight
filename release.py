@@ -135,6 +135,7 @@ def main():
     # Step 4: merge dev into main and push
     run(["git", "checkout", "main"], check=True)
     run(["git", "merge", "dev"], check=True)
+    run(["git", "push"], check=True)
     run(["git", "checkout", "dev"], check=True)
 
     # Step 5: create GitHub release
