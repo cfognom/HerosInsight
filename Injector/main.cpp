@@ -329,7 +329,7 @@ void RunLauncher(wchar_t *cmdLine = nullptr)
 
 void InstallAndRelaunch(const std::filesystem::path &install_path)
 {
-    auto package_path = install_path / "package.zip";
+    auto package_path = install_path / "new_version.zip";
     ExtractZip(package_path, install_path);
     std::filesystem::remove(package_path);
     Log(L"Install complete.");
@@ -346,7 +346,7 @@ void InstallAndRelaunch(const std::filesystem::path &install_path)
 void DownloadAndLaunchInstaller(GitHubRelease &release)
 {
     Log(L"Downloading release...");
-    auto download_path = exeDirPath / "package.zip";
+    auto download_path = exeDirPath / "new_version.zip";
     CurlEasy().DownloadFile(release.download_url, download_path);
 
     // Launch installer/updater
