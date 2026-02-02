@@ -41,8 +41,7 @@ def git_clean_except(allowed_files):
     return unexpected
 
 def list_build_settings():
-    print(f"\nListing settings for preset {BUILD_PRESET}...")
-    run(["cmake", "--preset", BUILD_PRESET, "-LA"], check=True)
+    print(f"Using build preset: {BUILD_PRESET}")
 
 def is_newer_version(old: str, new: str) -> bool:
     """Return True if `new` version is greater than `old` version."""
@@ -96,14 +95,14 @@ def main():
 
     print("CHANGELOG for new version:")
     print(changelog)
-    print("\n")
+    print()
 
     if not is_newer_version(old_version, new_version):
         print("❌ Error: new version is not greater than old version.")
         sys.exit(1)
 
     # Git pre-check
-    unexpected = git_clean_except(["CHANGELOG.md", "CMakeLists.txt"])
+    unexpected = git_clean_except(["CHANGELOG.md"])
     if unexpected:
         print("❌ Error: Unexpected changes detected in git:")
         for f in unexpected:
@@ -113,37 +112,38 @@ def main():
     list_build_settings()
 
     # Single confirmation
-    if input("\nProceed with updating CMakeLists, tagging, merging, building zip, and creating release? [y/N]: ").strip().lower() != "y":
+    if input("\nProceed with update version, build release, create tag, merge dev into main, push and create GitHub release? [y/N]: ").strip().lower() != "y":
         print("Aborted.")
         sys.exit(0)
 
-    # Step 1: update CMakeLists
+    # Step 1: update version
     set_new_version(new_version)
 
-    # Step 2: commit & tag
-    run(["git", "add", "CHANGELOG.md", "CMakeLists.txt"], check=True)
-    run(["git", "commit", "-m", f"Bump version to {new_version}"], check=True)
-    run(["git", "tag", new_version], check=True)
-
-    # Step 3: merge dev into main and push
-    run(["git", "checkout", "main"], check=True)
-    run(["git", "merge", "dev"], check=True)
-    run(["git", "push", "--follow-tags"], check=True)
-    run(["git", "checkout", "dev"], check=True)
-
-    # Step 4: build the release zip
+    # Step 2: build the release zip
     print("\nBuilding release zip...")
     run(["cmake", "--build", "--preset", BUILD_PRESET], check=True)
+    zip_path = Path(f"build/prod/RelWithDebInfo/HerosInsight_{new_version}.zip")
+    if not zip_path.exists():
+        print(f"❌ Error: zip file not found at {zip_path}")
+        sys.exit(1)
 
-    # # Step 5: create GitHub release
-    # zip_path = Path(f"build/prod/RelWithDebInfo/HerosInsight-{new_version}.zip")
-    # if not zip_path.exists():
-    #     print(f"Error: zip file not found at {zip_path}")
-    #     sys.exit(1)
-    # run([
-    #     "gh", "release", "create", new_version, str(zip_path),
-    #     "-t", f"HerosInsight {new_version}", "-n", f"Release {new_version}"
-    # ], check=True)
+    # Step 3: commit & tag
+    run(["git", "add", "CHANGELOG.md", "VERSION.txt"], check=True)
+    run(["git", "commit", "-m", f"Bump version to {new_version}"], check=True)
+
+    # Step 4: merge dev into main and push
+    run(["git", "checkout", "main"], check=True)
+    run(["git", "merge", "dev"], check=True)
+    run(["git", "checkout", "dev"], check=True)
+
+    # Step 5: create GitHub release
+    run([
+        "gh", "release", "create", f"v{new_version}", str(zip_path),
+        "--title", f"HerosInsight {new_version}",
+        "--generate-notes",
+        "--notes", changelog_text,
+        "--fail-on-no-commits"
+    ], check=True)
 
     print("\n✅ Release process completed successfully.")
 
