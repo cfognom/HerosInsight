@@ -142,7 +142,7 @@ def main():
         "gh", "release", "create", f"v{new_version}", str(zip_path),
         "--title", f"HerosInsight {new_version}",
         "--generate-notes",
-        "--notes", changelog_text,
+        "--notes", changelog,
         "--fail-on-no-commits"
     ], check=True)
 
