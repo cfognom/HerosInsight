@@ -118,6 +118,7 @@ def main():
 
     # Step 1: update version
     set_new_version(new_version)
+    run(["cmake", "--preset", "Production", "--fresh"], check=True)
 
     # Step 2: build the release zip
     print("\nBuilding release zip...")
