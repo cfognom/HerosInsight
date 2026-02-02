@@ -14,6 +14,6 @@
 7. Make a release draft on GitHub.
     1. Assign the new tag.
     2. Paste the changes written in the [CHANGELOG.md](CHANGELOG.md).
-    3. Add build/prod/RelWithDebInfo/HerosInsight-***[VERSION]***.zip as an asset.
+    3. Add build/prod/RelWithDebInfo/HerosInsight_***[VERSION]***.zip as an asset.
 
 Done.

@@ -50,7 +50,7 @@ add_custom_target(HerosInsight
     COMMENT "Installing mod in ${INSTALL_DIR}"
 )
 
-set(DST_ZIP ${INSTALL_DIR}-${PROJECT_VERSION}.zip)
+set(DST_ZIP ${INSTALL_DIR}_${PROJECT_VERSION}.zip)
 add_custom_target(HerosInsight_Zip
     COMMAND ${CMAKE_COMMAND} -E remove_directory "${INSTALL_DIR}"
     COMMAND ${CMAKE_COMMAND} --install "${CMAKE_BINARY_DIR}" --prefix "${INSTALL_DIR}" --config $<CONFIG>
