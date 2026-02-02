@@ -1,6 +1,6 @@
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake/")
 
-add_library(HerosInsight SHARED
+add_library(HerosInsightDLL SHARED
     main.cpp
     constants.h
     imgui_impl_dx9.cpp
@@ -41,40 +41,36 @@ add_library(HerosInsight SHARED
     settings.cpp
 )
 
+set_target_properties(HerosInsightDLL PROPERTIES
+    OUTPUT_NAME "HerosInsight"
+)
+
 # Headers live here
-target_include_directories(HerosInsight PRIVATE
+target_include_directories(HerosInsightDLL PRIVATE
     .
 )
 
 # Precompiled header
-target_precompile_headers(HerosInsight PRIVATE pch.h)
+target_precompile_headers(HerosInsightDLL PRIVATE pch.h)
 
 # Dependencies
 include(gwca)
 include(imgui)
 # include(simdutf)
 
-target_link_libraries(HerosInsight PRIVATE
+target_link_libraries(HerosInsightDLL PRIVATE
     gwca
     imgui
     # simdutf
 )
 
-# Add custom command to copy the entire resources folder to the output directory
-add_custom_command(
-    TARGET HerosInsight POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-            ${PROJECT_SOURCE_DIR}/resources
-            $<TARGET_FILE_DIR:HerosInsight>/resources
-    COMMENT "Copying resources folder to output directory"
-)
+# # Add custom command to copy the entire resources folder to the output directory
+# add_custom_command(
+#     TARGET HerosInsightDLL POST_BUILD
+#     COMMAND ${CMAKE_COMMAND} -E copy_directory
+#             ${PROJECT_SOURCE_DIR}/resources
+#             $<TARGET_FILE_DIR:HerosInsightDLL>/resources
+#     COMMENT "Copying resources folder to output directory"
+# )
 
 # Source/CMakeLists.txt
-set(OUTPUT_DIR "${CMAKE_BINARY_DIR}/$<CONFIG>/package/cache/bin")
-
-set_target_properties(HerosInsight PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${OUTPUT_DIR}" # .dll goes here
-    LIBRARY_OUTPUT_DIRECTORY "${OUTPUT_DIR}" # .so / .dll cross-platform
-    ARCHIVE_OUTPUT_DIRECTORY "${OUTPUT_DIR}" # .lib
-    PDB_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>/pdb"
-)

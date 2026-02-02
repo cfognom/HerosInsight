@@ -21,3 +21,37 @@ configure_file(
     ${CMAKE_BINARY_DIR}/generated/version.h
     @ONLY
 )
+
+option(PRODUCTION_BUILD "Production build" OFF)
+if(PRODUCTION_BUILD)
+    target_compile_definitions(HerosInsightLauncher PRIVATE PRODUCTION_BUILD)
+    target_compile_definitions(HerosInsightDLL PRIVATE PRODUCTION_BUILD)
+endif()
+
+set(CFG_DIR ${CMAKE_BINARY_DIR}/${CMAKE_CFG_INTDIR})
+set(INSTALL_DIR ${CFG_DIR}/${CMAKE_PROJECT_NAME})
+set(CMAKE_INSTALL_PREFIX ${INSTALL_DIR})
+
+install(TARGETS HerosInsightLauncher
+    RUNTIME DESTINATION .)
+
+install(TARGETS HerosInsightDLL
+    RUNTIME DESTINATION data/
+    LIBRARY DESTINATION data/)
+
+add_custom_target(HerosInsight
+    COMMAND ${CMAKE_COMMAND} -E remove_directory "${INSTALL_DIR}"
+    COMMAND ${CMAKE_COMMAND} --install "${CMAKE_BINARY_DIR}" --prefix "${INSTALL_DIR}" --config $<CONFIG>
+    DEPENDS HerosInsightLauncher HerosInsightDLL
+    COMMENT "Installing mod in ${INSTALL_DIR}"
+)
+
+set(DST_ZIP ${INSTALL_DIR}-${PROJECT_VERSION}.zip)
+add_custom_target(HerosInsight_Zip
+    COMMAND ${CMAKE_COMMAND} -E remove_directory "${INSTALL_DIR}"
+    COMMAND ${CMAKE_COMMAND} --install "${CMAKE_BINARY_DIR}" --prefix "${INSTALL_DIR}" --config $<CONFIG>
+    COMMAND ${CMAKE_COMMAND} -E tar cfv "${DST_ZIP}" --format=zip "${INSTALL_DIR}"
+    WORKING_DIRECTORY "${CFG_DIR}"
+    DEPENDS HerosInsightLauncher HerosInsightDLL
+    COMMENT "Installing and zipping mod to ${DST_ZIP}"
+)

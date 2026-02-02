@@ -28,15 +28,13 @@
 
 #include "enum_as_int.h"
 
-// #define RELEASE_BUILD
-
-#ifdef RELEASE_BUILD
+#ifdef PRODUCTION_BUILD
 
 #define ENABLE_SAFECALL
 
-#else
+#else // NOT PRODUCTION_BUILD
 
-// #define EXPERIMENTAL_FEATURES
+#define EXPERIMENTAL_FEATURES
 #define _STOPWATCH
 // #define ENABLE_SAFECALL
 

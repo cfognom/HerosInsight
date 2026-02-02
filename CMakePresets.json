@@ -2,33 +2,62 @@
     "version": 3,
     "configurePresets": [
         {
-            "name": "default",
-            "description": "Use MSVC Win32 with vcpkg",
+            "name": "Dev",
+            "description": "Development Build. Use MSVC Win32 with vcpkg.",
             "generator": "Visual Studio 17 2022",
             "architecture": "Win32",
-            "binaryDir": "${sourceDir}/build",
+            "binaryDir": "${sourceDir}/build/dev",
             "cacheVariables": {
                 "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
                 "VCPKG_TARGET_TRIPLET": "x86-windows-static",
                 "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>"
             }
+        },
+        {
+            "name": "Production",
+            "description": "Production build. Use MSVC Win32 with vcpkg.",
+            "inherits": "Dev",
+            "binaryDir": "${sourceDir}/build/prod",
+            "cacheVariables": {
+                "PRODUCTION_BUILD": "ON"
+            }
         }
     ],
     "buildPresets": [
         {
-            "name": "debug",
-            "configurePreset": "default",
-            "configuration": "Debug"
+            "name": "Debug",
+            "configurePreset": "Dev",
+            "configuration": "Debug",
+            "targets": [
+                "HerosInsight"
+            ]
         },
         {
-            "name": "release",
-            "configurePreset": "default",
+            "name": "Release",
+            "inherits": "Debug",
             "configuration": "Release"
         },
         {
-            "name": "relwithdebinfo",
-            "configurePreset": "default",
+            "name": "RelWithDebInfo",
+            "inherits": "Debug",
             "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "Test",
+            "description": "Use this to test before uploading to github.",
+            "configurePreset": "Production",
+            "configuration": "RelWithDebInfo",
+            "targets": [
+                "HerosInsight"
+            ]
+        },
+        {
+            "name": "ReadyForGithub",
+            "description": "Creates a zip file ready to be uploaded to github releases.",
+            "inherits": "Test",
+            "targets": [
+                "HerosInsight_Zip"
+            ]
         }
     ]
 }

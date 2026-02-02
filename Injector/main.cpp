@@ -239,9 +239,9 @@ struct LocalInstallation
 
     LocalInstallation()
     {
-        auto data_path = exeDirPath / "cache\\bin";
+        auto data_path = exeDirPath / "data";
         if (!std::filesystem::exists(data_path))
-            throw std::runtime_error("cache\\bin directory does not exist");
+            throw std::runtime_error("'data' directory does not exist");
 
         this->version = Version(HEROSINSIGHT_VERSION_MAJOR, HEROSINSIGHT_VERSION_MINOR, HEROSINSIGHT_VERSION_PATCH);
 

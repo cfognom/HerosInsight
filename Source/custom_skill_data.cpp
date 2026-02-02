@@ -3368,7 +3368,9 @@ namespace HerosInsight
         attribute = AttributeOrTitle(*skill);
 
         this->base_duration = DetermineBaseDuration(*this);
+#ifdef EXPERIMENTAL_FEATURES
         DetermineEffects(*this);
+#endif
     }
 
     SkillParam CustomSkillData::GetSkillParam(uint32_t id) const
