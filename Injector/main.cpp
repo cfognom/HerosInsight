@@ -25,6 +25,8 @@ bool check_for_updates = true;
 std::string launcher_exe_name;
 std::filesystem::path exePath;
 std::filesystem::path exeDirPath;
+DWORD gwProcessId = 0;
+HWND gwHwnd = nullptr;
 
 std::wstring StrToWStr(const std::string &str)
 {
@@ -42,6 +44,58 @@ std::wstring StrToWStr(const char *str)
 void Log(std::wstring_view msg)
 {
     std::wcout << msg << std::endl;
+}
+
+std::wstring IndentMultiline(std::wstring_view text, std::wstring_view indent)
+{
+    std::wostringstream out;
+    bool first = true;
+
+    for (size_t pos = 0, next; pos < text.size(); pos = next + 1)
+    {
+        next = text.find(L'\n', pos);
+        if (next == std::string_view::npos)
+            next = text.size();
+
+        if (!first)
+            out << L'\n';
+        first = false;
+
+        out << indent << text.substr(pos, next - pos);
+    }
+
+    return out.str();
+}
+
+HWND FindWindowByPID(DWORD pid)
+{
+    struct Param
+    {
+        DWORD pid;
+        HWND out_hwnd;
+    };
+    Param param = {pid, nullptr};
+
+    EnumWindows(
+        [](HWND hwnd, LPARAM lParam) -> BOOL
+        {
+            auto param = (Param *)lParam;
+            DWORD windowPid;
+            GetWindowThreadProcessId(hwnd, &windowPid);
+
+            if (windowPid == param->pid)
+            {
+                // Likely a "main" window
+                param->out_hwnd = hwnd;
+                return FALSE; // stop enumeration
+            }
+
+            return TRUE;
+        },
+        (LPARAM)&param
+    );
+
+    return param.out_hwnd;
 }
 
 struct ScopedFile
@@ -156,9 +210,9 @@ struct Version
         return std::tie(major, minor, patch) < std::tie(other.major, other.minor, other.patch);
     }
 
-    std::string ToString() const
+    std::wstring ToWString() const
     {
-        return std::to_string(major) + "." + std::to_string(minor) + "." + std::to_string(patch);
+        return std::format(L"{}.{}.{}", major, minor, patch);
     }
 
     static Version FromString(std::string_view str)
@@ -319,7 +373,7 @@ void RunLauncher(wchar_t *cmdLine = nullptr)
         ))
     {
         DWORD err = GetLastError();
-        throw std::runtime_error("Failed to launch game exe. Error code: " + std::to_string(err));
+        throw std::runtime_error("Failed to launch exe. Error code: " + std::to_string(err));
     }
 
     // Close handles to avoid leaks
@@ -379,27 +433,41 @@ std::optional<LocalInstallation> TryGetOrCreateLocalInstallation()
             else if (local_installation->version < latest_release->version)
             {
                 Log(L"Latest release is newer than local installation.");
-                auto wtag = StrToWStr(latest_release->tag);
+                auto cur_version_str = L"" HEROSINSIGHT_VERSION_STRING;
+                auto new_version_str = latest_release->version.ToWString();
                 auto wbody = StrToWStr(latest_release->body);
+                wbody = IndentMultiline(wbody, L"    ");
                 auto message = std::format(
                     L"There is a new version of Hero's Insight available: {}"
-                    "\n\n {}"
+                    "\n(Current version: {})"
+                    "\n\nRelease notes:"
+                    "\n\n{}"
                     "\n\nPress OK to download and install.",
-                    wtag,
+                    new_version_str,
+                    cur_version_str,
                     wbody
                 );
                 auto name = std::format(
-                    L"New version: {}",
-                    wtag
+                    L"New version available: {}",
+                    new_version_str
                 );
-                MessageBoxW(
-                    nullptr,
+                auto result = MessageBoxW(
+                    gwHwnd,
                     message.c_str(),
                     name.c_str(),
-                    MB_OK | MB_ICONINFORMATION
+                    MB_OKCANCEL | MB_ICONINFORMATION
                 );
 
-                should_download = true;
+                if (result == IDOK)
+                {
+                    Log(L"User accepted update. Downloading and installing...");
+                    should_download = true;
+                }
+                else
+                {
+                    Log(L"User declined update. Terminating.");
+                    ExitProcess(0);
+                }
             }
             else
             {
@@ -552,20 +620,19 @@ int RunNormalApp()
         return 1;
     }
 
-    DWORD processId = GetProcessIdByName("Gw.exe");
-    if (processId == 0)
+    if (gwProcessId == 0)
     {
         MessageBoxW(NULL, L"Failed to find target process.", L"Error", MB_ICONERROR | MB_OK);
         return 1;
     }
 
-    if (IsDllLoaded(processId, installation->mod_dll))
+    if (IsDllLoaded(gwProcessId, installation->mod_dll))
     {
         MessageBoxW(NULL, L"Hero's Insight is already running.", L"Error", MB_ICONERROR | MB_OK);
         return 1;
     }
 
-    if (!TryInjectDLL(processId, installation->mod_dll))
+    if (!TryInjectDLL(gwProcessId, installation->mod_dll))
     {
         MessageBoxW(NULL, L"Failed to inject DLL, check output file for more details.", L"Error", MB_ICONERROR | MB_OK);
         return 1;
@@ -684,6 +751,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     std::wofstream logFile(logPath, flags);
     std::wcout.rdbuf(logFile.rdbuf());
     std::wcerr.rdbuf(logFile.rdbuf());
+
+    gwProcessId = GetProcessIdByName("Gw.exe");
+    gwHwnd = FindWindowByPID(gwProcessId);
 
     args.Log();
 
