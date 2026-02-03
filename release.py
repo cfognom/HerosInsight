@@ -3,11 +3,13 @@ import sys
 import re
 from pathlib import Path
 
-CHANGELOG_FILE = Path("CHANGELOG.md")
+CHANGELOG_FILE_NAME = "CHANGELOG.md"
+CHANGELOG_FILE = Path(CHANGELOG_FILE_NAME)
+VERSION_FILE_NAME = "VERSION.txt"
+VERSION_FILE = Path(VERSION_FILE_NAME)
 BUILD_PRESET = "ReadyForGithub"
-VERSION_FILE = Path("VERSION.txt")
 
-def get_old_version() -> str:
+def read_version() -> str:
     """
     Reads the current version from VERSION.txt
     """
@@ -20,7 +22,7 @@ def get_old_version() -> str:
     return version
 
 
-def set_new_version(new_version: str) -> None:
+def write_version(new_version: str) -> None:
     """
     Writes the new version to VERSION.txt
     """
@@ -74,20 +76,37 @@ def get_version_and_changelog():
     )
 
     if not match:
-        raise RuntimeError("No version entry found at top of CHANGELOG.md")
+        raise RuntimeError(f"No version entry found at top of {CHANGELOG_FILE}")
 
     new_version = match.group(1)
     changelog_entry = match.group(2).strip() if match.group(2).strip() else "(No changelog entry found)"
 
     return new_version, changelog_entry
 
-
-def main():
-    if get_current_branch() != "dev":
-        print("❌ Error: script must be run on 'dev' branch.")
+def preflight_checks():
+    # Ensure clean tree
+    unexpected = git_clean_except([CHANGELOG_FILE_NAME])
+    if unexpected:
+        print("❌ Error: Unexpected changes detected in git:")
+        for f in unexpected:
+            print(f"  {f}")
         sys.exit(1)
 
-    old_version = get_old_version()
+    try:
+        # Ensure gh exists
+        subprocess.run(["gh", "--version"], check=True, stdout=subprocess.DEVNULL)
+
+        # Ensure cmake preset exists
+        subprocess.run(["cmake", "--list-presets"], check=True, stdout=subprocess.DEVNULL)
+    
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Error: {e}")
+        sys.exit(1)
+
+def main():
+    preflight_checks()
+
+    old_version = read_version()
     new_version, changelog = get_version_and_changelog()
 
     print(f"\nOld version: {old_version}")
@@ -95,59 +114,80 @@ def main():
 
     print("CHANGELOG for new version:")
     print(changelog)
-    print()
 
     if not is_newer_version(old_version, new_version):
-        print("❌ Error: new version is not greater than old version.")
-        sys.exit(1)
-
-    # Git pre-check
-    unexpected = git_clean_except(["CHANGELOG.md"])
-    if unexpected:
-        print("❌ Error: Unexpected changes detected in git:")
-        for f in unexpected:
-            print(f"  {f}")
+        print("\n❌ Error: new version is not greater than old version.")
         sys.exit(1)
 
     list_build_settings()
 
     # Single confirmation
-    if input("\nProceed with update version, build release, create tag, merge dev into main, push and create GitHub release? [y/N]: ").strip().lower() != "y":
+    if input("\nProceed with update version, build release, create tag, commit, push and create GitHub release? [y/N]: ").strip().lower() != "y":
         print("Aborted.")
         sys.exit(0)
 
     # Step 1: update version
-    set_new_version(new_version)
-    run(["cmake", "--preset", "Production", "--fresh"], check=True)
+    write_version(new_version)
 
-    # Step 2: build the release zip
-    print("\nBuilding release zip...")
-    run(["cmake", "--build", "--preset", BUILD_PRESET], check=True)
-    zip_path = Path(f"build/prod/RelWithDebInfo/HerosInsight_{new_version}.zip")
-    if not zip_path.exists():
-        print(f"❌ Error: zip file not found at {zip_path}")
-        sys.exit(1)
+    try:
+        run(["cmake", "--preset", "Production", "--fresh"], check=True)
 
-    # Step 3: commit & tag
-    run(["git", "add", "CHANGELOG.md", "VERSION.txt"], check=True)
-    run(["git", "commit", "-m", f"Bump version to {new_version}"], check=True)
+        # Step 2: build the release zip
+        print("\nBuilding release zip...")
+        run(["cmake", "--build", "--preset", BUILD_PRESET], check=True)
 
-    # Step 4: merge dev into main and push
-    run(["git", "checkout", "main"], check=True)
-    run(["git", "merge", "dev"], check=True)
-    run(["git", "push"], check=True)
-    run(["git", "checkout", "dev"], check=True)
+        zip_path = Path(f"build/prod/RelWithDebInfo/HerosInsight_{new_version}.zip")
+        if not zip_path.exists():
+            raise RuntimeError(f"❌ Error: zip file not found at {zip_path}")
+        
+        # Step 3: create tag
+        tag_str = f"v{new_version}"
+        print(f"\nCreating tag \"{tag_str}\"...")
+        run([
+            "git", "tag",
+            "-a", tag_str,
+            "-m", f"HerosInsight {new_version}\n\n{changelog}"
+        ], check=True)
 
-    # Step 5: create GitHub release
-    run([
-        "gh", "release", "create", f"v{new_version}", str(zip_path),
-        "--title", f"\"HerosInsight {new_version}\"",
-        "--generate-notes",
-        "--notes", f"\"{changelog}\"",
-        "--fail-on-no-commits"
-    ], check=True)
+        try:
+            # step 4: stage changes
+            print("\nStaging changes...")
+            run(["git", "add", CHANGELOG_FILE, VERSION_FILE], check=True)
 
-    print("\n✅ Release process completed successfully.")
+            # step 5: commit
+            print("\nCommitting...")
+            run(["git", "commit", "-m", f"Bump version to {new_version}"], check=True)
+
+            # Step 6: push changes + tag
+            print("\nPushing...")
+            run(["git", "push", "--follow-tags"], check=True)
+
+            # Step 7: create GitHub release
+            print("\nCreating GitHub release...")
+            run([
+                "gh", "release", "create", tag_str, str(zip_path),
+                "--title", f"\"HerosInsight {new_version}\"",
+                "--generate-notes",
+                "--notes-from-tag",
+                "--fail-on-no-commits",
+                "--verify-tag"
+            ], check=True)
+
+            print(f"\n✅ Release process completed successfully. Version {new_version} is now live. Dont forget to merge into main!")
+        
+        except:
+            print("\n❌ Annoying fail: Manual rollback of some steps required.")
+
+            # rollback tag creation
+            print("\nUndoing tag...")
+            run(["git", "tag", "-d", tag_str], check=True)
+            raise
+
+    except Exception:
+        # rollback version change
+        print("\nUndoing version change...")
+        write_version(old_version)
+        raise
 
 if __name__ == "__main__":
     main()
