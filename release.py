@@ -102,6 +102,12 @@ def preflight_checks():
     except subprocess.CalledProcessError as e:
         print(f"❌ Error: {e}")
         sys.exit(1)
+    
+    try:
+        run(["gh", "auth", "status"], check=True)
+    except:
+        run(["gh", "auth", "login"], check=True)
+        run(["gh", "auth", "status"], check=True)
 
 def main():
     preflight_checks()
