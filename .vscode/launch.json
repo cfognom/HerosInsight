@@ -27,8 +27,8 @@
             "name": "Debug Injector",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/Debug/package/Launch_HerosInsight.exe",
-            "cwd": "${workspaceFolder}/build/Debug",
+            "program": "${workspaceFolder}/build/dev/Debug/HerosInsight/Launch_HerosInsight.exe",
+            "cwd": "${workspaceFolder}/build/dev/Debug/HerosInsight",
         }
     ]
 }
