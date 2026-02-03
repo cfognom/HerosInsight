@@ -613,7 +613,7 @@ namespace HerosInsight::Utils
         enum struct Error
         {
             None = 0,
-            SkillAndAttributesNotOpened = 1,
+            SkillsAndAttributesNotOpened = 1,
             SkillFrameNotFound = 2,
         };
         Error error = Error::None;

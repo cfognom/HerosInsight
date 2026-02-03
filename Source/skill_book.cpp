@@ -1117,7 +1117,7 @@ namespace HerosInsight::SkillBook
 
         switch (result.error)
         {
-            case Utils::GetSkillFrameResult::Error::SkillAndAttributesNotOpened:
+            case Utils::GetSkillFrameResult::Error::SkillsAndAttributesNotOpened:
                 GW::GameThread::Enqueue(
                     []()
                     {

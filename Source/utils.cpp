@@ -3290,7 +3290,7 @@ namespace HerosInsight::Utils
     {
         auto skills_and_attributes_frame = GW::UI::GetFrameByLabel(L"DeckBuilder");
         if (!skills_and_attributes_frame)
-            return {GetSkillFrameResult::Error::SkillAndAttributesNotOpened, nullptr};
+            return {GetSkillFrameResult::Error::SkillsAndAttributesNotOpened, nullptr};
 
         const auto skill = GW::SkillbarMgr::GetSkillConstantData(skill_id);
 
