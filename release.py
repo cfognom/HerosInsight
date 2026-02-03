@@ -173,7 +173,6 @@ def main():
             run([
                 "gh", "release", "create", tag_str, str(zip_path),
                 "--title", f"\"HerosInsight {new_version}\"",
-                "--generate-notes",
                 "--notes-from-tag",
                 "--fail-on-no-commits",
                 "--verify-tag"
