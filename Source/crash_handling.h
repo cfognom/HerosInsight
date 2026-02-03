@@ -3,6 +3,8 @@
 #include <cstdio>
 #include <ctime>
 #include <dbghelp.h>
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <windows.h>
 
@@ -12,7 +14,7 @@
 
 namespace HerosInsight::CrashHandling
 {
-    std::filesystem::path GetTimestampedPath(const char *prefix, const char *ext)
+    inline std::filesystem::path GetTimestampedPath(const char *prefix, const char *ext)
     {
         char buf[128];
         std::time_t t = std::time(nullptr);
@@ -22,7 +24,7 @@ namespace HerosInsight::CrashHandling
         return Constants::paths.crash() / std::filesystem::path(buf);
     }
 
-    std::optional<std::filesystem::path> WriteCrashDump(EXCEPTION_POINTERS *info)
+    inline std::optional<std::filesystem::path> WriteCrashDump(EXCEPTION_POINTERS *info)
     {
         auto dump_path = GetTimestampedPath("crash", "dmp");
         HANDLE hFile = CreateFileW(dump_path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -54,7 +56,7 @@ namespace HerosInsight::CrashHandling
         return dump_path;
     }
 
-    LONG ErrorPromt(EXCEPTION_POINTERS *info, const std::exception *e)
+    inline LONG ErrorPromt(EXCEPTION_POINTERS *info, const std::exception *e)
     {
         wchar_t msg[1024];
         SpanWriter<wchar_t> writer(msg);
@@ -123,7 +125,7 @@ namespace HerosInsight::CrashHandling
     }
 
     inline thread_local EXCEPTION_POINTERS *g_exceptionPointers = nullptr;
-    LONG WINAPI CrashHandler(EXCEPTION_POINTERS *info)
+    inline LONG WINAPI CrashHandler(EXCEPTION_POINTERS *info)
     {
         DWORD code = info->ExceptionRecord->ExceptionCode;
         bool is_cpp_exception = code == 0xE06D7363;
@@ -140,7 +142,7 @@ namespace HerosInsight::CrashHandling
         }
     }
 
-    bool SafeCallInner(void (*fn)(void *data), void *data)
+    inline bool SafeCallInner(void (*fn)(void *data), void *data)
     {
         bool success = true;
         __try
@@ -154,7 +156,7 @@ namespace HerosInsight::CrashHandling
         return success;
     }
 
-    bool SafeCall(void (*fn)(void *data), void *data = nullptr)
+    inline bool SafeCall(void (*fn)(void *data), void *data = nullptr)
     {
         bool success = true;
 #ifdef ENABLE_SAFECALL

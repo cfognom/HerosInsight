@@ -82,6 +82,7 @@
 
 #include <attribute_or_title.h>
 #include <constants.h>
+#include <crash_handling.h>
 #include <custom_agent_data.h>
 #include <custom_skill_data.h>
 #include <debug_display.h>
@@ -3287,16 +3288,27 @@ namespace HerosInsight::Utils
     // Get the corresponding frame for a skill in the "Skills and Attributes" window
     GetSkillFrameResult GetSkillFrame(GW::Constants::SkillID skill_id)
     {
-        auto all_frames = GW::UI::GetFrames();
-        assert(!all_frames.empty());
-
         auto skills_and_attributes_frame = GW::UI::GetFrameByLabel(L"DeckBuilder");
         if (!skills_and_attributes_frame)
             return {GetSkillFrameResult::Error::SkillAndAttributesNotOpened, nullptr};
 
         const auto skill = GW::SkillbarMgr::GetSkillConstantData(skill_id);
 
+        struct Arg
+        {
+            uint32_t *payload;
+            uint32_t skill_id;
+        };
+
+        constexpr auto TryGetSkillIdFromPayload = [](void *data)
+        {
+            auto arg = (Arg *)data;
+            arg->skill_id = *arg->payload;
+        };
+
         GW::UI::Frame *found_frame = nullptr;
+        auto all_frames = GW::UI::GetFrames();
+        assert(!all_frames.empty());
         for (auto frame : all_frames)
         {
             if (!Utils::IsFrameValid(frame))
@@ -3310,7 +3322,11 @@ namespace HerosInsight::Utils
             if (!payload)
                 continue;
 
-            auto tooltip_skill_id = payload[0];
+            Arg arg = {payload, 0};
+
+            if (!CrashHandling::SafeCall(TryGetSkillIdFromPayload, &arg))
+                continue;
+            auto tooltip_skill_id = arg.skill_id;
 
             bool matching_skill_id = skill_id == tooltip_skill_id ||
                                      (skill && (skill->skill_id_pvp == tooltip_skill_id));
