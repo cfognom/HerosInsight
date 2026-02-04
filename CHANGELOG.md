@@ -1,4 +1,7 @@
 # CHANGELOG
+## 0.3.2
+Test release 3.
+
 ## 0.3.1
 Improve safety of Skill click and drag.
 
