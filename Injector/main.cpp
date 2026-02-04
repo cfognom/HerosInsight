@@ -677,6 +677,7 @@ struct Args
 {
     int count = 0;
     LPWSTR *ptr;
+    std::unordered_map<std::string_view, int> positions;
 
     Args()
     {
@@ -701,29 +702,37 @@ struct Args
 
     bool GetInt(std::wstring_view name, int &out) const
     {
-        int i = find(name);
-        return i >= 0 &&
-               i + 1 < count &&
-               parse_int(ptr[i + 1], out);
+        auto &pos = positions[name];
+        int pos = find(name, pos);
+        if (pos + 1 >= count)
+            return false;
+
+        if (!parse_int(ptr[pos + 1], out))
+            return false;
+
+        pos += 2;
+        return true;
     }
 
     bool GetPath(std::wstring_view name, std::filesystem::path &out) const
     {
-        int i = find(name);
-        if (i < 0 || i + 1 >= count)
+        auto &pos = positions[name];
+        pos = find(name, pos);
+        if (pos + 1 >= count)
             return false;
 
-        out = ptr[i + 1];
+        out = ptr[pos + 1];
+        pos += 2;
         return true;
     }
 
 private:
-    int find(std::wstring_view name) const
+    int find(std::wstring_view name, int pos) const
     {
-        for (int i = 0; i < count; ++i)
+        for (int i = pos; i < count; ++i)
             if (wcscmp(ptr[i], name.data()) == 0)
                 return i;
-        return -1;
+        return count;
     }
 
     static bool parse_int(std::wstring_view s, int &out)
