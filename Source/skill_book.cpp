@@ -1765,8 +1765,8 @@ namespace HerosInsight::SkillBook
             ImGui::PopStyleColor();
             // clang-format off
             constexpr std::string_view examples[] = {
-                "<c=@skilldyn>knock...down</c>", "Finds any skills related to knock down",
-                "<c=@skilldyn>h reg</c>", "Finds any skills related to knock down",
+                "<c=@skilldyn>knock...down</c>", "Finds skills related to knock down",
+                "<c=@skilldyn>h reg</c>", "Finds skills giving health regeneration",
             };
             // clang-format on
             DrawTable(examples);
