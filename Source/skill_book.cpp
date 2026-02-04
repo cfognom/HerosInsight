@@ -1765,8 +1765,11 @@ namespace HerosInsight::SkillBook
             ImGui::PopStyleColor();
             // clang-format off
             constexpr std::string_view examples[] = {
+                "<c=@skilldyn>locked</c>", "Finds skills you have yet to unlock",
+                "<c=@skilldyn>health regen</c>", "Finds skills giving health regeneration",
                 "<c=@skilldyn>knock...down</c>", "Finds skills related to knock down",
-                "<c=@skilldyn>h reg</c>", "Finds skills giving health regeneration",
+                "<c=@skilldyn>type: stance & prof: mes|derv</c>", "Finds mesmer or dervish stances",
+                "<c=@skilldyn>campaign!: prophecies</c>", "Finds non-prophecies skills",
             };
             // clang-format on
             DrawTable(examples);
@@ -1778,7 +1781,7 @@ namespace HerosInsight::SkillBook
             // clang-format off
             constexpr std::string_view control_chars[] = {
                 "<c=@skilldyn>:</c> or <c=@skilldyn>=</c>", "Used as a separator between the target and the body of the filter.",
-                "<c=@skilldyn>!</c>", "\"Not\". Used to invert a filter so that it excludes anything matching it.",
+                "<c=@skilldyn>!</c>", "\"Not\". When put before the filter body and any separator, it inverts the filter so that it excludes anything matching it. (Also acts as a separator if there is none.)",
                 "<c=@skilldyn>&</c>", "\"And\". Used to combine multiple statements in a query",
                 "<c=@skilldyn>|</c>", "\"Or\". Used to specify multiple options in a filter",
             };
