@@ -97,6 +97,21 @@ namespace HerosInsight
             return std::move(*(data() + index));
         }
 
+        void resize(std::size_t size)
+        {
+            assert(size <= capacity());
+            auto &len = Len();
+            if (size < len)
+            {
+                std::destroy_n(data() + size, len - size);
+            }
+            else if (size > len)
+            {
+                std::uninitialized_default_construct_n(data() + size, size - len);
+            }
+            len = size;
+        }
+
         void remove(std::size_t index)
         {
             assert(index < size());
