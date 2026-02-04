@@ -172,7 +172,8 @@ def main():
             print("\nCreating GitHub release...")
             run([
                 "gh", "release", "create", tag_str, str(zip_path),
-                "--title", f"\"HerosInsight {new_version}\"",
+                "--title", f"Hero's Insight {new_version}",
+                "--generate-notes",
                 "--notes-from-tag",
                 "--fail-on-no-commits",
                 "--verify-tag"
