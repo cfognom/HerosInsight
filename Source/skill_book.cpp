@@ -1819,7 +1819,7 @@ namespace HerosInsight::SkillBook
             ImGui::PopStyleColor();
             // clang-format off
             constexpr std::string_view commands[] = {
-                "<c=@skilldyn>/sort</c>", "Sorts the results according to the comma separated list of targets following it.",
+                "<c=@skilldyn>/sort</c>", "Sorts the results according to the comma-separated list of targets following it.",
             };
             // clang-format on
             DrawTable(commands);
