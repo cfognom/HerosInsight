@@ -230,7 +230,7 @@ namespace HerosInsight::SkillBook
         Profession,
         Campaign,
         Tag,
-        Range,
+        AoE,
         Name,
 
         Energy,
@@ -779,35 +779,30 @@ namespace HerosInsight::SkillBook
                 }
             );
 
-            static_props[(size_t)SkillProp::Range].PopulateItems(
-                "SkillBookProp_Range",
-                GW::Constants::SkillMax,
-                [](SpanVector<char> &dst, size_t skill_id)
+            static_props[(size_t)SkillProp::AoE].SetupIncremental(
+                nullptr,
+                +[](Text::StringTemplateAtom::Builder &b, size_t skill_id, void *) -> Text::StringTemplateAtom
                 {
                     FixedVector<Utils::Range, 4> ranges;
                     auto &cskill = CustomSkillDataModule::GetSkills()[skill_id];
                     cskill.GetRanges(ranges);
+                    FixedVector<Text::StringTemplateAtom, 32> range_atoms;
                     for (size_t i = 0; i < ranges.size(); ++i)
                     {
                         auto range = ranges[i];
-                        dst.AppendWriteBuffer(
-                            64,
-                            [range](std::span<char> &buffer)
-                            {
-                                SpanWriter<char> writer(buffer);
-                                writer.AppendIntToChars((int)range);
-                                auto range_name = Utils::GetRangeStr(range);
-                                if (range_name.has_value())
-                                {
-                                    writer.AppendFormat(" ({})", range_name.value());
-                                }
-                                buffer = writer.WrittenSpan();
-                            }
-                        );
+                        range_atoms.push_back(b.Number((float)(std::underlying_type_t<Utils::Range>)range));
+                        auto range_name = Utils::GetRangeStr(range);
+                        if (range_name.has_value())
+                        {
+                            range_atoms.push_back(b.Chars(" ("));
+                            range_atoms.push_back(b.ExplicitString(range_name.value()));
+                            range_atoms.push_back(b.Char(')'));
+                        }
 
                         if (i < ranges.size() - 1)
-                            dst.Elements().append_range(std::string_view(", "));
+                            range_atoms.push_back(b.Chars(", "));
                     }
+                    return b.ExplicitSequence(range_atoms);
                 }
             );
         }
@@ -851,7 +846,7 @@ namespace HerosInsight::SkillBook
             SetupMetaProp("Attribute", CreatePropset(SkillProp::Attribute));
             SetupMetaProp("Profession", CreatePropset(SkillProp::Profession));
             SetupMetaProp("Campaign", CreatePropset(SkillProp::Campaign));
-            SetupMetaProp("Range", CreatePropset(SkillProp::Range));
+            SetupMetaProp("AoE", CreatePropset(SkillProp::AoE));
 
             SetupMetaProp("Id", CreatePropset(SkillProp::Id));
 
@@ -1770,6 +1765,7 @@ namespace HerosInsight::SkillBook
                 "<c=@skilldyn>knock...down</c>", "Finds skills related to knock down",
                 "<c=@skilldyn>type: stance & prof: mes|derv</c>", "Finds mesmer or dervish stances",
                 "<c=@skilldyn>campaign!: prophecies</c>", "Finds non-prophecies skills",
+                "<c=@skilldyn>ty:attack & aoe /sort prof, aoe!</c>", "Finds AoE attack skills. Sorts ascending by profession then descending by AoE.",
             };
             // clang-format on
             DrawTable(examples);
@@ -2168,7 +2164,7 @@ namespace HerosInsight::SkillBook
                 {SkillProp::Attribute},
                 {SkillProp::Profession},
                 {SkillProp::Campaign},
-                {SkillProp::Range},
+                {SkillProp::AoE},
             };
 
             for (auto &l : layout)
