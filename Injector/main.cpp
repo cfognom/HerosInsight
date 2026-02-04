@@ -440,10 +440,9 @@ std::optional<LocalInstallation> TryGetOrCreateLocalInstallation()
                 auto message = std::format(
                     L"There is a new version of Hero's Insight available: {}"
                     "\n(Current version: {})"
-                    "\n\nO>======<Release notes>======<O"
+                    "\n\nRelease notes:"
                     "\n\n{}"
-                    "\n\nO>=======================<O"
-                    "\n\nPress OK to download and install.",
+                    "\n\n\nPress OK to download and install.",
                     new_version_str,
                     cur_version_str,
                     wbody
