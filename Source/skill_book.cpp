@@ -827,7 +827,7 @@ namespace HerosInsight::SkillBook
             meta_prop_names.arena.ReserveFromHint(capacity_hint_key);
             meta_propsets.reserve(meta_prop_names.arena.SpanCount());
 
-            SetupMetaProp("Anything", ALL_PROPS); // Must be first
+            SetupMetaProp("", ALL_PROPS); // Must be first
             SetupMetaProp("Meta", CreatePropset(SkillProp::COUNT));
             SetupMetaProp("Name", CreatePropset(SkillProp::Name));
             SetupMetaProp("Type", CreatePropset(SkillProp::Type));
@@ -1168,12 +1168,12 @@ namespace HerosInsight::SkillBook
         enum struct DirtyFlags : uint32_t
         {
             None = 0,
-            Filter = 1 << 0,
+            Query = 1 << 0,
             SkillList = 1 << 1,
             Props = 1 << 2,
 
-            FilterAndList = Filter | SkillList,
-            ALL = Filter | SkillList | Props,
+            FilterAndList = Query | SkillList,
+            ALL = Query | SkillList | Props,
         };
 
         bool is_opened = true;
@@ -1433,7 +1433,7 @@ namespace HerosInsight::SkillBook
                 clipper.Reset();
                 scroll_tracking = ScrollTracking();
             }
-            if (Utils::HasAnyFlag(dirty_flags, DirtyFlags::Filter))
+            if (Utils::HasAnyFlag(dirty_flags, DirtyFlags::Query))
             {
                 auto input_text_view = std::string_view(input_text, strlen(input_text));
                 scroll_tracking.UpdateScrollTracking(input_text_view, clipper);
@@ -1460,6 +1460,9 @@ namespace HerosInsight::SkillBook
 
             auto DrawTooltip = [](std::string_view text, std::span<uint16_t> highlighting)
             {
+                if (text.empty())
+                    return;
+
                 ImGui::BeginTooltip();
                 auto window = ImGui::GetCurrentWindow();
                 if (window->BeginCount == 1) // We only draw a tooltip if it wasn't written already
@@ -1703,7 +1706,7 @@ namespace HerosInsight::SkillBook
         {
             ImGui::BeginTooltip();
 
-            auto DrawTable = [](auto &&cells)
+            auto DrawTable = [](auto &&cells, uint32_t second_col_max_width = 0)
             {
                 constexpr auto elems = std::size(cells);
                 constexpr auto cols = 2;
@@ -1776,8 +1779,8 @@ namespace HerosInsight::SkillBook
             ImGui::PopStyleColor();
             // clang-format off
             constexpr std::string_view control_chars[] = {
-                "<c=@skilldyn>:</c> or <c=@skilldyn>=</c>", "Used as a separator between the target and the body of the filter.",
-                "<c=@skilldyn>!</c>", "\"Not\". When put before the filter body and any separator, it inverts the filter so that it excludes anything matching it. (Also acts as a separator if there is none.)",
+                "<c=@skilldyn>:</c> or <c=@skilldyn>=</c>", "Used as a separator between the target and the filter body.",
+                "<c=@skilldyn>!</c>", "\"Not\". When put before the filter body, negates the filter, turning it into an exclusion filter.",
                 "<c=@skilldyn>&</c>", "\"And\". Used to combine multiple statements in a query",
                 "<c=@skilldyn>|</c>", "\"Or\". Used to specify multiple options in a filter",
             };
@@ -2026,7 +2029,7 @@ namespace HerosInsight::SkillBook
                 [](ImGuiInputTextCallbackData *data)
                 {
                     auto &book = *static_cast<BookState *>(data->UserData);
-                    book.dirty_flags |= DirtyFlags::Filter;
+                    book.dirty_flags |= DirtyFlags::Query;
 
                     return 0;
                 },

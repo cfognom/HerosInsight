@@ -90,6 +90,7 @@ namespace HerosInsight::Filtering
         std::vector<size_t> filters_in_decl_order;
         std::span<Filter> exclusion_filters;
         std::span<Filter> inclusion_filters;
+        bool reverse_output = false;
         std::vector<SortAtom> sort_atoms;
         std::vector<SortCommand::Arg> sort_args;
 
@@ -100,6 +101,7 @@ namespace HerosInsight::Filtering
 
         void clear()
         {
+            reverse_output = false;
             filters.clear();
             filters_in_decl_order.clear();
             sort_atoms.clear();
@@ -473,9 +475,13 @@ namespace HerosInsight::Filtering
                                 for (auto &arg : sort_command.args)
                                 {
                                     query.sort_args.emplace_back(std::move(arg));
-                                    auto propset = impl.GetMetaPropset(arg.meta_id);
-                                    if (propset.All()) // Special case: Preserve order
+                                    if (arg.meta_id == 0) // Special case: Default sort
+                                    {
+                                        if (arg.is_negated)
+                                            query.reverse_output = !query.reverse_output;
                                         continue;
+                                    }
+                                    auto propset = impl.GetMetaPropset(arg.meta_id);
                                     for (auto prop_id : propset.IterSetBits())
                                     {
                                         if (prop_id == I::PropCount())
@@ -760,6 +766,11 @@ namespace HerosInsight::Filtering
                 RunFilters<false>(query.inclusion_filters, items);
             }
 
+            if (query.reverse_output)
+            {
+                std::reverse(items.begin(), items.end());
+            }
+
             if (!query.sort_atoms.empty())
             {
                 SortItems(query.sort_atoms, items);
@@ -818,8 +829,10 @@ namespace HerosInsight::Filtering
 
                     FixedVector<char, 128> meta_name;
                     impl.GetMetaName(filter.meta_prop_id).GetRenderableString(meta_name);
+                    auto meta_name_str = (std::string_view)meta_name;
                     auto cond = filter.inverted ? ControlColor "not " CloseColor : "";
-                    std::format_to(inserter, ControlColor "{}</c> must {}contain" ControlColor ":</c> ", (std::string_view)meta_name, cond);
+                    auto musty = meta_name_str.empty() ? "Must" : " must";
+                    std::format_to(inserter, ControlColor "{}</c>{} {}contain: ", meta_name_str, musty, cond);
                     for (size_t m = 0; m < filter.matchers.size(); ++m)
                     {
                         auto &matcher = filter.matchers[m];
@@ -930,11 +943,20 @@ namespace HerosInsight::Filtering
                     AppendJoin(s, a, n_args);
                     s.append_range((std::string_view) "by ");
 
-                    auto meta_name = impl.GetMetaName(arg.meta_id);
-                    FixedVector<char, 128> name;
-                    meta_name.GetRenderableString(name);
+                    std::string_view sort_target_name;
+                    if (arg.meta_id == 0)
+                    {
+                        sort_target_name = "Default";
+                    }
+                    else
+                    {
+                        auto meta_name = impl.GetMetaName(arg.meta_id);
+                        FixedVector<char, 128> name;
+                        meta_name.GetRenderableString(name);
+                        sort_target_name = name;
+                    }
 
-                    std::format_to(inserter, ArgColor "{}</c>", (std::string_view)name);
+                    std::format_to(inserter, ArgColor "{}</c>", sort_target_name);
 
                     if (arg.is_negated)
                     {
@@ -968,12 +990,15 @@ namespace HerosInsight::Filtering
             auto relevant_metas = relevant_metas_per_prop.Get(prop_id);
             if (!relevant_metas.empty())
             {
-                for (size_t i = 0;;)
+                constexpr std::string_view join = SkillDull ", " CloseColor;
+                for (size_t i = 0; i < relevant_metas.size(); ++i)
                 {
                     auto &relevant_meta = relevant_metas[i];
 
                     size_t offset = result.text.size();
                     LoweredText lowered = impl.GetMetaName(relevant_meta.meta_id);
+                    if (lowered.text.empty()) // We allow empty meta names; just skip
+                        continue;
                     auto size = result.hl.size();
                     CalcHL(q, meta_prop_id, lowered, result.hl);
                     lowered.GetRenderableString(result.text);
@@ -985,11 +1010,11 @@ namespace HerosInsight::Filtering
                         }
                     }
 
-                    ++i;
-                    if (i == relevant_metas.size())
-                        break;
-
-                    result.text.AppendString(SkillDull ", " CloseColor);
+                    result.text.AppendString(join);
+                }
+                if (result.text.size() > join.size())
+                {
+                    result.text.resize(result.text.size() - join.size());
                 }
             }
 
