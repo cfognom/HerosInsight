@@ -617,25 +617,25 @@ int RunNormalApp()
     if (!installation)
     {
         auto message = std::format(L"Failed to get or create local installation.");
-        MessageBoxW(NULL, message.c_str(), L"Error", MB_ICONERROR | MB_OK);
+        MessageBoxW(gwHwnd, message.c_str(), L"Error", MB_ICONERROR | MB_OK);
         return 1;
     }
 
     if (gwProcessId == 0)
     {
-        MessageBoxW(NULL, L"Failed to find target process.", L"Error", MB_ICONERROR | MB_OK);
+        MessageBoxW(gwHwnd, L"Failed to find target process.", L"Error", MB_ICONERROR | MB_OK);
         return 1;
     }
 
     if (IsDllLoaded(gwProcessId, installation->mod_dll))
     {
-        MessageBoxW(NULL, L"Hero's Insight is already running.", L"Error", MB_ICONERROR | MB_OK);
+        MessageBoxW(gwHwnd, L"Hero's Insight is already running.", L"Error", MB_ICONERROR | MB_OK);
         return 1;
     }
 
     if (!TryInjectDLL(gwProcessId, installation->mod_dll))
     {
-        MessageBoxW(NULL, L"Failed to inject DLL, check output file for more details.", L"Error", MB_ICONERROR | MB_OK);
+        MessageBoxW(gwHwnd, L"Failed to inject DLL, check output file for more details.", L"Error", MB_ICONERROR | MB_OK);
         return 1;
     }
 
