@@ -111,6 +111,8 @@ struct ScopedFile
             throw std::runtime_error("Failed to open file");
     }
 
+    bool IsEmpty() { return file.tellp() == 0; }
+
     void Commit()
     {
         committed = true;
@@ -181,6 +183,7 @@ struct CurlEasy
         ScopedFile file(dst);
 
         curl_easy_setopt(curl, CURLOPT_URL, url);
+        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L); // REQUIRED for GitHub
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CurlWriteToFile);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &file);
         curl_easy_setopt(curl, CURLOPT_USERAGENT, github_agent_name);
@@ -403,6 +406,12 @@ void DownloadAndLaunchInstaller(GitHubRelease &release)
     auto download_path = exeDirPath / "new_version.zip";
     CurlEasy().DownloadFile(release.download_url, download_path);
 
+    if (std::filesystem::is_empty(download_path))
+    {
+        std::filesystem::remove(download_path);
+        throw std::runtime_error("The downloaded file was empty.");
+    }
+
     // Launch installer/updater
     auto cmdLine = std::format(L"--prev_pid {} --install \"{}\"", GetCurrentProcessId(), exeDirPath.c_str());
     Log(L"Launching installer...");
@@ -483,6 +492,8 @@ std::optional<LocalInstallation> TryGetOrCreateLocalInstallation()
             }
             catch (const std::exception &e)
             {
+                auto content = StrToWStr(e.what());
+                MessageBoxW(gwHwnd, content.c_str(), L"Error", MB_ICONERROR | MB_OK);
                 std::wcerr << "Error downloading and launching installer: " << e.what() << std::endl;
             }
         }
