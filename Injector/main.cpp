@@ -436,12 +436,13 @@ std::optional<LocalInstallation> TryGetOrCreateLocalInstallation()
                 auto cur_version_str = L"" HEROSINSIGHT_VERSION_STRING;
                 auto new_version_str = latest_release->version.ToWString();
                 auto wbody = StrToWStr(latest_release->body);
-                wbody = IndentMultiline(wbody, L"    ");
+                // wbody = IndentMultiline(wbody, L"    ");
                 auto message = std::format(
                     L"There is a new version of Hero's Insight available: {}"
                     "\n(Current version: {})"
-                    "\n\nRelease notes:"
+                    "\n\nO>======<Release notes>======<O"
                     "\n\n{}"
+                    "\n\nO>=======================<O"
                     "\n\nPress OK to download and install.",
                     new_version_str,
                     cur_version_str,
