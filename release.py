@@ -85,7 +85,7 @@ def get_version_and_changelog():
 
 def preflight_checks():
     # Ensure clean tree
-    unexpected = git_clean_except([CHANGELOG_FILE_NAME])
+    unexpected = git_clean_except([__file__, CHANGELOG_FILE_NAME])
     if unexpected:
         print("❌ Error: Unexpected changes detected in git:")
         for f in unexpected:
@@ -174,7 +174,7 @@ def main():
                 "gh", "release", "create", tag_str, str(zip_path),
                 "--title", f"Hero's Insight {new_version}",
                 "--generate-notes",
-                "--notes-from-tag",
+                "--notes", changelog,
                 "--fail-on-no-commits",
                 "--verify-tag"
             ], check=True)
