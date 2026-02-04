@@ -623,7 +623,7 @@ int RunNormalApp()
 
     if (gwProcessId == 0)
     {
-        MessageBoxW(gwHwnd, L"Failed to find target process.", L"Error", MB_ICONERROR | MB_OK);
+        MessageBoxW(gwHwnd, L"Failed to find Guild Wars process.\n\n(Guild wars must be running when launching Hero's Insight.)", L"Error", MB_ICONERROR | MB_OK);
         return 1;
     }
 
@@ -635,11 +635,11 @@ int RunNormalApp()
 
     if (!TryInjectDLL(gwProcessId, installation->mod_dll))
     {
-        MessageBoxW(gwHwnd, L"Failed to inject DLL, check output file for more details.", L"Error", MB_ICONERROR | MB_OK);
+        MessageBoxW(gwHwnd, L"Failed to attach mod, check output file for more details.", L"Error", MB_ICONERROR | MB_OK);
         return 1;
     }
 
-    std::cout << "DLL injected successfully." << std::endl;
+    std::cout << "Mod DLL attached successfully." << std::endl;
 
     return 0;
 }
