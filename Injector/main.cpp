@@ -18,15 +18,40 @@
 
 #include "version.h"
 
-std::string_view mod_dll_name = "HerosInsight.dll";
-std::string_view version_file_name = "HerosInsight.version";
-std::string_view github_agent_name = "Hero's Insight Updater";
+#define MOD_NAME "Hero's Insight"
+#define MOD_MACHINE_NAME "HerosInsight"
+#define MOD_DLL_NAME MOD_MACHINE_NAME ".dll"
+#define MOD_EXE_NAME "Launch_" MOD_MACHINE_NAME ".exe"
+
+constexpr std::string_view mod_dll_name = MOD_DLL_NAME;
+constexpr std::string_view github_agent_name = MOD_NAME " Updater";
+constexpr std::string_view installerArchiveName = MOD_MACHINE_NAME "_Installer.zip";
+constexpr std::string_view installerName = MOD_MACHINE_NAME "_Installer.exe";
 bool check_for_updates = true;
-std::string launcher_exe_name;
-std::filesystem::path exePath;
-std::filesystem::path exeDirPath;
+std::filesystem::path curExePath;
+std::filesystem::path rootDirPath;
+std::filesystem::path installerArchivePath;
+std::filesystem::path installerExePath;
+std::filesystem::path logFilePath;
+std::string curExeName;
 DWORD gwProcessId = 0;
 HWND gwHwnd = nullptr;
+
+struct StaticInitailizer
+{
+    StaticInitailizer()
+    {
+        wchar_t buffer[MAX_PATH];
+        GetModuleFileNameW(nullptr, buffer, MAX_PATH);
+        curExePath = std::filesystem::path(buffer);
+        rootDirPath = curExePath.parent_path();
+        curExeName = curExePath.filename().string();
+        installerArchivePath = rootDirPath / installerArchiveName;
+        installerExePath = rootDirPath / installerName;
+        logFilePath = rootDirPath / MOD_EXE_NAME, logFilePath.replace_extension("log");
+    }
+};
+StaticInitailizer dummy;
 
 std::wstring StrToWStr(const std::string &str)
 {
@@ -178,7 +203,7 @@ struct CurlEasy
         return size * nmemb;
     }
 
-    void DownloadFile(std::string_view url, std::filesystem::path &dst)
+    void DownloadFile(std::string_view url, const std::filesystem::path &dst)
     {
         ScopedFile file(dst);
 
@@ -192,6 +217,8 @@ struct CurlEasy
 
         if (res != CURLE_OK)
             throw std::runtime_error(std::string("Failed to download file: ") + curl_easy_strerror(res));
+        if (!std::filesystem::exists(dst))
+            throw std::runtime_error("Failed to download file: File does not exist");
 
         file.Commit();
     }
@@ -296,7 +323,7 @@ struct LocalInstallation
 
     LocalInstallation()
     {
-        auto data_path = exeDirPath / "data";
+        auto data_path = rootDirPath / "data";
         if (!std::filesystem::exists(data_path))
             throw std::runtime_error("'data' directory does not exist");
 
@@ -320,63 +347,121 @@ std::optional<LocalInstallation> TryGetLocalInstallation()
     }
 }
 
-void ExtractZip(const std::filesystem::path &zipPath, const std::filesystem::path &dstPath)
+struct ZipRAII
 {
-    int err = 0;
-    zip *z = zip_open(zipPath.string().c_str(), 0, &err);
-    if (!z)
+    std::filesystem::path path;
+    zip *zip;
+    ZipRAII(const std::filesystem::path &p) : path(p)
     {
-        throw std::runtime_error(std::format("Failed to open zip file: {}", zipPath.string()));
+        int err = 0;
+        zip = zip_open(p.string().c_str(), 0, nullptr);
+        if (!zip || err)
+            throw std::runtime_error(std::format("Failed to open zip file: {}", p.string()));
     }
+    ~ZipRAII() { zip_close(zip); }
+};
+
+struct ZipFileRAII
+{
+    zip_file *file;
+    ZipFileRAII(zip *z, zip_uint64_t index) : file(zip_fopen_index(z, index, 0)) {}
+    ~ZipFileRAII() { zip_fclose(file); }
+};
+
+std::filesystem::path InstallFromArchive(const std::filesystem::path &zipPath, const std::filesystem::path &dstPath)
+{
+    Log(std::format(L"Installing from archive {} to {}", zipPath.wstring(), dstPath.wstring()));
+    ZipRAII zip(zipPath);
+    auto z = zip.zip;
 
     zip_int64_t num_entries = zip_get_num_entries(z, 0);
+
+    std::string topDir;             // detected top-level dir in zip
+    std::filesystem::path foundExe; // path to exe we want to return
+
+    Log(std::format(L"Found {} entries in archive.", num_entries));
     for (zip_uint64_t i = 0; i < num_entries; ++i)
     {
         const char *name = zip_get_name(z, i, 0);
-        if (!name) continue;
+        Log(std::format(L"Entry {}: {}", i, StrToWStr(name)));
+        if (!name)
+            continue;
 
-        zip_file *zf = zip_fopen_index(z, i, 0);
-        if (!zf) continue;
+        std::string entryName = name;
 
-        std::filesystem::path outFile = dstPath / name;
+        // Detect top-level directory (first component before '/')
+        if (topDir.empty())
+        {
+            auto pos = entryName.find('/');
+            if (pos != std::string::npos)
+            {
+                topDir = entryName.substr(0, pos + 1);
+                Log(std::format(L"Detecting archive top-level directory: {}", StrToWStr(topDir)));
+            }
+        }
+
+        if (topDir.empty())
+            throw std::runtime_error("Top-level directory not found");
+
+        if (!entryName.starts_with(topDir))
+            throw std::runtime_error(std::format("Entry {} is not in top-level directory", entryName));
+
+        // Remove top-level folder from path
+        std::string relativePath = entryName.substr(topDir.size());
+
+        if (relativePath.empty())
+            continue;
+
+        std::filesystem::path outFile = dstPath / relativePath;
         std::filesystem::create_directories(outFile.parent_path());
 
-        std::ofstream ofs(outFile, std::ios::binary);
+        ZipFileRAII zf_raii(z, i);
+        zip_file *zf = zf_raii.file;
+        if (!zf)
+            continue;
+
+        std::ofstream ofs(outFile, std::ios::binary | std::ios::out | std::ios::trunc);
         char buf[4096];
         zip_int64_t n;
         while ((n = zip_fread(zf, buf, sizeof(buf))) > 0)
-        {
             ofs.write(buf, n);
-        }
 
-        zip_fclose(zf);
+        // Detect the exe
+        if (foundExe.empty() && outFile.extension() == ".exe")
+            foundExe = outFile;
     }
 
-    zip_close(z);
+    if (foundExe.empty())
+        throw std::runtime_error("No exe found inside zip");
+
+    return foundExe;
 }
 
-void RunLauncher(wchar_t *cmdLine = nullptr)
+void RunExe(const std::filesystem::path &appPath, std::wstring cmdLine)
 {
     STARTUPINFOW si{};
     PROCESS_INFORMATION pi{};
 
     si.cb = sizeof(si);
 
+    auto appPathStr = appPath.wstring();
+    Log(std::format(L"Running exe {} with command line {}", appPathStr, cmdLine));
+    cmdLine = std::format(L"\"{}\" {}", appPathStr, cmdLine);
     if (!CreateProcessW(
-            exePath.c_str(), // Application name
-            cmdLine,         // Command line arguments (can be nullptr)
-            nullptr,         // Process handle not inheritable
-            nullptr,         // Thread handle not inheritable
-            FALSE,           // Inherit handles
-            0,               // No special creation flags
-            nullptr,         // Use parent's environment
-            nullptr,         // Use parent's current directory
+            appPathStr.c_str(), // Application name
+            cmdLine.data(),     // Command line arguments (can be nullptr)
+            nullptr,            // Process handle not inheritable
+            nullptr,            // Thread handle not inheritable
+            FALSE,              // Inherit handles
+            0,                  // No special creation flags
+            nullptr,            // Use parent's environment
+            nullptr,            // Use parent's current directory
             &si,
             &pi
         ))
     {
         DWORD err = GetLastError();
-        throw std::runtime_error("Failed to launch exe. Error code: " + std::to_string(err));
+        throw std::runtime_error("Failed to run exe. Error code: " + std::to_string(err));
     }
 
     // Close handles to avoid leaks
@@ -384,17 +469,75 @@ void RunLauncher(wchar_t *cmdLine = nullptr)
     CloseHandle(pi.hProcess);
 }
 
-void InstallAndRelaunch(const std::filesystem::path &install_path)
+enum struct UpdateFailedChoice
 {
-    auto package_path = install_path / "new_version.zip";
-    ExtractZip(package_path, install_path);
-    std::filesystem::remove(package_path);
-    Log(L"Install complete.");
+    UseOld,
+    Cancel,
+};
 
-    // Relaunch
-    auto cmdLine = std::format(L"--prev_pid {} --no_update", GetCurrentProcessId());
-    Log(L"Relaunching...");
-    RunLauncher(cmdLine.data());
+UpdateFailedChoice UpdateFailedPromt(const std::exception &e)
+{
+    std::wcerr << "Error updating: " << e.what() << std::endl;
+
+    auto msg = std::format(
+        L"Update failed."
+        "\n\n"
+        "Reason: {}"
+        "\n\n"
+        "Do you want to attempt to use the old version instead?",
+        StrToWStr(e.what())
+    );
+
+    auto result = MessageBoxW(gwHwnd, msg.c_str(), L"Update Failed", MB_ICONERROR | MB_OKCANCEL);
+
+    return result == IDOK ? UpdateFailedChoice::UseOld : UpdateFailedChoice::Cancel;
+}
+
+[[noreturn]] void InstallAndLaunch(const std::filesystem::path &oldExePath)
+{
+    std::wstring cmdLine = std::format(
+        L"--prev_pid {} --delete \"{}\"",
+        GetCurrentProcessId(),
+        std::filesystem::relative(installerExePath, rootDirPath).wstring()
+    );
+    try
+    {
+        if (!std::filesystem::exists(installerArchivePath))
+            throw std::runtime_error("Installation archive does not exist.");
+
+        struct ArchiveGuard
+        {
+            std::filesystem::path installerArchivePath;
+            ~ArchiveGuard()
+            {
+                std::filesystem::remove(installerArchivePath);
+            }
+        } archiveGuard{installerArchivePath};
+
+        auto newExePath = InstallFromArchive(installerArchivePath, rootDirPath);
+        Log(L"Install complete.");
+
+        if (newExePath != oldExePath)
+        {
+            Log(L"Removing old exe...");
+            std::filesystem::remove(oldExePath);
+        }
+
+        RunExe(newExePath, cmdLine);
+    }
+    catch (const std::exception &e)
+    {
+        switch (UpdateFailedPromt(e))
+        {
+            case UpdateFailedChoice::UseOld:
+                std::format_to(std::back_inserter(cmdLine), L" --no_update");
+                break;
+            case UpdateFailedChoice::Cancel:
+                std::format_to(std::back_inserter(cmdLine), L" --cleanup");
+                break;
+        }
+        RunExe(oldExePath, cmdLine);
+    }
 
     // Exit current instance
     ExitProcess(0);
@@ -403,22 +546,38 @@ void InstallAndRelaunch(const std::filesystem::path &install_path)
 void DownloadAndLaunchInstaller(GitHubRelease &release)
 {
     Log(L"Downloading release...");
-    auto download_path = exeDirPath / "new_version.zip";
-    CurlEasy().DownloadFile(release.download_url, download_path);
+    CurlEasy().DownloadFile(release.download_url, installerArchivePath);
 
-    if (std::filesystem::is_empty(download_path))
+    try
     {
-        std::filesystem::remove(download_path);
-        throw std::runtime_error("The downloaded file was empty.");
+        if (std::filesystem::is_empty(installerArchivePath))
+        {
+            throw std::runtime_error("The installation archive is empty.");
+        }
+
+        // Launch installer/updater from a temp copy so the original exe can be replaced.
+        Log(std::format(L"Copying exe from {} to {}", curExePath.wstring(), installerExePath.wstring()));
+        std::filesystem::copy_file(curExePath, installerExePath, std::filesystem::copy_options::overwrite_existing);
+
+        try
+        {
+            auto cmdLine = std::format(L"--prev_pid {} --install \"{}\"", GetCurrentProcessId(), curExePath.c_str());
+            RunExe(installerExePath, cmdLine);
+
+            // Exit current instance so updater can overwrite files
+            ExitProcess(0);
+        }
+        catch (const std::exception &e)
+        {
+            std::filesystem::remove(installerExePath);
+            throw;
+        }
     }
-
-    // Launch installer/updater
-    auto cmdLine = std::format(L"--prev_pid {} --install \"{}\"", GetCurrentProcessId(), exeDirPath.c_str());
-    Log(L"Launching installer...");
-    RunLauncher(cmdLine.data());
-
-    // Exit current instance so updater can overwrite files
-    ExitProcess(0);
+    catch (const std::exception &e)
+    {
+        std::filesystem::remove(installerArchivePath);
+        throw;
+    }
 }
 
 std::optional<LocalInstallation> TryGetOrCreateLocalInstallation()
@@ -449,9 +608,12 @@ std::optional<LocalInstallation> TryGetOrCreateLocalInstallation()
                 auto message = std::format(
                     L"There is a new version of Hero's Insight available: {}"
                     "\n(Current version: {})"
-                    "\n\nRelease notes:"
-                    "\n\n{}"
-                    "\n\n\nPress OK to download and install.",
+                    "\n\n"
+                    "Release notes:"
+                    "\n\n"
+                    "{}"
+                    "\n\n\n"
+                    "Press OK to download and install.",
                     new_version_str,
                     cur_version_str,
                     wbody
@@ -492,9 +654,15 @@ std::optional<LocalInstallation> TryGetOrCreateLocalInstallation()
             }
             catch (const std::exception &e)
             {
-                auto content = StrToWStr(e.what());
-                MessageBoxW(gwHwnd, content.c_str(), L"Error", MB_ICONERROR | MB_OK);
-                std::wcerr << "Error downloading and launching installer: " << e.what() << std::endl;
+                switch (UpdateFailedPromt(e))
+                {
+                    case UpdateFailedChoice::UseOld:
+                        Log(L"Using old version...");
+                        break;
+                    case UpdateFailedChoice::Cancel:
+                        Log(L"Terminating...");
+                        ExitProcess(0);
+                }
             }
         }
     }
@@ -580,7 +748,7 @@ bool TryInjectDLL(DWORD processId, const std::filesystem::path &dllPath)
         std::wcerr << "Failed to open target process. Error: " << last_error << std::endl;
         if (last_error == 5)
         {
-            std::wcerr << "(Maybe try adding HerosInsight.dll and Launch_HerosInsight.exe to your antivirus whitelist/exlusion list)" << std::endl;
+            std::wcerr << "(Maybe try adding " MOD_DLL_NAME " and " << curExePath.filename() << " to your antivirus whitelist/exlusion list)" << std::endl;
         }
     }
     else
@@ -664,24 +832,16 @@ void WaitForProcessExit(DWORD pid)
     CloseHandle(hProcess);
 }
 
-void InitPaths()
-{
-    wchar_t buffer[MAX_PATH];
-    GetModuleFileNameW(nullptr, buffer, MAX_PATH);
-    exePath = std::filesystem::path(buffer);
-    launcher_exe_name = exePath.filename().string();
-    exeDirPath = exePath.parent_path();
-}
-
 struct Args
 {
     int count = 0;
     LPWSTR *ptr;
-    std::unordered_map<std::string_view, int> positions;
+    std::unordered_map<std::wstring_view, int> positions;
 
     Args()
     {
-        ptr = CommandLineToArgvW(GetCommandLineW(), &count);
+        auto commandLine = GetCommandLineW();
+        ptr = CommandLineToArgvW(commandLine, &count);
     }
     ~Args()
     {
@@ -693,17 +853,25 @@ struct Args
         std::wcout << L"Running executable: ";
         for (int i = 0; i < count; i++)
         {
-            std::wcout << ptr[i];
+            std::wcout << ptr[i] << L" ";
         }
         std::wcout << std::endl;
     }
 
-    bool Has(std::wstring_view name) const { return find(name) >= 0; }
-
-    bool GetInt(std::wstring_view name, int &out) const
+    bool Has(std::wstring_view name)
     {
         auto &pos = positions[name];
-        int pos = find(name, pos);
+        pos = find(name, pos);
+        if (pos >= count)
+            return false;
+        ++pos;
+        return true;
+    }
+
+    bool GetInt(std::wstring_view name, int &out)
+    {
+        auto &pos = positions[name];
+        pos = find(name, pos);
         if (pos + 1 >= count)
             return false;
 
@@ -714,7 +882,7 @@ struct Args
         return true;
     }
 
-    bool GetPath(std::wstring_view name, std::filesystem::path &out) const
+    bool GetPath(std::wstring_view name, std::filesystem::path &out)
     {
         auto &pos = positions[name];
         pos = find(name, pos);
@@ -748,10 +916,23 @@ private:
     }
 };
 
+void DeleteRequestedFiles(Args &args)
+{
+    // "--delete [local path]" must be supported by every version of the launcher.
+    std::filesystem::path local_path;
+    while (args.GetPath(L"--delete", local_path))
+    {
+        if (local_path.is_absolute())
+            continue; // Ignore absolute paths
+
+        auto abs_path = rootDirPath / local_path;
+        std::wcout << "Deleting " << abs_path << std::endl;
+        std::filesystem::remove(abs_path);
+    }
+}
+
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
-    InitPaths();
-
     // Convert full command line to argv (Unicode-safe)
     Args args{};
     if (args.ptr == nullptr)
@@ -763,35 +944,39 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     {
         // Wait for previous process to exit
         WaitForProcessExit(prev_pid);
-        flags |= std::ios::app;
+        flags |= std::ios::app; // Append to file
     }
 
     // Redirect std::cout and std::wcerr to a file
-    auto logPath = exePath.replace_extension("log");
-    std::wofstream logFile(logPath, flags);
+    std::wofstream logFile(logFilePath, flags);
     std::wcout.rdbuf(logFile.rdbuf());
     std::wcerr.rdbuf(logFile.rdbuf());
+
+    args.Log();
+
+    DeleteRequestedFiles(args);
+    if (args.Has(L"--cleanup")) // cleanup means just delete files and exit
+    {
+        return 0;
+    }
 
     gwProcessId = GetProcessIdByName("Gw.exe");
     gwHwnd = FindWindowByPID(gwProcessId);
 
-    args.Log();
-
     int result = 0;
 
-    std::filesystem::path installDir;
-    if (args.GetPath(L"--install", installDir))
+    std::filesystem::path oldExePath;
+    if (args.GetPath(L"--install", oldExePath))
     {
-        InstallAndRelaunch(installDir);
+        assert(curExePath == installerExePath);
+        InstallAndLaunch(oldExePath);
     }
-    else
+
+    if (args.Has(L"--no_update"))
     {
-        if (args.Has(L"--no_update"))
-        {
-            check_for_updates = false;
-        }
-        result = RunNormalApp();
+        check_for_updates = false;
     }
+    result = RunNormalApp();
 
     return result;
 }
