@@ -29,8 +29,9 @@ Or even, if you've completely lost your mind:
 The following features are in development.
 
 ### Active effects UI
-Ability to see effects on friends and foes.
-[gif effect tracking teaser]
+Ability to see effects on allies and foes.
+Teaser:
+![](Media/EffectUI.mp4)
 
 ### Party stat tracking
 Track stats for you and your party
@@ -55,7 +56,7 @@ Track stats for you and your party
 - ### Help! My antivirus software is flagging ***Hero’s Insight*** as Malware. Have I been infected?
   If you have downloaded the mod from this Github repository: No you have not been infected. You can safely add **Launch_HerosInsight.exe** to you antivirus software's whitelist/exlusion list and keep using the mod.
 
-  Explanation: Antivirus software uses a bunch of heuristics to determine if something is malware or not. Sometimes these heuristics fail and you get false positives. In the case of ***Hero’s Insight***, the antivirus software maybe saw that its a lesser known exe, maybe few users etc. Maybe it checked the code and saw that it uses dll injection, a method also used by malware sometimes, however in this case for a completely benign purpose.
+  *Explanation: Antivirus software uses a bunch of heuristics to determine if something is malware or not. Sometimes these heuristics fail and you get false positives. In the case of ***Hero’s Insight***, the antivirus software maybe saw that its a lesser known exe, maybe few users etc. Maybe it checked the code and saw that it uses dll injection, a method also used by malware sometimes, however in this case for a completely benign purpose.*
 
 - ### Is ***Hero’s Insight*** compatible with [***GWToolbox***](https://www.gwtoolbox.com/)?
   For the most part it should be. Please report any issues you find by opening an issue on Github.
