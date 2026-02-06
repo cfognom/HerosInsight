@@ -213,6 +213,7 @@ namespace HerosInsight::Utils
         InTheArea = 312,
         Earshot = 1000,
         SpiritRange = 2500,
+        SpiritRange2 = 3500,
         CompassRange = 5000,
     };
 

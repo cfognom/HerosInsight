@@ -145,7 +145,8 @@ namespace HerosInsight::Utils
             case Range::Nearby:           return "Nearby";
             case Range::InTheArea:        return "In the Area";
             case Range::Earshot:          return "Earshot";
-            case Range::SpiritRange:      return "Spirit Range";
+            case Range::SpiritRange:
+            case Range::SpiritRange2:     return "Spirit Range";
             case Range::CompassRange:     return "Compass Range";
 
             default:   return std::nullopt;
@@ -3223,6 +3224,7 @@ namespace HerosInsight::Utils
                value == 1000.f ||
                value == 2000.f ||
                value == 2500.f ||
+               value == 3500.f ||
                value == 5000.f;
     }
 
