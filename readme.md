@@ -6,10 +6,10 @@ The mod is named after the Guild Wars item [*Hero's Insight*](https://wiki.guild
 ## How to install
 Download the lastest release [link to latest release]. The downloaded zip file contains a directory with the mod pre-installed. Unzip it to wherever you want to install the mod. Once done, you can now you can launch the mod by running the exe inside.
 
-Before using the mod please check out the [Faq] section.
+Before using the mod please check out the [FAQ](#FAQ) section.
 
 ## What it does
-The following features available today.
+The following features available today:
 
 ### Skillbook
 The skill book is a powerful tool for buildcrafters, or when you just want to find that one skill to equip. It allows filtering and sorting of all skills in the game.
@@ -26,7 +26,7 @@ Or even, if you've completely lost your mind:
 [gif showing skill book]
 
 ## Whats next
-The following features are in development.
+The following features are in development:
 
 ### Active effects UI
 Ability to see effects on allies and foes.
@@ -36,7 +36,7 @@ Ability to see effects on allies and foes.
 </video>
 
 ### Party stat tracking
-Track stats for you and your party
+Track stats for you and your party.
 * Damage/Healing (including regen/degen)
 * Conditions removed/applied
 * Damaged prevented (maybe)
@@ -47,7 +47,7 @@ Track stats for you and your party
 
 ## FAQ
 - ### Could using ***Hero’s Insight*** result in a ban?
-  It is not possible to guarantee that using ***Hero’s Insight*** will not result in a ban. Any use of the mod is at your own risk!
+  Although a ban is considered unlikely by the mod developer, there is no guarantee that using ***Hero’s Insight*** will not result in account action. By using this mod, you acknowledge and accept all associated risks.
 
   ***Hero’s Insight*** is designed to comply, as closely as possible, with ***ArenaNet's*** [*Code of Conduct*](https://www.arena.net/en/legal/code-of-conduct) and [*User Agreement*](https://www.arena.net/en/legal/user-agreement). In particular:
   - The mod disables itself entirely in PvP areas and lobbies (with the sole exception of one hook used to detect when it is permitted to re-enable).
