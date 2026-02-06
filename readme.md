@@ -31,9 +31,7 @@ The following features are in development:
 ### Active effects UI
 Ability to see effects on allies and foes.
 
-<video  controls>
-  <source src="Media/EffectUISmooth.mp4" type="video/mp4">
-</video>
+![](Media/EffectUISmooth.gif)
 
 ### Party stat tracking
 Track stats for you and your party.
