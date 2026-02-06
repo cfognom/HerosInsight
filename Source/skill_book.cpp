@@ -2079,12 +2079,11 @@ namespace HerosInsight::SkillBook
                 if (!feedback.filter_feedback.empty())
                 {
                     text_drawer.DrawRichText(feedback.filter_feedback, 0, wrapping_max);
-                    ImGui::Spacing();
                 }
                 if (!feedback.command_feedback.empty())
                 {
-                    text_drawer.DrawRichText(feedback.command_feedback, 0, wrapping_max);
                     ImGui::Spacing();
+                    text_drawer.DrawRichText(feedback.command_feedback, 0, wrapping_max);
                 }
 
                 ImGui::PopStyleColor();
@@ -2262,6 +2261,7 @@ namespace HerosInsight::SkillBook
                 DrawFocusedCharacterInfo();
                 DrawAttributeModeSelection();
                 DrawSearchBox();
+                ImGui::Spacing();
 
                 ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
                 auto n_skills = filtered_skills.size();
