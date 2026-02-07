@@ -1,8 +1,8 @@
 {
-    "version": 3,
+    "version": 10,
     "configurePresets": [
         {
-            "name": "Dev",
+            "name": "dev",
             "description": "Development Build. Use MSVC Win32 with vcpkg.",
             "generator": "Visual Studio 17 2022",
             "architecture": "Win32",
@@ -14,9 +14,9 @@
             }
         },
         {
-            "name": "Production",
+            "name": "prod",
             "description": "Production build. Use MSVC Win32 with vcpkg.",
-            "inherits": "Dev",
+            "inherits": "dev",
             "binaryDir": "${sourceDir}/build/prod",
             "cacheVariables": {
                 "PRODUCTION_BUILD": "ON"
@@ -25,38 +25,55 @@
     ],
     "buildPresets": [
         {
-            "name": "Debug",
-            "configurePreset": "Dev",
-            "configuration": "Debug",
-            "targets": [
-                "HerosInsight"
-            ]
+            "name": "dev_debug",
+            "configurePreset": "dev",
+            "configuration": "Debug"
         },
         {
-            "name": "Release",
-            "inherits": "Debug",
+            "name": "dev_release",
+            "configurePreset": "dev",
             "configuration": "Release"
         },
         {
-            "name": "RelWithDebInfo",
-            "inherits": "Debug",
+            "name": "dev_relwithdebinfo",
+            "configurePreset": "dev",
             "configuration": "RelWithDebInfo"
         },
         {
-            "name": "Test",
-            "description": "Use this to test before uploading to github.",
-            "configurePreset": "Production",
-            "configuration": "RelWithDebInfo",
-            "targets": [
-                "HerosInsight"
-            ]
-        },
+            "name": "prod_relwithdebinfo",
+            "configurePreset": "prod",
+            "configuration": "RelWithDebInfo"
+        }
+    ],
+    "packagePresets": [
         {
-            "name": "ReadyForGithub",
-            "description": "Creates a zip file ready to be uploaded to github releases.",
-            "inherits": "Test",
-            "targets": [
-                "HerosInsight_Zip"
+            "name": "prod_relwithdebinfo_zip",
+            "description": "Creates a zip file ready to be released.",
+            "configurePreset": "prod",
+            "configurations": [
+                "RelWithDebInfo"
+            ],
+            "generators": [
+                "ZIP"
+            ]
+        }
+    ],
+    "workflowPresets": [
+        {
+            "name": "prod_relwithdebinfo_zip",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "prod"
+                },
+                {
+                    "type": "build",
+                    "name": "prod_relwithdebinfo"
+                },
+                {
+                    "type": "package",
+                    "name": "prod_relwithdebinfo_zip"
+                }
             ]
         }
     ]
