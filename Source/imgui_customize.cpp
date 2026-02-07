@@ -334,5 +334,7 @@ void HerosInsight::ImGuiCustomize::Init()
     // InvertDefaultStyleColors();
 
     static std::string imgui_ini_path = (Constants::paths.cache() / "imgui.ini").string();
+    static std::string imgui_log_path = (Constants::paths.cache() / "imgui_log.txt").string();
     io.IniFilename = imgui_ini_path.c_str();
+    io.LogFilename = imgui_log_path.c_str();
 }
