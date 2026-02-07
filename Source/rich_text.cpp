@@ -419,7 +419,7 @@ namespace HerosInsight::RichText
 
             // Make newline
             used_width = 0.f;
-            ss_cursor.x = window->ContentRegionRect.Min.x + wrapping_min;
+            ss_cursor.x = window->WorkRect.Min.x + wrapping_min;
             ss_cursor.y += text_height;
         }
 
