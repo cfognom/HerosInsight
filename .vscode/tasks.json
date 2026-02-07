@@ -1,0 +1,20 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build + Install Python Script",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "${workspaceFolder}/build.py",
+                "--preset", "${command:cmake.activeConfigurePresetName}",
+                "--config", "${command:cmake.buildType}"
+            ],
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+    ]
+}

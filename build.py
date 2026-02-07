@@ -93,7 +93,7 @@ parser.add_argument(
 parser.add_argument(
     '--outdir', 
     '-o',
-    default='build',
+    default='build/testbuild',
     help='Destination directory for install (relative to working dir unless absolute path)'
 )
 parser.add_argument(
