@@ -10,7 +10,7 @@
                 "--preset", "${command:cmake.activeConfigurePresetName}",
                 "--config", "${command:cmake.buildType}"
             ],
-            "problemMatcher": [],
+            "problemMatcher": ["$msCompile"],
             "group": {
                 "kind": "build",
                 "isDefault": true
