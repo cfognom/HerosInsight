@@ -789,6 +789,23 @@ bool TryInjectDLL(DWORD processId, const std::filesystem::path &dllPath)
     return success;
 }
 
+void FocusWindow(HWND hwnd)
+{
+    if (!hwnd)
+        return;
+
+    if (IsIconic(hwnd))
+    {
+        // If minimized, restore it
+        ShowWindow(hwnd, SW_RESTORE);
+    }
+    else
+    {
+        // Otherwise, give it the focus
+        SetForegroundWindow(hwnd);
+    }
+}
+
 int RunNormalApp()
 {
     auto installation = TryGetOrCreateLocalInstallation();
@@ -818,6 +835,8 @@ int RunNormalApp()
     }
 
     std::cout << "Mod DLL attached successfully." << std::endl;
+
+    FocusWindow(gwHwnd);
 
     return 0;
 }
