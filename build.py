@@ -5,6 +5,7 @@ import subprocess
 import sys
 import zipfile
 import tempfile
+import json
 
 # Helpers
 def run(cmd, cwd=None):
@@ -50,7 +51,23 @@ def get_cmake_cache_value(binary_dir, key):
 
     raise KeyError(f"CMake cache key '{key}' not found in {cache_path}")
 
-def get_cmake_presets():
+def load_cmake_presets(presets_file="CMakePresets.json"):
+    """
+    Load CMakePresets.json as a Python object.
+    """
+    if not os.path.exists(presets_file):
+        raise FileNotFoundError(f"{presets_file} not found")
+
+    with open(presets_file, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+cmake_presets = load_cmake_presets()
+
+def get_configure_presets():
+    for preset in cmake_presets["configurePresets"]:
+        yield preset["name"]
+
+
     # Run the command
     result = subprocess.run(
         ["cmake", "--list-presets"],
@@ -72,14 +89,15 @@ def get_cmake_presets():
 
     return presets
 
-configure_presets = get_cmake_presets()
+configure_presets = cmake_presets.get("configurePresets")
+configure_preset_names = [preset["name"] for preset in configure_presets]
 
 # Argument Parser
 parser = argparse.ArgumentParser(description="Build + Install CMake project with optional zip packaging")
 parser.add_argument(
     '--preset', 
     '-p',
-    choices=configure_presets,
+    choices=configure_preset_names,
     default='dev',
     help='Build configuration preset'
 )
@@ -104,18 +122,20 @@ parser.add_argument(
 
 args = parser.parse_args()
 
+binary_dir = None
+for preset in configure_presets:
+    if preset["name"] == args.preset:
+        binary_dir = preset["binaryDir"]
+if not binary_dir:
+    raise ValueError(f"Missing binaryDir field in preset: {args.preset}")
+
 # Set dynamic default if --outdir not provided
-if args.outdir is None:
-    args.outdir = os.path.join("build", args.preset, args.config)
+if not args.outdir:
+    args.outdir = os.path.join(binary_dir, args.config)
 
 # Setup Paths
 working_dir = os.getcwd()
 output_dir = ensure_absolute(args.outdir)
-os.makedirs(output_dir, exist_ok=True)
-
-# Subdirectory for configure/build
-build_dir = os.path.join(working_dir, "build")
-binary_dir = os.path.join(build_dir, args.type)
 
 project_name = get_cmake_cache_value(binary_dir, "CMAKE_PROJECT_NAME")
 project_version = get_cmake_cache_value(binary_dir, "CMAKE_PROJECT_VERSION")
@@ -152,6 +172,7 @@ run([
 
 # Step 4: Optional Zip
 if args.zip:
+    os.makedirs(output_dir, exist_ok=True)
     zip_name = f"{project_name}-{project_version}.zip"
     zip_path = os.path.join(output_dir, zip_name)
     zip_directory(virtual_output_dir, zip_path)

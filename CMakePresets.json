@@ -6,7 +6,7 @@
             "description": "Development Build. Use MSVC Win32 with vcpkg.",
             "generator": "Visual Studio 17 2022",
             "architecture": "Win32",
-            "binaryDir": "${sourceDir}/build/dev",
+            "binaryDir": "build/dev",
             "cacheVariables": {
                 "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
                 "VCPKG_TARGET_TRIPLET": "x86-windows-static",
@@ -17,7 +17,7 @@
             "name": "prod",
             "description": "Production build. Use MSVC Win32 with vcpkg.",
             "inherits": "dev",
-            "binaryDir": "${sourceDir}/build/prod",
+            "binaryDir": "build/prod",
             "cacheVariables": {
                 "PRODUCTION_BUILD": "ON"
             }
