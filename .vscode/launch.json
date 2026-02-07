@@ -27,8 +27,8 @@
             "name": "Debug Injector",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/dev/Debug/HerosInsight/Launch_HerosInsight.exe",
-            "cwd": "${workspaceFolder}/build/dev/Debug/HerosInsight",
+            "program": "${command:cmake.buildDirectory}/${command:cmake.buildType}/HerosInsight/Launch_HerosInsight.exe",
+            "cwd": "${command:cmake.buildDirectory}/${command:cmake.buildType}/HerosInsight/",
         }
     ]
 }
