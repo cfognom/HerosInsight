@@ -300,13 +300,17 @@ namespace HerosInsight::RichText
 
     void Drawer::DrawTextSegments(std::span<TextSegment> segments, float wrapping_min, float wrapping_max)
     {
-        float max_width = wrapping_max < 0 ? std::numeric_limits<float>::max() : wrapping_max - wrapping_min;
-        float used_width = ImGui::GetCursorPosX() - wrapping_min;
+        auto window = ImGui::GetCurrentWindow();
+        auto workrect = window->WorkRect;
         auto ss_cursor = ImGui::GetCursorScreenPos();
+        float workrect_cursor_x = ss_cursor.x - workrect.Min.x;
+        if (wrapping_min == -1)
+            wrapping_min = workrect_cursor_x;
+        float max_width = wrapping_max == -1 ? std::numeric_limits<float>::max() : wrapping_max - wrapping_min;
+        float used_width = workrect_cursor_x - wrapping_min;
         const auto style = ImGui::GetStyle();
         const auto text_height = ImGui::GetTextLineHeight();
 
-        auto window = ImGui::GetCurrentWindow();
         auto draw_list = window->DrawList;
 
         const auto highlight_color = ImGui::GetColorU32(Constants::Colors::highlight);
@@ -419,7 +423,7 @@ namespace HerosInsight::RichText
 
             // Make newline
             used_width = 0.f;
-            ss_cursor.x = window->WorkRect.Min.x + wrapping_min;
+            ss_cursor.x = workrect.Min.x + wrapping_min;
             ss_cursor.y += text_height;
         }
 
