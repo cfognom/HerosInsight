@@ -63,32 +63,6 @@ def load_cmake_presets(presets_file="CMakePresets.json"):
 
 cmake_presets = load_cmake_presets()
 
-def get_configure_presets():
-    for preset in cmake_presets["configurePresets"]:
-        yield preset["name"]
-
-
-    # Run the command
-    result = subprocess.run(
-        ["cmake", "--list-presets"],
-        capture_output=True,
-        text=True  # ensures output is a string, not bytes
-    )
-
-    if result.returncode != 0:
-        raise RuntimeError(f"CMake failed: {result.stderr}")
-
-    lines = result.stdout.splitlines()
-    presets = []
-
-    for line in lines:
-        line = line.strip()
-        if line.startswith('"') and line.endswith('"'):
-            # Remove the quotes
-            presets.append(line.strip('"'))
-
-    return presets
-
 configure_presets = cmake_presets.get("configurePresets")
 configure_preset_names = [preset["name"] for preset in configure_presets]
 
