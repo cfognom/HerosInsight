@@ -167,7 +167,7 @@ namespace HerosInsight
                 }
             }
 
-            auto view_rect = window->InnerClipRect;
+            auto view_rect = window->InnerRect;
             float first_item_cursor_ss = view_rect.Min.y - std::round(this->scroll_current.pixel_offset);
             size_t i = this->scroll_current.item_index;
             ImGui::SetCursorScreenPos(ImVec2(view_rect.Min.x, first_item_cursor_ss));
