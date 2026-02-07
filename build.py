@@ -6,35 +6,6 @@ import sys
 import zipfile
 import tempfile
 
-# Argument Parser
-parser = argparse.ArgumentParser(description="Build + Install CMake project with optional zip packaging")
-parser.add_argument(
-    '--type', 
-    '-t',
-    choices=['dev', 'prod'],
-    default='dev',
-    help='Build type (dev/prod)'
-)
-parser.add_argument(
-    '--config', 
-    '-c',
-    default='Debug',
-    help='Build configuration'
-)
-parser.add_argument(
-    '--outdir', 
-    '-o',
-    default='build',
-    help='Destination directory for install (relative to working dir unless absolute path)'
-)
-parser.add_argument(
-    '--zip',
-    action='store_true',
-    help='Output as zip file'
-)
-
-args = parser.parse_args()
-
 # Helpers
 def run(cmd, cwd=None):
     print(f"> {' '.join(cmd)}")
@@ -78,6 +49,60 @@ def get_cmake_cache_value(binary_dir, key):
                 return value.strip()
 
     raise KeyError(f"CMake cache key '{key}' not found in {cache_path}")
+
+def get_cmake_presets():
+    # Run the command
+    result = subprocess.run(
+        ["cmake", "--list-presets"],
+        capture_output=True,
+        text=True  # ensures output is a string, not bytes
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError(f"CMake failed: {result.stderr}")
+
+    lines = result.stdout.splitlines()
+    presets = []
+
+    for line in lines:
+        line = line.strip()
+        if line.startswith('"') and line.endswith('"'):
+            # Remove the quotes
+            presets.append(line.strip('"'))
+
+    return presets
+
+configure_presets = get_cmake_presets()
+
+# Argument Parser
+parser = argparse.ArgumentParser(description="Build + Install CMake project with optional zip packaging")
+parser.add_argument(
+    '--preset', 
+    '-p',
+    choices=configure_presets,
+    default='dev',
+    help='Build configuration preset'
+)
+parser.add_argument(
+    '--config', 
+    '-c',
+    choices=['Debug', 'Release', 'RelWithDebInfo', 'MinSizeRel'],
+    default='Debug',
+    help='Build config'
+)
+parser.add_argument(
+    '--outdir', 
+    '-o',
+    default='build',
+    help='Destination directory for install (relative to working dir unless absolute path)'
+)
+parser.add_argument(
+    '--zip',
+    action='store_true',
+    help='Output as zip file'
+)
+
+args = parser.parse_args()
 
 # Setup Paths
 working_dir = os.getcwd()
