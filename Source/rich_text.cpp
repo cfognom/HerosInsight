@@ -427,8 +427,6 @@ namespace HerosInsight::RichText
 
         ImGui::ItemSize(bb);
         ImGui::ItemAdd(bb, 0);
-        ss_cursor.y += style.ItemSpacing.y;
-        ImGui::SetCursorScreenPos(ss_cursor);
     }
 
     void Drawer::DrawRichText(std::string_view text, float wrapping_min, float wrapping_max, std::span<uint16_t> highlighting, TextSegment::WrapMode first_segment_wrap_mode)
