@@ -93,7 +93,7 @@ parser.add_argument(
 parser.add_argument(
     '--outdir', 
     '-o',
-    default='build/testbuild',
+    default=None,
     help='Destination directory for install (relative to working dir unless absolute path)'
 )
 parser.add_argument(
@@ -103,6 +103,10 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
+
+# Set dynamic default if --outdir not provided
+if args.outdir is None:
+    args.outdir = os.path.join("build", args.preset, args.config)
 
 # Setup Paths
 working_dir = os.getcwd()
