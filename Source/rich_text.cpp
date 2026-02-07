@@ -306,6 +306,8 @@ namespace HerosInsight::RichText
         float workrect_cursor_x = ss_cursor.x - workrect.Min.x;
         if (wrapping_min == -1)
             wrapping_min = workrect_cursor_x;
+        if (wrapping_max == -2)
+            wrapping_max = workrect.GetWidth();
         float max_width = wrapping_max == -1 ? std::numeric_limits<float>::max() : wrapping_max - wrapping_min;
         float used_width = workrect_cursor_x - wrapping_min;
         const auto style = ImGui::GetStyle();
