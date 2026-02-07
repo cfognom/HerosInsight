@@ -331,7 +331,7 @@ static void Initialize(void *data)
     ImGui::CreateContext();
     ImGui_ImplWin32_Init(hWnd);
     ImGui_ImplDX9_Init(device);
-    HerosInsight::ImGui::Init();
+    HerosInsight::ImGuiCustomize::Init();
     HerosInsight::UpdateManager::Initialize();
 
     GW::GameThread::RegisterGameThreadCallback(

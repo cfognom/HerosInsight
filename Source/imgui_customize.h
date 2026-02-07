@@ -1,6 +1,6 @@
 #pragma once
 
-namespace HerosInsight::ImGui
+namespace HerosInsight::ImGuiCustomize
 {
     void Init();
 }

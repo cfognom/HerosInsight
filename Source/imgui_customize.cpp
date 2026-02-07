@@ -326,10 +326,13 @@ void InvertDefaultStyleColors()
     }
 }
 
-void HerosInsight::ImGui::Init()
+void HerosInsight::ImGuiCustomize::Init()
 {
-    auto &io = ::ImGui::GetIO();
+    auto &io = ImGui::GetIO();
     AddFonts(io);
     BlitGWGlyphsToFontAtlas(io);
     // InvertDefaultStyleColors();
+
+    static std::string imgui_ini_path = (Constants::paths.cache() / "imgui.ini").string();
+    io.IniFilename = imgui_ini_path.c_str();
 }
