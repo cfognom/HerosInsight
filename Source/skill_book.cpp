@@ -1706,7 +1706,7 @@ namespace HerosInsight::SkillBook
         {
             ImGui::BeginTooltip();
 
-            auto DrawTable = [](auto &&cells, uint32_t second_col_max_width = 0)
+            constexpr auto DrawTable = [](const auto &cells, uint32_t second_col_max_width = 0)
             {
                 constexpr auto elems = std::size(cells);
                 constexpr auto cols = 2;
