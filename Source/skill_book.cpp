@@ -2476,10 +2476,6 @@ namespace HerosInsight::SkillBook
 
     void Update()
     {
-#ifdef _DEBUG
-        DebugDisplay::PushToDisplay("Skill Book selected agent_id", focused_agent_id);
-#endif
-
         auto &feedback = SettingsGuard().Access().skill_book.feedback;
         if (feedback_checker.Changed(feedback))
         {
