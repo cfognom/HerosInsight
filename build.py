@@ -49,7 +49,7 @@ def get_cmake_cache_value(binary_dir: Path, key):
 
     raise KeyError(f"CMake cache key '{key}' not found in {cache_path}")
 
-def load_cmake_presets(presets_file: Path="CMakePresets.json"):
+def load_cmake_presets(presets_file=Path("CMakePresets.json")):
     """
     Load CMakePresets.json as a Python object.
     """
@@ -111,7 +111,7 @@ def main():
     binary_dir: Path = None
     for preset in configure_presets:
         if preset["name"] == args.preset:
-            binary_dir = preset["binaryDir"]
+            binary_dir = Path(preset["binaryDir"])
     if not binary_dir:
         raise ValueError(f"Missing binaryDir field in preset: {args.preset}")
     
@@ -120,8 +120,8 @@ def main():
     def install_to(install_dir):
         run([
             "cmake",
-            "--install", binary_dir,
-            "--prefix", install_dir,
+            "--install", str(binary_dir),
+            "--prefix", str(install_dir),
             "--config", args.config
         ])
 
@@ -152,7 +152,7 @@ def main():
     # Step 2: Build
     cmd = [
         "cmake",
-        "--build", binary_dir,
+        "--build", str(binary_dir),
         "--config", args.config
     ]
     if args.fresh:
@@ -168,7 +168,7 @@ def main():
     # Optional Step 4: Zip
     if args.zipdir:
         temp = tempfile.TemporaryDirectory()
-        temp_dir: Path = temp.name
+        temp_dir = Path(temp.name)
         zip_name = f"{project_name}-{project_version}.zip"
         zip_path = args.zipdir / zip_name
         os.makedirs(args.zipdir, exist_ok=True)
