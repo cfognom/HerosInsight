@@ -251,6 +251,10 @@ namespace HerosInsight
             ImVec2(0.0f, 0.0f),
             ImGuiCond_Always
         );
+        ImGui::SetNextWindowSizeConstraints(
+            ImVec2(window_name_width, 0.0f),
+            ImVec2(FLT_MAX, FLT_MAX)
+        );
 
         const auto window_menu_button_position = style.WindowMenuButtonPosition;
         style.WindowMenuButtonPosition = ImGuiDir_None;

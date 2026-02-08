@@ -1,4 +1,6 @@
 # CHANGELOG
+- Fix main menu being too small (the other way this time).
+
 ## 0.5.7
 - Fix main menu being too small.
 - Fix UI msgs.
