@@ -8,7 +8,7 @@ Download the zip file from the [lastest release](https://github.com/cfognom/Hero
 
 Before using the mod please check out the [FAQ](#FAQ) section.
 
-## What it does
+## What does it do?
 The following features available today:
 
 ### Skillbook
@@ -25,7 +25,7 @@ Or even, if you've completely lost your mind:
 
 ![](Media/SkillBook.gif)
 
-## Whats next
+## Whats next?
 The following features are in development:
 
 ### Active effects UI
