@@ -39,6 +39,7 @@ add_library(HerosInsightDLL SHARED
     capacity_hints.cpp
     string_manager.cpp
     settings.cpp
+    imgui_ext.h
 )
 
 set_target_properties(HerosInsightDLL PROPERTIES

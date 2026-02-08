@@ -94,6 +94,7 @@
 #include <debug.h>
 #include <debug_display.h>
 #include <filtering.h>
+#include <imgui_ext.h>
 #include <matcher.h>
 #include <party_data.h>
 #include <rich_text.h>
