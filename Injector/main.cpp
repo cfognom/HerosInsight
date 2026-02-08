@@ -875,6 +875,7 @@ struct Args
             std::wcout << ptr[i] << L" ";
         }
         std::wcout << std::endl;
+        std::wcout << L"Version: " << HEROSINSIGHT_VERSION_STRING << std::endl;
     }
 
     bool Has(std::wstring_view name)
