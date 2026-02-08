@@ -1,4 +1,7 @@
 # CHANGELOG
+## 0.4.3
+- Tweak release script.
+
 ## 0.4.2
 - Make buttons and widgets have ambient occlusion like GW.
 
