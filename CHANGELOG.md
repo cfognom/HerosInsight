@@ -1,4 +1,9 @@
 # CHANGELOG
+## 0.4.0
+- Reworked release pipeline.
+- Added skillbook help window.
+- Other stuff.
+
 ## 0.3.2
 Test release 3.
 
