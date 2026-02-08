@@ -107,7 +107,7 @@ def main():
 
     args = parser.parse_args()
 
-    binary_dir: Path = None
+    binary_dir: Path = Path()
     for preset in configure_presets:
         if preset["name"] == args.preset:
             binary_dir = Path(preset["binaryDir"])
