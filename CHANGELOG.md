@@ -1,4 +1,8 @@
 # CHANGELOG
+## 0.5.7
+- Fix main menu being too small.
+- Fix UI msgs.
+
 ## 0.5.6
 - Add button to open github repo.
 
