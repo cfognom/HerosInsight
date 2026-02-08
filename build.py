@@ -61,97 +61,101 @@ def load_cmake_presets(presets_file="CMakePresets.json"):
     with open(presets_file, "r", encoding="utf-8") as f:
         return json.load(f)
 
-cmake_presets = load_cmake_presets()
+def main():
+    cmake_presets = load_cmake_presets()
 
-configure_presets = cmake_presets.get("configurePresets")
-configure_preset_names = [preset["name"] for preset in configure_presets]
+    configure_presets = cmake_presets.get("configurePresets")
+    configure_preset_names = [preset["name"] for preset in configure_presets]
 
-# Argument Parser
-parser = argparse.ArgumentParser(description="Build + Install CMake project with optional zip packaging")
-parser.add_argument(
-    '--preset', 
-    '-p',
-    choices=configure_preset_names,
-    default='dev',
-    help='Build configuration preset'
-)
-parser.add_argument(
-    '--config', 
-    '-c',
-    choices=['Debug', 'Release', 'RelWithDebInfo', 'MinSizeRel'],
-    default='Debug',
-    help='Build config'
-)
-parser.add_argument(
-    '--outdir', 
-    '-o',
-    default=None,
-    help='Destination directory for install (relative to working dir unless absolute path)'
-)
-parser.add_argument(
-    '--zip',
-    action='store_true',
-    help='Output as zip file'
-)
+    # Argument Parser
+    parser = argparse.ArgumentParser(description="Build + Install CMake project with optional zip packaging")
+    parser.add_argument(
+        '--preset', 
+        '-p',
+        choices=configure_preset_names,
+        default='dev',
+        help='Build configuration preset'
+    )
+    parser.add_argument(
+        '--config', 
+        '-c',
+        choices=['Debug', 'Release', 'RelWithDebInfo', 'MinSizeRel'],
+        default='Debug',
+        help='Build config'
+    )
+    parser.add_argument(
+        '--outdir', 
+        '-o',
+        default=None,
+        help='Destination directory for install (relative to working dir unless absolute path)'
+    )
+    parser.add_argument(
+        '--zip',
+        action='store_true',
+        help='Output as zip file'
+    )
 
-args = parser.parse_args()
+    args = parser.parse_args()
 
-binary_dir = None
-for preset in configure_presets:
-    if preset["name"] == args.preset:
-        binary_dir = preset["binaryDir"]
-if not binary_dir:
-    raise ValueError(f"Missing binaryDir field in preset: {args.preset}")
+    binary_dir = None
+    for preset in configure_presets:
+        if preset["name"] == args.preset:
+            binary_dir = preset["binaryDir"]
+    if not binary_dir:
+        raise ValueError(f"Missing binaryDir field in preset: {args.preset}")
 
-# Set dynamic default if --outdir not provided
-if not args.outdir:
-    args.outdir = os.path.join(binary_dir, args.config)
+    # Set dynamic default if --outdir not provided
+    if not args.outdir:
+        args.outdir = os.path.join(binary_dir, args.config)
 
-# Setup Paths
-working_dir = os.getcwd()
-output_dir = ensure_absolute(args.outdir)
+    # Setup Paths
+    working_dir = os.getcwd()
+    output_dir = ensure_absolute(args.outdir)
 
-project_name = get_cmake_cache_value(binary_dir, "CMAKE_PROJECT_NAME")
-project_version = get_cmake_cache_value(binary_dir, "CMAKE_PROJECT_VERSION")
+    project_name = get_cmake_cache_value(binary_dir, "CMAKE_PROJECT_NAME")
+    project_version = get_cmake_cache_value(binary_dir, "CMAKE_PROJECT_VERSION")
 
-# # Step 1: Configure
-# run([
-#     "cmake",
-#     "--preset", args.type
-# ])
+    # # Step 1: Configure
+    # run([
+    #     "cmake",
+    #     "--preset", args.type
+    # ])
 
-# Step 2: Build
-run([
-    "cmake",
-    "--build", binary_dir,
-    "--config", args.config
-])
+    # Step 2: Build
+    run([
+        "cmake",
+        "--build", binary_dir,
+        "--config", args.config
+    ])
 
-temp_dir = None
-if args.zip:
-    temp_dir = tempfile.TemporaryDirectory()
-    virtual_output_dir = temp_dir.name
-else:
-    virtual_output_dir = output_dir
-install_dir = os.path.join(virtual_output_dir, project_name)
+    temp_dir = None
+    if args.zip:
+        temp_dir = tempfile.TemporaryDirectory()
+        virtual_output_dir = temp_dir.name
+    else:
+        virtual_output_dir = output_dir
+    install_dir = os.path.join(virtual_output_dir, project_name)
 
-# Step 3: Install
-print (f"Installing to: {install_dir}")
-run([
-    "cmake",
-    "--install", binary_dir,
-    "--prefix", install_dir,
-    "--config", args.config
-])
+    # Step 3: Install
+    print (f"Installing to: {install_dir}")
+    run([
+        "cmake",
+        "--install", binary_dir,
+        "--prefix", install_dir,
+        "--config", args.config
+    ])
 
-# Step 4: Optional Zip
-if args.zip:
-    os.makedirs(output_dir, exist_ok=True)
-    zip_name = f"{project_name}-{project_version}.zip"
-    zip_path = os.path.join(output_dir, zip_name)
-    zip_directory(virtual_output_dir, zip_path)
-    print(f"Zip created: {zip_path}")
+    # Step 4: Optional Zip
+    if args.zip:
+        os.makedirs(output_dir, exist_ok=True)
+        zip_name = f"{project_name}-{project_version}.zip"
+        zip_path = os.path.join(output_dir, zip_name)
+        zip_directory(virtual_output_dir, zip_path)
+        print(f"Zip created: {zip_path}")
 
-    temp_dir.cleanup()
+        temp_dir.cleanup()
 
-print("✅ Build + Install complete!")
+    print("✅ Build + Install complete!")
+
+if (__name__ == "__main__"):
+    main()
