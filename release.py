@@ -305,6 +305,7 @@ def public_release(args):
         print("\nPushing...")
         subprocess.run(["git", "push", "--follow-tags"], check=True)
         subprocess.run(["git", "checkout", "main"], check=True)
+        subprocess.run(["git", "merge", "dev"], check=True)
         subprocess.run(["git", "push", "--follow-tags"], check=True)
         subprocess.run(["git", "checkout", "dev"], check=True)
 
