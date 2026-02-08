@@ -1,5 +1,5 @@
 # CHANGELOG
-## ???
+## 0.4.2
 - Make buttons and widgets have ambient occlusion like GW.
 
 ## 0.4.1
