@@ -1,4 +1,5 @@
 # CHANGELOG
+## 0.6.0
 - Fix main menu being too small (the other way this time).
 - Add setting to hide focused character.
 - Add skill ruleset selector (Mixed, PvE, PvP).
