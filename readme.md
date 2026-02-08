@@ -17,7 +17,7 @@ The skill book is a powerful tool for buildcrafters, or when you just want to fi
 For example it could be used to:
 * Find all skills related to knock-down
 * Find all skills giving health regen, sort by amount
-* Find all skills giving +damage, sort by amount
+* Find all skills giving +damage, sort by amount (not quite yet possible)
 * Find all skills yet to be unlocked, sort by campaign
 
 Or even, if you've completely lost your mind:
@@ -45,11 +45,10 @@ Track stats for you and your party.
 
 ## FAQ
 - ### Could using *Hero’s Insight* result in a ban?
-  Account action, such as a ban, resulting from the ***use*** of *Hero’s Insight* is considered unlikely by the mod developer but cannot be ruled out.
-  Although a ban is considered unlikely by the mod developer, there is no guarantee that using *Hero’s Insight* will not result in account action. By using this mod, you acknowledge and accept all associated risks.
+  Account action, such as a ban, resulting from the **use** of *Hero’s Insight* is thought to be unlikely by the mod developer. However, this possibility cannot be ruled out, and no guarantees can be made. By using this mod, **you** acknowledge and accept all associated risks.
 
   *Hero’s Insight* is designed to comply, as closely as possible, with *ArenaNet's* [Code of Conduct](https://www.arena.net/en/legal/code-of-conduct) and [User Agreement](https://www.arena.net/en/legal/user-agreement). In particular:
-  - The mod disables itself entirely in PvP areas and lobbies (with the sole exception of one hook used to detect when it is permitted to re-enable).
+  - The mod disables itself in PvP areas and lobbies.
   - It does not automate gameplay or provide botting functionality.
 
   That said, *ArenaNet* retains full discretion over enforcement of its policies, and may suspend or ban accounts at any time, for any reason. You are encouraged to review the [Code of Conduct](https://www.arena.net/en/legal/code-of-conduct) and [User Agreement](https://www.arena.net/en/legal/user-agreement) yourself and decide whether you are comfortable using the mod.
