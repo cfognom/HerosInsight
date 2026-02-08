@@ -66,4 +66,4 @@ Track stats for you and your party.
 ## Contributions
 You are very welcome to report bugs by opening issues and provide feedback and/or feature requests using discussions here in Github.
 
-However, contributing to *Hero’s Insight* is currently hard because it is dependent on a closed source fork of *GWCA*. You cannot build the project it without it.
+However, contributing to *Hero’s Insight* is currently hard because it is dependent on a closed source fork of *GWCA*. You cannot build the project without it.
