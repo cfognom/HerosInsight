@@ -1,4 +1,7 @@
 # CHANGELOG
+## 0.5.6
+- Add button to open github repo.
+
 ## 0.4.6
 - Devbump.
 
