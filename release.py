@@ -35,7 +35,7 @@ def get_current_branch():
 
 def git_clean_except(allowed_files):
     result = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
-    changes: Path = [line[3:] for line in result.stdout.splitlines()]
+    changes = [line[3:] for line in result.stdout.splitlines()]
     unexpected = [f for f in changes if f not in allowed_files]
     return unexpected
 
