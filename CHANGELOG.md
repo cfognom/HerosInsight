@@ -1,4 +1,7 @@
 # CHANGELOG
+## 0.4.6
+- Devbump.
+
 ## 0.4.5
 - Devbump.
 
