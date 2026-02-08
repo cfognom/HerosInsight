@@ -23,7 +23,7 @@ def zip_directory(source_dir, zip_file):
                 rel_path = os.path.relpath(abs_path, source_dir)
                 zf.write(abs_path, rel_path)
 
-def get_cmake_cache_value(binary_dir: Path, key):
+def get_cmake_cache_value(cache_path: Path, key):
     """
     Read a value from CMakeCache.txt.
 
@@ -31,7 +31,6 @@ def get_cmake_cache_value(binary_dir: Path, key):
         FileNotFoundError if CMakeCache.txt does not exist
         KeyError if the key is not found
     """
-    cache_path = binary_dir / "CMakeCache.txt"
 
     if not cache_path.exists():
         raise FileNotFoundError(
@@ -125,9 +124,6 @@ def main():
             "--config", args.config
         ])
 
-    project_name = get_cmake_cache_value(binary_dir, "CMAKE_PROJECT_NAME")
-    project_version = get_cmake_cache_value(binary_dir, "CMAKE_PROJECT_VERSION")
-
     # Auto dir is <binary_dir>/<config>
     autodir = binary_dir / args.config
     if args.installdir == Path('auto'):
@@ -140,11 +136,11 @@ def main():
         args.installdir = args.installdir.absolute()
     if args.zipdir:
         args.zipdir = args.zipdir.absolute()
-
-    output_dir = args.installdir
+    
+    cmake_cache = binary_dir / "CMakeCache.txt"
 
     # Step 1: Configure
-    if args.fresh:
+    if not cmake_cache.exists() or args.fresh:
         run([
             "cmake",
             "--preset", args.preset,
@@ -158,6 +154,9 @@ def main():
         "--config", args.config
     ]
     run(cmd)
+
+    project_name = get_cmake_cache_value(cmake_cache, "CMAKE_PROJECT_NAME")
+    project_version = get_cmake_cache_value(cmake_cache, "CMAKE_PROJECT_VERSION")
 
     # Optional Step 3: Install
     if args.installdir:
