@@ -102,8 +102,8 @@ def main():
     parser.add_argument(
         '--fresh',
         '-f',
-        action='store_false',
-        help='Rebuild project from scratch'
+        action='store_true',
+        help='Force reconfigure'
     )
 
     args = parser.parse_args()
@@ -143,11 +143,13 @@ def main():
 
     output_dir = args.installdir
 
-    # # Step 1: Configure
-    # run([
-    #     "cmake",
-    #     "--preset", args.type
-    # ])
+    # Step 1: Configure
+    if args.fresh:
+        run([
+            "cmake",
+            "--preset", args.preset,
+            "--fresh"
+        ])
 
     # Step 2: Build
     cmd = [
@@ -155,8 +157,6 @@ def main():
         "--build", str(binary_dir),
         "--config", args.config
     ]
-    if args.fresh:
-        cmd.insert(1, "--fresh")
     run(cmd)
 
     # Optional Step 3: Install
