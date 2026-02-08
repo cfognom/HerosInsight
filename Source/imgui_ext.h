@@ -39,4 +39,12 @@ namespace HerosInsight::ImGuiExt
         ImGui::PopFont();
         return opened;
     }
+
+    inline bool Combo(const char *label, int *current_item, const char *const items[], int items_count, int popup_max_height_in_items = -1)
+    {
+        ImGui::PushFont(Constants::Fonts::button_font);
+        bool opened = ImGui::Combo(label, current_item, items, items_count, popup_max_height_in_items);
+        ImGui::PopFont();
+        return opened;
+    }
 }

@@ -97,7 +97,7 @@ namespace HerosInsight
             ImGui::Checkbox("Show help button", &settings.skill_book.show_help_button.value);
 
             const char *feedback_items[] = {"Hidden", "Concise", "Detailed"};
-            ImGui::Combo("Feedback", &settings.skill_book.feedback.value, feedback_items, IM_ARRAYSIZE(feedback_items));
+            ImGuiExt::Combo("Feedback", &settings.skill_book.feedback.value, feedback_items, IM_ARRAYSIZE(feedback_items));
 
             if (ImGuiExt::Button("Reset to default"))
             {
