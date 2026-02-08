@@ -137,7 +137,7 @@ def get_zip(version: str) -> Path:
 def stage_release(args):
     new_version, changelog = get_version_and_changelog()
     release_staging_dir = get_release_staging_dir(new_version)
-    
+
     def build_local_release():
         print(f"\nBuilding {new_version} release...")
         subprocess.run([
@@ -151,6 +151,14 @@ def stage_release(args):
         )
         get_zip(new_version)
 
+    new_version_tag = format_tag(new_version)
+    has_tag = head_is_tag(new_version_tag)
+    if has_tag:
+        # Shortcut in case we need to rebuild
+        build_local_release()
+        print(f"\n✅ Successfully staged local release with tag: {new_version_tag}.")
+        sys.exit(0)
+
     unexpected = git_clean_except([__file__, CHANGELOG_FILE.name])
     if unexpected:
         print(f"❌ Error: The git directory must be clean, except for {CHANGELOG_FILE}.")
@@ -158,23 +166,18 @@ def stage_release(args):
             print(f"  {f}")
         sys.exit(1)
 
+    if (behind("dev", "main")):
+        print(f"❌ Error: main branch is ahead of dev branch.")
+        sys.exit(1)
+
     old_version = read_version_txt()
     
     if release_staging_dir.exists():
         print(f"❌ Error: local release already exists at {release_staging_dir}.")
         sys.exit(1)
-    
-    new_version_tag = format_tag(new_version)
+
     if has_local_tag(new_version_tag):
-        print(f"❌ Error: local tag already exists for version {new_version}.")
-        sys.exit(1)
-    
-    if has_remote_tag(new_version_tag):
-        print(f"❌ Error: remote tag already exists for version {new_version}.")
-        sys.exit(1)
-    
-    if (behind("dev", "main")):
-        print(f"❌ Error: main branch is ahead of dev branch.")
+        print(f"❌ Error: local tag is on a different commit than HEAD.")
         sys.exit(1)
 
     print()
@@ -206,21 +209,26 @@ def stage_release(args):
         print("\nCommitting...")
         subprocess.run(["git", "commit", CHANGELOG_FILE, VERSION_FILE, "-m", f"Bump version to {new_version}"], check=True)
 
-        try:
-            # Step 4: create tag
-            tag_str = format_tag(new_version)
-            print(f"\nCreating tag \"{tag_str}\"...")
-            subprocess.run([
-                "git", "tag",
-                "-a", tag_str,
-                "-m", changelog
-            ], check=True)
+        if not has_tag:
+            try:
+                # Step 4: create tag
+                tag_str = format_tag(new_version)
+                print(f"\nCreating tag \"{tag_str}\"...")
+                subprocess.run([
+                    "git", "tag",
+                    "-a", tag_str,
+                    "-m", changelog
+                ], check=True)
 
-            print(f"\n✅ Sucessfully staged local release with tag: {tag_str}.")
-        
-        except:
-            reset_to_before_commit("HEAD")
-            raise
+                subprocess.run(["git", "checkout", "main"], check=True)
+                subprocess.run(["git", "merge", "dev"], check=True)
+                subprocess.run(["git", "checkout", "dev"], check=True)
+
+                print(f"\n✅ Sucessfully staged local release with tag: {tag_str}.")
+            
+            except:
+                reset_to_before_commit("HEAD")
+                raise
 
     except Exception:
         print("\nUndoing version change...")
