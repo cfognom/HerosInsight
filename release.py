@@ -51,6 +51,34 @@ def is_newer_version(old: str, new: str) -> bool:
 
     return new_parts > old_parts
 
+def fetch():
+    subprocess.run(
+        ["git", "fetch", "origin"],
+        check=True,
+        stdout=subprocess.DEVNULL
+    )
+
+def behind(branch="dev", other_branch="main"):
+    """
+    Returns True if 'other_branch' has commits 'branch' doesn't (we need to pull).
+    """
+    try:
+        # Update remote refs
+        subprocess.check_call(['git', 'fetch', 'origin'], 
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        # Count commits: origin/main ahead of local main
+        result = subprocess.run(
+            ['git', 'rev-list', '--count', f'{branch}..{other_branch}'],
+            capture_output=True, text=True, check=True
+        )
+        
+        ahead_count = int(result.stdout.strip())
+        return ahead_count > 0
+        
+    except (subprocess.CalledProcessError, ValueError, FileNotFoundError):
+        return False
+
 def get_version_and_changelog():
     """
     Reads CHANGELOG.md and returns a tuple:
@@ -143,6 +171,10 @@ def stage_release(args):
     
     if has_remote_tag(new_version_tag):
         print(f"❌ Error: remote tag already exists for version {new_version}.")
+        sys.exit(1)
+    
+    if (behind("dev", "main")):
+        print(f"❌ Error: main branch is ahead of dev branch.")
         sys.exit(1)
 
     print()
