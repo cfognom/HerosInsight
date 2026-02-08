@@ -73,7 +73,7 @@ def main():
         '--preset', 
         '-p',
         choices=configure_preset_names,
-        default='dev',
+        default=configure_preset_names[0],
         help='Build configuration preset'
     )
     parser.add_argument(
@@ -84,15 +84,20 @@ def main():
         help='Build config'
     )
     parser.add_argument(
-        '--outdir', 
-        '-o',
+        '--installdir', 
+        '-i',
+        nargs='?',
         default=None,
+        const='auto',
         help='Destination directory for install (relative to working dir unless absolute path)'
     )
     parser.add_argument(
-        '--zip',
-        action='store_true',
-        help='Output as zip file'
+        '--zipdir',
+        '-z',
+        nargs='?',
+        default=None,
+        const='auto',
+        help='Destination directory for zip (relative to working dir unless absolute path)'
     )
 
     args = parser.parse_args()
@@ -103,14 +108,31 @@ def main():
             binary_dir = preset["binaryDir"]
     if not binary_dir:
         raise ValueError(f"Missing binaryDir field in preset: {args.preset}")
-
-    # Set dynamic default if --outdir not provided
-    if not args.outdir:
-        args.outdir = os.path.join(binary_dir, args.config)
-
-    # Setup Paths
+    
     working_dir = os.getcwd()
-    output_dir = ensure_absolute(args.outdir)
+    
+    def install_to(install_dir):
+        run([
+            "cmake",
+            "--install", binary_dir,
+            "--prefix", install_dir,
+            "--config", args.config
+        ])
+
+    # Auto dir is <binary_dir>/<config>
+    autodir = os.path.join(binary_dir, args.config)
+    if args.installdir == 'auto':
+        args.installdir = autodir
+    if args.zipdir == 'auto':
+        args.zipdir = autodir
+    
+    # Ensure absolute
+    if args.installdir:
+        args.installdir = ensure_absolute(args.installdir)
+    if args.zipdir:
+        args.zipdir = ensure_absolute(args.zipdir)
+
+    output_dir = args.installdir
 
     project_name = get_cmake_cache_value(binary_dir, "CMAKE_PROJECT_NAME")
     project_version = get_cmake_cache_value(binary_dir, "CMAKE_PROJECT_VERSION")
@@ -128,32 +150,22 @@ def main():
         "--config", args.config
     ])
 
-    temp_dir = None
-    if args.zip:
-        temp_dir = tempfile.TemporaryDirectory()
-        virtual_output_dir = temp_dir.name
-    else:
-        virtual_output_dir = output_dir
-    install_dir = os.path.join(virtual_output_dir, project_name)
-
-    # Step 3: Install
-    print (f"Installing to: {install_dir}")
-    run([
-        "cmake",
-        "--install", binary_dir,
-        "--prefix", install_dir,
-        "--config", args.config
-    ])
-
-    # Step 4: Optional Zip
-    if args.zip:
-        os.makedirs(output_dir, exist_ok=True)
+    # Optional Step 3: Install
+    if args.installdir:
+        install_dir = os.path.join(args.installdir, project_name)
+        install_to(install_dir)
+        print (f"Installed to: {install_dir}")
+    
+    # Optional Step 4: Zip
+    if args.zipdir:
+        temp = tempfile.TemporaryDirectory()
+        temp_dir = temp.name
         zip_name = f"{project_name}-{project_version}.zip"
-        zip_path = os.path.join(output_dir, zip_name)
-        zip_directory(virtual_output_dir, zip_path)
+        zip_path = os.path.join(args.zipdir, zip_name)
+        os.makedirs(args.zipdir, exist_ok=True)
+        install_to(os.path.join(temp_dir, project_name))
+        zip_directory(temp_dir, zip_path)
         print(f"Zip created: {zip_path}")
-
-        temp_dir.cleanup()
 
     print("✅ Build + Install complete!")
 
