@@ -6,6 +6,7 @@ import sys
 import zipfile
 import tempfile
 import json
+from pathlib import Path
 
 # Helpers
 def run(cmd, cwd=None):
@@ -13,9 +14,6 @@ def run(cmd, cwd=None):
     result = subprocess.run(cmd, cwd=cwd)
     if result.returncode != 0:
         sys.exit(result.returncode)
-
-def ensure_absolute(path):
-    return os.path.abspath(path) if not os.path.isabs(path) else path
 
 def zip_directory(source_dir, zip_file):
     with zipfile.ZipFile(zip_file, 'w', zipfile.ZIP_DEFLATED) as zf:
@@ -25,7 +23,7 @@ def zip_directory(source_dir, zip_file):
                 rel_path = os.path.relpath(abs_path, source_dir)
                 zf.write(abs_path, rel_path)
 
-def get_cmake_cache_value(binary_dir, key):
+def get_cmake_cache_value(binary_dir: Path, key):
     """
     Read a value from CMakeCache.txt.
 
@@ -33,9 +31,9 @@ def get_cmake_cache_value(binary_dir, key):
         FileNotFoundError if CMakeCache.txt does not exist
         KeyError if the key is not found
     """
-    cache_path = os.path.join(binary_dir, "CMakeCache.txt")
+    cache_path = binary_dir / "CMakeCache.txt"
 
-    if not os.path.exists(cache_path):
+    if not cache_path.exists():
         raise FileNotFoundError(
             f"CMake cache not found at '{cache_path}'. "
             "Has the project been configured?"
@@ -51,11 +49,11 @@ def get_cmake_cache_value(binary_dir, key):
 
     raise KeyError(f"CMake cache key '{key}' not found in {cache_path}")
 
-def load_cmake_presets(presets_file="CMakePresets.json"):
+def load_cmake_presets(presets_file: Path="CMakePresets.json"):
     """
     Load CMakePresets.json as a Python object.
     """
-    if not os.path.exists(presets_file):
+    if not presets_file.exists():
         raise FileNotFoundError(f"{presets_file} not found")
 
     with open(presets_file, "r", encoding="utf-8") as f:
@@ -86,6 +84,7 @@ def main():
     parser.add_argument(
         '--installdir', 
         '-i',
+        type=Path,
         nargs='?',
         default=None,
         const='auto',
@@ -94,6 +93,7 @@ def main():
     parser.add_argument(
         '--zipdir',
         '-z',
+        type=Path,
         nargs='?',
         default=None,
         const='auto',
@@ -108,7 +108,7 @@ def main():
 
     args = parser.parse_args()
 
-    binary_dir = None
+    binary_dir: Path = None
     for preset in configure_presets:
         if preset["name"] == args.preset:
             binary_dir = preset["binaryDir"]
@@ -125,8 +125,11 @@ def main():
             "--config", args.config
         ])
 
+    project_name = get_cmake_cache_value(binary_dir, "CMAKE_PROJECT_NAME")
+    project_version = get_cmake_cache_value(binary_dir, "CMAKE_PROJECT_VERSION")
+
     # Auto dir is <binary_dir>/<config>
-    autodir = os.path.join(binary_dir, args.config)
+    autodir = binary_dir / args.config
     if args.installdir == 'auto':
         args.installdir = autodir
     if args.zipdir == 'auto':
@@ -134,14 +137,11 @@ def main():
     
     # Ensure absolute
     if args.installdir:
-        args.installdir = ensure_absolute(args.installdir)
+        args.installdir = args.installdir.absolute()
     if args.zipdir:
-        args.zipdir = ensure_absolute(args.zipdir)
+        args.zipdir = args.zipdir.absolute()
 
     output_dir = args.installdir
-
-    project_name = get_cmake_cache_value(binary_dir, "CMAKE_PROJECT_NAME")
-    project_version = get_cmake_cache_value(binary_dir, "CMAKE_PROJECT_VERSION")
 
     # # Step 1: Configure
     # run([
@@ -161,18 +161,18 @@ def main():
 
     # Optional Step 3: Install
     if args.installdir:
-        install_dir = os.path.join(args.installdir, project_name)
+        install_dir = args.installdir / project_name
         install_to(install_dir)
         print (f"Installed to: {install_dir}")
     
     # Optional Step 4: Zip
     if args.zipdir:
         temp = tempfile.TemporaryDirectory()
-        temp_dir = temp.name
+        temp_dir: Path = temp.name
         zip_name = f"{project_name}-{project_version}.zip"
-        zip_path = os.path.join(args.zipdir, zip_name)
+        zip_path = args.zipdir / zip_name
         os.makedirs(args.zipdir, exist_ok=True)
-        install_to(os.path.join(temp_dir, project_name))
+        install_to(temp_dir / project_name)
         zip_directory(temp_dir, zip_path)
         print(f"Zip created: {zip_path}")
 
