@@ -130,9 +130,9 @@ def main():
 
     # Auto dir is <binary_dir>/<config>
     autodir = binary_dir / args.config
-    if args.installdir == 'auto':
+    if args.installdir == Path('auto'):
         args.installdir = autodir
-    if args.zipdir == 'auto':
+    if args.zipdir == Path('auto'):
         args.zipdir = autodir
     
     # Ensure absolute
