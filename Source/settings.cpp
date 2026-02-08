@@ -4,6 +4,7 @@
 #include <string>
 
 #include <constants.h>
+#include <imgui_ext.h>
 #include <update_manager.h>
 
 #include "settings.h"
@@ -111,7 +112,7 @@ namespace HerosInsight
     void Settings::Draw(IDirect3DDevice9 *device)
     {
         ImGui::SetNextWindowSize(ImVec2(400, 200), ImGuiCond_FirstUseEver);
-        if (ImGui::Begin("Settings", &HerosInsight::UpdateManager::open_settings))
+        if (ImGuiExt::WindowScope scope{"Settings", &HerosInsight::UpdateManager::open_settings}; scope.begun)
         {
             // Make tabs: General, Skillbook
             if (ImGui::BeginTabBar("SettingsTabs"))
@@ -123,6 +124,5 @@ namespace HerosInsight
             }
             ImGui::EndTabBar();
         }
-        ImGui::End();
     }
 }
