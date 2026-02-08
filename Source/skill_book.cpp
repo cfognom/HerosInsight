@@ -260,13 +260,14 @@ namespace HerosInsight::SkillBook
 
     struct AttributeSource
     {
-        enum struct Type
+        enum struct Type : int
         {
+            ZeroToFifteen,
             FromAgent,
-            Constant,
+            Manual,
         };
 
-        AttributeSource() : type(Type::Constant), value(-1) {}
+        AttributeSource() : type(Type::ZeroToFifteen), value(-1) {}
 
         Type type;
         size_t value;
@@ -283,7 +284,8 @@ namespace HerosInsight::SkillBook
                     return custom_agent_data.GetOrEstimateAttribute(id);
                 }
                 default:
-                case Type::Constant:
+                case Type::ZeroToFifteen:
+                case Type::Manual:
                 {
                     return (int8_t)this->value;
                 }
@@ -886,14 +888,16 @@ namespace HerosInsight::SkillBook
 
     struct BookSettings
     {
-        // AttributeMode attribute_mode = AttributeMode::Generic;
+        enum struct Ruleset
+        {
+            Mixed,
+            PvE,
+            PvP,
+        };
         AttributeSource attr_src;
+        Ruleset ruleset = Ruleset::Mixed;
         int attr_lvl_slider = 12;
-        bool IsGeneric() const { return attr_src.type == AttributeSource::Type::Constant && attr_src.value == -1; }
-        bool IsCharacters() const { return attr_src.type == AttributeSource::Type::FromAgent; }
-        bool IsManual() const { return attr_src.type == AttributeSource::Type::Constant && attr_src.value != -1; }
 
-        bool include_pve_only_skills = true;
         bool include_temporary_skills = false;
         bool include_npc_skills = false;
         bool include_archived_skills = false;
@@ -1292,11 +1296,10 @@ namespace HerosInsight::SkillBook
 
         void DrawCheckboxes()
         {
-            // if (ImGui::CollapsingHeader("Options"))
+            if (ImGui::CollapsingHeader("Options"))
             {
                 ImGui::Columns(2, nullptr, false);
 
-                dirty_flags |= ImGui::Checkbox("Include PvE-only skills", &settings.include_pve_only_skills) ? DirtyFlags::FilterAndList : DirtyFlags::None;
                 dirty_flags |= ImGui::Checkbox("Include Temporary skills", &settings.include_temporary_skills) ? DirtyFlags::FilterAndList : DirtyFlags::None;
                 dirty_flags |= ImGui::Checkbox("Include NPC skills", &settings.include_npc_skills) ? DirtyFlags::FilterAndList : DirtyFlags::None;
                 dirty_flags |= ImGui::Checkbox("Include Archived skills", &settings.include_archived_skills) ? DirtyFlags::FilterAndList : DirtyFlags::None;
@@ -1314,42 +1317,38 @@ namespace HerosInsight::SkillBook
             }
         }
 
+        void DrawPvXModeSelection()
+        {
+            const char *options[] = {"Mixed", "PvE", "PvP"};
+            if (ImGuiExt::RadioArray("Skill Ruleset", (int *)&settings.ruleset, options, IM_ARRAYSIZE(options)))
+            {
+                dirty_flags |= DirtyFlags::FilterAndList;
+            }
+        }
+
         void DrawAttributeModeSelection()
         {
-            auto cursor_before = ImGui::GetCursorPos();
-            ImGui::SetCursorPosY(cursor_before.y + 2);
-            ImGui::TextUnformatted("Attributes");
-            ImGui::SameLine();
-            ImGui::SetCursorPosY(cursor_before.y);
-
-            if (ImGui::RadioButton("(0...15)", settings.IsGeneric()))
+            const char *options[] = {"(0...15)", "Character's", "Manual"};
+            if (ImGuiExt::RadioArray("Attributes", (int *)&settings.attr_src.type, options, IM_ARRAYSIZE(options)))
             {
-                settings.attr_src.type = AttributeSource::Type::Constant;
-                settings.attr_src.value = -1;
                 dirty_flags |= DirtyFlags::Props;
+                switch (settings.attr_src.type)
+                {
+                    case AttributeSource::Type::ZeroToFifteen:
+                        settings.attr_src.value = -1;
+                        break;
+                    case AttributeSource::Type::FromAgent:
+                    case AttributeSource::Type::Manual:
+                        break;
+                }
             }
 
-            ImGui::SameLine();
-            if (ImGui::RadioButton("Character's", settings.IsCharacters()))
-            {
-                settings.attr_src.type = AttributeSource::Type::FromAgent;
-                dirty_flags |= DirtyFlags::Props;
-            }
-
-            ImGui::SameLine();
-            if (ImGui::RadioButton("Manual", settings.IsManual()))
-            {
-                settings.attr_src.type = AttributeSource::Type::Constant;
-                settings.attr_src.value = settings.attr_lvl_slider;
-                dirty_flags |= DirtyFlags::Props;
-            }
-
-            if (settings.IsManual())
+            if (settings.attr_src.type == AttributeSource::Type::Manual)
             {
                 if (ImGui::SliderInt("Attribute level", &settings.attr_lvl_slider, 0, 21))
                 {
-                    settings.attr_src.value = settings.attr_lvl_slider;
                     dirty_flags |= DirtyFlags::Props;
+                    settings.attr_src.value = settings.attr_lvl_slider;
                 }
             }
         }
@@ -1368,9 +1367,14 @@ namespace HerosInsight::SkillBook
                 const auto skill_id = static_cast<GW::Constants::SkillID>(skill_id_16);
                 auto &custom_sd = CustomSkillDataModule::GetCustomSkillData(skill_id);
 
-                if (!settings.include_pve_only_skills)
+                if (settings.ruleset == BookSettings::Ruleset::PvP)
                 {
-                    if (custom_sd.tags.PvEOnly)
+                    if (custom_sd.tags.PvEOnly || custom_sd.tags.PvEVersion)
+                        continue;
+                }
+                else if (settings.ruleset == BookSettings::Ruleset::PvE)
+                {
+                    if (custom_sd.tags.PvPOnly || custom_sd.tags.PvPVersion)
                         continue;
                 }
                 if (!settings.include_temporary_skills)
@@ -1965,6 +1969,7 @@ namespace HerosInsight::SkillBook
                 DrawCheckboxes();
                 ImGui::Spacing();
                 DrawFocusedCharacterInfo();
+                DrawPvXModeSelection();
                 DrawAttributeModeSelection();
                 DrawSearchBox();
                 ImGui::Spacing();
@@ -2241,7 +2246,7 @@ namespace HerosInsight::SkillBook
         {
             for (auto &book : books)
             {
-                if (book->settings.IsCharacters())
+                if (book->settings.attr_src.type == AttributeSource::Type::FromAgent)
                 {
                     // auto attr = AttributeOrTitle((GW::Constants::AttributeByte)p->attribute);
                     // attributes[attr.value] = p->value;
@@ -2255,7 +2260,7 @@ namespace HerosInsight::SkillBook
     {
         for (auto &book : books)
         {
-            if (book->settings.IsCharacters())
+            if (book->settings.attr_src.type == AttributeSource::Type::FromAgent)
             {
                 // auto attr = AttributeOrTitle((GW::Constants::TitleID)packet->title_id);
                 // attributes[attr.value] = packet->new_value;
