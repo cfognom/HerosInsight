@@ -119,6 +119,7 @@ namespace HerosInsight
         struct SkillBook
         {
             Setting<bool> show_help_button{"skill_book.show_help_button", true};
+            Setting<bool> show_focused_character{"skill_book.show_focused_character", true};
             enum struct FeedbackSetting : int
             {
                 Hidden,

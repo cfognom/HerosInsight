@@ -95,6 +95,7 @@ namespace HerosInsight
         if (ImGuiExt::BeginTabItem("Skill Book"))
         {
             ImGui::Checkbox("Show help button", &settings.skill_book.show_help_button.value);
+            ImGui::Checkbox("Show focused character", &settings.skill_book.show_focused_character.value);
 
             const char *feedback_items[] = {"Hidden", "Concise", "Detailed"};
             ImGuiExt::Combo("Feedback", &settings.skill_book.feedback.value, feedback_items, IM_ARRAYSIZE(feedback_items));

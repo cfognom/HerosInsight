@@ -1915,9 +1915,13 @@ namespace HerosInsight::SkillBook
         {
             auto wname = Utils::GetAgentName(focused_agent_id, L"?");
             auto name = Utils::WStrToStr(wname.c_str());
-            ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
-            ImGui::Text("Focused character: %s", name.c_str());
-            ImGui::PopStyleColor();
+
+            if (SettingsGuard().Access().skill_book.show_focused_character.value)
+            {
+                ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
+                ImGui::Text("Focused character: %s", name.c_str());
+                ImGui::PopStyleColor();
+            }
         }
 
         bool Draw(IDirect3DDevice9 *device, size_t book_index)

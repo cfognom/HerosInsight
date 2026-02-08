@@ -1,5 +1,6 @@
 # CHANGELOG
 - Fix main menu being too small (the other way this time).
+- Add setting to hide focused character.
 
 ## 0.5.7
 - Fix main menu being too small.
