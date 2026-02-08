@@ -23,7 +23,7 @@ For example it could be used to:
 Or even, if you've completely lost your mind:
 * Find all hexes, in prophecies or nightfall, yet to be learned, having a recharge of 10 seconds or less. Sort by energy cost, then by AoE range.
 
-[gif showing skill book]
+![](Media/SkillBook.gif)
 
 ## Whats next
 The following features are in development:
