@@ -5,6 +5,7 @@
 2. Find the built launcher in [build/prod/RelWithDebInfo/HerosInsight/Launch_HerosInsight.exe](build/prod/RelWithDebInfo/HerosInsight/Launch_HerosInsight.exe). Run it while GW is running and test the build for any issues.
 
 ## Release
+//OUTDATED
 1. Document changes in [CHANGELOG.md](CHANGELOG.md).
 2. Bump version in [CMakeLists.txt](CMakeLists.txt).
 3. Make a git tag with with the new version.
