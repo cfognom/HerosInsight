@@ -31,4 +31,12 @@ namespace HerosInsight::ImGuiExt
         ImGui::PopFont();
         return pressed;
     }
+
+    inline bool BeginTabItem(const char *label, bool *p_open = nullptr, ImGuiTabItemFlags flags = 0)
+    {
+        ImGui::PushFont(Constants::Fonts::button_font);
+        bool opened = ImGui::BeginTabItem(label, p_open, flags);
+        ImGui::PopFont();
+        return opened;
+    }
 }

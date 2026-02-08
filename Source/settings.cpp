@@ -59,7 +59,7 @@ namespace HerosInsight
 
     void DrawGeneral(Settings &settings)
     {
-        if (ImGui::BeginTabItem("General"))
+        if (ImGuiExt::BeginTabItem("General"))
         {
             ImGui::Checkbox("Scroll snap to item", &settings.general.scroll_snap_to_item.value);
 
@@ -92,7 +92,7 @@ namespace HerosInsight
 
     void DrawSkillBook(Settings &settings)
     {
-        if (ImGui::BeginTabItem("Skill Book"))
+        if (ImGuiExt::BeginTabItem("Skill Book"))
         {
             ImGui::Checkbox("Show help button", &settings.skill_book.show_help_button.value);
 
