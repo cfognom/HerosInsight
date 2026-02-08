@@ -99,6 +99,12 @@ def main():
         const='auto',
         help='Destination directory for zip (relative to working dir unless absolute path)'
     )
+    parser.add_argument(
+        '--fresh',
+        '-f',
+        action='store_false',
+        help='Rebuild project from scratch'
+    )
 
     args = parser.parse_args()
 
@@ -144,11 +150,14 @@ def main():
     # ])
 
     # Step 2: Build
-    run([
+    cmd = [
         "cmake",
         "--build", binary_dir,
         "--config", args.config
-    ])
+    ]
+    if args.fresh:
+        cmd.insert(1, "--fresh")
+    run(cmd)
 
     # Optional Step 3: Install
     if args.installdir:
