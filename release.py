@@ -86,7 +86,7 @@ def has_remote_tag(tag: str) -> bool:
     return bool(result.stdout.strip())
 
 def has_remote_release(tag: str) -> bool:
-    result = subprocess.run(["gh", "release", "view", tag], stdout=subprocess.DEVNULL)
+    result = subprocess.run(["gh", "release", "view", tag], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return result.returncode == 0
 
 def reset_to_before_commit(commit_hash: str) -> None:
@@ -241,7 +241,7 @@ def public_release(args):
         sys.exit(1)
     
     title = f"Hero's Insight {version}"
-    changelog = subprocess.run(["git", "for-each-ref", f"refs/tags/{tag_str}", "--format='%(contents)'"])
+    changelog = subprocess.run(["git", "tag", "--list", tag_str, "--format=%(contents)"], capture_output=True, text=True).stdout.strip()
     zip_path = get_zip(version)
 
     # Print info about release
@@ -250,8 +250,8 @@ def public_release(args):
     print()
     print(f"title: {title}")
     print(f"version: {version}")
-    print(f"changelog: {changelog}")
     print(f"zip_file: {zip_path}")
+    print(f"changelog: \n{changelog}")
     print()
     print("Make sure you have tested the release before publishing.")
     print()
