@@ -41,7 +41,7 @@ Track stats for you and your party.
 * Hits blocked
 * Energy given
 * Time spent casting
-* And more...
+* And more...?
 
 ## FAQ
 - ### Could using *Hero’s Insight* result in a ban?
