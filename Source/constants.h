@@ -76,6 +76,7 @@ namespace Constants
     namespace Fonts
     {
         inline ImFont *gw_font_16;
+        inline ImFont *button_font;
         inline ImFont *window_name_font;
         inline ImFont *skill_name_font;
         inline ImFont *skill_thick_font_15;

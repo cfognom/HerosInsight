@@ -154,6 +154,11 @@ void AddFonts(ImGuiIO &io)
         .glyphPadding = 1,
         .advanceAdjustment = 1,
     });
+    Constants::Fonts::button_font = CreateGWFont(GWFontConfig{
+        .blitFlags = GW::TextMgr::BlitFontFlags::AmbientOcclusion,
+        .glyphPadding = 1,
+        .advanceAdjustment = 1,
+    });
     Constants::Fonts::window_name_font = CreateGWFont(GWFontConfig{
         .fontIndex = 1,
         .blitFlags = GW::TextMgr::BlitFontFlags::AmbientOcclusion,

@@ -23,4 +23,12 @@ namespace HerosInsight::ImGuiExt
             ImGui::PopFont();
         }
     };
+
+    inline bool Button(const char *label, const ImVec2 &size = ImVec2(0, 0))
+    {
+        ImGui::PushFont(Constants::Fonts::button_font);
+        bool pressed = ImGui::Button(label, size);
+        ImGui::PopFont();
+        return pressed;
+    }
 }

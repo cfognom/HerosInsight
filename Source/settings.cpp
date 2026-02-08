@@ -70,17 +70,17 @@ namespace HerosInsight
             if (imgui_ini_filename_str.starts_with(cache_dir_string.c_str()) &&
                 std::filesystem::path(ini_filename).is_absolute()) // Safety
             {
-                if (ImGui::Button("Clear window cache"))
+                if (ImGuiExt::Button("Clear window cache"))
                 {
                     std::remove(ini_filename);
                 }
             }
-            if (ImGui::Button("Reset to default"))
+            if (ImGuiExt::Button("Reset to default"))
             {
                 SettingsManager::ForceDefaultScope guard{};
                 Utils::Reconstuct(settings.general);
             }
-            if (ImGui::Button("Reset ALL settings to default"))
+            if (ImGuiExt::Button("Reset ALL settings to default"))
             {
                 SettingsManager::ForceDefaultScope guard{};
                 Utils::Reconstuct(settings);
@@ -99,7 +99,7 @@ namespace HerosInsight
             const char *feedback_items[] = {"Hidden", "Concise", "Detailed"};
             ImGui::Combo("Feedback", &settings.skill_book.feedback.value, feedback_items, IM_ARRAYSIZE(feedback_items));
 
-            if (ImGui::Button("Reset to default"))
+            if (ImGuiExt::Button("Reset to default"))
             {
                 SettingsManager::ForceDefaultScope guard{};
                 Utils::Reconstuct(settings.skill_book);

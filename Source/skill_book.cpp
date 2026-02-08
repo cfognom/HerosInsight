@@ -1735,7 +1735,7 @@ namespace HerosInsight::SkillBook
             {
                 ImGui::SameLine();
                 auto pos = ImGui::GetCursorScreenPos();
-                if (ImGui::Button("Help!"))
+                if (ImGuiExt::Button("Help!"))
                 {
                     book_that_pressed_help = book_that_pressed_help ? nullptr : this;
                 }
@@ -2123,7 +2123,7 @@ namespace HerosInsight::SkillBook
                 FixedVector<char, 32> buffer;
                 buffer.AppendFormat("Try it##{}", button_counter++);
                 buffer.push_back('\0');
-                if (ImGui::Button(buffer.data()))
+                if (ImGuiExt::Button(buffer.data()))
                 {
                     book->SetInputText(query_body);
                 }
