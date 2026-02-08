@@ -355,7 +355,7 @@ namespace HerosInsight
         if (open_skill_book)
             HerosInsight::SkillBook::Draw(device);
         if (open_settings)
-            HerosInsight::g_settings.Draw(device);
+            HerosInsight::Settings::Draw(device);
 
         DrawMenu();
 

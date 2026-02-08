@@ -1,3 +1,4 @@
+#include <filesystem>
 #include <fstream>
 #include <imgui.h>
 #include <string>
@@ -55,6 +56,58 @@ namespace HerosInsight
         }
     }
 
+    void DrawGeneral(Settings &settings)
+    {
+        if (ImGui::BeginTabItem("General"))
+        {
+            ImGui::Checkbox("Scroll snap to item", &settings.general.scroll_snap_to_item.value);
+
+            auto &io = ImGui::GetIO();
+            auto ini_filename = io.IniFilename;
+            auto cache_dir_string = Constants::paths.cache().string();
+            std::string_view imgui_ini_filename_str{ini_filename};
+            if (imgui_ini_filename_str.starts_with(cache_dir_string.c_str()) &&
+                std::filesystem::path(ini_filename).is_absolute()) // Safety
+            {
+                if (ImGui::Button("Clear window cache"))
+                {
+                    std::remove(ini_filename);
+                }
+            }
+            if (ImGui::Button("Reset to default"))
+            {
+                SettingsManager::ForceDefaultScope guard{};
+                Utils::Reconstuct(settings.general);
+            }
+            if (ImGui::Button("Reset ALL settings to default"))
+            {
+                SettingsManager::ForceDefaultScope guard{};
+                Utils::Reconstuct(settings);
+            }
+
+            ImGui::EndTabItem();
+        }
+    }
+
+    void DrawSkillBook(Settings &settings)
+    {
+        if (ImGui::BeginTabItem("Skill Book"))
+        {
+            ImGui::Checkbox("Show help button", &settings.skill_book.show_help_button.value);
+
+            const char *feedback_items[] = {"Hidden", "Concise", "Detailed"};
+            ImGui::Combo("Feedback", &settings.skill_book.feedback.value, feedback_items, IM_ARRAYSIZE(feedback_items));
+
+            if (ImGui::Button("Reset to default"))
+            {
+                SettingsManager::ForceDefaultScope guard{};
+                Utils::Reconstuct(settings.skill_book);
+            }
+
+            ImGui::EndTabItem();
+        }
+    }
+
     void Settings::Draw(IDirect3DDevice9 *device)
     {
         ImGui::SetNextWindowSize(ImVec2(400, 200), ImGuiCond_FirstUseEver);
@@ -63,50 +116,13 @@ namespace HerosInsight
             // Make tabs: General, Skillbook
             if (ImGui::BeginTabBar("SettingsTabs"))
             {
-                general.Draw(device);
-                skill_book.Draw(device);
+                SettingsGuard g{};
+                auto &settings = g.Access();
+                DrawGeneral(settings);
+                DrawSkillBook(settings);
             }
             ImGui::EndTabBar();
         }
         ImGui::End();
-    }
-
-    void CheckboxSetting(const char *label, ObservableSetting<bool> &setting)
-    {
-        bool value = setting.Get();
-        if (ImGui::Checkbox(label, &value))
-        {
-            setting.Set(value);
-        }
-    }
-
-    void ComboSetting(const char *label, ObservableSetting<int> &setting, std::span<const char *> items)
-    {
-        int value = setting.Get();
-        if (ImGui::Combo(label, &value, items.data(), items.size()))
-        {
-            setting.Set(value);
-        }
-    }
-
-    void Settings::General::Draw(IDirect3DDevice9 *device)
-    {
-        if (ImGui::BeginTabItem("General"))
-        {
-            CheckboxSetting("Scroll snap to item", g_settings.general.scroll_snap_to_item);
-
-            ImGui::EndTabItem();
-        }
-    }
-
-    void Settings::SkillBook::Draw(IDirect3DDevice9 *device)
-    {
-        if (ImGui::BeginTabItem("Skill Book"))
-        {
-            const char *feedback_items[] = {"Hidden", "Concise", "Detailed"};
-            ComboSetting("Feedback", g_settings.skill_book.feedback, feedback_items);
-
-            ImGui::EndTabItem();
-        }
     }
 }

@@ -23,11 +23,20 @@ namespace HerosInsight
         SettingsManager(const SettingsManager &) = delete;
         SettingsManager &operator=(const SettingsManager &) = delete;
 
+        inline thread_local static bool force_defaults;
+        struct ForceDefaultScope
+        {
+            ForceDefaultScope() { force_defaults = true; }
+            ~ForceDefaultScope() { force_defaults = false; }
+        };
+
         template <typename T>
-        T InitSetting(const std::string &key, T default_value)
+        T LoadSettingOrDefault(const std::string &key, T default_value)
         {
             std::lock_guard<std::recursive_mutex> lock(m_mutex);
             ++m_active_settings;
+            if (force_defaults)
+                return default_value;
             auto it = m_settings.find(key);
             if (it != m_settings.end())
             {
@@ -42,9 +51,10 @@ namespace HerosInsight
         }
 
         template <typename T>
-        void TermSetting(const std::string &key, T value)
+        void StoreSetting(const std::string &key, T value)
         {
             std::lock_guard<std::recursive_mutex> lock(m_mutex);
+            assert(m_active_settings > 0 && "StoreSetting called without LoadSettingOrDefault");
             --m_active_settings;
             m_settings[key] = std::to_string(value);
         }
@@ -55,74 +65,47 @@ namespace HerosInsight
     };
 
     template <typename T>
-    class ObservableSetting
+    struct Setting
     {
-    public:
-        using Callback = std::function<void(const T &)>;
+        Setting(const std::string &key, const T &default_value)
+            : m_key(key), value(SettingsManager::Get().LoadSettingOrDefault(key, default_value)) {}
 
-        ObservableSetting(const std::string &key, const T &default_value)
-            : m_key(key), m_value(SettingsManager::Get().InitSetting(key, default_value)) {}
-
-        ~ObservableSetting()
+        ~Setting()
         {
-            SettingsManager::Get().TermSetting(m_key, m_value);
+            SettingsManager::Get().StoreSetting(m_key, value);
         }
 
-        T Get() const
-        {
-            std::lock_guard<std::recursive_mutex> lock(m_mutex);
-            return m_value;
-        }
+        // Disable copy
+        Setting(const Setting &) = delete;
+        Setting &operator=(const Setting &) = delete;
 
-        void Set(const T &new_value)
+        struct ChangeChecker
         {
-            std::lock_guard<std::recursive_mutex> lock(m_mutex);
-            if (m_value != new_value)
+            T last_value;
+            bool Changed(const Setting<T> &setting)
             {
-                m_value = new_value;
-                Notify();
-            }
-        }
-
-        struct Subscription
-        {
-            ObservableSetting &setting;
-            size_t id;
-            Subscription(ObservableSetting &setting, Callback cb)
-                : setting(setting)
-            {
-                std::lock_guard<std::recursive_mutex> lock(setting.m_mutex);
-                size_t id = setting.m_next_id++;
-                setting.m_callbacks[id] = std::move(cb);
-            }
-            ~Subscription()
-            {
-                std::lock_guard<std::recursive_mutex> lock(setting.m_mutex);
-                setting.m_callbacks.erase(id);
+                if (setting.value != last_value)
+                {
+                    last_value = setting.value;
+                    return true;
+                }
+                return false;
             }
         };
 
+        ChangeChecker GetChangeChecker() { return ChangeChecker{value}; }
+
+        T value;
+
     private:
         std::string m_key;
-        T m_value;
-        std::unordered_map<size_t, Callback> m_callbacks;
-        size_t m_next_id = 0;
-        mutable std::recursive_mutex m_mutex;
 
         friend struct Subscription;
-
-        void Notify()
-        {
-            for (auto &[_, cb] : m_callbacks)
-            {
-                cb(m_value);
-            }
-        }
 
         std::string SerializeValue() const
         {
             std::ostringstream ss;
-            ss << m_value;
+            ss << value;
             return ss.str();
         }
     };
@@ -131,26 +114,32 @@ namespace HerosInsight
     {
         struct General
         {
-            ObservableSetting<bool> scroll_snap_to_item{"general.scroll_snap_to_item", true};
-
-            void Draw(IDirect3DDevice9 *device);
+            Setting<bool> scroll_snap_to_item{"general.scroll_snap_to_item", true};
         };
         struct SkillBook
         {
+            Setting<bool> show_help_button{"skill_book.show_help_button", true};
             enum struct FeedbackSetting : int
             {
                 Hidden,
                 Concise,
                 Detailed,
             };
-            ObservableSetting<int> feedback{"skill_book.feedback", (int)FeedbackSetting::Concise};
-
-            void Draw(IDirect3DDevice9 *device);
+            Setting<int> feedback{"skill_book.feedback", (int)FeedbackSetting::Concise};
         };
         General general;
         SkillBook skill_book;
 
-        void Draw(IDirect3DDevice9 *device);
+        static void Draw(IDirect3DDevice9 *device);
     };
-    inline Settings g_settings;
+    struct SettingsGuard
+    {
+        SettingsGuard() { mutex.lock(); }
+        ~SettingsGuard() { mutex.unlock(); }
+        Settings &Access() { return settings; }
+
+    private:
+        inline static std::recursive_mutex mutex;
+        inline static Settings settings;
+    };
 }
