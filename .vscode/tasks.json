@@ -8,7 +8,8 @@
             "args": [
                 "${workspaceFolder}/build.py",
                 "--preset", "${command:cmake.activeConfigurePresetName}",
-                "--config", "${command:cmake.buildType}"
+                "--config", "${command:cmake.buildType}",
+                "--installdir"
             ],
             "problemMatcher": ["$msCompile"],
             "group": {
