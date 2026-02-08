@@ -1,4 +1,7 @@
 # CHANGELOG
+## ???
+- Make buttons and widgets have ambient occlusion like GW.
+
 ## 0.4.1
 - Add exe icon.
 - Now logs version.
