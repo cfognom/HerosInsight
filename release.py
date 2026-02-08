@@ -1,15 +1,14 @@
 import subprocess
 import sys
 import re
+import argparse
 from pathlib import Path
 
-CHANGELOG_FILE_NAME = "CHANGELOG.md"
-CHANGELOG_FILE = Path(CHANGELOG_FILE_NAME)
-VERSION_FILE_NAME = "VERSION.txt"
-VERSION_FILE = Path(VERSION_FILE_NAME)
-BUILD_PRESET = "ReadyForGithub"
+CHANGELOG_FILE = Path("CHANGELOG.md")
+VERSION_FILE = Path("VERSION.txt")
+RELEASE_DIR = Path("build/releases")
 
-def read_version() -> str:
+def read_version_txt() -> str:
     """
     Reads the current version from VERSION.txt
     """
@@ -21,16 +20,14 @@ def read_version() -> str:
         raise RuntimeError(f"{VERSION_FILE} is empty")
     return version
 
-
-def write_version(new_version: str) -> None:
+def write_version_txt(new_version: str) -> None:
     """
     Writes the new version to VERSION.txt
     """
     VERSION_FILE.write_text(new_version.strip() + "\n", encoding="utf-8")
 
-def run(cmd, **kwargs):
-    print(f"$ {' '.join(str(c) for c in cmd)}")
-    return subprocess.run(cmd, **kwargs)
+def format_tag(version: str) -> str:
+    return f"v{version}"
 
 def get_current_branch():
     result = subprocess.run(["git", "branch", "--show-current"], capture_output=True, text=True)
@@ -38,12 +35,9 @@ def get_current_branch():
 
 def git_clean_except(allowed_files):
     result = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
-    changes = [line[3:] for line in result.stdout.splitlines()]
+    changes: Path = [line[3:] for line in result.stdout.splitlines()]
     unexpected = [f for f in changes if f not in allowed_files]
     return unexpected
-
-def list_build_settings():
-    print(f"Using build preset: {BUILD_PRESET}")
 
 def is_newer_version(old: str, new: str) -> bool:
     """Return True if `new` version is greater than `old` version."""
@@ -83,117 +77,233 @@ def get_version_and_changelog():
 
     return new_version, changelog_entry
 
-def preflight_checks():
-    # Ensure clean tree
-    unexpected = git_clean_except([__file__, CHANGELOG_FILE_NAME])
+def has_local_tag(tag: str) -> bool:
+    result = subprocess.run(["git", "tag", "--list", tag], capture_output=True, text=True)
+    return bool(result.stdout.strip())
+
+def has_remote_tag(tag: str) -> bool:
+    result = subprocess.run(["git", "ls-remote", "--tags", "origin", tag], capture_output=True, text=True)
+    return bool(result.stdout.strip())
+
+def has_remote_release(tag: str) -> bool:
+    result = subprocess.run(["gh", "release", "view", tag], stdout=subprocess.DEVNULL)
+    return result.returncode == 0
+
+def reset_to_before_commit(commit_hash: str) -> None:
+    print(f"\nResetting to before commit {commit_hash}...")
+    subprocess.run(["git", "reset", "--mixed", f"{commit_hash}~1"], check=True)
+
+def head_is_tag(tag: str) -> bool:
+    result = subprocess.run(["git", "tag", "--points-at", "HEAD"], capture_output=True, text=True)
+    return result.stdout.strip() == tag
+
+def get_release_staging_dir(version: str) -> Path:
+    return RELEASE_DIR / version
+
+def get_zip(version: str) -> Path:
+    path = get_release_staging_dir(version) / f"HerosInsight-{version}.zip"
+    if not path.exists():
+        raise RuntimeError(f"❌ Error: zip file not found at {path}")
+    return path
+
+def stage_release(args):
+    new_version, changelog = get_version_and_changelog()
+    release_staging_dir = get_release_staging_dir(new_version)
+    
+    def build_local_release():
+        print(f"\nBuilding {new_version} release...")
+        subprocess.run([
+            "python", "build.py",
+            "--fresh",
+            "--preset", "prod",
+            "--config", "RelWithDebInfo",
+            "--installdir", release_staging_dir,
+            "--zipdir", release_staging_dir],
+            check=True
+        )
+        get_zip(new_version)
+
+    unexpected = git_clean_except([__file__, CHANGELOG_FILE.name])
     if unexpected:
-        print("❌ Error: Unexpected changes detected in git:")
+        print(f"❌ Error: The git directory must be clean, except for {CHANGELOG_FILE}.")
         for f in unexpected:
             print(f"  {f}")
         sys.exit(1)
 
-    try:
-        # Ensure gh exists
-        subprocess.run(["gh", "--version"], check=True, stdout=subprocess.DEVNULL)
-
-        # Ensure cmake preset exists
-        subprocess.run(["cmake", "--list-presets"], check=True, stdout=subprocess.DEVNULL)
+    old_version = read_version_txt()
     
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Error: {e}")
+    if release_staging_dir.exists():
+        print(f"❌ Error: local release already exists at {release_staging_dir}.")
         sys.exit(1)
     
-    try:
-        run(["gh", "auth", "status"], check=True)
-    except:
-        run(["gh", "auth", "login"], check=True)
-        run(["gh", "auth", "status"], check=True)
+    new_version_tag = format_tag(new_version)
+    if has_local_tag(new_version_tag):
+        print(f"❌ Error: local tag already exists for version {new_version}.")
+        sys.exit(1)
+    
+    if has_remote_tag(new_version_tag):
+        print(f"❌ Error: remote tag already exists for version {new_version}.")
+        sys.exit(1)
 
-def main():
-    preflight_checks()
-
-    old_version = read_version()
-    new_version, changelog = get_version_and_changelog()
-
-    print(f"\nOld version: {old_version}")
-    print(f"New version: {new_version}\n")
-
+    print()
+    print(f"Old version: {old_version}")
+    print(f"New version: {new_version}")
+    print()
     print("CHANGELOG for new version:")
     print(changelog)
+    print()
 
     if not is_newer_version(old_version, new_version):
-        print("\n❌ Error: new version is not greater than old version.")
+        print("❌ Error: new version is not greater than old version.")
         sys.exit(1)
 
-    list_build_settings()
-
     # Single confirmation
-    if input("\nProceed with update version, build release, create tag, commit, push and create GitHub release? [y/N]: ").strip().lower() != "y":
+    if input(f"\nProceed with update {VERSION_FILE}, build release, commit and create tag? [y/N]: ").strip().lower() != "y":
         print("Aborted.")
         sys.exit(0)
 
     # Step 1: update version
-    write_version(new_version)
+    print("\nUpdating version...")
+    write_version_txt(new_version)
 
     try:
-        run(["cmake", "--preset", "Production", "--fresh"], check=True)
+        # Step 2: build the release
+        build_local_release()
 
-        # Step 2: build the release zip
-        print("\nBuilding release zip...")
-        run(["cmake", "--build", "--preset", BUILD_PRESET], check=True)
-
-        zip_path = Path(f"build/prod/RelWithDebInfo/HerosInsight_{new_version}.zip")
-        if not zip_path.exists():
-            raise RuntimeError(f"❌ Error: zip file not found at {zip_path}")
-        
-        # Step 3: create tag
-        tag_str = f"v{new_version}"
-        print(f"\nCreating tag \"{tag_str}\"...")
-        run([
-            "git", "tag",
-            "-a", tag_str,
-            "-m", f"HerosInsight {new_version}\n\n{changelog}"
-        ], check=True)
+        # Step 3: commit
+        print("\nCommitting...")
+        subprocess.run(["git", "commit", CHANGELOG_FILE, VERSION_FILE, "-m", f"Bump version to {new_version}"], check=True)
 
         try:
-            # step 4: stage changes
-            print("\nStaging changes...")
-            run(["git", "add", CHANGELOG_FILE, VERSION_FILE], check=True)
-
-            # step 5: commit
-            print("\nCommitting...")
-            run(["git", "commit", "-m", f"Bump version to {new_version}"], check=True)
-
-            # Step 6: push changes + tag
-            print("\nPushing...")
-            run(["git", "push", "--follow-tags"], check=True)
-
-            # Step 7: create GitHub release
-            print("\nCreating GitHub release...")
-            run([
-                "gh", "release", "create", tag_str, str(zip_path),
-                "--title", f"Hero's Insight {new_version}",
-                "--generate-notes",
-                "--notes", changelog,
-                "--fail-on-no-commits",
-                "--verify-tag"
+            # Step 4: create tag
+            tag_str = format_tag(new_version)
+            print(f"\nCreating tag \"{tag_str}\"...")
+            subprocess.run([
+                "git", "tag",
+                "-a", tag_str,
+                "-m", changelog
             ], check=True)
 
-            print(f"\n✅ Release process completed successfully. Version {new_version} is now live. Dont forget to merge into main!")
+            print(f"\n✅ Sucessfully staged local release with tag: {tag_str}.")
         
         except:
-            print("\n❌ Annoying fail: Manual rollback of some steps required.")
-
-            # rollback tag creation
-            print("\nUndoing tag...")
-            run(["git", "tag", "-d", tag_str], check=True)
+            reset_to_before_commit("HEAD")
             raise
 
     except Exception:
-        # rollback version change
         print("\nUndoing version change...")
-        write_version(old_version)
+        write_version_txt(old_version)
         raise
+
+def unstage_release(args):
+    version = read_version_txt()
+    tag_str = format_tag(version)
+
+    if not has_local_tag(tag_str):
+        print(f"\n❌ Error: there is no release to unstage.")
+        sys.exit(1)
+    
+    if has_remote_tag(tag_str):
+        print(f"\n❌ Error: cannot unstage a release that has been published.")
+        sys.exit(1)
+    
+    if not head_is_tag(tag_str):
+        print(f"\n❌ Error: HEAD is not at tag {tag_str}.")
+        sys.exit(1)
+
+    reset_to_before_commit(tag_str)
+
+    print("\nRemoving tag...")
+    subprocess.run(["git", "tag", "-d", tag_str], check=True)
+
+    print("\nRestoring old version...")
+    subprocess.run(["git", "restore", VERSION_FILE], check=True)
+
+    print(f"\n✅ Successfully unstaged local release with tag: {tag_str}.")
+
+def public_release(args):
+    version = read_version_txt()
+    tag_str = format_tag(version)
+
+    if not has_local_tag(tag_str):
+        print(f"\n❌ Error: there is no release to publish.")
+        sys.exit(1)
+
+    # Check if user is authenticated
+    try:
+        subprocess.run(["gh", "auth", "status"], check=True)
+    except:
+        subprocess.run(["gh", "auth", "login"], check=True)
+        subprocess.run(["gh", "auth", "status"], check=True)
+
+    if has_remote_release(tag_str):
+        print(f"\n❌ Error: release {tag_str} already exists on GitHub.")
+        sys.exit(1)
+    
+    title = f"Hero's Insight {version}"
+    changelog = subprocess.run(["git", "for-each-ref", f"refs/tags/{tag_str}", "--format='%(contents)'"])
+    zip_path = get_zip(version)
+
+    # Print info about release
+    print()
+    print("You are about to publish the following release:")
+    print()
+    print(f"title: {title}")
+    print(f"version: {version}")
+    print(f"changelog: {changelog}")
+    print(f"zip_file: {zip_path}")
+    print()
+    print("Make sure you have tested the release before publishing.")
+    print()
+    
+    # Single confirmation
+    if input(f"Proceed with publishing release? [y/N]: ").strip().lower() != "y":
+        print("Aborted.")
+        sys.exit(0)
+
+    if not has_remote_tag(tag_str):
+        print("\nPushing...")
+        subprocess.run(["git", "push", "--follow-tags"], check=True)
+
+    try:
+        print("\nCreating GitHub release...")
+        subprocess.run([
+            "gh", "release", "create", tag_str, str(zip_path),
+            "--title", title,
+            "--generate-notes",
+            "--notes", changelog,
+            "--fail-on-no-commits",
+            "--verify-tag"
+        ], check=True)
+
+        print(f"\n✅ Release process completed successfully. Version {version} is now live!")
+
+    except:
+        print("\n❌ Failed to publish release. Fix any issues and try again.")
+        raise
+
+def main():
+    # Argument Parser
+    parser = argparse.ArgumentParser(prog="release", description="Manage releases")
+
+    # Top-level subcommands: create, remove, publish
+    subparsers = parser.add_subparsers(dest="action", required=True)
+
+    # create
+    stage_parser = subparsers.add_parser("stage", help="Stages a release")
+    stage_parser.set_defaults(func=stage_release)
+
+    # remove
+    unstage_parser = subparsers.add_parser("unstage", help="Unstages a release")
+    unstage_parser.set_defaults(func=unstage_release)
+
+    # publish
+    publish_parser = subparsers.add_parser("publish", help="Publish a release")
+    publish_parser.set_defaults(func=public_release)
+
+    # Parse and dispatch
+    args = parser.parse_args()
+    args.func(args)
 
 if __name__ == "__main__":
     main()
