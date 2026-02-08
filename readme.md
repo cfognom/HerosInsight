@@ -4,7 +4,7 @@
 The mod is named after the *Guild Wars* item: [Hero's Insight](https://wiki.guildwars.com/wiki/Hero%27s_Insight), which grants the player's character double experience while active. In the same spirit, the mod aims to do the same, but for the actual player this time 😁.
 
 ## How to install
-Download the lastest release [link to latest release]. The downloaded zip file contains a directory with the mod pre-installed. Unzip it to wherever you want to install the mod. Once done, you can now you can launch the mod by running the exe inside.
+Download the [lastest release](https://github.com/cfognom/HerosInsight/releases/latest) The downloaded zip file contains a directory with the mod pre-installed. Unzip it to wherever you want to install the mod. Once done, you can now you can launch the mod by running the exe inside.
 
 Before using the mod please check out the [FAQ](#FAQ) section.
 
