@@ -303,7 +303,7 @@ def public_release(args):
 
     if not has_remote_tag(tag_str):
         print("\nPushing...")
-        subprocess.run(["git", "push", "--follow-tags"], check=True)
+        subprocess.run(["git", "push", "origin", "--follow-tags"], check=True)
 
     try:
         print("\nCreating GitHub release...")
