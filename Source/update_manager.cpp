@@ -26,6 +26,7 @@
 #include <worldspaceUI.h>
 
 #include "update_manager.h"
+#include <imgui_ext.h>
 #include <utils.h>
 
 namespace HerosInsight
@@ -295,6 +296,11 @@ namespace HerosInsight
                 // window->Size = content_size - ImVec2(0, 50);
 
                 ImGui::Spacing();
+
+                if (ImGuiExt::Button("Open Github"))
+                {
+                    Utils::OpenURL("https://github.com/cfognom/HerosInsight");
+                }
 
                 ImGui::Text("Version: %s", HEROSINSIGHT_VERSION_STRING);
 #ifdef _DEBUG

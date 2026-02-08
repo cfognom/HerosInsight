@@ -3118,6 +3118,11 @@ namespace HerosInsight::Utils
         GW::UI::SendUIMessage(GW::UI::UIMessage::kOpenWikiUrl, url.data());
     }
 
+    void OpenURL(const char *url)
+    {
+        GW::UI::SendUIMessage(GW::UI::UIMessage::kOpenWikiUrl, (void *)url);
+    }
+
     void ImGuiCenterAlignCursorX(float size_x)
     {
         const auto avail = ImGui::GetContentRegionAvail().x;

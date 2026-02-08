@@ -590,6 +590,7 @@ namespace HerosInsight::Utils
     void GetControllableAgentsOfPlayer(OutBuf<uint32_t> out, uint32_t player_number = 0);
 
     void OpenWikiPage(std::string_view page);
+    void OpenURL(const char *url);
     void ImGuiCenterAlignCursorX(float size_x);
     void ImGuiThickText(const char *text);
 
