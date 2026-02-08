@@ -120,6 +120,8 @@ bool IsInitialCursorPos()
 // This adds a "skill book" window where the user can search and filter all skills in the game.
 namespace HerosInsight::SkillBook
 {
+    struct BookState;
+
     std::vector<uint16_t> base_skills; // skill ids
 
     using SkillID = GW::Constants::SkillID;
@@ -253,6 +255,8 @@ namespace HerosInsight::SkillBook
     constexpr size_t PROP_COUNT = static_cast<size_t>(SkillProp::COUNT);
 
     uint32_t focused_agent_id = 0;
+    BookState *book_that_pressed_help = nullptr;
+    auto feedback_checker = SettingsGuard().Access().skill_book.feedback.GetChangeChecker();
 
     struct AttributeSource
     {
@@ -1143,7 +1147,6 @@ namespace HerosInsight::SkillBook
         }
     }
 
-    struct BookState;
     std::vector<std::unique_ptr<BookState>> books;
     BookState *AddBook()
     {
@@ -1163,6 +1166,7 @@ namespace HerosInsight::SkillBook
         Filtering::Device<FilteringAdapter> filter_device{adapter};
         Filtering::Query query;
         std::vector<uint16_t> filtered_skills; // skill ids
+        ImGuiWindow *imgui_window = nullptr;
 
         Text::Provider &text_provider = Text::GetTextProvider(GW::Constants::Language::English);
 
@@ -1177,17 +1181,8 @@ namespace HerosInsight::SkillBook
             ALL = Query | SkillList | Props,
         };
 
-        bool is_opened = true;
         DirtyFlags dirty_flags = DirtyFlags::ALL;
         bool first_draw = true;
-
-        ObservableSetting<int>::Subscription feedback_subs{
-            g_settings.skill_book.feedback,
-            [this](auto &new_value)
-            {
-                this->UpdateFeedback();
-            }
-        };
 
         struct ScrollTracking
         {
@@ -1278,7 +1273,7 @@ namespace HerosInsight::SkillBook
             {
                 auto book = AddBook();
                 book->CopyStateFrom(*this);
-                book->init_dims = {window->Pos + ImVec2(16, 16), window->Size};
+                book->init_dims = {window->Pos + ImVec2(32, 32), window->Size};
             }
             if (ImGui::IsItemHovered())
             {
@@ -1417,9 +1412,9 @@ namespace HerosInsight::SkillBook
             }
         }
 
-        void UpdateFeedback()
+        void UpdateFeedback(int feedback_style)
         {
-            bool verbose = g_settings.skill_book.feedback.Get() == (int)Settings::SkillBook::FeedbackSetting::Detailed;
+            bool verbose = feedback_style == (int)Settings::SkillBook::FeedbackSetting::Detailed;
             filter_device.GetFeedback(query, feedback, verbose);
         }
 
@@ -1443,7 +1438,7 @@ namespace HerosInsight::SkillBook
                 InitFilterList();
                 this->filter_device.RunQuery(this->query, this->filtered_skills);
 
-                UpdateFeedback();
+                UpdateFeedback(feedback_checker.last_value);
             }
             dirty_flags = DirtyFlags::None;
         }
@@ -1703,318 +1698,17 @@ namespace HerosInsight::SkillBook
             ImGui::EndGroup();
         }
 
-        void DrawHelpTooltip()
+        void MarkQueryDirty()
         {
-            ImGui::BeginTooltip();
+            dirty_flags |= DirtyFlags::Query;
+        }
 
-            constexpr auto DrawTable = [](const auto &cells, uint32_t second_col_max_width = 0)
-            {
-                constexpr auto elems = std::size(cells);
-                constexpr auto cols = 2;
-                constexpr auto rows = elems / cols;
-                constexpr auto padding = 5;
-
-                float widths[elems];
-
-                for (size_t i = 0; i < elems; i++)
-                {
-                    FixedVector<RichText::TextSegment, 32> segments;
-                    text_drawer.MakeTextSegments(cells[i], segments);
-                    widths[i] = RichText::CalcTextSegmentsWidth(segments);
-                }
-
-                float col_widths[cols]{0, 0};
-
-                for (size_t x = 0; x < cols; ++x)
-                {
-                    col_widths[x] = 0;
-                    for (size_t y = 0; y < rows; ++y)
-                    {
-                        col_widths[x] = std::max(col_widths[x], widths[y * cols + x]);
-                    }
-                }
-
-                auto init_cursor = ImGui::GetCursorScreenPos();
-                auto cursor = init_cursor;
-
-                for (size_t y = 0; y < rows; ++y)
-                {
-                    cursor.x = init_cursor.x;
-                    for (size_t x = 0; x < cols; ++x)
-                    {
-                        cursor.x += padding;
-                        auto cell = cells[y * cols + x];
-                        auto width = widths[y * cols + x];
-                        auto write_cursor = cursor;
-                        if (x == 0)
-                        {
-                            auto offset = (col_widths[x] - width) / 2;
-                            write_cursor.x += offset;
-                        }
-                        ImGui::SetCursorScreenPos(write_cursor);
-                        text_drawer.DrawRichText(cell);
-                        cursor.x += col_widths[x] + padding;
-                    }
-                    cursor.y += ImGui::GetTextLineHeight();
-                }
-            };
-
-            ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
-            ImGui::Text("Examples");
-            ImGui::PopStyleColor();
-            // clang-format off
-            constexpr std::string_view examples[] = {
-                "<c=@skilldyn>locked</c>", "Finds skills you have yet to unlock",
-                "<c=@skilldyn>health regen</c>", "Finds skills giving health regeneration",
-                "<c=@skilldyn>knock...down</c>", "Finds skills related to knock down",
-                "<c=@skilldyn>type: stance & prof: mes|derv</c>", "Finds mesmer or dervish stances",
-                "<c=@skilldyn>campaign!: prophecies</c>", "Finds non-prophecies skills",
-                "<c=@skilldyn>ty:attack & aoe /sort prof, aoe!</c>", "Finds AoE attack skills. Sorts ascending by profession then descending by AoE.",
-            };
-            // clang-format on
-            DrawTable(examples);
-            ImGui::Spacing();
-
-            ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
-            ImGui::Text("Special control characters");
-            ImGui::PopStyleColor();
-            // clang-format off
-            constexpr std::string_view control_chars[] = {
-                "<c=@skilldyn>:</c> or <c=@skilldyn>=</c>", "Used as a separator between the target and the filter body.",
-                "<c=@skilldyn>!</c>", "\"Not\". When put before the filter body, negates the filter, turning it into an exclusion filter.",
-                "<c=@skilldyn>&</c>", "\"And\". Used to combine multiple statements in a query",
-                "<c=@skilldyn>|</c>", "\"Or\". Used to specify multiple options in a filter",
-            };
-            // clang-format on
-            DrawTable(control_chars);
-            ImGui::Spacing();
-
-            ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
-            ImGui::Text("Special keywords");
-            ImGui::PopStyleColor();
-            // clang-format off
-            constexpr std::string_view keywords[] = {
-                "(Space)", "Optionally skip to the next word.",
-                "<c=@skilldyn>..</c>", "Optionally skip non-space characters.",
-                "<c=@skilldyn>...</c>", "Optionally skip anything.",
-                "<c=@skilldyn>#</c>", "Matches any number.",
-            };
-            // clang-format on
-            DrawTable(keywords);
-            ImGui::Spacing();
-
-            ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
-            ImGui::Text("Special number prefixes");
-            ImGui::PopStyleColor();
-            ImGui::Text("When used before numbers it changes how they are matched.");
-            // clang-format off
-            constexpr std::string_view number_prefixes[] = {
-                "<c=@skilldyn><</c>", "\"Less than\".",
-                "<c=@skilldyn>></c>", "\"Greater than\".",
-                "<c=@skilldyn><=</c>", "\"Less than or equal to\".",
-                "<c=@skilldyn>>=</c>", "\"Greater than or equal to\".",
-            };
-            // clang-format on
-            DrawTable(number_prefixes);
-
-            ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
-            ImGui::Text("Special commands");
-            ImGui::PopStyleColor();
-            // clang-format off
-            constexpr std::string_view commands[] = {
-                "<c=@skilldyn>/sort</c>", "Sorts the results according to the comma-separated list of targets following it.",
-            };
-            // clang-format on
-            DrawTable(commands);
-
-            ImGui::EndTooltip();
-            return;
-
-            auto width = 600;
-            std::string_view text;
-
-            { // General info
-
-                text = "Here you can narrow down the results by using a filter.";
-                Utils::DrawMultiColoredText(text, 0, width);
-
-                text = "A filter requires a target, an operator and one or more values. "
-                       "If you do not specify target or operator, the target will be 'Text', and the operator will be ':'. "
-                       "This will essentially check if any text of the skill contains the provided string.";
-                Utils::DrawMultiColoredText(text, 0, width);
-
-                text = "Multiple values can be specified for a filter by separating them with '|', "
-                       "then ANY of them must be satisfied for that filter to match.";
-                Utils::DrawMultiColoredText(text, 0, width);
-
-                text = "You can use '&' (AND) or '|' (OR) to combine multiple filters.";
-                Utils::DrawMultiColoredText(text, 0, width);
-
-                text = "Once you are satisified with the filters, you may want to sort the results. "
-                       "This can be achieved by typing the special command \"#sort\" followed by a "
-                       "whitespace-separated list of targets to sort by. The results will be sorted by the first target, "
-                       "then by the second, and so on. To invert the order prepend a '!' character before the target";
-                Utils::DrawMultiColoredText(text, 0, width);
-
-                text = "If you are unsure how to proceed, take a look at the examples below.";
-                Utils::DrawMultiColoredText(text, 0, width);
-            }
-
-            ImGui::Spacing();
-
-            auto Example = [&](std::string_view filter, std::string_view desc)
-            {
-                ImGui::Text(" - \"%s\"", filter.data());
-                ImGui::SameLine();
-                ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
-                ImGui::Text("(%s)", desc.data());
-                ImGui::PopStyleColor();
-            };
-            { // Examples
-
-                ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
-                ImGui::TextUnformatted("Example filters:");
-                ImGui::PopStyleColor();
-                ImGui::TextUnformatted("Try these examples by typing them in the search bar.");
-
-                Example("health regen", "Show health regeneration skills");
-                Example("camp = night & ava = locked/unlocked", "Show Nightfall skills you have yet to learn");
-                Example("prof = mo/d & ty: enc", "Show monk or dervish enchantment spells");
-                Example("adr > 0 & ty = stance #sort !adr nam", "Show adrenal stances, sort by cost and then name");
-            }
-
-            ImGui::Spacing();
-
-            FixedVector<char, 128> char_buffer;
-            FixedVector<Utils::ColorChange, 8> col_buffer;
-            FixedVector<uint32_t, 8> boundaries;
-            ImU32 req_color = IM_COL32(0, 255, 0, 255);
-
-            { // Target and operator info
-                ImGui::Columns(3, "mycolumns", false);
-
-                auto DrawTargets = [&](std::string_view type, const auto &target_array)
-                {
-                    ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
-                    ImGui::Text("%s targets:", type);
-                    ImGui::PopStyleColor();
-                    uint32_t i = 0;
-                    for (auto &[_, target_type] : target_array)
-                    {
-                        if (i++ == 25)
-                            ImGui::NextColumn();
-                        auto ident = SkillPropertyID{target_type, 0}.ToStr();
-                        // bool success = CalcIdentMinChars(target_type, ident, char_buffer, boundaries);
-                        // assert(success);
-
-                        // assert(boundaries.size() % 2 == 0);
-                        // col_buffer.clear();
-                        // for (int32_t i = 0; i < boundaries.size(); i += 2)
-                        // {
-                        //     col_buffer.try_push({boundaries[i] + 2, req_color});
-                        //     col_buffer.try_push({boundaries[i + 1] + 2, 0});
-                        // }
-
-                        char_buffer.clear();
-                        char_buffer.PushFormat("- %s", ident.data());
-                        Utils::DrawMultiColoredText(char_buffer, 0, width);
-                    }
-                };
-
-                auto DrawOperators = [&](std::string_view type, const auto &op_array, SkillPropertyID::Type prop_type)
-                {
-                    ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
-                    ImGui::Text("%s operators:", type);
-                    ImGui::PopStyleColor();
-                    for (auto &[ident, op] : op_array)
-                    {
-                        const auto desc = GetOpDescription({prop_type, 0}, op);
-                        char_buffer.clear();
-                        char_buffer.PushFormat("- %s %s", ident.data(), desc.data());
-
-                        col_buffer.clear();
-                        col_buffer.try_push({2, req_color});
-                        col_buffer.try_push({2 + ident.size(), 0});
-                        Utils::DrawMultiColoredText(char_buffer, 0, width, col_buffer);
-                    }
-                };
-
-                // DrawTargets("Text", text_filter_targets);
-                ImGui::Spacing();
-                // DrawOperators("Text", text_filter_operators, SkillPropertyID::Type::TEXT);
-                ImGui::Spacing();
-                // DrawOperators("Number", number_filter_operators, SkillPropertyID::Type::NUMBER);
-
-                ImGui::Spacing();
-                ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
-                text = "The highlighted characters indicate the minimum required to uniquely identify it.";
-                Utils::DrawMultiColoredText(text, 0, width / 3);
-                ImGui::PopStyleColor();
-
-                ImGui::NextColumn();
-                // DrawTargets("Number", number_filter_targets);
-
-                ImGui::Columns(1);
-            }
-
-            { // Advanced info
-                ImGui::Spacing();
-
-                if (!ImGui::GetIO().KeyCtrl)
-                {
-                    ImGui::TextUnformatted("Hold CTRL to show advanced info");
-                }
-                else
-                {
-                    ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
-                    ImGui::TextUnformatted("Advanced:");
-                    ImGui::PopStyleColor();
-
-                    ImGui::TextUnformatted("For advanced users it's also possible to target specific bytes in the \"raw\" skill data\nstructure. "
-                                           "This can be useful for targeting specific flags or values that are not directly\nexposed.");
-
-                    ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
-                    ImGui::TextUnformatted("Example raw filter:");
-                    ImGui::PopStyleColor();
-                    Example("0x10 u32 : 4", "Show skills with the 3rd bit set in the u32 at offset 0x10");
-
-                    ImGui::Columns(2, "mycolumns", false);
-                    ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
-                    ImGui::TextUnformatted("Raw target:");
-                    ImGui::PopStyleColor();
-
-                    ImGui::TextUnformatted("A raw target consists a hex byte offset\nand the type of value to read at that offset.");
-                    ImGui::TextUnformatted("- ");
-                    ImGui::PushStyleColor(ImGuiCol_Text, req_color);
-                    ImGui::SameLine(0, 0);
-                    ImGui::TextUnformatted("0x");
-                    ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::hp_red);
-                    ImGui::SameLine(0, 0);
-                    ImGui::TextUnformatted("<HEX_OFFSET> ");
-                    ImGui::PopStyleColor(2);
-                    ImGui::SameLine(0, 0);
-                    ImGui::TextUnformatted("[u8|u16|u32|f32]");
-
-                    ImGui::NextColumn();
-
-                    ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
-                    ImGui::TextUnformatted("Raw operators:");
-                    ImGui::PopStyleColor();
-
-                    ImGui::TextUnformatted("Any number operator OR:");
-                    // for (auto &[ident, op] : adv_filter_operators)
-                    // {
-                    //     const auto desc = GetOpDescription(SkillPropertyID{SkillPropertyID::Type::RAW, 0}, op);
-                    //     char_buffer.clear();
-                    //     char_buffer.PushFormat("- %s %s", ident.data(), desc.data());
-                    //     col_buffer.try_push({2, req_color});
-                    //     col_buffer.try_push({2 + ident.size(), 0});
-                    //     Utils::DrawMultiColoredText(char_buffer, 0, width, col_buffer);
-                    // }
-                }
-            }
-
-            ImGui::EndTooltip();
+        void SetInputText(std::string_view text)
+        {
+            auto size = std::min(text.size(), sizeof(input_text) - 1);
+            std::memcpy(input_text, text.data(), size);
+            input_text[size] = '\0';
+            MarkQueryDirty();
         }
 
         void DrawSearchBox()
@@ -2030,20 +1724,29 @@ namespace HerosInsight::SkillBook
                 [](ImGuiInputTextCallbackData *data)
                 {
                     auto &book = *static_cast<BookState *>(data->UserData);
-                    book.dirty_flags |= DirtyFlags::Query;
+                    book.MarkQueryDirty();
 
                     return 0;
                 },
                 this
             );
 
-            ImGui::SameLine();
-            auto pos = ImGui::GetCursorScreenPos();
-            ImGui::SetCursorScreenPos(ImVec2(pos.x, pos.y - 1));
-            ImGui::TextUnformatted("(?)");
-            if (ImGui::IsItemHovered())
+            if (SettingsGuard{}.Access().skill_book.show_help_button.value)
             {
-                DrawHelpTooltip();
+                ImGui::SameLine();
+                auto pos = ImGui::GetCursorScreenPos();
+                if (ImGui::Button("Help!"))
+                {
+                    book_that_pressed_help = book_that_pressed_help ? nullptr : this;
+                }
+                // ImGui::SetCursorScreenPos(ImVec2(pos.x, pos.y - 1));
+                // ImGui::TextUnformatted("(?)");
+                // if (ImGui::IsItemHovered())
+                // {
+                //     ImGui::BeginTooltip();
+                //     DrawSearchHelp();
+                //     ImGui::EndTooltip();
+                // }
             }
 
             // if (state_update_start_timestamp)
@@ -2069,7 +1772,7 @@ namespace HerosInsight::SkillBook
             //     }
             // }
 
-            if (g_settings.skill_book.feedback.Get() != (int)Settings::SkillBook::FeedbackSetting::Hidden)
+            if (feedback_checker.last_value != (int)Settings::SkillBook::FeedbackSetting::Hidden)
             {
                 ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
 
@@ -2197,17 +1900,13 @@ namespace HerosInsight::SkillBook
             }
         }
 
-        void MakeBookName(OutBuf<char> name, size_t book_index)
+        static void MakeBookName(OutBuf<char> name, size_t book_index)
         {
             name.AppendString("Skill Book [Ctrl + K]");
             if (book_index > 0)
             {
                 name.AppendFormat(" ({})", book_index);
             }
-
-            // Add unique id: Hex-string of pointer to BookState
-            name.AppendString("###");
-            name.AppendIntToChars(reinterpret_cast<size_t>(this), 16);
 
             name.push_back('\0');
         }
@@ -2221,7 +1920,7 @@ namespace HerosInsight::SkillBook
             ImGui::PopStyleColor();
         }
 
-        void Draw(IDirect3DDevice9 *device, size_t book_index)
+        bool Draw(IDirect3DDevice9 *device, size_t book_index)
         {
             if (first_draw)
             {
@@ -2249,13 +1948,15 @@ namespace HerosInsight::SkillBook
             FixedVector<char, 64> name;
             MakeBookName(name, book_index);
 
-            auto current_font = ImGui::GetFont();
-            ImGui::PushFont(Constants::Fonts::window_name_font);
-            if (ImGui::Begin(name.data(), &is_opened))
+            bool is_open = true;
+            ImGuiExt::WindowScope hi_wnd(name.data(), &is_open);
+            if (hi_wnd.begun)
             {
+                ImGui::PushFont(Constants::Fonts::window_name_font);
                 DrawDupeButton();
+                ImGui::PopFont();
 
-                ImGui::PushFont(current_font);
+                this->imgui_window = ImGui::GetCurrentWindow();
 
                 DrawCheckboxes();
                 ImGui::Spacing();
@@ -2334,15 +2035,196 @@ namespace HerosInsight::SkillBook
                         ImGui::Separator();
                     };
 
-                    clipper.Draw(n_skills, est_item_height, g_settings.general.scroll_snap_to_item.Get(), DrawItem);
+                    bool snap_to_item = SettingsGuard().Access().general.scroll_snap_to_item.value;
+                    clipper.Draw(n_skills, est_item_height, snap_to_item, DrawItem);
                 }
                 ImGui::EndChild();
-                ImGui::PopFont();
             }
-            ImGui::End();
-            ImGui::PopFont();
+
+            return is_open;
         }
     };
+
+    void DrawHelpContent(BookState *book)
+    {
+        constexpr float wrap_min = -1;
+        constexpr float wrap_max = 800;
+
+        constexpr auto DrawTable = [](const auto &cells)
+        {
+            constexpr auto elems = std::size(cells);
+            constexpr auto cols = 2;
+            constexpr auto rows = elems / cols;
+            constexpr auto padding = 5;
+
+            float widths[elems];
+
+            for (size_t i = 0; i < elems; i++)
+            {
+                FixedVector<RichText::TextSegment, 32> segments;
+                text_drawer.MakeTextSegments(cells[i], segments);
+                widths[i] = RichText::CalcTextSegmentsWidth(segments);
+            }
+
+            float col_widths[cols]{0, 0};
+
+            for (size_t x = 0; x < cols; ++x)
+            {
+                col_widths[x] = 0;
+                for (size_t y = 0; y < rows; ++y)
+                {
+                    col_widths[x] = std::max(col_widths[x], widths[y * cols + x]);
+                }
+            }
+
+            auto init_cursor = ImGui::GetCursorScreenPos();
+            auto cursor = init_cursor;
+
+            for (size_t y = 0; y < rows; ++y)
+            {
+                cursor.x = init_cursor.x;
+                for (size_t x = 0; x < cols; ++x)
+                {
+                    cursor.x += padding;
+                    auto cell = cells[y * cols + x];
+                    auto width = widths[y * cols + x];
+                    auto write_cursor = cursor;
+                    if (x == 0)
+                    {
+                        auto offset = (col_widths[x] - width) / 2;
+                        write_cursor.x += offset;
+                    }
+                    ImGui::SetCursorScreenPos(write_cursor);
+                    text_drawer.DrawRichText(cell, -1, wrap_max);
+                    cursor.x += col_widths[x] + padding;
+                }
+                cursor.y += ImGui::GetTextLineHeight();
+            }
+        };
+
+        text_drawer.DrawRichText(
+            "Studying and trying the examples below should help you understand most of the search-syntax. "
+            "In case you need more help you can also check out the more rigid definitions further below. "
+            "Those definitions are much less intuitive but also much more precise.",
+            wrap_min, wrap_max
+        );
+
+        ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
+        ImGui::PushFont(Constants::Fonts::skill_name_font);
+        ImGui::Text("Examples");
+        ImGui::PopFont();
+        ImGui::PopStyleColor();
+
+        auto button_counter = 0;
+        auto DrawExample = [&](std::string_view query_body, std::string_view description)
+        {
+            if (book)
+            {
+                FixedVector<char, 32> buffer;
+                buffer.AppendFormat("Try it##{}", button_counter++);
+                buffer.push_back('\0');
+                if (ImGui::Button(buffer.data()))
+                {
+                    book->SetInputText(query_body);
+                }
+                ImGui::SameLine();
+            }
+            auto text = std::format("\"{}\" <c=@skilldull>{}</c>", query_body, description);
+            text_drawer.DrawRichText(text, wrap_min, wrap_max);
+            ImGui::Spacing();
+        };
+        DrawExample("locked", "Finds skills you have yet to unlock");
+        DrawExample("health regen", "Finds skills giving health regeneration");
+        DrawExample("knock...down", "Finds skills related to knock down");
+        DrawExample("recharge: <9", "Finds skills having less than 9 seconds recharge time");
+        DrawExample("campaign!: prophecies", "Finds non-prophecies skills");
+        DrawExample("type: stance & prof: mes|derv", "Finds mesmer or dervish stances");
+        DrawExample("type: attack & aoe /sort prof, aoe!", "Finds AoE attack skills. Sorts ascending by profession then descending by AoE.");
+        ImGui::Spacing();
+
+        ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
+        ImGui::PushFont(Constants::Fonts::skill_name_font);
+        ImGui::Text("Definitions");
+        ImGui::PopFont();
+        ImGui::PopStyleColor();
+        text_drawer.DrawRichText("The text typed in the search box is known as a <c=@skilldyn>query</c>.");
+
+        ImGui::Bullet();
+        text_drawer.DrawRichText(
+            "A <c=@skilldyn>query</c> consists of one or more <c=@skilldyn>statements</c>, separated by <c=@skilldyn>&</c>.",
+            wrap_min, wrap_max
+        );
+        ImGui::Bullet();
+        text_drawer.DrawRichText(
+            "A <c=@skilldyn>statement</c> consists of an optional <c=@skilldyn>filter</c> and zero or more <c=@skilldyn>commands</c>.",
+            wrap_min, wrap_max
+        );
+        ImGui::Bullet();
+        text_drawer.DrawRichText(
+            "A <c=@skilldyn>filter</c> has two parts: an optional <c=@skilldyn>target</c>, "
+            "which specifies which skill property to search and a <c=@skilldyn>body</c>, which defines what to match. "
+            "<c=@skilldull>(You can discover valid targets by hovering over a skill's property in the skill book. "
+            "For example, hovering over a skill's name shows \"<c=#64ffff>Name</c>\", which can be used as a filter target.)</c>",
+            wrap_min, wrap_max
+        );
+
+        ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
+        ImGui::Text("Special control characters");
+        ImGui::PopStyleColor();
+        ImGui::Text("These characters are used to control the overall structure of the query.");
+        // clang-format off
+        constexpr std::string_view control_chars[] = {
+            "<c=@skilldyn>:</c>", "Used as the separator between a filter's target and body.",
+            "<c=@skilldyn>!</c>", "\"Not\". When put before the separator, negates the filter, turning it into an exclusion filter.",
+            "<c=@skilldyn>&</c>", "\"And\". Used to combine multiple statements in a query",
+            "<c=@skilldyn>|</c>", "\"Or\". Used to specify multiple options in a filter's body",
+            "<c=@skilldyn>/</c>", "Start of a command, follow up by the command name and its arguments",
+        };
+        // clang-format on
+        DrawTable(control_chars);
+        ImGui::Spacing();
+
+        ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
+        ImGui::Text("Special commands");
+        ImGui::PopStyleColor();
+        ImGui::Text("These commands can be used to modify how the results are presented.");
+        // clang-format off
+        constexpr std::string_view commands[] = {
+            "<c=@skilldyn>/sort</c>", "Sorts the results according to the comma-separated list of targets following it. Append <c=@skilldyn>!</c> to reverse the sort order.",
+        };
+        // clang-format on
+        DrawTable(commands);
+        ImGui::Spacing();
+
+        ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
+        ImGui::Text("Special keywords");
+        ImGui::PopStyleColor();
+        ImGui::Text("These can be used in a filter's body to specify more complex patterns.");
+        // clang-format off
+        constexpr std::string_view keywords[] = {
+            "(Space)", "Optionally skip to the next word.",
+            "<c=@skilldyn>..</c>", "Optionally skip non-space characters.",
+            "<c=@skilldyn>...</c>", "Optionally skip anything.",
+            "<c=@skilldyn>#</c>", "Matches any number.",
+        };
+        // clang-format on
+        DrawTable(keywords);
+        ImGui::Spacing();
+
+        ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
+        ImGui::Text("Special number prefixes");
+        ImGui::PopStyleColor();
+        ImGui::Text("When put right before a number, they change how the number is matched.");
+        // clang-format off
+        constexpr std::string_view number_prefixes[] = {
+            "<c=@skilldyn><</c>", "\"Less than\".",
+            "<c=@skilldyn>></c>", "\"Greater than\".",
+            "<c=@skilldyn><=</c>", "\"Less than or equal to\".",
+            "<c=@skilldyn>>=</c>", "\"Greater than or equal to\".",
+        };
+        // clang-format on
+        DrawTable(number_prefixes);
+    }
 
     GW::HookEntry attribute_update_entry;
     GW::HookEntry select_hero_entry;
@@ -2592,38 +2474,20 @@ namespace HerosInsight::SkillBook
         {"Less Healing", ParsedToProp(ParsedSkillData::Type::LessHealing)},
     };
 
-    void CloseBooks()
-    {
-        bool all_closed = true;
-        for (auto &book : books)
-        {
-            bool is_closed = !book->is_opened;
-            all_closed &= is_closed;
-        }
-
-        auto it = std::remove_if(
-            books.begin() + all_closed, books.end(),
-            [](const std::unique_ptr<BookState> &book)
-            {
-                return !book->is_opened;
-            }
-        );
-        books.erase(it, books.end());
-
-        if (all_closed)
-        {
-            books[0]->is_opened = true;
-            UpdateManager::open_skill_book = false;
-        }
-    }
-
     void Update()
     {
 #ifdef _DEBUG
         DebugDisplay::PushToDisplay("Skill Book selected agent_id", focused_agent_id);
 #endif
 
-        CloseBooks();
+        auto &feedback = SettingsGuard().Access().skill_book.feedback;
+        if (feedback_checker.Changed(feedback))
+        {
+            for (auto &book : books)
+            {
+                book->UpdateFeedback(feedback.value);
+            }
+        }
 
         for (auto &book : books)
         {
@@ -2635,12 +2499,48 @@ namespace HerosInsight::SkillBook
 
     void Draw(IDirect3DDevice9 *device)
     {
-        // Books may be added in book->Draw().
-        size_t n_books_before_draw = books.size();
-        for (size_t i = 0; i < n_books_before_draw; ++i)
+        // Reverse loop because books may be added in book->Draw() + we handle removal.
+        for (size_t i = books.size(); i-- > 0;)
         {
             auto &book = books[i];
-            book->Draw(device, i);
+            bool is_open = book->Draw(device, i);
+            if (!is_open)
+            {
+                if (books.size() > 1)
+                {
+                    auto dst_wind = books[i]->imgui_window;
+                    for (size_t j = i; ++j < books.size();)
+                    {
+                        auto src_wind = books[j]->imgui_window;
+                        if (dst_wind && src_wind)
+                        {
+                            dst_wind->Pos = src_wind->Pos;
+                            dst_wind->Size = src_wind->Size;
+                            dst_wind->Collapsed = src_wind->Collapsed;
+                        }
+                        dst_wind = src_wind;
+                    }
+                    books.erase(books.begin() + i);
+                }
+                else
+                {
+                    UpdateManager::open_skill_book = false;
+                }
+            }
+        }
+
+        if (book_that_pressed_help)
+        {
+            bool is_open = true;
+            ImGuiExt::WindowScope hi_wnd("Search-syntax help", &is_open);
+            if (hi_wnd.begun)
+            {
+                DrawHelpContent(book_that_pressed_help);
+            }
+            if (!is_open)
+            {
+                book_that_pressed_help = nullptr;
+            }
         }
     }
 }
