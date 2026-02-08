@@ -247,9 +247,9 @@ namespace HerosInsight
                                  + style.FramePadding.x * 2.0f      //
                                  + 10.0f;                           // For good measure :)
 
-        ImGui::SetNextWindowSizeConstraints(
-            ImVec2(window_name_width, 0.0f),
-            ImVec2(FLT_MAX, FLT_MAX)
+        ImGui::SetNextWindowSize(
+            ImVec2(0.0f, 0.0f),
+            ImGuiCond_Always
         );
 
         const auto window_menu_button_position = style.WindowMenuButtonPosition;
