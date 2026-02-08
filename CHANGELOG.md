@@ -1,4 +1,7 @@
 # CHANGELOG
+## 0.4.4
+- Devbump.
+
 ## 0.4.3
 - Tweak release script.
 
