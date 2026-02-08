@@ -258,6 +258,13 @@ namespace HerosInsight::SkillBook
     BookState *book_that_pressed_help = nullptr;
     auto feedback_checker = SettingsGuard().Access().skill_book.feedback.GetChangeChecker();
 
+    int8_t GetFocusedAgentAttrLvl(AttributeOrTitle id)
+    {
+        auto agent_id = focused_agent_id;
+        auto custom_agent_data = CustomAgentDataModule::GetCustomAgentData(agent_id);
+        return custom_agent_data.GetOrEstimateAttribute(id);
+    }
+
     struct AttributeSource
     {
         enum struct Type : int
@@ -279,9 +286,7 @@ namespace HerosInsight::SkillBook
                 case Type::FromAgent:
                 {
                     // auto agent_id = this->value;
-                    auto agent_id = focused_agent_id;
-                    auto custom_agent_data = CustomAgentDataModule::GetCustomAgentData(agent_id);
-                    return custom_agent_data.GetOrEstimateAttribute(id);
+                    return GetFocusedAgentAttrLvl(id);
                 }
                 default:
                 case Type::ZeroToFifteen:
@@ -894,19 +899,25 @@ namespace HerosInsight::SkillBook
             PvE,
             PvP,
         };
+        enum struct Scope : int
+        {
+            Invested,
+            Equippable,
+            ForProfessions,
+            Default,
+            AddTemporary,
+            AddNPC,
+            AddMisc,
+            AddArchived,
+            COUNT,
+        };
         AttributeSource attr_src;
         Ruleset ruleset = Ruleset::Mixed;
+        Scope scope = Scope::Default;
         int attr_lvl_slider = 12;
-
-        bool include_temporary_skills = false;
-        bool include_npc_skills = false;
-        bool include_archived_skills = false;
-        bool include_disguises = false;
-        bool include_bounties = false;
 
         bool use_exact_adrenaline = false;
         bool prefer_concise_descriptions = false;
-        bool limit_to_characters_professions = false;
     };
 
     struct FilteringAdapter
@@ -1294,30 +1305,52 @@ namespace HerosInsight::SkillBook
             ImGui::SetCursorPos(saved_cursor);
         }
 
-        void DrawCheckboxes()
+        void DrawScopeSlider()
         {
-            if (ImGui::CollapsingHeader("Options"))
+            if (ImGui::SliderInt("Scope", (int *)&settings.scope, 0, (int)BookSettings::Scope::COUNT - 1, ""))
             {
-                ImGui::Columns(2, nullptr, false);
-
-                dirty_flags |= ImGui::Checkbox("Include Temporary skills", &settings.include_temporary_skills) ? DirtyFlags::FilterAndList : DirtyFlags::None;
-                dirty_flags |= ImGui::Checkbox("Include NPC skills", &settings.include_npc_skills) ? DirtyFlags::FilterAndList : DirtyFlags::None;
-                dirty_flags |= ImGui::Checkbox("Include Archived skills", &settings.include_archived_skills) ? DirtyFlags::FilterAndList : DirtyFlags::None;
-                dirty_flags |= ImGui::Checkbox("Include Disguises", &settings.include_disguises) ? DirtyFlags::FilterAndList : DirtyFlags::None;
-                dirty_flags |= ImGui::Checkbox("Include Bounties", &settings.include_bounties) ? DirtyFlags::FilterAndList : DirtyFlags::None;
-
-                ImGui::NextColumn();
-
-                dirty_flags |= ImGui::Checkbox("Show exact adrenaline", &settings.use_exact_adrenaline) ? DirtyFlags::Props : DirtyFlags::None;
-                // ImGui::Checkbox("Show null stats", &settings.show_null_stats);
-                ImGui::Checkbox("Prefer concise descriptions", &settings.prefer_concise_descriptions);
-                dirty_flags |= ImGui::Checkbox("Limit to character's professions", &settings.limit_to_characters_professions) ? DirtyFlags::FilterAndList : DirtyFlags::None;
-
-                ImGui::Columns(1);
+                dirty_flags |= DirtyFlags::FilterAndList;
             }
+            std::string_view explanation;
+            switch (settings.scope)
+            {
+                case BookSettings::Scope::Invested:
+                    explanation = "Showing equipable and invested.";
+                    break;
+                case BookSettings::Scope::Equippable:
+                    explanation = "Showing equippable.";
+                    break;
+                case BookSettings::Scope::ForProfessions:
+                    explanation = "Showing for professions.";
+                    break;
+                case BookSettings::Scope::Default:
+                    explanation = "Showing normal.";
+                    break;
+                case BookSettings::Scope::AddTemporary:
+                    explanation = "Showing normal and temporary.";
+                    break;
+                case BookSettings::Scope::AddNPC:
+                    explanation = "Showing normal, temporary, and NPC.";
+                    break;
+                case BookSettings::Scope::AddMisc:
+                    explanation = "Showing normal, temporary, NPC, and misc.";
+                    break;
+                case BookSettings::Scope::AddArchived:
+                    explanation = "Showing normal, temporary, NPC, misc, and archived.";
+                    break;
+            }
+            // ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
+            ImGui::TextUnformatted(explanation.data());
+            // ImGui::PopStyleColor();
         }
 
-        void DrawPvXModeSelection()
+        void DrawCheckboxes()
+        {
+            // dirty_flags |= ImGui::Checkbox("Show exact adrenaline", &settings.use_exact_adrenaline) ? DirtyFlags::Props : DirtyFlags::None; // Disabled, is it really that useful?
+            ImGui::Checkbox("Prefer concise descriptions", &settings.prefer_concise_descriptions);
+        }
+
+        void DrawRulesetSelection()
         {
             const char *options[] = {"Mixed", "PvE", "PvP"};
             if (ImGuiExt::RadioArray("Skill Ruleset", (int *)&settings.ruleset, options, IM_ARRAYSIZE(options)))
@@ -1356,63 +1389,78 @@ namespace HerosInsight::SkillBook
         void InitFilterList()
         {
             uint32_t prof_mask;
-            if (settings.limit_to_characters_professions)
+            if (settings.scope == BookSettings::Scope::ForProfessions)
             {
                 prof_mask = Utils::GetProfessionMask(focused_agent_id);
             }
 
+            auto skills = GW::SkillbarMgr::GetSkills();
+            auto cskills = CustomSkillDataModule::GetSkills();
+
             filtered_skills.clear();
             for (auto skill_id_16 : base_skills)
             {
-                const auto skill_id = static_cast<GW::Constants::SkillID>(skill_id_16);
-                auto &custom_sd = CustomSkillDataModule::GetCustomSkillData(skill_id);
+                auto &skill = skills[skill_id_16];
+                auto &cskill = cskills[skill_id_16];
 
                 if (settings.ruleset == BookSettings::Ruleset::PvP)
                 {
-                    if (custom_sd.tags.PvEOnly || custom_sd.tags.PvEVersion)
+                    if (cskill.tags.PvEOnly || cskill.tags.PvEVersion)
                         continue;
                 }
                 else if (settings.ruleset == BookSettings::Ruleset::PvE)
                 {
-                    if (custom_sd.tags.PvPOnly || custom_sd.tags.PvPVersion)
-                        continue;
-                }
-                if (!settings.include_temporary_skills)
-                {
-                    if (custom_sd.tags.Temporary)
-                        continue;
-                }
-                if (!settings.include_archived_skills)
-                {
-                    if (custom_sd.tags.Archived)
-                        continue;
-                }
-                if (!settings.include_npc_skills)
-                {
-                    if (custom_sd.tags.MonsterSkill ||
-                        custom_sd.tags.EnvironmentSkill)
-                        continue;
-                }
-                if (!settings.include_disguises)
-                {
-                    if (custom_sd.skill->type == GW::Constants::SkillType::Disguise ||
-                        custom_sd.skill_id == GW::Constants::SkillID::Tonic_Tipsiness)
-                        continue;
-                }
-                if (!settings.include_bounties)
-                {
-                    if (custom_sd.tags.Bounty)
+                    if (cskill.tags.PvPOnly || cskill.tags.PvPVersion)
                         continue;
                 }
 
-                if (settings.limit_to_characters_professions)
+                if ((int)settings.scope < (int)BookSettings::Scope::AddTemporary)
                 {
-                    auto skill_prof_mask = 1 << (uint32_t)custom_sd.skill->profession;
+                    if (cskill.tags.Temporary)
+                        continue;
+                }
+                if ((int)settings.scope < (int)BookSettings::Scope::AddArchived)
+                {
+                    if (cskill.tags.Archived)
+                        continue;
+                }
+                if ((int)settings.scope < (int)BookSettings::Scope::AddNPC)
+                {
+                    if (cskill.tags.MonsterSkill ||
+                        cskill.tags.EnvironmentSkill)
+                        continue;
+                }
+                if ((int)settings.scope < (int)BookSettings::Scope::AddMisc)
+                {
+                    if (skill.type == GW::Constants::SkillType::Disguise ||
+                        skill_id_16 == GW::Constants::SkillID::Tonic_Tipsiness)
+                        continue;
+                }
+                if ((int)settings.scope < (int)BookSettings::Scope::AddMisc)
+                {
+                    if (cskill.tags.Bounty)
+                        continue;
+                }
+
+                if ((int)settings.scope <= (int)BookSettings::Scope::Invested)
+                {
+                    if (GetFocusedAgentAttrLvl(cskill.attribute) == 0)
+                        continue;
+                }
+
+                if ((int)settings.scope <= (int)BookSettings::Scope::Equippable)
+                {
+                    if (!Utils::IsSkillEquipable(skill, focused_agent_id))
+                        continue;
+                }
+                else if ((int)settings.scope <= (int)BookSettings::Scope::ForProfessions)
+                {
+                    auto skill_prof_mask = 1 << (uint32_t)cskill.skill->profession;
                     if ((prof_mask & skill_prof_mask) == 0)
                         continue;
                 }
 
-                filtered_skills.push_back(static_cast<uint16_t>(skill_id));
+                filtered_skills.push_back(skill_id_16);
             }
         }
 
@@ -1967,9 +2015,10 @@ namespace HerosInsight::SkillBook
                 this->imgui_window = ImGui::GetCurrentWindow();
 
                 DrawCheckboxes();
+                DrawRulesetSelection();
+                DrawScopeSlider();
                 ImGui::Spacing();
                 DrawFocusedCharacterInfo();
-                DrawPvXModeSelection();
                 DrawAttributeModeSelection();
                 DrawSearchBox();
                 ImGui::Spacing();
