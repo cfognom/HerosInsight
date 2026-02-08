@@ -1,4 +1,6 @@
 # CHANGELOG
+- Add exe icon.
+
 ## 0.4.0
 - Reworked release pipeline.
 - Added skillbook help window.

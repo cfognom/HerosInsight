@@ -1,4 +1,4 @@
-add_executable(HerosInsightLauncher main.cpp)
+add_executable(HerosInsightLauncher main.cpp app_icon.rc)
 
 set_target_properties(HerosInsightLauncher PROPERTIES
     WIN32_EXECUTABLE TRUE # Set the WIN32 flag to create a Windows application
