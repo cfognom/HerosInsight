@@ -676,4 +676,11 @@ namespace HerosInsight::Utils
     ImVec4 LerpColor(const ImVec4 &a, const ImVec4 &b, float t);
     ImU32 LerpColorU32(ImU32 a, ImU32 b, float t);
     void ImGuiDisabledCheckboxWithTooltip(const char *label, const char *tooltip);
+
+    template <typename T, typename... Args>
+    void Reconstuct(T &object, Args &&...args)
+    {
+        object.~T();
+        new (&object) T(std::forward<Args>(args)...);
+    }
 }
