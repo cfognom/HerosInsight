@@ -18,7 +18,7 @@ project(HerosInsight
 include_directories(${CMAKE_BINARY_DIR}/generated)
 
 add_subdirectory(Source)
-add_subdirectory(Injector)
+add_subdirectory(Launcher)
 
 configure_file(
     ${CMAKE_SOURCE_DIR}/Source/version.h.in

@@ -24,7 +24,7 @@
             }
         },
         {
-            "name": "Debug Injector",
+            "name": "Debug Launcher",
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${command:cmake.buildDirectory}/${command:cmake.buildType}/HerosInsight/Launch_HerosInsight.exe",
