@@ -363,6 +363,42 @@ static void Initialize(void *data)
     );
 }
 
+void InitGWCAOrExit(HMODULE hModule)
+{
+    auto result = GW::Initialize();
+    std::wstring msg;
+    switch (result.type)
+    {
+            // clang-format off
+        case GW::InitializationResult::Type::MemoryMgrFailed:                  msg = L"Memory manager failed to initialize.";
+        case GW::InitializationResult::Type::UnknownError:    if (msg.empty()) msg = L"Unknown error.";
+        case GW::InitializationResult::Type::CPPException:
+        {
+            if (msg.empty())
+            {
+                auto s = result.exception->what();
+                msg = std::wstring(s, s + strlen(s));
+            }
+            MessageBoxW(
+                nullptr,
+                std::format(
+                    L"Hero's Insight failed to initialize."
+                    L"\n\n"
+                    L"Reason: {}"
+                    L"\n\n"
+                    L"If this happened after a game update, it means the mod is incompatible with this Guild Wars build. "
+                    L"Please wait until the mod developer has fixed the mod and then try again.",
+                    msg
+                ).c_str(),
+                L"Error",
+                MB_OK | MB_ICONERROR
+            );
+            FreeLibraryAndExitThread(hModule, EXIT_FAILURE);
+        }
+            // clang-format on
+    }
+}
+
 static DWORD WINAPI ThreadProc(LPVOID lpModule)
 {
     // This is a new thread so you should only initialize GWCA and setup the hook on the game thread.
@@ -371,12 +407,7 @@ static DWORD WINAPI ThreadProc(LPVOID lpModule)
 
     HMODULE hModule = static_cast<HMODULE>(lpModule);
 
-    bool success = GW::Initialize();
-    if (!success)
-    {
-        MessageBoxW(nullptr, L"Hero's Insight failed to initialize.\n\nIf this happened after a game update, it means the mod is incompatible with this Guild Wars build. Please wait until the mod developer has fixed the mod and then try again.", L"Error", MB_OK | MB_ICONERROR);
-        FreeLibraryAndExitThread(hModule, EXIT_FAILURE);
-    }
+    InitGWCAOrExit(hModule);
     GW::EnableRenderHooks();
 
     HerosInsight::CapacityHints::LoadHints();
