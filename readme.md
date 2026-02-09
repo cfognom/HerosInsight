@@ -25,7 +25,7 @@ Or even, if you've completely lost your mind:
 
 ![](Media/SkillBook.gif)
 
-![](Media/attrs.jpg)
+![](Media/attrs.jpg?raw=true)
 
 ## Whats next?
 The following features are in development:
