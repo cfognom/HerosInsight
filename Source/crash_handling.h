@@ -70,7 +70,13 @@ namespace HerosInsight::CrashHandling
             writer.AppendString(error_msg);
             writer.push_back(L'\"');
         }
-        else
+
+        if (!info)
+        {
+            writer.AppendFormat(L"\nNo stack info available.");
+        }
+
+        if (info)
         {
             writer.AppendFormat(L"\nError code: \"{}\"", info->ExceptionRecord->ExceptionCode);
         }
@@ -103,18 +109,22 @@ namespace HerosInsight::CrashHandling
                 return EXCEPTION_CONTINUE_SEARCH;
         }
 #else
-        auto path = WriteCrashDump(info);
+        if (info)
+        {
+            auto path = WriteCrashDump(info);
 
-        if (path.has_value())
-        {
-            auto &path_value = path.value();
-            writer.AppendString(L"\n\nA crash report has been saved to:\n");
-            writer.AppendString(path_value.c_str());
+            if (path.has_value())
+            {
+                auto &path_value = path.value();
+                writer.AppendString(L"\n\nA crash report has been saved to:\n");
+                writer.AppendString(path_value.c_str());
+            }
+            else
+            {
+                writer.AppendString(L"\n\nAttempted to write a crash report but failed.");
+            }
         }
-        else
-        {
-            writer.AppendString(L"\n\nAttempted to write a crash report but failed.");
-        }
+
         writer.AppendString(L"\n\nGame state might be unstable, please restart the game as soon as possible.");
         writer.push_back(L'\0');
 
@@ -124,8 +134,7 @@ namespace HerosInsight::CrashHandling
 #endif
     }
 
-    inline thread_local EXCEPTION_POINTERS *g_exceptionPointers = nullptr;
-    inline LONG WINAPI CrashHandler(EXCEPTION_POINTERS *info)
+    inline LONG WINAPI CrashHandler(EXCEPTION_POINTERS *info, EXCEPTION_POINTERS **out_info)
     {
         DWORD code = info->ExceptionRecord->ExceptionCode;
         bool is_cpp_exception = code == 0xE06D7363;
@@ -133,7 +142,10 @@ namespace HerosInsight::CrashHandling
 
         if (is_cpp_exception)
         {
-            g_exceptionPointers = info;
+            if (out_info)
+            {
+                *out_info = info;
+            }
             return EXCEPTION_CONTINUE_SEARCH; // We pass it to the C++ exception handler, where we can get additional info
         }
         else
@@ -142,16 +154,32 @@ namespace HerosInsight::CrashHandling
         }
     }
 
-    inline bool SafeCallInner(void (*fn)(void *data), void *data)
+    inline bool SafeCallInner(void (*fn)(void *data), void *data, EXCEPTION_POINTERS **out_exceptionPointers)
     {
         bool success = true;
         __try
         {
             fn(data);
         }
-        __except (CrashHandler(GetExceptionInformation()))
+        __except (CrashHandler(GetExceptionInformation(), out_exceptionPointers))
         {
             success = false;
+        }
+        return success;
+    }
+
+    inline bool HandleCPPException(EXCEPTION_POINTERS *info, const std::exception *e)
+    {
+        bool success = true;
+        auto result = ErrorPromt(info, e);
+        switch (result)
+        {
+            case EXCEPTION_CONTINUE_SEARCH:
+                success = true;
+                break;
+            case EXCEPTION_EXECUTE_HANDLER:
+                success = false;
+                break;
         }
         return success;
     }
@@ -160,29 +188,18 @@ namespace HerosInsight::CrashHandling
     {
         bool success = true;
 #ifdef ENABLE_SAFECALL
+        EXCEPTION_POINTERS *exceptionPointers = nullptr;
         try
         {
-            success = SafeCallInner(fn, data);
+            success = SafeCallInner(fn, data, &exceptionPointers);
         }
         catch (const std::exception &e)
         {
-            if (g_exceptionPointers)
-            {
-                auto result = ErrorPromt(g_exceptionPointers, &e);
-                switch (result)
-                {
-                    case EXCEPTION_CONTINUE_SEARCH:
-                        success = true;
-                        break;
-                    case EXCEPTION_EXECUTE_HANDLER:
-                        success = false;
-                        break;
-                }
-            }
-            else
-            {
-                success = false;
-            }
+            success = HandleCPPException(exceptionPointers, &e);
+        }
+        catch (...)
+        {
+            success = HandleCPPException(exceptionPointers, nullptr);
         }
 #else
         fn(data);
