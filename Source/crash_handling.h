@@ -81,6 +81,8 @@ namespace HerosInsight::CrashHandling
             writer.AppendFormat(L"\nError code: \"{}\"", info->ExceptionRecord->ExceptionCode);
         }
 
+        HWND hWnd = GW::IsInitialized() ? GW::MemoryMgr::GetGWWindowHandle() : nullptr;
+
 #ifdef _DEBUG
         writer.push_back(L'\n');
         writer.AppendString(L"\nAbort: Attempt to unhook the mod"
@@ -88,7 +90,6 @@ namespace HerosInsight::CrashHandling
                             L"\nIgnore: Pass to GW crash handler");
         writer.push_back(L'\0');
 
-        HWND hWnd = GW::MemoryMgr::GetGWWindowHandle();
     retry:
         int result = MessageBoxW(hWnd, msg, L"Hero's Insight Error", MB_ABORTRETRYIGNORE | MB_ICONERROR);
 
@@ -128,7 +129,7 @@ namespace HerosInsight::CrashHandling
         writer.AppendString(L"\n\nGame state might be unstable, please restart the game as soon as possible.");
         writer.push_back(L'\0');
 
-        MessageBoxW(nullptr, msg, L"Hero's Insight Crash", MB_OK | MB_ICONERROR);
+        MessageBoxW(hWnd, msg, L"Hero's Insight Crash", MB_OK | MB_ICONERROR);
 
         return EXCEPTION_EXECUTE_HANDLER;
 #endif
