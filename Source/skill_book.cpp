@@ -902,7 +902,7 @@ namespace HerosInsight::SkillBook
         enum struct Scope : int
         {
             Invested,
-            Equippable,
+            Equipable,
             ForProfessions,
             Default,
             AddTemporary,
@@ -1317,8 +1317,8 @@ namespace HerosInsight::SkillBook
                 case BookSettings::Scope::Invested:
                     explanation = "Showing equipable and invested.";
                     break;
-                case BookSettings::Scope::Equippable:
-                    explanation = "Showing equippable.";
+                case BookSettings::Scope::Equipable:
+                    explanation = "Showing equipable.";
                     break;
                 case BookSettings::Scope::ForProfessions:
                     explanation = "Showing for professions.";
@@ -1448,7 +1448,7 @@ namespace HerosInsight::SkillBook
                         continue;
                 }
 
-                if ((int)settings.scope <= (int)BookSettings::Scope::Equippable)
+                if ((int)settings.scope <= (int)BookSettings::Scope::Equipable)
                 {
                     if (!Utils::IsSkillEquipable(skill, focused_agent_id))
                         continue;
