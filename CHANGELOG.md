@@ -1,5 +1,7 @@
 # CHANGELOG
+## 0.6.1
 - Fix a bug that could make the crash handler crash.
+- Patched some holes where exceptions could escape.
 
 ## 0.6.0
 - Fix main menu being too small (the other way this time).
