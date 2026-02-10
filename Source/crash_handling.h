@@ -5,6 +5,7 @@
 #include <dbghelp.h>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <string>
 #include <windows.h>
 
@@ -56,67 +57,79 @@ namespace HerosInsight::CrashHandling
         return dump_path;
     }
 
-    inline LONG ErrorPromt(EXCEPTION_POINTERS *info, const std::exception *e)
+    struct ExceptionRecord
     {
-        wchar_t msg[1024];
-        SpanWriter<wchar_t> writer(msg);
+        std::optional<std::filesystem::path> report_path = std::nullopt;
+        std::optional<DWORD> code = std::nullopt;
+        const std::exception *exception = nullptr;
 
-        writer.AppendString(L"Hero's Insight encountered an error.");
-        if (e)
+        inline LONG ErrorPromt()
         {
-            writer.AppendString(L"\nError message: \"");
-            auto what = e->what();
-            std::wstring error_msg(what, what + strlen(what));
-            writer.AppendString(error_msg);
-            writer.push_back(L'\"');
-        }
+            wchar_t msg[1024];
+            SpanWriter<wchar_t> writer(msg);
 
-        if (!info)
-        {
-            writer.AppendFormat(L"\nNo stack info available.");
-        }
+            writer.AppendString(L"Hero's Insight encountered an error.");
+            if (exception)
+            {
+                writer.AppendString(L"\nError message: \"");
+                auto what = exception->what();
+                std::wstring error_msg(what, what + strlen(what));
+                writer.AppendString(error_msg);
+                writer.push_back(L'\"');
+            }
 
-        if (info)
-        {
-            writer.AppendFormat(L"\nError code: \"0x{:X}\"", info->ExceptionRecord->ExceptionCode);
-        }
+            if (code.has_value())
+            {
+                auto val = code.value();
+                std::string_view str{reinterpret_cast<const char *>(&val), sizeof(decltype(val))};
+                std::wstring str_w;
+                if constexpr (std::endian::native == std::endian::little)
+                {
+                    str_w = std::wstring{str.rbegin(), str.rend()};
+                }
+                else
+                {
+                    str_w = std::wstring{str.begin(), str.end()};
+                }
+                writer.AppendFormat(L"\nError code: 0x{:X} (\"{}\")", val, str_w);
+            }
+            else
+            {
+                writer.AppendString(L"\nNo error code available.");
+            }
 
-        HWND hWnd = GW::IsInitialized() ? GW::MemoryMgr::GetGWWindowHandle() : nullptr;
+            HWND hWnd = GW::IsInitialized() ? GW::MemoryMgr::GetGWWindowHandle() : nullptr;
 
 #ifdef _DEBUG
-        writer.push_back(L'\n');
-        writer.AppendString(L"\nAbort: Attempt to unhook the mod"
-                            L"\nRetry: Attempt to break the debugger"
-                            L"\nIgnore: Pass to GW crash handler");
-        writer.push_back(L'\0');
+            writer.push_back(L'\n');
+            writer.AppendString(L"\nAbort: Attempt to unhook the mod"
+                                L"\nRetry: Attempt to break the debugger"
+                                L"\nIgnore: Pass to GW crash handler");
+            writer.push_back(L'\0');
 
-    retry:
-        int result = MessageBoxW(hWnd, msg, L"Hero's Insight Error", MB_ABORTRETRYIGNORE | MB_ICONERROR);
+        retry:
+            int result = MessageBoxW(hWnd, msg, L"Hero's Insight Error", MB_ABORTRETRYIGNORE | MB_ICONERROR);
 
-        switch (result)
-        {
-            case IDABORT:
-                return EXCEPTION_EXECUTE_HANDLER;
-
-            case IDRETRY:
-                if (IsDebuggerPresent())
-                    __debugbreak();
-                else
-                    goto retry;
-                return EXCEPTION_EXECUTE_HANDLER;
-
-            case IDIGNORE:
-            default:
-                return EXCEPTION_CONTINUE_SEARCH;
-        }
-#else
-        if (info)
-        {
-            auto path = WriteCrashDump(info);
-
-            if (path.has_value())
+            switch (result)
             {
-                auto &path_value = path.value();
+                case IDABORT:
+                    return EXCEPTION_EXECUTE_HANDLER;
+
+                case IDRETRY:
+                    if (IsDebuggerPresent())
+                        __debugbreak();
+                    else
+                        goto retry;
+                    return EXCEPTION_EXECUTE_HANDLER;
+
+                case IDIGNORE:
+                default:
+                    return EXCEPTION_CONTINUE_SEARCH;
+            }
+#else
+            if (report_path.has_value())
+            {
+                auto &path_value = report_path.value();
                 writer.AppendString(L"\n\nA crash report has been saved to:\n");
                 writer.AppendString(path_value.c_str());
             }
@@ -124,55 +137,53 @@ namespace HerosInsight::CrashHandling
             {
                 writer.AppendString(L"\n\nAttempted to write a crash report but failed.");
             }
-        }
 
-        writer.AppendString(L"\n\nGame state might be unstable, please restart the game as soon as possible.");
-        writer.push_back(L'\0');
+            writer.AppendString(L"\n\nGame state might be unstable, please restart the game as soon as possible.");
+            writer.push_back(L'\0');
 
-        MessageBoxW(hWnd, msg, L"Hero's Insight Crash", MB_OK | MB_ICONERROR);
+            MessageBoxW(hWnd, msg, L"Hero's Insight Crash", MB_OK | MB_ICONERROR);
 
-        return EXCEPTION_EXECUTE_HANDLER;
+            return EXCEPTION_EXECUTE_HANDLER;
 #endif
-    }
+        }
+    };
 
-    inline LONG WINAPI CrashHandler(EXCEPTION_POINTERS *info, EXCEPTION_POINTERS **out_info)
+    inline LONG WINAPI CrashHandler(EXCEPTION_POINTERS *info, ExceptionRecord &record)
     {
-        DWORD code = info->ExceptionRecord->ExceptionCode;
-        bool is_cpp_exception = code == 0xE06D7363;
+        record.code = info->ExceptionRecord->ExceptionCode;
+        bool is_cpp_exception = record.code == 0xE06D7363;
         bool is_SEH_exception = !is_cpp_exception;
+
+        record.report_path = WriteCrashDump(info);
 
         if (is_cpp_exception)
         {
-            if (out_info)
-            {
-                *out_info = info;
-            }
             return EXCEPTION_CONTINUE_SEARCH; // We pass it to the C++ exception handler, where we can get additional info
         }
         else
         {
-            return ErrorPromt(info, nullptr);
+            return record.ErrorPromt();
         }
     }
 
-    inline bool SafeCallInner(void (*fn)(void *data), void *data, EXCEPTION_POINTERS **out_exceptionPointers)
+    inline bool SafeCallInner(void (*fn)(void *data), void *data, ExceptionRecord &record)
     {
         bool success = true;
         __try
         {
             fn(data);
         }
-        __except (CrashHandler(GetExceptionInformation(), out_exceptionPointers))
+        __except (CrashHandler(GetExceptionInformation(), record))
         {
             success = false;
         }
         return success;
     }
 
-    inline bool HandleCPPException(EXCEPTION_POINTERS *info, const std::exception *e)
+    inline bool HandleCPPException(ExceptionRecord &record)
     {
         bool success = true;
-        auto result = ErrorPromt(info, e);
+        auto result = record.ErrorPromt();
         switch (result)
         {
             case EXCEPTION_CONTINUE_SEARCH:
@@ -189,18 +200,19 @@ namespace HerosInsight::CrashHandling
     {
         bool success = true;
 #ifdef ENABLE_SAFECALL
-        EXCEPTION_POINTERS *exceptionPointers = nullptr;
+        ExceptionRecord record;
         try
         {
-            success = SafeCallInner(fn, data, &exceptionPointers);
+            success = SafeCallInner(fn, data, record);
         }
         catch (const std::exception &e)
         {
-            success = HandleCPPException(exceptionPointers, &e);
+            record.exception = &e;
+            success = HandleCPPException(record);
         }
         catch (...)
         {
-            success = HandleCPPException(exceptionPointers, nullptr);
+            success = HandleCPPException(record);
         }
 #else
         fn(data);
