@@ -57,6 +57,8 @@ namespace HerosInsight::CrashHandling
         return dump_path;
     }
 
+    inline static std::atomic<std::wstring_view> msg_overload{};
+
     struct ExceptionRecord
     {
         std::optional<std::filesystem::path> report_path = std::nullopt;
@@ -68,7 +70,9 @@ namespace HerosInsight::CrashHandling
             wchar_t msg[1024];
             SpanWriter<wchar_t> writer(msg);
 
-            writer.AppendString(L"Hero's Insight encountered an error.");
+            auto msg_ov = msg_overload.load();
+            writer.AppendString(!msg_ov.empty() ? msg_ov : L"Hero's Insight encountered an error.");
+            writer.push_back(L'\n');
             if (exception)
             {
                 writer.AppendString(L"\nError message: \"");
