@@ -78,7 +78,7 @@ namespace HerosInsight::CrashHandling
 
         if (info)
         {
-            writer.AppendFormat(L"\nError code: \"{}\"", info->ExceptionRecord->ExceptionCode);
+            writer.AppendFormat(L"\nError code: \"0x{:X}\"", info->ExceptionRecord->ExceptionCode);
         }
 
         HWND hWnd = GW::IsInitialized() ? GW::MemoryMgr::GetGWWindowHandle() : nullptr;
