@@ -126,4 +126,19 @@ namespace HerosInsight
             ImGui::EndTabBar();
         }
     }
+
+    static std::recursive_mutex settings_mutex;
+    static Settings settings;
+    SettingsGuard::SettingsGuard()
+    {
+        settings_mutex.lock();
+    }
+    SettingsGuard::~SettingsGuard()
+    {
+        settings_mutex.unlock();
+    }
+    Settings &SettingsGuard::Access()
+    {
+        return settings;
+    }
 }

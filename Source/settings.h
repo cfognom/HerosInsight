@@ -135,12 +135,8 @@ namespace HerosInsight
     };
     struct SettingsGuard
     {
-        SettingsGuard() { mutex.lock(); }
-        ~SettingsGuard() { mutex.unlock(); }
-        Settings &Access() { return settings; }
-
-    private:
-        inline static std::recursive_mutex mutex;
-        inline static Settings settings;
+        SettingsGuard();
+        ~SettingsGuard();
+        Settings &Access();
     };
 }
