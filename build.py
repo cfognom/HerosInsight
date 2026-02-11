@@ -104,6 +104,12 @@ def main():
         action='store_true',
         help='Force reconfigure'
     )
+    parser.add_argument(
+        '--launch',
+        '-l',
+        action='store_true',
+        help='Launch the mod after install'
+    )
 
     args = parser.parse_args()
 
@@ -159,8 +165,8 @@ def main():
     project_version = get_cmake_cache_value(cmake_cache, "CMAKE_PROJECT_VERSION")
 
     # Optional Step 3: Install
+    install_dir = args.installdir / project_name
     if args.installdir:
-        install_dir = args.installdir / project_name
         install_to(install_dir)
         print (f"Installed to: {install_dir}")
     
@@ -176,6 +182,9 @@ def main():
         print(f"Zip created: {zip_path}")
 
     print("✅ Build + Install complete!")
+
+    if args.launch:
+        subprocess.Popen(["python", "launch.py", install_dir / "Launch_HerosInsight.exe"])
 
 if (__name__ == "__main__"):
     main()

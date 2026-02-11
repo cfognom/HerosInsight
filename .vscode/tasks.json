@@ -16,6 +16,16 @@
                 "kind": "build",
                 "isDefault": true
             }
+        },
+        {
+            "label": "Launch GW + Mod",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "launch.py",
+                "${command:cmake.buildDirectory}/${command:cmake.buildType}/HerosInsight/Launch_HerosInsight.exe"
+            ],
+            "problemMatcher": []
         }
     ]
 }
