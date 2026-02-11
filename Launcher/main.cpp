@@ -613,7 +613,7 @@ std::optional<LocalInstallation> TryGetOrCreateLocalInstallation()
                     "\n\n"
                     "{}"
                     "\n\n\n"
-                    "Press OK to download and install.",
+                    "Do you want to download and install it now?",
                     new_version_str,
                     cur_version_str,
                     wbody
@@ -626,17 +626,22 @@ std::optional<LocalInstallation> TryGetOrCreateLocalInstallation()
                     gwHwnd,
                     message.c_str(),
                     name.c_str(),
-                    MB_OKCANCEL | MB_ICONINFORMATION
+                    MB_YESNOCANCEL | MB_ICONINFORMATION
                 );
 
-                if (result == IDOK)
+                if (result == IDYES)
                 {
                     Log(L"User accepted update. Downloading and installing...");
                     should_download = true;
                 }
+                else if (result == IDNO)
+                {
+                    Log(L"User declined update. Using old version.");
+                    should_download = false;
+                }
                 else
                 {
-                    Log(L"User declined update. Terminating.");
+                    Log(L"User cancelled. Terminating.");
                     ExitProcess(0);
                 }
             }

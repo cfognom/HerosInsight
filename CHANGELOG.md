@@ -1,4 +1,6 @@
 # CHANGELOG
+- Make it possible to skip update.
+
 ## 0.6.1
 - Fix a bug that could make the crash handler crash.
 - Patched some holes where exceptions could escape.
