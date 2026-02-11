@@ -59,6 +59,29 @@ namespace HerosInsight::CrashHandling
 
     inline static std::atomic<std::wstring_view> msg_overload{};
 
+    inline std::optional<std::wstring> ErrorCodeToString(DWORD error_code)
+    {
+        std::string_view str{reinterpret_cast<const char *>(&error_code), sizeof(decltype(error_code))};
+        bool any_printable = false;
+        for (auto &c : str)
+        {
+            if (c == '\0')
+                return std::nullopt;
+            if (!any_printable && std::isprint(c))
+                any_printable = true;
+        }
+        if (!any_printable)
+            return std::nullopt;
+        if constexpr (std::endian::native == std::endian::little)
+        {
+            return std::wstring{str.rbegin(), str.rend()};
+        }
+        else
+        {
+            return std::wstring{str.begin(), str.end()};
+        }
+    }
+
     struct ExceptionRecord
     {
         std::optional<std::filesystem::path> report_path = std::nullopt;
@@ -84,18 +107,13 @@ namespace HerosInsight::CrashHandling
 
             if (code.has_value())
             {
-                auto val = code.value();
-                std::string_view str{reinterpret_cast<const char *>(&val), sizeof(decltype(val))};
-                std::wstring str_w;
-                if constexpr (std::endian::native == std::endian::little)
+                // auto val = code.value();
+                auto val = 0xE06D7363;
+                writer.AppendFormat(L"\nError code: 0x{:X}", val);
+                if (auto code_str = ErrorCodeToString(val); code_str.has_value())
                 {
-                    str_w = std::wstring{str.rbegin(), str.rend()};
+                    writer.AppendFormat(L" (\"{}\")", code_str.value());
                 }
-                else
-                {
-                    str_w = std::wstring{str.begin(), str.end()};
-                }
-                writer.AppendFormat(L"\nError code: 0x{:X} (\"{}\")", val, str_w);
             }
             else
             {

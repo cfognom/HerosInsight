@@ -1,5 +1,6 @@
 # CHANGELOG
 - Make it possible to skip update.
+- Fixed a bug that could cause the crash message to be truncated
 
 ## 0.6.1
 - Fix a bug that could make the crash handler crash.
