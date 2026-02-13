@@ -307,6 +307,7 @@ namespace HerosInsight
 
                 ImGui::Text("Version: %s", HEROSINSIGHT_VERSION_STRING);
 #ifdef _DEBUG
+                ImGui::Text("(Debug build)");
                 ImGui::TextUnformatted("Alt + End => Terminate addon");
 #endif
                 ImGui::PopFont();
