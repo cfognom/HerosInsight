@@ -34,17 +34,41 @@ endif()
 
 set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/default_install)
 
+# Set default install components
+set(CMAKE_INSTALL_COMPONENT_RUNTIME "runtime")
+set(CMAKE_INSTALL_COMPONENT_SYMBOLS "symbols")
+
 install(TARGETS HerosInsightLauncher
-    RUNTIME DESTINATION .)
+    RUNTIME DESTINATION .           # executable goes here
+    COMPONENT runtime               # belongs to runtime component
+)
 
 install(TARGETS HerosInsightDLL
-    RUNTIME DESTINATION data/
-    LIBRARY DESTINATION data/)
+    RUNTIME DESTINATION data/       # DLL runtime
+    LIBRARY DESTINATION data/       # shared lib runtime
+    COMPONENT runtime
+)
 
-set(CPACK_PACKAGE_NAME ${PROJECT_NAME})
-set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY ON)
-set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
-set(CPACK_PACKAGE_VENDOR "cfognom")
-set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}")
+if(MSVC) # Only for MSVC, where PDBs exist
+    install(FILES $<TARGET_PDB_FILE:HerosInsightLauncher>
+        DESTINATION .
+        COMPONENT symbols
+        CONFIGURATIONS Debug RelWithDebInfo
+        OPTIONAL
+    )
 
-include(CPack)
+    install(FILES $<TARGET_PDB_FILE:HerosInsightDLL>
+        DESTINATION .
+        COMPONENT symbols
+        CONFIGURATIONS Debug RelWithDebInfo
+        OPTIONAL
+    )
+endif()
+
+# set(CPACK_PACKAGE_NAME ${PROJECT_NAME})
+# set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY ON)
+# set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
+# set(CPACK_PACKAGE_VENDOR "cfognom")
+# set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}")
+
+# include(CPack)

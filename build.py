@@ -99,6 +99,15 @@ def main():
         help='Destination directory for zip (relative to working dir unless absolute path)'
     )
     parser.add_argument(
+        '--pdbdir',
+        '-d',
+        type=Path,
+        nargs='?',
+        default=None,
+        const='auto',
+        help='Destination directory for PDB files (relative to working dir unless absolute path)'
+    )
+    parser.add_argument(
         '--fresh',
         '-f',
         action='store_true',
@@ -122,12 +131,13 @@ def main():
     
     working_dir = os.getcwd()
     
-    def install_to(install_dir):
+    def install_to(install_dir, component):
         run([
             "cmake",
             "--install", str(binary_dir),
             "--prefix", str(install_dir),
-            "--config", args.config
+            "--config", args.config,
+            "--component", component
         ])
 
     # Auto dir is <binary_dir>/<config>
@@ -136,12 +146,16 @@ def main():
         args.installdir = autodir
     if args.zipdir == Path('auto'):
         args.zipdir = autodir
+    if args.pdbdir == Path('auto'):
+        args.pdbdir = autodir
     
     # Ensure absolute
     if args.installdir:
         args.installdir = args.installdir.absolute()
     if args.zipdir:
         args.zipdir = args.zipdir.absolute()
+    if args.pdbdir:
+        args.pdbdir = args.pdbdir.absolute()
     
     cmake_cache = binary_dir / "CMakeCache.txt"
 
@@ -167,7 +181,7 @@ def main():
     # Optional Step 3: Install
     install_dir = args.installdir / project_name
     if args.installdir:
-        install_to(install_dir)
+        install_to(install_dir, "runtime")
         print (f"Installed to: {install_dir}")
     
     # Optional Step 4: Zip
@@ -177,9 +191,14 @@ def main():
         zip_name = f"{project_name}-{project_version}.zip"
         zip_path = args.zipdir / zip_name
         os.makedirs(args.zipdir, exist_ok=True)
-        install_to(temp_dir / project_name)
+        install_to(temp_dir / project_name, "runtime")
         zip_directory(temp_dir, zip_path)
         print(f"Zip created: {zip_path}")
+    
+    if args.pdbdir:
+        dst_dir = args.pdbdir / "pdbs"
+        install_to(dst_dir, "symbols")
+        print(f"PDBs written to: {dst_dir}")
 
     print("✅ Build + Install complete!")
 

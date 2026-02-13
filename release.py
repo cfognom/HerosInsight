@@ -146,7 +146,8 @@ def stage_release(args):
             "--preset", "prod",
             "--config", "RelWithDebInfo",
             "--installdir", release_staging_dir,
-            "--zipdir", release_staging_dir],
+            "--zipdir", release_staging_dir,
+            "--pdbdir", release_staging_dir],
             check=True
         )
         get_zip(new_version)
