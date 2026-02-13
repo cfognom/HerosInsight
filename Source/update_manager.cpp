@@ -15,7 +15,6 @@
 #include <effect_initiator.h>
 #include <effect_tracking.h>
 #include <encstr_debugger.h>
-#include <hero_ai.h>
 #include <packet_stepper.h>
 #include <party_data.h>
 #include <settings.h>

@@ -39,7 +39,6 @@
 #include <custom_skill_data.h>
 #include <debug_display.h>
 #include <effect_tracking.h>
-#include <hero_ai.h>
 #include <party_data.h>
 #include <update_manager.h>
 #include <utils.h>

@@ -36,7 +36,6 @@
 #include <custom_agent_data.h>
 #include <custom_skill_data.h>
 #include <debug_display.h>
-#include <hero_ai.h>
 #include <party_data.h>
 #include <update_manager.h>
 #include <utils.h>
