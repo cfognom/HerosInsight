@@ -39,14 +39,12 @@ set(CMAKE_INSTALL_COMPONENT_RUNTIME "runtime")
 set(CMAKE_INSTALL_COMPONENT_SYMBOLS "symbols")
 
 install(TARGETS HerosInsightLauncher
-    RUNTIME DESTINATION .           # executable goes here
-    COMPONENT runtime               # belongs to runtime component
+    RUNTIME DESTINATION . COMPONENT runtime          # executable goes here
 )
 
 install(TARGETS HerosInsightDLL
-    RUNTIME DESTINATION data/       # DLL runtime
-    LIBRARY DESTINATION data/       # shared lib runtime
-    COMPONENT runtime
+    RUNTIME DESTINATION data/ COMPONENT runtime      # DLL runtime
+    LIBRARY DESTINATION data/ COMPONENT runtime      # shared lib runtime
 )
 
 if(MSVC) # Only for MSVC, where PDBs exist
