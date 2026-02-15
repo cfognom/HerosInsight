@@ -18,6 +18,22 @@
             }
         },
         {
+            "label": "Build + Install (fresh)",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "${workspaceFolder}/build.py",
+                "--preset", "${command:cmake.activeConfigurePresetName}",
+                "--config", "${command:cmake.buildType}",
+                "--installdir",
+                "--fresh"
+            ],
+            "problemMatcher": ["$msCompile"],
+            "group": {
+                "kind": "build",
+            }
+        },
+        {
             "label": "Launch GW + Mod",
             "type": "shell",
             "command": "python",
