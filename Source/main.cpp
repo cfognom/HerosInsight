@@ -60,6 +60,7 @@
 #include <imgui_impl_dx9.h>
 #include <imgui_impl_win32.h>
 #include <imgui_internal.h>
+#include <once_or_never.h>
 #include <skill_book.h>
 
 #include <update_manager.h>
@@ -70,10 +71,10 @@ struct IDirect3DDevice9;
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 static long prevWndProc = 0;
-static volatile bool running = true;
+static std::atomic<bool> running = true;
+static std::atomic<bool> gtfo = false; // When this is set, we better gtfo
 
-// Must be called from the render thread
-void TerminateFromRenderThread();
+void SignalStopRunning();
 
 static LRESULT CALLBACK WndProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lParam)
 {
@@ -303,7 +304,7 @@ static void OnRender_CheckPermission(void *data)
 #endif
     )
     {
-        TerminateFromRenderThread();
+        SignalStopRunning();
     }
 }
 
@@ -336,7 +337,10 @@ struct ImGuiScope
     struct ImplDx9
     {
         ImplDx9(IDirect3DDevice9 *device) { ImGui_ImplDX9_Init(device); }
-        ~ImplDx9() { ImGui_ImplDX9_Shutdown(); }
+        ~ImplDx9()
+        {
+            if (!gtfo) ImGui_ImplDX9_Shutdown();
+        }
     };
     Context context;
     ImplWin32 implWin32;
@@ -356,70 +360,6 @@ struct UpdateManagerScope
     ~UpdateManagerScope() { HerosInsight::UpdateManager::Terminate(); }
 };
 
-struct RenderThreadScope
-{
-    WindowOverride windowOverride;
-    ImGuiScope imguiScope;
-    UpdateManagerScope updateManagerScope;
-    GW::HookEntry game_loop_callback_entry;
-
-    RenderThreadScope(HWND hWnd, IDirect3DDevice9 *device)
-        : windowOverride(hWnd, reinterpret_cast<LONG_PTR>(SafeWndProc)),
-          imguiScope(hWnd, device),
-          updateManagerScope()
-    {
-        GW::Render::SetRenderCallback(
-            [](GW::Render::Helper helper, void *)
-            {
-                if (!HerosInsight::CrashHandling::SafeCall(&OnRender_CheckPermission, &helper))
-                {
-                    TerminateFromRenderThread();
-                }
-            }
-        );
-
-        GW::Render::SetResetCallback(
-            [](GW::Render::Helper helper, void *)
-            {
-                ImGui_ImplDX9_InvalidateDeviceObjects();
-            }
-        );
-
-        GW::GameThread::RegisterGameThreadCallback(
-            &game_loop_callback_entry,
-            [](GW::HookStatus *)
-            {
-                if (!HerosInsight::CrashHandling::SafeCall(&OnUpdate))
-                {
-                    TerminateFromRenderThread();
-                }
-            }
-        );
-        HerosInsight::CrashHandling::msg_overload = L"";
-    }
-    ~RenderThreadScope()
-    {
-        GW::DisableHooks();
-        GW::Render::SetRenderCallback(nullptr);
-        GW::GameThread::RemoveGameThreadCallback(&game_loop_callback_entry);
-    }
-};
-std::optional<RenderThreadScope> render_thread_scope = std::nullopt;
-
-void TerminateFromRenderThread()
-{
-    if (running)
-    {
-        GW::DisableHooks();
-        GW::Render::SetRenderCallback(nullptr);
-        running = false;
-        if (render_thread_scope.has_value())
-        {
-            render_thread_scope.reset();
-        }
-    }
-}
-
 struct CapacityHintsScope
 {
     CapacityHintsScope() { HerosInsight::CapacityHints::LoadHints(); }
@@ -432,6 +372,91 @@ struct GWCAScope
     ~GWCAScope() { GW::Terminate(); }
 };
 
+struct GameScope // Must be created from GW's thread
+{
+    WindowOverride windowOverride;
+    ImGuiScope imguiScope;
+    UpdateManagerScope updateManagerScope;
+    GW::HookEntry game_thread_callback_entry;
+
+    GameScope(HWND hWnd, IDirect3DDevice9 *device)
+        : windowOverride(hWnd, reinterpret_cast<LONG_PTR>(SafeWndProc)),
+          imguiScope(hWnd, device),
+          updateManagerScope()
+    {
+        GW::Render::SetRenderCallback(
+            [](GW::Render::Helper helper, void *)
+            {
+                if (!HerosInsight::CrashHandling::SafeCall(&OnRender_CheckPermission, &helper))
+                {
+                    SignalStopRunning();
+                }
+            }
+        );
+        GW::Render::SetResetCallback(
+            [](GW::Render::Helper helper, void *)
+            {
+                ImGui_ImplDX9_InvalidateDeviceObjects(); // TODO: use safecall?
+            }
+        );
+        GW::GameThread::RegisterGameThreadCallback(
+            &game_thread_callback_entry,
+            [](GW::HookStatus *)
+            {
+                if (!HerosInsight::CrashHandling::SafeCall(&OnUpdate))
+                {
+                    SignalStopRunning();
+                }
+            }
+        );
+        HerosInsight::CrashHandling::msg_overload = L"";
+        GW::Chat::WriteChat(GW::Chat::CHANNEL_MODERATOR, L"Hero's Insight: Initialized");
+    }
+    ~GameScope()
+    {
+        if (!gtfo)
+            GW::Chat::WriteChat(GW::Chat::CHANNEL_MODERATOR, L"Hero's Insight: Terminated");
+        GW::DisableHooks();
+        GW::GameThread::RemoveGameThreadCallback(&game_thread_callback_entry);
+        GW::Render::SetResetCallback(nullptr);
+        GW::Render::SetRenderCallback(nullptr);
+    }
+};
+struct SafeGameScope // Just a wrapper that lets us catch and rethrow any exceptions in the constructor
+{
+    std::optional<GameScope> game_scope = std::nullopt;
+    SafeGameScope(HWND hWnd, IDirect3DDevice9 *device)
+    {
+        struct Param
+        {
+            HWND hWnd;
+            IDirect3DDevice9 *device;
+            SafeGameScope *scope;
+        } param{
+            hWnd,
+            device,
+            this,
+        };
+
+        constexpr auto Init = [](void *arg)
+        {
+            auto param = *static_cast<Param *>(arg);
+            param.scope->game_scope.emplace(param.hWnd, param.device);
+        };
+
+        if (!HerosInsight::CrashHandling::SafeCall(Init, &param))
+        {
+            throw OnceOrNever<SafeGameScope>::construction_failed();
+        }
+    }
+};
+OnceOrNever<SafeGameScope> game_scope;
+static void SignalStopRunning()
+{
+    game_scope.Terminate();
+    running = false;
+}
+
 struct MainScope
 {
     GWCAScope gwca_scope;
@@ -439,45 +464,31 @@ struct MainScope
     HWND hWnd;
     MainScope()
         : gwca_scope(),
-          capacity_hints_scope()
+          capacity_hints_scope(),
+          hWnd(GW::MemoryMgr::GetGWWindowHandle())
     {
-        hWnd = GW::MemoryMgr::GetGWWindowHandle();
-
-        // We temporarily set the render callback to initialize render_scope, since all initialization must happen in the game thread ???
+        // We temporarily set the render callback to an Init function that can initialize game_scope
         GW::Render::SetRenderCallback(
-            [](GW::Render::Helper helper, void *user_arg)
+            [](GW::Render::Helper helper, void *arg)
             {
-                // This is call from within the game thread and all operation should be done here. (Although, Note that: GW::GameThread::IsInGameThread() == false)
-                // You can't freeze this thread, so no blocking operation or at your own risk.
-                struct Param
-                {
-                    MainScope *main;
-                    GW::Render::Helper helper;
-                } param;
-                param.main = static_cast<MainScope *>(user_arg);
-                param.helper = helper;
+                // We are now inside GW's render thread
 
-                constexpr auto Init = [](void *user_arg)
-                {
-                    auto param = *static_cast<Param *>(user_arg);
-                    render_thread_scope.emplace(param.main->hWnd, param.helper.device);
-                };
+                GW::Render::SetRenderCallback(nullptr); // Ensure this is only called once
 
-                if (!HerosInsight::CrashHandling::SafeCall(Init, &param))
+                auto main = static_cast<MainScope *>(arg);
+
+                if (!game_scope.ConstructOnce(main->hWnd, helper.device))
                 {
-                    // Failed to initialize
-                    TerminateFromRenderThread();
+                    GW::DisableHooks();
+                    SignalStopRunning();
                 }
             },
             this
         );
         GW::EnableRenderHooks();
-
-        while (running)
-        {
-            Sleep(100);
-        }
-
+    }
+    ~MainScope()
+    {
         // Hooks are disabled from Guild Wars thread (safely), so we just make sure we exit the last hooks
         while (GW::HookBase::GetInHookCount())
             Sleep(16);
@@ -506,12 +517,17 @@ static DWORD WINAPI ThreadProc(LPVOID lpModule)
             [](void *data)
             {
                 MainScope main_scope{};
-                // Destructors are called here
+
+                while (running)
+                {
+                    Sleep(100);
+                }
             }
         ))
     {
     }
     FreeLibraryAndExitThread(hModule, EXIT_SUCCESS);
+    return 0;
 }
 
 BOOL WINAPI DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
@@ -520,8 +536,13 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
 
     if (dwReason == DLL_PROCESS_ATTACH)
     {
-        HANDLE handle = CreateThread(0, 0, ThreadProc, hModule, 0, 0);
-        CloseHandle(handle);
+        HANDLE thread_handle = CreateThread(0, 0, ThreadProc, hModule, 0, 0);
+        CloseHandle(thread_handle);
+    }
+    else if (dwReason == DLL_PROCESS_DETACH)
+    {
+        gtfo = true;
+        SignalStopRunning();
     }
 
     return TRUE;

@@ -133,7 +133,6 @@ namespace HerosInsight
         {
             GW::RegisterLogHandler(&LogHandler, &log_context);
         }
-        GW::Chat::WriteChat(GW::Chat::CHANNEL_MODERATOR, L"Hero's Insight: Initialized");
     }
 
     void UpdateManager::Terminate()
@@ -147,7 +146,6 @@ namespace HerosInsight
         HerosInsight::PacketStepper::Terminate();
         HerosInsight::EffectInitiator::Terminate();
         HerosInsight::EnergyDisplay::Terminate();
-        GW::Chat::WriteChat(GW::Chat::CHANNEL_MODERATOR, L"Hero's Insight: Terminated");
     }
 
     void OnUpdate()

@@ -1,4 +1,6 @@
 # CHANGELOG
+- Fix settings not being saved when closing GW before the mod.
+
 ## 0.6.2
 - Make it possible to skip update (for debug purposes).
 - Fixed a bug that could cause the crash message to be truncated.
