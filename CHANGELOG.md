@@ -1,4 +1,5 @@
 # CHANGELOG
+## 0.6.3
 - Fix settings not being saved when closing GW before the mod.
 
 ## 0.6.2
