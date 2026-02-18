@@ -396,7 +396,15 @@ struct GameScope // Must be created from GW's thread
         GW::Render::SetResetCallback(
             [](GW::Render::Helper helper, void *)
             {
-                ImGui_ImplDX9_InvalidateDeviceObjects(); // TODO: use safecall?
+                if (!HerosInsight::CrashHandling::SafeCall(
+                        [](void *)
+                        {
+                            ImGui_ImplDX9_InvalidateDeviceObjects();
+                        }
+                    ))
+                {
+                    SignalStopRunning();
+                }
             }
         );
         GW::GameThread::RegisterGameThreadCallback(
