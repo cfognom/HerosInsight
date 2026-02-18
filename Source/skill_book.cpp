@@ -1192,7 +1192,6 @@ namespace HerosInsight::SkillBook
             SkillList = 1 << 1,
             Props = 1 << 2,
 
-            FilterAndList = Query | SkillList,
             ALL = Query | SkillList | Props,
         };
 
@@ -1309,7 +1308,7 @@ namespace HerosInsight::SkillBook
         {
             if (ImGui::SliderInt("Scope", (int *)&settings.scope, 0, (int)BookSettings::Scope::COUNT - 1, ""))
             {
-                dirty_flags |= DirtyFlags::FilterAndList;
+                dirty_flags |= DirtyFlags::SkillList;
             }
             std::string_view explanation;
             switch (settings.scope)
@@ -1355,7 +1354,7 @@ namespace HerosInsight::SkillBook
             const char *options[] = {"Mixed", "PvE", "PvP"};
             if (ImGuiExt::RadioArray("Skill Ruleset", (int *)&settings.ruleset, options, IM_ARRAYSIZE(options)))
             {
-                dirty_flags |= DirtyFlags::FilterAndList;
+                dirty_flags |= DirtyFlags::SkillList;
             }
         }
 
@@ -1371,7 +1370,9 @@ namespace HerosInsight::SkillBook
                         settings.attr_src.value = -1;
                         break;
                     case AttributeSource::Type::FromAgent:
+                        break;
                     case AttributeSource::Type::Manual:
+                        settings.attr_src.value = settings.attr_lvl_slider;
                         break;
                 }
             }
@@ -1475,11 +1476,13 @@ namespace HerosInsight::SkillBook
             if (Utils::HasAnyFlag(dirty_flags, DirtyFlags::Props))
             {
                 adapter.RefreshDynamicProps(this->settings.attr_src);
+                dirty_flags |= DirtyFlags::Query;
             }
             if (Utils::HasAnyFlag(dirty_flags, DirtyFlags::SkillList))
             {
                 clipper.Reset();
                 scroll_tracking = ScrollTracking();
+                dirty_flags |= DirtyFlags::Query;
             }
             if (Utils::HasAnyFlag(dirty_flags, DirtyFlags::Query))
             {
@@ -2099,6 +2102,8 @@ namespace HerosInsight::SkillBook
                 ImGui::EndChild();
             }
 
+            Update();
+
             return is_open;
         }
     };
@@ -2541,11 +2546,6 @@ namespace HerosInsight::SkillBook
             {
                 book->UpdateFeedback(feedback.value);
             }
-        }
-
-        for (auto &book : books)
-        {
-            book->Update();
         }
 
         UpdateSkillDragging();
