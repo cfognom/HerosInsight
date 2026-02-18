@@ -370,11 +370,6 @@ namespace HerosInsight
     {
         auto n_atoms = atoms.size();
 
-        if (text.text.contains('<'))
-        {
-            ;
-        }
-
         size_t horizon = 0;
         size_t match_end;
         for (size_t i = 0; i < n_atoms; ++i)
