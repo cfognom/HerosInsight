@@ -106,35 +106,37 @@ namespace HerosInsight
 
             {
                 auto r = rem;
+                PostCheck num_post_checks = PostCheck::Null;
                 if (Utils::TryRead('<', r))
                 {
-                    atom.post_check |= PostCheck::NumLess;
+                    num_post_checks |= PostCheck::NumLess;
                 }
                 else if (Utils::TryRead('>', r))
                 {
-                    atom.post_check |= PostCheck::NumGreater;
+                    num_post_checks |= PostCheck::NumGreater;
                 }
                 else
                 {
-                    atom.post_check |= PostCheck::NumEqual;
+                    num_post_checks |= PostCheck::NumEqual;
                 }
 
                 if (Utils::TryRead('=', r))
                 {
-                    atom.post_check |= PostCheck::NumEqual;
+                    num_post_checks |= PostCheck::NumEqual;
                 }
 
                 float num;
                 if (TryReadNumberOrFraction(r, num))
                 {
                     auto type = Type::AnyNumber;
-                    if ((atom.post_check & PostCheck::NumChecks) == PostCheck::NumEqual)
+                    if ((num_post_checks & PostCheck::NumChecks) == PostCheck::NumEqual)
                     {
                         // Pure equal, we can just std::find it
-                        Utils::RemoveFlags(atom.post_check, PostCheck::NumChecks);
+                        num_post_checks = PostCheck::Null;
                         type = Type::ExactNumber;
                     }
                     atom.type = type;
+                    atom.post_check |= num_post_checks;
                     atom.src_str = std::string_view(rem.data(), r.data() - rem.data());
                     atom.enc_num = Text::EncodeSearchableNumber(num);
                     rem = r;
@@ -367,6 +369,11 @@ namespace HerosInsight
     bool Matcher::Match(LoweredText text, size_t offset)
     {
         auto n_atoms = atoms.size();
+
+        if (text.text.contains('<'))
+        {
+            ;
+        }
 
         size_t horizon = 0;
         size_t match_end;
