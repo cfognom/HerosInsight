@@ -943,7 +943,7 @@ namespace HerosInsight::Filtering
 
                 const auto n_args = query.sort_args.size();
 
-                std::format_to(inserter, ControlColor "Sort</c> ");
+                std::format_to(inserter, "Sort ");
                 for (uint32_t a = 0; a < n_args; a++)
                 {
                     const auto &arg = query.sort_args[a];
