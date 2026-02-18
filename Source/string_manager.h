@@ -337,7 +337,7 @@ namespace HerosInsight::Text
         int16_t delta;
     };
 
-    void PatchPositions(std::span<uint16_t> positions, std::span<PosDelta> deltas);
+    void PatchPositions(std::span<uint16_t> positions, std::span<uint16_t> out_positions, std::span<PosDelta> deltas);
 
     struct StringManager
     {

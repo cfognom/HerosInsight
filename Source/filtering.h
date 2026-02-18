@@ -20,6 +20,7 @@ namespace HerosInsight::Filtering
     // Modifies the size of the span to account for the removed values
     void SortHighlighting(std::span<uint16_t> &hl);
     void ConnectHighlighting(std::string_view text, std::span<uint16_t> &hl);
+    std::strong_ordering CompareSubstrs(std::span<uint16_t> asubs, std::string_view astr, std::span<uint16_t> bsubs, std::string_view bstr);
 
     // Returns the index of the "best" match
     template <typename TextGetter>
@@ -117,8 +118,12 @@ namespace HerosInsight::Filtering
 
     struct ResultItem
     {
-        FixedVector<char, 512> text;
-        std::vector<uint16_t> hl; // Highlight
+        LoweredText searchable_text;
+        FixedVector<char, 512> presentable_text;
+        std::span<uint16_t> searchable_hl;
+        std::span<uint16_t> presentable_hl;
+
+        std::vector<uint16_t> _hl_storage; // Highlight
     };
 
     struct IncrementalProp
@@ -977,12 +982,23 @@ namespace HerosInsight::Filtering
         {
             auto &prop = *impl.GetProperty(prop_id);
             auto str_id = prop.GetStrId(item_id);
-            LoweredText lowered = prop.GetSearchableStr(str_id);
             ResultItem result;
-            CalcHL(q, prop_id, lowered, result.hl);
+            result.searchable_text = prop.GetSearchableStr(str_id);
+            CalcHL(q, prop_id, result.searchable_text, result._hl_storage);
             FixedVector<Text::PosDelta, 128> deltas;
-            prop.GetRenderableString(str_id, result.text, deltas);
-            Text::PatchPositions(result.hl, deltas);
+            prop.GetRenderableString(str_id, result.presentable_text, deltas);
+            if (deltas.empty())
+            {
+                result.searchable_hl = result.presentable_hl = result._hl_storage;
+            }
+            else
+            {
+                auto hl_count = result._hl_storage.size();
+                result._hl_storage.resize(hl_count * 2);
+                result.searchable_hl = {result._hl_storage.data(), hl_count};
+                result.presentable_hl = {result._hl_storage.data() + hl_count, hl_count};
+                Text::PatchPositions(result.searchable_hl, result.presentable_hl, deltas);
+            }
             return result;
         }
 
@@ -998,26 +1014,27 @@ namespace HerosInsight::Filtering
                 {
                     auto &relevant_meta = relevant_metas[i];
 
-                    size_t offset = result.text.size();
+                    size_t offset = result.presentable_text.size();
                     LoweredText lowered = impl.GetMetaName(relevant_meta.meta_id);
                     if (lowered.text.empty()) // We allow empty meta names; just skip
                         continue;
-                    auto size = result.hl.size();
-                    CalcHL(q, meta_prop_id, lowered, result.hl);
-                    lowered.GetRenderableString(result.text);
+                    auto size = result._hl_storage.size();
+                    CalcHL(q, meta_prop_id, lowered, result._hl_storage);
+                    result.searchable_hl = result.presentable_hl = result._hl_storage;
+                    lowered.GetRenderableString(result.presentable_text);
                     if (offset > 0)
                     {
-                        for (size_t i = size; i < result.hl.size(); i++)
+                        for (size_t i = size; i < result._hl_storage.size(); i++)
                         {
-                            result.hl[i] += offset;
+                            result._hl_storage[i] += offset;
                         }
                     }
 
-                    result.text.AppendString(join);
+                    result.presentable_text.AppendString(join);
                 }
-                if (result.text.size() > join.size())
+                if (result.presentable_text.size() > join.size())
                 {
-                    result.text.resize(result.text.size() - join.size());
+                    result.presentable_text.resize(result.presentable_text.size() - join.size());
                 }
             }
 

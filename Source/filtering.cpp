@@ -66,4 +66,20 @@ namespace HerosInsight::Filtering
         hl[dst_idx++] = hl[i];
         hl = hl.subspan(0, dst_idx);
     }
+
+    std::strong_ordering CompareSubstrs(std::span<uint16_t> asubs, std::string_view astr, std::span<uint16_t> bsubs, std::string_view bstr)
+    {
+        size_t count = std::min(asubs.size(), bsubs.size());
+        std::strong_ordering cmp;
+        for (size_t i = 0; i < count; i += 2)
+        {
+            auto asub = astr.substr(asubs[i], asubs[i + 1] - asubs[i]);
+            auto bsub = bstr.substr(bsubs[i], bsubs[i + 1] - bsubs[i]);
+            cmp = asub <=> bsub;
+            if (cmp != 0)
+                return cmp;
+        }
+        cmp = asubs.size() <=> bsubs.size();
+        return cmp;
+    }
 }

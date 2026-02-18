@@ -1,5 +1,7 @@
 # CHANGELOG
-- Improve handling of '<', '>', ':' and '=' in filters when not part of a number or in an untargeted filter.
+- Make "Additional matches in x description" be a bit more relaxed.
+- Fix skill book not refreshing when changing attribute mode.
+- Improve handling of '<', '>', ':' and '=' in queries when not part of a number or in an untargeted query.
 
 ## 0.6.3
 - Fix settings not being saved when closing GW before the mod.

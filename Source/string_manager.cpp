@@ -593,25 +593,25 @@ namespace HerosInsight::Text
         return std::bit_cast<float>(value);
     }
 
-    void PatchPositions(std::span<uint16_t> positions, std::span<PosDelta> deltas)
+    void PatchPositions(std::span<uint16_t> positions, std::span<uint16_t> out_positions, std::span<PosDelta> deltas)
     {
-        if (deltas.empty())
-            return;
+        assert(positions.size() == out_positions.size());
 
         int32_t delta_to_apply = 0;
         size_t i = 0;
         auto until_pos = deltas[i].pos;
 
-        for (auto &pos : positions)
+        for (size_t j = 0; j < positions.size(); j++)
         {
-            while (pos >= until_pos)
+            auto &pos = positions[j];
+            while (until_pos <= pos)
             {
                 delta_to_apply = deltas[i].delta;
                 ++i;
                 until_pos = i < deltas.size() ? deltas[i].pos : std::numeric_limits<decltype(PosDelta::pos)>::max();
             }
 
-            pos += delta_to_apply;
+            out_positions[j] = pos + delta_to_apply;
         }
     }
 }

@@ -1505,7 +1505,7 @@ namespace HerosInsight::SkillBook
             std::string_view header{};
             if (!is_hidden_header)
             {
-                std::string_view span = meta_names.text;
+                std::string_view span = meta_names.presentable_text;
                 header = span.substr(0, span.find(','));
             }
 
@@ -1527,13 +1527,13 @@ namespace HerosInsight::SkillBook
                 ImGui::EndTooltip();
             };
 
-            text_drawer.DrawRichText(header, 0, -1, meta_names.hl);
+            text_drawer.DrawRichText(header, 0, -1, meta_names.presentable_hl);
             bool is_header_hovered = ImGui::IsItemHovered();
             if (is_header_hovered)
             {
                 auto meta_prop_id = adapter.PropCount();
                 auto meta_meta_names = filter_device.CalcPropResult(query, meta_prop_id);
-                DrawTooltip(meta_meta_names.text, meta_meta_names.hl);
+                DrawTooltip(meta_meta_names.presentable_text, meta_meta_names.presentable_hl);
             }
             ImGui::SameLine(0, 0);
 
@@ -1546,20 +1546,20 @@ namespace HerosInsight::SkillBook
             draw_content();
             if (!is_header_hovered && ImGui::IsItemHovered())
             {
-                DrawTooltip(meta_names.text, meta_names.hl);
+                DrawTooltip(meta_names.presentable_text, meta_names.presentable_hl);
             }
         }
 
         void DrawProperty(size_t prop_id, size_t skill_id, float wrapping_min, float wrapping_max, bool is_hidden_header = false)
         {
             auto content = filter_device.CalcItemResult(query, prop_id, skill_id);
-            if (content.text.empty())
+            if (content.presentable_text.empty())
                 return;
 
             DrawProperty(
                 [&]()
                 {
-                    text_drawer.DrawRichText(content.text, wrapping_min, wrapping_max, content.hl);
+                    text_drawer.DrawRichText(content.presentable_text, wrapping_min, wrapping_max, content.presentable_hl);
                 },
                 prop_id,
                 is_hidden_header
@@ -1610,10 +1610,10 @@ namespace HerosInsight::SkillBook
             for (const auto &l : layout)
             {
                 auto r = filter_device.CalcItemResult(query, (size_t)l.id, (size_t)skill_id);
-                if (r.text.empty())
+                if (r.presentable_text.empty())
                     continue;
                 FixedVector<RichText::TextSegment, 16> segments;
-                text_drawer.MakeTextSegments(r.text, segments, r.hl);
+                text_drawer.MakeTextSegments(r.presentable_text, segments, r.presentable_hl);
                 const auto text_width = RichText::CalcTextSegmentsWidth(segments);
                 float start_x = max_pos_x - l.pos_from_right * width_per_stat - text_width;
                 float current_x = std::max(start_x, min_pos_x);
@@ -1680,7 +1680,7 @@ namespace HerosInsight::SkillBook
 
                     auto r = filter_device.CalcItemResult(query, (size_t)SkillProp::Name, (size_t)skill_id);
                     FixedVector<RichText::TextSegment, 32> segments;
-                    text_drawer.MakeTextSegments(r.text, segments, r.hl);
+                    text_drawer.MakeTextSegments(r.presentable_text, segments, r.presentable_hl);
                     DrawProperty(
                         [&]()
                         {
@@ -1865,28 +1865,19 @@ namespace HerosInsight::SkillBook
             DrawProperty(
                 [&]
                 {
-                    text_drawer.DrawRichText(main_r.text, 0, work_width, main_r.hl);
+                    text_drawer.DrawRichText(main_r.presentable_text, 0, work_width, main_r.presentable_hl);
                 },
                 (size_t)main_prop,
                 true
             );
 
-            bool draw_alt = alt_r.hl.size() > main_r.hl.size();
-            if (!draw_alt)
-            {
-                auto len = std::min(main_r.hl.size(), alt_r.hl.size());
-                assert(len % 2 == 0);
-                for (size_t i = 0; i < len; i += 2)
-                {
-                    std::string_view main_hl_text = ((std::string_view)main_r.text).substr(main_r.hl[i], main_r.hl[i + 1] - main_r.hl[i]);
-                    std::string_view alt_hl_text = ((std::string_view)alt_r.text).substr(alt_r.hl[i], alt_r.hl[i + 1] - alt_r.hl[i]);
-                    if (main_hl_text != alt_hl_text)
-                    {
-                        draw_alt = true;
-                        break;
-                    }
-                }
-            }
+            bool draw_alt = alt_r.searchable_hl.size() > main_r.searchable_hl.size() ||
+                            Filtering::CompareSubstrs(
+                                main_r.searchable_hl.subspan(0, alt_r.searchable_hl.size()),
+                                main_r.searchable_text.text,
+                                alt_r.searchable_hl,
+                                alt_r.searchable_text.text
+                            ) != 0;
 
             if (draw_alt)
             {
@@ -1901,7 +1892,7 @@ namespace HerosInsight::SkillBook
                 DrawProperty(
                     [&]
                     {
-                        text_drawer.DrawRichText(alt_r.text, 0, work_width, alt_r.hl);
+                        text_drawer.DrawRichText(alt_r.presentable_text, 0, work_width, alt_r.presentable_hl);
                     },
                     (size_t)alt_prop,
                     true
@@ -1939,14 +1930,14 @@ namespace HerosInsight::SkillBook
             { // Draw skill id
                 ImGui::SetWindowFontScale(0.7f);
                 auto r = filter_device.CalcItemResult(query, (size_t)SkillProp::Id, (size_t)skill_id);
-                const auto id_str_size = ImGui::CalcTextSize(r.text.data(), r.text.data() + r.text.size());
+                const auto id_str_size = ImGui::CalcTextSize(r.presentable_text.data(), r.presentable_text.data() + r.presentable_text.size());
                 ImGui::SetCursorPosX(work_width - id_str_size.x - 4);
                 ImVec4 color(1, 1, 1, 0.3f);
                 ImGui::PushStyleColor(ImGuiCol_Text, color);
                 DrawProperty(
                     [&]()
                     {
-                        text_drawer.DrawRichText(r.text, 0, -1, r.hl);
+                        text_drawer.DrawRichText(r.presentable_text, 0, -1, r.presentable_hl);
                     },
                     (size_t)SkillProp::Id, true
                 );
@@ -2078,7 +2069,7 @@ namespace HerosInsight::SkillBook
                                 if (ctrl_down)
                                 {
                                     auto r = filter_device.CalcItemResult(query, (size_t)SkillProp::Name, (size_t)skill_id);
-                                    Utils::OpenWikiPage(r.text);
+                                    Utils::OpenWikiPage(r.presentable_text);
                                 }
                                 else
                                 {
