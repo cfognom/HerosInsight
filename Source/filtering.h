@@ -358,7 +358,10 @@ namespace HerosInsight::Filtering
             }
 
             filter.inverted = Utils::TryRead('!', rem);
-            Utils::TryRead(':', rem) || Utils::TryRead('=', rem);
+            if (filter.meta_prop_id)
+            {
+                Utils::TryRead(':', rem) || Utils::TryRead('=', rem);
+            }
 
             Utils::ReadSpaces(rem);
             filter.filter_text = rem;

@@ -1,4 +1,6 @@
 # CHANGELOG
+- Improve handling of '<', '>', ':' and '=' in filters when not part of a number or in an untargeted filter.
+
 ## 0.6.3
 - Fix settings not being saved when closing GW before the mod.
 
