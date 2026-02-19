@@ -20,7 +20,7 @@ namespace HerosInsight::Filtering
     // Modifies the size of the span to account for the removed values
     void SortHighlighting(std::span<uint16_t> &hl);
     void ConnectHighlighting(std::string_view text, std::span<uint16_t> &hl);
-    std::strong_ordering CompareSubstrs(std::span<uint16_t> asubs, std::string_view astr, std::span<uint16_t> bsubs, std::string_view bstr);
+    std::strong_ordering CompareSubstrs(std::span<const uint16_t> asubs, std::string_view astr, std::span<const uint16_t> bsubs, std::string_view bstr);
 
     // Returns the index of the "best" match
     template <typename TextGetter>
@@ -63,8 +63,8 @@ namespace HerosInsight::Filtering
     {
         struct Arg
         {
-            size_t meta_id;
-            bool is_negated;
+            size_t sort_target_id = 0;
+            bool is_negated = false;
         };
 
         std::vector<Arg> args;
@@ -83,6 +83,7 @@ namespace HerosInsight::Filtering
     {
         uint16_t prop_id = 0;
         bool is_negated = false;
+        bool sort_by_matched = false;
     };
 
     struct Query
@@ -352,7 +353,7 @@ namespace HerosInsight::Filtering
                     auto target_str = rem.substr(0, separator_pos);
                     if (!target_str.empty())
                     {
-                        auto opt_meta_prop_id = TryGetMetaIndexFromName(target_str);
+                        auto opt_meta_prop_id = TryGetMetaIdFromName(target_str);
                         if (opt_meta_prop_id.has_value())
                         {
                             filter.meta_prop_id = opt_meta_prop_id.value();
@@ -427,16 +428,19 @@ namespace HerosInsight::Filtering
                 auto target_text = rem.substr(0, arg_end);
                 Utils::ReadSpaces(target_text);
                 Utils::TrimTrailingSpaces(target_text);
-                bool is_negated = !target_text.empty() && target_text.back() == '!';
-                if (is_negated)
-                    target_text = target_text.substr(0, target_text.size() - 1);
-                Utils::TrimTrailingSpaces(target_text);
-                auto index = target_text.empty() ? 0 : TryGetMetaIndexFromName(target_text);
-                if (index.has_value())
+                size_t pos;
+                SortCommand::Arg arg;
+                while (pos = target_text.find_last_of("!"), pos != std::string_view::npos)
                 {
-                    auto &arg = sort_com.args.emplace_back();
-                    arg.is_negated = is_negated;
-                    arg.meta_id = index.value();
+                    arg.is_negated |= target_text[pos] == '!';
+                    target_text = target_text.substr(0, pos);
+                }
+                Utils::TrimTrailingSpaces(target_text);
+                auto sort_target_id = target_text.empty() ? 0 : TryGetSortTargetIdFromName(target_text);
+                if (sort_target_id.has_value())
+                {
+                    arg.sort_target_id = sort_target_id.value();
+                    sort_com.args.push_back(std::move(arg));
                 }
 
                 if (arg_end == std::string_view::npos)
@@ -446,6 +450,7 @@ namespace HerosInsight::Filtering
 
             return true;
         }
+        inline static LoweredTextOwned matched_target{"Matched"};
         void ParseQuery(std::string_view source, Query &query)
         {
             query.clear();
@@ -483,13 +488,18 @@ namespace HerosInsight::Filtering
                                 for (auto &arg : sort_command.args)
                                 {
                                     query.sort_args.emplace_back(std::move(arg));
-                                    if (arg.meta_id == 0) // Special case: Default sort
+                                    if (arg.sort_target_id == 0) // Special case: Default sort
                                     {
                                         if (arg.is_negated)
                                             query.reverse_output = !query.reverse_output;
                                         continue;
                                     }
-                                    auto propset = impl.GetMetaPropset(arg.meta_id);
+                                    if (GetSortTargetName(arg.sort_target_id).text == (std::string_view)matched_target.text) // Special case: Matched sort
+                                    {
+                                        query.sort_atoms.emplace_back(0, arg.is_negated, true);
+                                        continue;
+                                    }
+                                    auto propset = impl.GetMetaPropset(arg.sort_target_id);
                                     for (auto prop_id : propset.IterSetBits())
                                     {
                                         if (prop_id == I::PropCount())
@@ -738,25 +748,90 @@ namespace HerosInsight::Filtering
             }
             stopwatch.Checkpoint("filters");
         }
-        void SortItems(std::span<SortAtom> atoms, std::span<typename I::index_type> items)
+        void SortItems(Query &query, std::span<typename I::index_type> items)
         {
             Stopwatch stopwatch("SortItems");
+
+            struct MatchedContent
+            {
+                std::vector<uint16_t> subs;
+                std::string_view str;
+
+                std::strong_ordering operator<=>(const MatchedContent &other) const
+                {
+                    return CompareSubstrs(subs, str, other.subs, other.str);
+                }
+
+                void Populate(Matcher &matcher, LoweredText &text)
+                {
+                    subs.clear();
+                    str = text.text;
+                    bool is_match = matcher.Matches(text, subs);
+                    if (!is_match)
+                        subs.clear();
+                }
+            };
+
+            MatchedContent matched[3];
+
+            MatchedContent *matched_a = &matched[0];
+            MatchedContent *matched_b = &matched[1];
+            MatchedContent *matched_temp = &matched[2];
 
             std::stable_sort(
                 items.begin(), items.end(),
                 [&](size_t item_a, size_t item_b)
                 {
-                    for (auto &atom : atoms)
+                    for (auto &atom : query.sort_atoms)
                     {
-                        auto prop_id = atom.prop_id;
-                        auto &prop = *impl.GetProperty(prop_id);
-                        auto str_a = prop.GetSearchableStr(prop.GetStrId(item_a));
-                        auto str_b = prop.GetSearchableStr(prop.GetStrId(item_b));
-                        auto cmp = str_a.text <=> str_b.text;
-                        if (cmp == 0)
-                            continue;
+                        if (atom.sort_by_matched)
+                        {
+                            for (auto &filter : query.inclusion_filters)
+                            {
+                                matched_a->subs.clear();
+                                matched_b->subs.clear();
+                                auto propset = impl.GetMetaPropset(filter.meta_prop_id);
+                                std::strong_ordering cmp;
+                                for (auto prop_id : propset.IterSetBits())
+                                {
+                                    if (prop_id == I::PropCount())
+                                        continue;
 
-                        return atom.is_negated ? cmp > 0 : cmp < 0;
+                                    auto &prop = *impl.GetProperty(prop_id);
+                                    auto str_a = prop.GetSearchableStr(prop.GetStrId(item_a));
+                                    auto str_b = prop.GetSearchableStr(prop.GetStrId(item_b));
+                                    for (auto &matcher : filter.matchers)
+                                    {
+                                        matched_temp->Populate(matcher, str_a);
+                                        if (matched_a->subs.empty() ||
+                                            (!matched_temp->subs.empty() && (cmp = *matched_temp <=> *matched_a, (cmp != 0 && ((cmp < 0) != atom.is_negated)))))
+                                        {
+                                            std::swap(matched_a, matched_temp);
+                                        }
+
+                                        matched_temp->Populate(matcher, str_b);
+                                        if (matched_b->subs.empty() ||
+                                            (!matched_temp->subs.empty() && (cmp = *matched_temp <=> *matched_b, (cmp != 0 && ((cmp < 0) != atom.is_negated)))))
+                                        {
+                                            std::swap(matched_b, matched_temp);
+                                        }
+                                    }
+                                }
+                                cmp = *matched_a <=> *matched_b;
+                                if (cmp != 0)
+                                    return (cmp < 0) != atom.is_negated;
+                            }
+                        }
+                        else
+                        {
+                            auto prop_id = atom.prop_id;
+                            auto &prop = *impl.GetProperty(prop_id);
+                            auto str_a = prop.GetSearchableStr(prop.GetStrId(item_a));
+                            auto str_b = prop.GetSearchableStr(prop.GetStrId(item_b));
+                            auto cmp = str_a.text <=> str_b.text;
+                            if (cmp != 0)
+                                return (cmp < 0) != atom.is_negated;
+                        }
                     }
                     return false;
                 }
@@ -781,7 +856,7 @@ namespace HerosInsight::Filtering
 
             if (!query.sort_atoms.empty())
             {
-                SortItems(query.sort_atoms, items);
+                SortItems(query, items);
             }
         }
         void GetFeedback(Query &query, Feedback &out, bool verbose = false)
@@ -952,15 +1027,14 @@ namespace HerosInsight::Filtering
                     s.append_range((std::string_view) "by ");
 
                     std::string_view sort_target_name;
-                    if (arg.meta_id == 0)
+                    if (arg.sort_target_id == 0)
                     {
                         sort_target_name = "Default";
                     }
                     else
                     {
-                        auto meta_name = impl.GetMetaName(arg.meta_id);
                         FixedVector<char, 128> name;
-                        meta_name.GetRenderableString(name);
+                        GetSortTargetName(arg.sort_target_id).GetRenderableString(name);
                         sort_target_name = name;
                     }
 
@@ -1070,7 +1144,29 @@ namespace HerosInsight::Filtering
             }
         }
 
-        inline std::optional<size_t> TryGetMetaIndexFromName(std::string_view subject)
+        inline LoweredText GetSortTargetName(size_t sort_target_id)
+        {
+            auto n_meta = impl.MetaCount();
+            if (sort_target_id < n_meta)
+                return impl.GetMetaName(sort_target_id);
+
+            assert(sort_target_id == n_meta);
+            return (LoweredText)matched_target;
+        }
+
+        inline std::optional<size_t> TryGetSortTargetIdFromName(std::string_view subject)
+        {
+            return BestMatch(
+                subject,
+                [this](size_t id)
+                {
+                    return this->GetSortTargetName(id);
+                },
+                impl.MetaCount() + 1
+            );
+        }
+
+        inline std::optional<size_t> TryGetMetaIdFromName(std::string_view subject)
         {
             return BestMatch(
                 subject,

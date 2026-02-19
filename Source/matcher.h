@@ -101,13 +101,17 @@ namespace HerosInsight
 
         constexpr operator LoweredText() { return LoweredText(TextView(), UppercaseView()); }
 
-        constexpr explicit LoweredTextOwned(const char (&chars)[N])
+        constexpr explicit LoweredTextOwned(std::string_view chars)
         {
             for (size_t i = 0; i < N; ++i)
                 text[i] = chars[i];
             LoweredTextBase<LoweredTextOwned<N>>::FoldText(std::span<char>(text.data(), N), (BitView)uppercase);
         }
     };
+
+    template <size_t M>
+    LoweredTextOwned(const char (&)[M])
+        -> LoweredTextOwned<M - 1>;
 
     struct LoweredTextVector
     {

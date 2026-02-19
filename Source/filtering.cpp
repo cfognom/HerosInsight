@@ -67,7 +67,7 @@ namespace HerosInsight::Filtering
         hl = hl.subspan(0, dst_idx);
     }
 
-    std::strong_ordering CompareSubstrs(std::span<uint16_t> asubs, std::string_view astr, std::span<uint16_t> bsubs, std::string_view bstr)
+    std::strong_ordering CompareSubstrs(std::span<const uint16_t> asubs, std::string_view astr, std::span<const uint16_t> bsubs, std::string_view bstr)
     {
         size_t count = std::min(asubs.size(), bsubs.size());
         std::strong_ordering cmp;
