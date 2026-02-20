@@ -1456,7 +1456,7 @@ namespace HerosInsight::SkillBook
                 }
                 else if ((int)settings.scope <= (int)BookSettings::Scope::ForProfessions)
                 {
-                    auto skill_prof_mask = 1 << (uint32_t)cskill.skill->profession;
+                    auto skill_prof_mask = 1 << (uint32_t)cskill.skill.profession;
                     if ((prof_mask & skill_prof_mask) == 0)
                         continue;
                 }
@@ -1641,7 +1641,7 @@ namespace HerosInsight::SkillBook
         {
             ImGui::BeginGroup(); // Whole header
 
-            const auto &skill = *custom_sd.skill;
+            const auto &skill = custom_sd.skill;
             const auto skill_id = custom_sd.skill_id;
 
             { // Draw skill icon
@@ -1649,7 +1649,7 @@ namespace HerosInsight::SkillBook
                 auto icon_cursor_ss = ImGui::GetCursorScreenPos();
                 bool is_hovered = ImGui::IsMouseHoveringRect(icon_cursor_ss, icon_cursor_ss + ImVec2(skill_icon_size, skill_icon_size));
                 bool is_effect = custom_sd.tags.EffectOnly;
-                if (TextureModule::DrawSkill(*custom_sd.skill, icon_cursor_ss, skill_icon_size, is_effect, is_hovered) ||
+                if (TextureModule::DrawSkill(custom_sd.skill, icon_cursor_ss, skill_icon_size, is_effect, is_hovered) ||
                     TextureModule::DrawSkill(*GW::SkillbarMgr::GetSkillConstantData(GW::Constants::SkillID::No_Skill), icon_cursor_ss, skill_icon_size, is_effect, is_hovered))
                 {
                     if (is_hovered && is_equipable)
@@ -1902,7 +1902,7 @@ namespace HerosInsight::SkillBook
 
         void DrawSkillFooter(CustomSkillData &custom_sd, float work_width)
         {
-            auto &skill = *custom_sd.skill;
+            auto &skill = custom_sd.skill;
             auto skill_id = custom_sd.skill_id;
             ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dull_gray);
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
@@ -2040,7 +2040,7 @@ namespace HerosInsight::SkillBook
                         const auto window = ImGui::GetCurrentWindow();
                         const auto work_width = window->WorkRect.GetWidth();
 
-                        bool is_equipable = Utils::IsSkillEquipable(*custom_sd.skill, focused_agent_id);
+                        bool is_equipable = Utils::IsSkillEquipable(custom_sd.skill, focused_agent_id);
 
                         DrawSkillHeader(custom_sd, is_equipable);
                         DrawDescription(skill_id, work_width);

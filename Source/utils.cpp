@@ -776,7 +776,7 @@ namespace HerosInsight::Utils
     uint8_t CalculateEnergyCost(uint32_t agent_id, GW::Constants::SkillID skill_id)
     {
         const auto &custom_sd = CustomSkillDataModule::GetCustomSkillData(skill_id);
-        const auto &skill = *custom_sd.skill;
+        const auto &skill = custom_sd.skill;
 
         const auto base_energy_cost = skill.GetEnergyCost();
         auto energy_cost = (float)base_energy_cost;
@@ -1116,7 +1116,7 @@ namespace HerosInsight::Utils
     std::optional<ChancyValue> CalculateRecharge(uint32_t agent_id, GW::Constants::SkillID skill_id)
     {
         const auto &custom_sd = CustomSkillDataModule::GetCustomSkillData(skill_id);
-        const auto &skill = *custom_sd.skill;
+        const auto &skill = custom_sd.skill;
         const auto &custom_ad = CustomAgentDataModule::GetCustomAgentData(agent_id);
         const auto agent_ptr = Utils::GetAgentLivingByID(agent_id);
         if (agent_ptr == nullptr)
@@ -1202,7 +1202,7 @@ namespace HerosInsight::Utils
     std::optional<ChancyValue> CalculateCasttime(uint32_t agent_id, GW::Constants::SkillID skill_id)
     {
         const auto &custom_sd = CustomSkillDataModule::GetCustomSkillData(skill_id);
-        const auto &skill = *custom_sd.skill;
+        const auto &skill = custom_sd.skill;
         const auto &custom_ad = CustomAgentDataModule::GetCustomAgentData(agent_id);
         const auto agent_ptr = Utils::GetAgentLivingByID(agent_id);
         if (agent_ptr == nullptr)
@@ -1285,7 +1285,7 @@ namespace HerosInsight::Utils
         auto &custom_ad = CustomAgentDataModule::GetCustomAgentData(agent_id);
         auto &custom_sd = CustomSkillDataModule::GetCustomSkillData(skill_id);
         auto base_duration = custom_sd.ResolveBaseDuration(custom_ad);
-        const auto duration = (float)CalculateDuration(*custom_sd.skill, base_duration, agent_id);
+        const auto duration = (float)CalculateDuration(custom_sd.skill, base_duration, agent_id);
         if (duration == 0)
             return {};
 
@@ -3540,7 +3540,7 @@ namespace HerosInsight::Utils
         bool is_player = agent_id == GW::Agents::GetControlledCharacterId();
         if (!is_player)
         {
-            if (skill.skill->IsPvE()) // Heroes cannot learn PvE skills
+            if (skill.skill.IsPvE()) // Heroes cannot learn PvE skills
                 return false;
         }
 

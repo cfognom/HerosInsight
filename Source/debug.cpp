@@ -125,7 +125,7 @@ namespace HerosInsight::Debug
             return;
 
         const auto &cskill = CustomSkillDataModule::GetCustomSkillData(skill_id);
-        auto &skill = *cskill.skill;
+        auto &skill = cskill.skill;
         const auto str = Utils::SkillConstantDataToString(skill);
         DebugDisplay::PushToDisplay("Hovered skill data", str);
 

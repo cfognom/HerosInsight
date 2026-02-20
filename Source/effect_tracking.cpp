@@ -404,7 +404,7 @@ namespace HerosInsight::EffectTracking
     {
         const auto skill_id = effect.skill_id;
         const auto &custom_sd = CustomSkillDataModule::GetCustomSkillData(skill_id);
-        const auto &skill = *custom_sd.skill;
+        const auto &skill = custom_sd.skill;
 
         // clang-format off
         switch (skill.type) {

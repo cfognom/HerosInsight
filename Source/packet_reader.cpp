@@ -920,7 +920,7 @@ namespace HerosInsight::PacketReader
             auto &custom_sd = CustomSkillDataModule::GetCustomSkillData(skill_id);
             auto base_duration = custom_sd.ResolveBaseDuration(custom_ad, attribute_rank);
             auto source_skill_id = last_skill_cast[caster_id].skill_id;
-            const auto calc_duration = (float)Utils::CalculateDuration(*custom_sd.skill, base_duration, caster_id);
+            const auto calc_duration = (float)Utils::CalculateDuration(custom_sd.skill, base_duration, caster_id);
 
             const auto duration_diff = std::abs(duration - calc_duration);
             const auto success = duration_diff < 0.001f;

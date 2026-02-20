@@ -583,7 +583,7 @@ namespace HerosInsight
     struct CustomSkillData
     {
         GW::Constants::SkillID skill_id;
-        GW::Skill *skill;
+        GW::Skill &skill;
 
         SkillTags tags;
         Utils::SkillContext context;
@@ -595,7 +595,7 @@ namespace HerosInsight
         std::vector<StaticSkillEffect> end_effects;
         std::vector<StaticSkillEffect> drop_effects;
 
-        void Init();
+        CustomSkillData(GW::Skill &skill);
 
         SkillParam GetSkillParam(uint32_t id) const;
         SkillParam GetParsedSkillParam(std::function<bool(const ParsedSkillData &)> predicate) const;
