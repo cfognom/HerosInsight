@@ -5,48 +5,48 @@
 #include <GWCA/Utilities/Hooker.h>
 #include <GWCA/Utilities/Scanner.h>
 
-#include <GWCA/GameEntities/Map.h>
 #include <GWCA/GameEntities/Agent.h>
+#include <GWCA/GameEntities/Map.h>
 #include <GWCA/GameEntities/NPC.h>
 #include <GWCA/GameEntities/Party.h>
 #include <GWCA/GameEntities/Player.h>
 #include <GWCA/GameEntities/Skill.h>
 
-#include <GWCA/Context/PreGameContext.h>
-#include <GWCA/Context/CharContext.h>
 #include <GWCA/Context/AgentContext.h>
-#include <GWCA/Context/PartyContext.h>
-#include <GWCA/Context/MapContext.h>
+#include <GWCA/Context/CharContext.h>
 #include <GWCA/Context/GadgetContext.h>
 #include <GWCA/Context/GameContext.h>
+#include <GWCA/Context/MapContext.h>
+#include <GWCA/Context/PartyContext.h>
+#include <GWCA/Context/PreGameContext.h>
 
 #include <GWCA/Constants/AgentIDs.h>
+#include <GWCA/Constants/Constants.h>
 #include <GWCA/Constants/Maps.h>
 #include <GWCA/Constants/Skills.h>
-#include <GWCA/Constants/Constants.h>
 
 #include <GWCA/GameContainers/Array.h>
 #include <GWCA/GameContainers/GamePos.h>
 #include <GWCA/GameContainers/List.h>
 
-#include <GWCA/Managers/GameThreadMgr.h>
-#include <GWCA/Managers/Module.h>
-#include <GWCA/Managers/UIMgr.h>
-#include <GWCA/Managers/StoCMgr.h>
-#include <GWCA/Managers/MemoryMgr.h>
-#include <GWCA/Managers/MapMgr.h>
-#include <GWCA/Managers/ChatMgr.h>
-#include <GWCA/Managers/RenderMgr.h>
-#include <GWCA/Managers/EffectMgr.h>
-#include <GWCA/Managers/SkillbarMgr.h>
 #include <GWCA/Managers/AgentMgr.h>
+#include <GWCA/Managers/ChatMgr.h>
+#include <GWCA/Managers/EffectMgr.h>
+#include <GWCA/Managers/GameThreadMgr.h>
+#include <GWCA/Managers/MapMgr.h>
+#include <GWCA/Managers/MemoryMgr.h>
+#include <GWCA/Managers/Module.h>
 #include <GWCA/Managers/PartyMgr.h>
 #include <GWCA/Managers/PlayerMgr.h>
+#include <GWCA/Managers/RenderMgr.h>
+#include <GWCA/Managers/SkillbarMgr.h>
+#include <GWCA/Managers/StoCMgr.h>
+#include <GWCA/Managers/UIMgr.h>
 
 #include <debug_display.h>
+#include <effect_tracking.h>
 #include <update_manager.h>
 #include <utils.h>
-#include <effect_tracking.h>
 #include <worldspaceUI.h>
 
 #include "party_data.h"
@@ -276,7 +276,7 @@ namespace HerosInsight
                     auto skill_id = effect.skill_id;
 
                     const auto caster_id = effect.cause_agent_id;
-                    const auto opt_hp_per_sec = Utils::CalculateEffectHPPerSec(skill_id, effect.attribute_level);
+                    const auto opt_hp_per_sec = Utils::CalculateEffectHPPerSec(skill_id, effect.attribute_rank);
 
                     auto caster_hp_per_sec = opt_hp_per_sec ? opt_hp_per_sec.value().caster_hp_sec : 0;
                     auto target_hp_per_sec = opt_hp_per_sec ? opt_hp_per_sec.value().target_hp_sec : 0;

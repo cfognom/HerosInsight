@@ -91,25 +91,25 @@ namespace HerosInsight
             return val0 == other.val0 && val15 == other.val15;
         }
 
-        bool IsSingular(int32_t attribute_lvl) const
+        bool IsSingular(int32_t attribute_rank) const
         {
-            return 1 == (attribute_lvl == -1 ? val15 : Resolve(attribute_lvl));
+            return 1 == (attribute_rank == -1 ? val15 : Resolve(attribute_rank));
         }
 
-        // Computes the value at a given attribute level
-        uint32_t Resolve(uint32_t attribute_lvl) const
+        // Computes the value at a given attribute rank
+        uint32_t Resolve(uint32_t attribute_rank) const
         {
-            return IsConstant() ? val0 : Utils::LinearAttributeScale(val0, val15, attribute_lvl);
+            return IsConstant() ? val0 : Utils::LinearAttributeScale(val0, val15, attribute_rank);
         }
 
-        void Print(int32_t attribute_lvl, OutBuf<char> out) const
+        void Print(int32_t attribute_rank, OutBuf<char> out) const
         {
             auto dst = out.data();
             auto dst_size = out.size();
             auto dst_end = dst + dst_size;
-            if (IsConstant() || attribute_lvl != -1)
+            if (IsConstant() || attribute_rank != -1)
             {
-                uint32_t value = Resolve(attribute_lvl);
+                uint32_t value = Resolve(attribute_rank);
                 out.AppendIntToChars(value, 10);
             }
             else
@@ -118,10 +118,10 @@ namespace HerosInsight
             }
         }
 
-        void ImGuiRender(int32_t attribute_lvl)
+        void ImGuiRender(int32_t attribute_rank)
         {
             FixedVector<char, 32> buffer;
-            Print(attribute_lvl, buffer);
+            Print(attribute_rank, buffer);
 
             if (!IsConstant())
                 ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::skill_dynamic_green);
@@ -287,7 +287,7 @@ namespace HerosInsight
         {
             return type >= Type::ConditionsRemoved && type <= Type::EnchantmentsRemoved;
         }
-        void ImGuiRender(int8_t attr_lvl, float width, std::span<uint16_t> hl);
+        void ImGuiRender(int8_t attr_rank, float width, std::span<uint16_t> hl);
 
         GW::Constants::SkillID GetCondition() const;
         RemovalMask GetRemovalMask() const;
@@ -510,7 +510,7 @@ namespace HerosInsight
         SkillParam duration_or_count;
 
         bool IsAffected(uint32_t caster_id, uint32_t target_id, uint32_t candidate_agent_id) const;
-        void Apply(uint32_t caster_id, uint32_t target_id, uint8_t attr_lvl, std::function<bool(GW::AgentLiving &)> predicate = nullptr) const;
+        void Apply(uint32_t caster_id, uint32_t target_id, uint8_t attr_rank, std::function<bool(GW::AgentLiving &)> predicate = nullptr) const;
         std::wstring ToWString() const;
     };
 
@@ -547,20 +547,20 @@ namespace HerosInsight
 
     struct DescKey
     {
-        DescKey(const GW::Skill &skill, bool is_concise, int8_t attribute_lvl)
+        DescKey(const GW::Skill &skill, bool is_concise, int8_t attribute_rank)
         {
-            is_singular0 = GetSkillParam(skill, 0).IsSingular(attribute_lvl);
-            is_singular1 = GetSkillParam(skill, 1).IsSingular(attribute_lvl);
-            is_singular2 = GetSkillParam(skill, 2).IsSingular(attribute_lvl);
+            is_singular0 = GetSkillParam(skill, 0).IsSingular(attribute_rank);
+            is_singular1 = GetSkillParam(skill, 1).IsSingular(attribute_rank);
+            is_singular2 = GetSkillParam(skill, 2).IsSingular(attribute_rank);
             is_concise = is_concise;
-            attribute_lvl = attribute_lvl;
+            attribute_rank = attribute_rank;
         }
 
         bool is_singular0 : 1;
         bool is_singular1 : 1;
         bool is_singular2 : 1;
         bool is_concise : 1;
-        int8_t attribute_lvl : 8;
+        int8_t attribute_rank : 8;
 
         uint16_t value() const
         {
@@ -600,8 +600,8 @@ namespace HerosInsight
         SkillParam GetSkillParam(uint32_t id) const;
         SkillParam GetParsedSkillParam(std::function<bool(const ParsedSkillData &)> predicate) const;
         void GetParsedSkillParams(ParsedSkillData::Type type, OutBuf<ParsedSkillData> result) const;
-        void GetInitConditions(uint8_t attr_lvl, OutBuf<SkillEffect> result) const;
-        void GetEndConditions(uint8_t attr_lvl, OutBuf<SkillEffect> result) const;
+        void GetInitConditions(uint8_t attr_rank, OutBuf<SkillEffect> result) const;
+        void GetEndConditions(uint8_t attr_rank, OutBuf<SkillEffect> result) const;
         std::span<const ParsedSkillData> GetInitParsedData() const;
         std::span<const ParsedSkillData> GetEndParsedData() const;
 
@@ -629,7 +629,7 @@ namespace HerosInsight
         float GetAftercast() const;
         Utils::Range GetAoE() const;
         void GetRanges(OutBuf<Utils::Range> out) const;
-        uint32_t ResolveBaseDuration(CustomAgentData &custom_ad, std::optional<uint8_t> skill_attr_lvl_override = std::nullopt) const;
+        uint32_t ResolveBaseDuration(CustomAgentData &custom_ad, std::optional<uint8_t> skill_attr_rank_override = std::nullopt) const;
 
     private:
         std::string_view type_str;

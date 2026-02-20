@@ -359,7 +359,7 @@ namespace HerosInsight::Utils
         float caster_hp_sec;
         float target_hp_sec;
     };
-    std::optional<EffectHPPerSec> CalculateEffectHPPerSec(GW::Constants::SkillID skill_id, uint32_t attribute_level);
+    std::optional<EffectHPPerSec> CalculateEffectHPPerSec(GW::Constants::SkillID skill_id, uint32_t attribute_rank);
 
     bool UseSkill(uint32_t hero_index, GW::Constants::SkillID skill_id, uint32_t target = NULL);
     bool UseSkill(uint32_t hero_index, uint32_t slot_index, uint32_t target = NULL);
@@ -461,7 +461,7 @@ namespace HerosInsight::Utils
 
     std::string SkillConstantDataToString(GW::Skill &skill);
 
-    uint32_t LinearAttributeScale(uint32_t value0, uint32_t value15, uint32_t attribute_level);
+    uint32_t LinearAttributeScale(uint32_t value0, uint32_t value15, uint32_t attribute_rank);
     std::optional<std::pair<uint8_t, uint8_t>> ReverseLinearAttributeScale(uint32_t value0, uint32_t value15, uint32_t value);
     std::span<GW::Attribute> GetAgentAttributeSpan(uint32_t agent_id);
     uint32_t GetAgentAttributeForSkill(uint32_t agent_id, GW::Skill &skill);

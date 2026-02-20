@@ -109,11 +109,8 @@ namespace HerosInsight::EffectTracking
         {
             // There can only be one of this type active at a time
 
-            EffectTracking::RemoveTrackers(agent_id,
-                [=](EffectTracking::EffectTracker &tracker)
-                {
-                    return GW::SkillbarMgr::GetSkillConstantData(tracker.skill_id)->type == skill_type;
-                });
+            EffectTracking::RemoveTrackers(agent_id, [=](EffectTracking::EffectTracker &tracker)
+                                           { return GW::SkillbarMgr::GetSkillConstantData(tracker.skill_id)->type == skill_type; });
         }
 
         if (!new_effect.begin_timestamp)
@@ -131,9 +128,9 @@ namespace HerosInsight::EffectTracking
         {
             if (existing_effect.skill_id == new_effect.skill_id && existing_effect.is_active)
             {
-                if (existing_effect.attribute_level < new_effect.attribute_level ||
-                    (existing_effect.attribute_level == new_effect.attribute_level &&
-                        existing_effect.cause_agent_id == new_effect.cause_agent_id))
+                if (existing_effect.attribute_rank < new_effect.attribute_rank ||
+                    (existing_effect.attribute_rank == new_effect.attribute_rank &&
+                     existing_effect.cause_agent_id == new_effect.cause_agent_id))
                 {
                     existing_effect.is_active = false;
                 }
@@ -155,7 +152,7 @@ namespace HerosInsight::EffectTracking
         uint32_t effect_id;
         uint32_t cause_agent_id;
         float duration;
-        uint8_t attribute_level;
+        uint8_t attribute_rank;
         DWORD timestamp_begin;
         std::vector<uint32_t> agents_in_range;
     };
@@ -213,11 +210,8 @@ namespace HerosInsight::EffectTracking
 
         for (auto agent_id : aoe->agents_in_range)
         {
-            RemoveTrackers(agent_id,
-                [=](EffectTracker &tracker)
-                {
-                    return tracker.aoe_id == id;
-                });
+            RemoveTrackers(agent_id, [=](EffectTracker &tracker)
+                           { return tracker.aoe_id == id; });
         }
         aoe = std::nullopt;
     }
@@ -262,7 +256,7 @@ namespace HerosInsight::EffectTracking
             {
                 if (check_effect.skill_id == skill_id &&
                     // Because the effects are sorted by timestap; in case of ties, we get the oldest effect
-                    (!candidate_effect || check_effect.attribute_level > candidate_effect->attribute_level))
+                    (!candidate_effect || check_effect.attribute_rank > candidate_effect->attribute_rank))
                 {
                     candidate_effect = &check_effect;
                 }
@@ -531,9 +525,8 @@ namespace HerosInsight::EffectTracking
 
             auto &agents_in_range = aoe_effect->agents_in_range;
             size_t i = 0;
-            Utils::ForAgentsInCircle(aoe_effect->pos, aoe_effect->radius,
-                [&](GW::AgentLiving &agent)
-                {
+            Utils::ForAgentsInCircle(aoe_effect->pos, aoe_effect->radius, [&](GW::AgentLiving &agent)
+                                     {
                     auto agent_id = agent.agent_id;
 
                     if (Utils::ReceivesStoCEffects(agent_id))
@@ -577,12 +570,11 @@ namespace HerosInsight::EffectTracking
                         tracker.effect_id = aoe_effect->effect_id;
                         tracker.aoe_id = id;
                         tracker.duration_sec = rem_duration;
-                        tracker.attribute_level = aoe_effect->attribute_level;
+                        tracker.attribute_rank = aoe_effect->attribute_rank;
 
                         AddTracker(agent_id, tracker);
                         ++i;
-                    }
-                });
+                    } });
 
             for (uint32_t j = 0; j < agents_in_range.size(); ++j)
             {
@@ -593,20 +585,14 @@ namespace HerosInsight::EffectTracking
                 // Remove trackers from agents no longer in range
                 if (agent_id_in_range & remove_marker)
                 {
-                    RemoveTrackers(agent_id_in_range & ~remove_marker,
-                        [&](EffectTracker &effect)
-                        {
-                            return effect.aoe_id == id;
-                        });
+                    RemoveTrackers(agent_id_in_range & ~remove_marker, [&](EffectTracker &effect)
+                                   { return effect.aoe_id == id; });
                 }
             }
 
             // Remove agents no longer in range from aoe's tracking
-            std::erase_if(agents_in_range,
-                [&](uint32_t agent_id)
-                {
-                    return agent_id & remove_marker;
-                });
+            std::erase_if(agents_in_range, [&](uint32_t agent_id)
+                          { return agent_id & remove_marker; });
         }
     }
 

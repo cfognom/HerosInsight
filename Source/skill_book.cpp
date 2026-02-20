@@ -302,8 +302,8 @@ namespace HerosInsight::SkillBook
     {
     public:
         GW::Constants::SkillID skill_id;
-        int8_t attr_lvl;
-        SkillTooltipProvider(GW::Constants::SkillID skill_id, int8_t attr_lvl) : skill_id(skill_id), attr_lvl(attr_lvl) {}
+        int8_t attr_rank;
+        SkillTooltipProvider(GW::Constants::SkillID skill_id, int8_t attr_rank) : skill_id(skill_id), attr_rank(attr_rank) {}
         void DrawTooltip(uint32_t tooltip_id)
         {
             auto &custom_sd = CustomSkillDataModule::GetCustomSkillData(skill_id);
@@ -336,12 +336,12 @@ namespace HerosInsight::SkillBook
                 float width;
             };
 
-            constexpr uint32_t attr_lvls = 22;
+            constexpr uint32_t attr_ranks = 22;
             constexpr uint32_t rows = Row::COUNT;
-            constexpr uint32_t cols = 1 + attr_lvls;
+            constexpr uint32_t cols = 1 + attr_ranks;
             constexpr uint32_t cell_count = rows * cols;
             std::array<Cell, cell_count> cells;
-            std::array<int32_t, attr_lvls - 1> deltas;
+            std::array<int32_t, attr_ranks - 1> deltas;
 
             auto skill_param = custom_sd.GetSkillParam(tooltip_id);
 
@@ -351,22 +351,22 @@ namespace HerosInsight::SkillBook
                 cells[DeltaRow * cols + 0].str = "Change";
 
                 int32_t prev_value = 0;
-                for (size_t attr_lvl = 0; attr_lvl < attr_lvls; ++attr_lvl)
+                for (size_t attr_rank = 0; attr_rank < attr_ranks; ++attr_rank)
                 {
-                    auto value = skill_param.Resolve(attr_lvl);
+                    auto value = skill_param.Resolve(attr_rank);
                     auto delta = (int32_t)value - prev_value;
                     prev_value = value;
 
-                    auto x = 1 + attr_lvl;
+                    auto x = 1 + attr_rank;
 
-                    auto &attr_lvl_cell = cells[AttributeRow * cols + x];
+                    auto &attr_rank_cell = cells[AttributeRow * cols + x];
                     auto &value_cell = cells[ValueRow * cols + x];
                     auto &delta_cell = cells[DeltaRow * cols + x];
 
                     constexpr size_t buffer_size = sizeof(Cell::chars);
-                    snprintf(attr_lvl_cell.chars, buffer_size, "%d", attr_lvl);
+                    snprintf(attr_rank_cell.chars, buffer_size, "%d", attr_rank);
                     snprintf(value_cell.chars, buffer_size, "%d", value);
-                    if (attr_lvl == 0 || delta == 0)
+                    if (attr_rank == 0 || delta == 0)
                     {
                         delta_cell.chars[0] = '-';
                         delta_cell.chars[1] = '\0';
@@ -375,9 +375,9 @@ namespace HerosInsight::SkillBook
                     {
                         snprintf(delta_cell.chars, buffer_size, "%+d", delta);
                     }
-                    if (attr_lvl > 0)
+                    if (attr_rank > 0)
                     {
-                        deltas[attr_lvl - 1] = delta;
+                        deltas[attr_rank - 1] = delta;
                     }
                 }
             }
@@ -417,8 +417,8 @@ namespace HerosInsight::SkillBook
                     .color = IM_COL32_WHITE
                 };
 
-                int32_t attr_lvl = (int32_t)col - 1;
-                bool is_special = attr_lvl == 0 || attr_lvl == 12 || attr_lvl == 15;
+                int32_t attr_rank = (int32_t)col - 1;
+                bool is_special = attr_rank == 0 || attr_rank == 12 || attr_rank == 15;
                 switch (row)
                 {
                     case AttributeRow:
@@ -525,8 +525,8 @@ namespace HerosInsight::SkillBook
 
                 if (x > 0)
                 {
-                    auto attr_lvl = x - 1;
-                    if (attr_lvl == this->attr_lvl)
+                    auto attr_rank = x - 1;
+                    if (attr_rank == this->attr_rank)
                     {
                         // Draw selector box around current attribute
                         auto min = col_cursor + ImVec2(x_padding - selector_box_padding, -selector_box_padding);
@@ -914,7 +914,7 @@ namespace HerosInsight::SkillBook
         AttributeSource attr_src;
         Ruleset ruleset = Ruleset::Mixed;
         Scope scope = Scope::Default;
-        int attr_lvl_slider = 12;
+        int attr_rank_slider = 12;
 
         bool use_exact_adrenaline = false;
         bool prefer_concise_descriptions = false;
@@ -940,8 +940,8 @@ namespace HerosInsight::SkillBook
             auto &settings = *(BookSettings *)data;
             auto &cskill = CustomSkillDataModule::GetSkills()[skill_id];
             auto &text_provider = Text::GetTextProvider(GW::Constants::Language::English);
-            auto attr_lvl = settings.attr_src.GetAttrLvl(cskill.attribute);
-            return text_provider.MakeSkillDescription(b, (GW::Constants::SkillID)skill_id, IsConcise, attr_lvl);
+            auto attr_rank = settings.attr_src.GetAttrLvl(cskill.attribute);
+            return text_provider.MakeSkillDescription(b, (GW::Constants::SkillID)skill_id, IsConcise, attr_rank);
         }
 
         explicit FilteringAdapter(TextStorage &storage, BookSettings &settings)
@@ -1372,17 +1372,17 @@ namespace HerosInsight::SkillBook
                     case AttributeSource::Type::FromAgent:
                         break;
                     case AttributeSource::Type::Manual:
-                        settings.attr_src.value = settings.attr_lvl_slider;
+                        settings.attr_src.value = settings.attr_rank_slider;
                         break;
                 }
             }
 
             if (settings.attr_src.type == AttributeSource::Type::Manual)
             {
-                if (ImGui::SliderInt("Attribute level", &settings.attr_lvl_slider, 0, 21))
+                if (ImGui::SliderInt("Attribute rank", &settings.attr_rank_slider, 0, 21))
                 {
                     dirty_flags |= DirtyFlags::Props;
-                    settings.attr_src.value = settings.attr_lvl_slider;
+                    settings.attr_src.value = settings.attr_rank_slider;
                 }
             }
         }
@@ -1852,8 +1852,8 @@ namespace HerosInsight::SkillBook
         void DrawDescription(GW::Constants::SkillID skill_id, float work_width)
         {
             auto &cskill = CustomSkillDataModule::GetSkills()[(size_t)skill_id];
-            auto attr_lvl = settings.attr_src.GetAttrLvl(cskill.attribute);
-            auto tt_provider = SkillTooltipProvider(skill_id, attr_lvl);
+            auto attr_rank = settings.attr_src.GetAttrLvl(cskill.attribute);
+            auto tt_provider = SkillTooltipProvider(skill_id, attr_rank);
             text_drawer.tooltip_provider = &tt_provider;
 
             auto main_prop = settings.prefer_concise_descriptions ? SkillProp::Concise : SkillProp::Description;

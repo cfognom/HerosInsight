@@ -1,4 +1,6 @@
 # CHANGELOG
+- Renamed 'Attribute level' to 'Attribute rank'.
+
 ## 0.7.0
 - Added a special sort target: "Matched" that sorts according to whatever is matched by the query, filter by filter. Also added an example in the help menu showcasing how this feature can be used.
 - Made "Additional matches in x description" be a bit more relaxed.

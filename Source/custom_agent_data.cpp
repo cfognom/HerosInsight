@@ -138,7 +138,7 @@ namespace HerosInsight
             auto attribute_span = Utils::GetAgentAttributeSpan(agent_id);
             if (!attribute_span.empty())
             {
-                return attribute_span[(size_t)id.GetAttribute()].level;
+                return attribute_span[(size_t)id.GetAttribute()].rank;
             }
         }
         else if (id.IsTitle())

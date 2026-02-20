@@ -697,20 +697,20 @@ namespace HerosInsight::Utils
         return ToggleSkill(hero_index, slot_index);
     }
 
-    uint32_t LinearAttributeScale(uint32_t value0, uint32_t value15, uint32_t attribute_level)
+    uint32_t LinearAttributeScale(uint32_t value0, uint32_t value15, uint32_t attribute_rank)
     {
-        assert(attribute_level <= 21);
+        assert(attribute_rank <= 21);
         int32_t diff = (int32_t)value15 - (int32_t)value0;
         int32_t rounder = diff < 0 ? -15 : 15;
-        int32_t result = (int32_t)value0 + (diff * (int32_t)attribute_level * 2 + rounder) / 30;
+        int32_t result = (int32_t)value0 + (diff * (int32_t)attribute_rank * 2 + rounder) / 30;
 
-        // Only for Withdraw Hexes and Signet of Binding might the result be negative if attribute_level is 21.
+        // Only for Withdraw Hexes and Signet of Binding might the result be negative if attribute_rank is 21.
         // It is unclear what the game does in that case. We assume it is clamped to 0.
         uint32_t uresult = (uint32_t)std::max(result, 0);
         return uresult;
     }
 
-    // Returns a pair of the minimum and maximum attribute level that produces this value
+    // Returns a pair of the minimum and maximum attribute rank that produces this value
     // If it is not possible to produce this value, returns std::nullopt
     std::optional<std::pair<uint8_t, uint8_t>> ReverseLinearAttributeScale(uint32_t value0, uint32_t value15, uint32_t value)
     {
@@ -723,15 +723,15 @@ namespace HerosInsight::Utils
             return std::nullopt;
         }
         int32_t rounder = diffX_0 < 0 ? -15 : 15;
-        auto hyp_attr_lvl_max = (diffX_0 * 30 + rounder) / (2 * diff15_0);
-        auto hyp_attr_lvl_min = (diffX_0 * 30 - rounder) / (2 * diff15_0) + 1;
-        if (hyp_attr_lvl_max < 0 || hyp_attr_lvl_min > 21)
+        auto hyp_attr_rank_max = (diffX_0 * 30 + rounder) / (2 * diff15_0);
+        auto hyp_attr_rank_min = (diffX_0 * 30 - rounder) / (2 * diff15_0) + 1;
+        if (hyp_attr_rank_max < 0 || hyp_attr_rank_min > 21)
             return std::nullopt; // Its not possible to produce this value
 
-        auto attr_lvl_max = std::min(hyp_attr_lvl_max, 21);
-        auto attr_lvl_min = std::max(hyp_attr_lvl_min, 0);
+        auto attr_rank_max = std::min(hyp_attr_rank_max, 21);
+        auto attr_rank_min = std::max(hyp_attr_rank_min, 0);
 
-        return std::make_pair((uint8_t)attr_lvl_min, (uint8_t)attr_lvl_max);
+        return std::make_pair((uint8_t)attr_rank_min, (uint8_t)attr_rank_max);
     }
 
     std::span<GW::Attribute> GetAgentAttributeSpan(uint32_t agent_id)
@@ -764,8 +764,8 @@ namespace HerosInsight::Utils
         // Sort effects by timestamp
         // clang-format off
         std::sort(effectBuffer, effectBuffer + n_effects, [](const auto &a, const auto &b) { 
-            if (a.skill_id == b.skill_id && a.attribute_level != b.attribute_level)
-                return a.attribute_level > b.attribute_level;
+            if (a.skill_id == b.skill_id && a.attribute_rank != b.attribute_rank)
+                return a.attribute_rank > b.attribute_rank;
             return a.timestamp < b.timestamp;
         });
         // clang-format on
@@ -797,14 +797,14 @@ namespace HerosInsight::Utils
             for (auto &effect : effects)
             {
                 // Agents may have multiple instances of the same effect, typically the one with greatest effect is the one that matters
-                auto attr_lvl = effect.attribute_level;
+                auto attr_rank = effect.attribute_rank;
 
                 if (effect.skill_id == GW::Constants::SkillID::Cultists_Fervor &&
                     skill.profession == GW::Constants::ProfessionByte::Necromancer &&
                     custom_sd.tags.Spell)
                 {
                     const auto effect_csd = GW::SkillbarMgr::GetSkillConstantData(effect.skill_id);
-                    const auto energy_discount = LinearAttributeScale(effect_csd->scale0, effect_csd->scale15, attr_lvl);
+                    const auto energy_discount = LinearAttributeScale(effect_csd->scale0, effect_csd->scale15, attr_rank);
 
                     cultists_fervor_discount = std::max(cultists_fervor_discount, energy_discount);
                 }
@@ -876,7 +876,7 @@ namespace HerosInsight::Utils
                     skill.type == GW::Constants::SkillType::Enchantment &&
                     skill.profession == GW::Constants::ProfessionByte::Dervish)
                 {
-                    const auto multiplier = (float)(100 - 4 * attribute.level) / 100.f;
+                    const auto multiplier = (float)(100 - 4 * attribute.rank) / 100.f;
                     energy_cost *= multiplier;
                 }
 
@@ -886,7 +886,7 @@ namespace HerosInsight::Utils
                      skill.profession == GW::Constants::ProfessionByte::Ranger ||
                      skill.IsTouchRange()))
                 {
-                    const auto multiplier = (float)(100 - 4 * attribute.level) / 100.f;
+                    const auto multiplier = (float)(100 - 4 * attribute.rank) / 100.f;
                     energy_cost *= multiplier;
                 }
             }
@@ -1307,7 +1307,7 @@ namespace HerosInsight::Utils
         };
     }
 
-    std::optional<EffectHPPerSec> CalculateEffectHPPerSec(GW::Constants::SkillID skill_id, uint32_t attribute_level)
+    std::optional<EffectHPPerSec> CalculateEffectHPPerSec(GW::Constants::SkillID skill_id, uint32_t attribute_rank)
     {
         auto &custom_sd = CustomSkillDataModule::GetCustomSkillData(skill_id);
 
@@ -1323,11 +1323,11 @@ namespace HerosInsight::Utils
         custom_sd.GetParsedSkillParams(ParsedSkillData::Type::HealthDegen, degs);
         for (auto &reg : regs)
         {
-            regen_hp_per_second += 2 * reg.param.Resolve(attribute_level);
+            regen_hp_per_second += 2 * reg.param.Resolve(attribute_rank);
         }
         for (auto &deg : degs)
         {
-            degen_hp_per_second -= 2 * deg.param.Resolve(attribute_level);
+            degen_hp_per_second -= 2 * deg.param.Resolve(attribute_rank);
         }
 
         if (!regen_hp_per_second && !degen_hp_per_second)
@@ -2238,7 +2238,7 @@ namespace HerosInsight::Utils
 
             if (it != sorted_effects.end()) // We already have an effect with the same skill_id
             {
-                if ((*it)->attribute_level < effect.attribute_level ||
+                if ((*it)->attribute_rank < effect.attribute_rank ||
                     (*it)->timestamp < effect.timestamp)
                 {
                     // New effect is better; remove the old effect and later insert the new effect

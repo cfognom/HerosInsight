@@ -13,21 +13,21 @@ namespace HerosInsight
         {
             std::memset(data, 0xff, std::size(data));
         }
-        AttributeStore(uint8_t init_level)
+        AttributeStore(uint8_t init_rank)
         {
 #ifdef _DEBUG
-            assert(init_level < 64);
+            assert(init_rank < 64);
 #endif
-            uint16_t filler = init_level | (init_level << 5) | (init_level << 10);
+            uint16_t filler = init_rank | (init_rank << 5) | (init_rank << 10);
             std::fill(data, data + std::size(data), filler);
         }
         AttributeStore(std::span<GW::Attribute> attrs)
         {
             for (const auto &attr : attrs)
             {
-                if (attr.level != 0)
+                if (attr.rank != 0)
                 {
-                    SetAttribute(AttributeOrTitle(attr.id), attr.level);
+                    SetAttribute(AttributeOrTitle(attr.id), attr.rank);
                 }
             }
         }

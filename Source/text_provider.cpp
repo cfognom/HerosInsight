@@ -54,10 +54,10 @@ namespace HerosInsight::Text
         );
     };
 
-    StringTemplateAtom Provider::MakeSkillParam(StringTemplateAtom::Builder &b, GW::Constants::SkillID skill_id, int8_t attr_lvl, size_t param_id)
+    StringTemplateAtom Provider::MakeSkillParam(StringTemplateAtom::Builder &b, GW::Constants::SkillID skill_id, int8_t attr_rank, size_t param_id)
     {
         auto &skill = GW::SkillbarMgr::GetSkills()[static_cast<size_t>(skill_id)];
-        bool has_attribute = attr_lvl != -1;
+        bool has_attribute = attr_rank != -1;
 
         auto param = GetSkillParam(skill, param_id);
 
@@ -73,7 +73,7 @@ namespace HerosInsight::Text
             {
                 content = b.LookupSequence(
                     s_CommonStrings.dyn_strId,
-                    {b.Number((float)param.Resolve((uint32_t)attr_lvl))}
+                    {b.Number((float)param.Resolve((uint32_t)attr_rank))}
                 );
             }
             else
@@ -174,15 +174,15 @@ namespace HerosInsight::Text
         return &this->skill_raw[is_concise ? SkillTextType::Concise : SkillTextType::Description];
     }
 
-    StringTemplateAtom Provider::MakeSkillDescription(StringTemplateAtom::Builder &b, GW::Constants::SkillID skill_id, bool is_concise, int8_t attr_lvl)
+    StringTemplateAtom Provider::MakeSkillDescription(StringTemplateAtom::Builder &b, GW::Constants::SkillID skill_id, bool is_concise, int8_t attr_rank)
     {
         auto description_str_id = this->skill_strIds[is_concise ? SkillTextType::Concise : SkillTextType::Description][(size_t)skill_id];
 
         return b.LookupSequence(
             description_str_id,
-            {MakeSkillParam(b, skill_id, attr_lvl, 0),
-             MakeSkillParam(b, skill_id, attr_lvl, 1),
-             MakeSkillParam(b, skill_id, attr_lvl, 2)}
+            {MakeSkillParam(b, skill_id, attr_rank, 0),
+             MakeSkillParam(b, skill_id, attr_rank, 1),
+             MakeSkillParam(b, skill_id, attr_rank, 2)}
         );
     }
 
@@ -302,7 +302,7 @@ namespace HerosInsight::Text
 #define LUT_RANGE L'\x45B'      // "({1:u}...{2:u})"
 #define LUT_ATTRIB L'\x46E';    // "(Attrib: {1:s})"
 
-    void SkillDescriptionToEncStr(const GW::Skill &skill, bool concise, int32_t attr_lvl, std::span<wchar_t> dst)
+    void SkillDescriptionToEncStr(const GW::Skill &skill, bool concise, int32_t attr_rank, std::span<wchar_t> dst)
     {
         SpanWriter<wchar_t> buffer(dst);
         auto str_id = concise ? skill.concise : skill.description;
@@ -311,7 +311,7 @@ namespace HerosInsight::Text
         assert(success);
         buffer.Len() = wcslen(dst.data());
 
-        bool has_attribute = attr_lvl != -1;
+        bool has_attribute = attr_rank != -1;
         constexpr uint32_t MAX_VALUE = 0x8000 - 0x100 - 1;
         for (size_t i = 0; i < 3; ++i)
         {
@@ -331,7 +331,7 @@ namespace HerosInsight::Text
             if (is_single_value)
             {
                 // If one value, add it as literal
-                auto value = param.Resolve((uint32_t)attr_lvl);
+                auto value = param.Resolve((uint32_t)attr_rank);
                 value = std::min(value, MAX_VALUE) + 0x100;
                 buffer.PushFormat(L"\x104\x101%c", value);
             }

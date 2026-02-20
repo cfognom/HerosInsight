@@ -239,7 +239,7 @@ namespace HerosInsight::PacketReader
 
         if (is_armor_ignoring && !Utils::ReceivesStoCEffects(cause_id))
         {
-            // Try to deduce the required attribute level for the observed damage and store that information
+            // Try to deduce the required attribute rank for the observed damage and store that information
 
             auto &data = last_skill_cast[cause_id];
         }
@@ -320,8 +320,8 @@ namespace HerosInsight::PacketReader
                 auto p = reinterpret_cast<const StoC::AddEffect *>(packet);
                 ids_to_check.push_back(p->agent_id);
                 message = std::format(
-                    L"AddEffect: agent={}, skill={}, attr_lvl={}, effect_id={}, duration={}",
-                    p->agent_id, p->skill_id, p->attribute_level, p->effect_id, *(float *)&p->timestamp
+                    L"AddEffect: agent={}, skill={}, attr_rank={}, effect_id={}, duration={}",
+                    p->agent_id, p->skill_id, p->attribute_rank, p->effect_id, *(float *)&p->timestamp
                 );
                 break;
             }
@@ -330,8 +330,8 @@ namespace HerosInsight::PacketReader
                 auto p = reinterpret_cast<const StoC::AddEffect *>(packet);
                 ids_to_check.push_back(p->agent_id);
                 message = std::format(
-                    L"EffectRenewed: agent={}, skill={}, attr_lvl={}, effect_id={}, duration={}",
-                    p->agent_id, p->skill_id, p->attribute_level, p->effect_id, *(float *)&p->timestamp
+                    L"EffectRenewed: agent={}, skill={}, attr_rank={}, effect_id={}, duration={}",
+                    p->agent_id, p->skill_id, p->attribute_rank, p->effect_id, *(float *)&p->timestamp
                 );
                 break;
             }
@@ -876,7 +876,7 @@ namespace HerosInsight::PacketReader
         const auto target_id = packet->agent_id;
         const auto skill_id = (GW::Constants::SkillID)packet->skill_id;
         const auto current_frame = UpdateManager::frame_id;
-        const auto attribute_level = packet->attribute_level;
+        const auto attribute_rank = packet->attribute_rank;
         const auto effect_id = packet->effect_id;
         const auto duration = *(float *)&packet->timestamp;
 
@@ -908,7 +908,7 @@ namespace HerosInsight::PacketReader
         EffectTracking::EffectTracker new_tracker = {};
         new_tracker.cause_agent_id = caster_id;
         new_tracker.skill_id = skill_id;
-        new_tracker.attribute_level = attribute_level;
+        new_tracker.attribute_rank = attribute_rank;
         new_tracker.effect_id = effect_id;
         new_tracker.duration_sec = static_cast<uint32_t>(duration);
 
@@ -918,7 +918,7 @@ namespace HerosInsight::PacketReader
         {
             auto &custom_ad = CustomAgentDataModule::GetCustomAgentData(caster_id);
             auto &custom_sd = CustomSkillDataModule::GetCustomSkillData(skill_id);
-            auto base_duration = custom_sd.ResolveBaseDuration(custom_ad, attribute_level);
+            auto base_duration = custom_sd.ResolveBaseDuration(custom_ad, attribute_rank);
             auto source_skill_id = last_skill_cast[caster_id].skill_id;
             const auto calc_duration = (float)Utils::CalculateDuration(*custom_sd.skill, base_duration, caster_id);
 

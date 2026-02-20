@@ -88,7 +88,7 @@ namespace HerosInsight::Text
         }
     }
 
-    void SkillDescriptionToEncStr(const GW::Skill &skill, bool concise, int32_t attr_lvl, std::span<wchar_t> dst);
+    void SkillDescriptionToEncStr(const GW::Skill &skill, bool concise, int32_t attr_rank, std::span<wchar_t> dst);
 
     inline StringManager s_Manager;
 
@@ -107,8 +107,8 @@ namespace HerosInsight::Text
         std::string_view GetRawDescription(GW::Constants::SkillID skill_id, bool is_concise);
         SlotSpanVector<char> *GetNames();
         SlotSpanVector<char> *GetRawDescriptions(bool is_concise);
-        StringTemplateAtom MakeSkillParam(StringTemplateAtom::Builder &b, GW::Constants::SkillID skill_id, int8_t attr_lvl, size_t param_id);
-        StringTemplateAtom MakeSkillDescription(StringTemplateAtom::Builder &b, GW::Constants::SkillID skill_id, bool is_concise, int8_t attr_lvl);
+        StringTemplateAtom MakeSkillParam(StringTemplateAtom::Builder &b, GW::Constants::SkillID skill_id, int8_t attr_rank, size_t param_id);
+        StringTemplateAtom MakeSkillDescription(StringTemplateAtom::Builder &b, GW::Constants::SkillID skill_id, bool is_concise, int8_t attr_rank);
         StringTemplateAtom MakeSkillName(StringTemplateAtom::Builder &b, GW::Constants::SkillID skill_id);
 
         Provider(GW::Constants::Language language);

@@ -2267,7 +2267,7 @@ namespace HerosInsight
         // clang-format on
     }
 
-    void ParsedSkillData::ImGuiRender(int8_t attr_lvl, float width, std::span<uint16_t> hl)
+    void ParsedSkillData::ImGuiRender(int8_t attr_rank, float width, std::span<uint16_t> hl)
     {
         auto str = this->ToStr();
         // ImGui::TextUnformatted(str.data(), str.data() + str.size());
@@ -2300,7 +2300,7 @@ namespace HerosInsight
         }
 
         ImGui::SameLine();
-        param.ImGuiRender(attr_lvl);
+        param.ImGuiRender(attr_rank);
 
         if (is_percent)
         {
@@ -3397,7 +3397,7 @@ namespace HerosInsight
         }
     }
 
-    void GetConditionsFromSpan(std::span<const ParsedSkillData> parsed_data, SkillID source_skill_id, uint8_t attr_lvl, OutBuf<SkillEffect> result)
+    void GetConditionsFromSpan(std::span<const ParsedSkillData> parsed_data, SkillID source_skill_id, uint8_t attr_rank, OutBuf<SkillEffect> result)
     {
         bool success = true;
         for (const auto &pd : parsed_data)
@@ -3405,25 +3405,25 @@ namespace HerosInsight
             const auto condition_skill_id = pd.GetCondition();
             if (condition_skill_id == SkillID::No_Skill)
                 continue;
-            success &= result.try_push({condition_skill_id, source_skill_id, pd.param.Resolve(attr_lvl)});
+            success &= result.try_push({condition_skill_id, source_skill_id, pd.param.Resolve(attr_rank)});
         }
         SOFT_ASSERT(success, L"Failed to push condition");
     }
 
-    void CustomSkillData::GetInitConditions(uint8_t attr_lvl, OutBuf<SkillEffect> result) const
+    void CustomSkillData::GetInitConditions(uint8_t attr_rank, OutBuf<SkillEffect> result) const
     {
         if (!tags.ConditionSource)
             return;
 
-        GetConditionsFromSpan(GetInitParsedData(), skill_id, attr_lvl, result);
+        GetConditionsFromSpan(GetInitParsedData(), skill_id, attr_rank, result);
     }
 
-    void CustomSkillData::GetEndConditions(uint8_t attr_lvl, OutBuf<SkillEffect> result) const
+    void CustomSkillData::GetEndConditions(uint8_t attr_rank, OutBuf<SkillEffect> result) const
     {
         if (!tags.ConditionSource)
             return;
 
-        GetConditionsFromSpan(GetEndParsedData(), skill_id, attr_lvl, result);
+        GetConditionsFromSpan(GetEndParsedData(), skill_id, attr_rank, result);
     }
 
     std::span<const ParsedSkillData> CustomSkillData::GetInitParsedData() const
@@ -3477,7 +3477,7 @@ namespace HerosInsight
         auto caster_id = caster.agent_id;
 
         auto &custom_sd = CustomSkillDataModule::GetCustomSkillData(skill_id);
-        const auto attr_lvl = caster.GetAttrLvlForSkill(custom_sd);
+        const auto attr_rank = caster.GetAttrLvlForSkill(custom_sd);
 
         if (custom_sd.tags.Spell)
         {
@@ -3489,7 +3489,7 @@ namespace HerosInsight
         {
             case SkillID::Signet_of_Illusions:
             {
-                caster.signet_of_illusions_charges = custom_sd.GetSkillParam(0).Resolve(attr_lvl);
+                caster.signet_of_illusions_charges = custom_sd.GetSkillParam(0).Resolve(attr_rank);
                 break;
             }
 
@@ -3603,7 +3603,7 @@ namespace HerosInsight
                 new_tracker.cause_agent_id = caster_id;
                 new_tracker.skill_id = data.effect_skill_id;
                 new_tracker.effect_id = 0; // We dont know the effect id
-                new_tracker.attribute_level = attr_lvl;
+                new_tracker.attribute_rank = attr_rank;
                 new_tracker.duration_sec = duration;
 
                 EffectTracking::AddTracker(t_id, new_tracker);
@@ -3680,7 +3680,7 @@ namespace HerosInsight
             out.push_back((Utils::Range)skill->bonusScale0);
     }
 
-    uint32_t CustomSkillData::ResolveBaseDuration(CustomAgentData &caster, std::optional<uint8_t> skill_attr_lvl_override) const
+    uint32_t CustomSkillData::ResolveBaseDuration(CustomAgentData &caster, std::optional<uint8_t> skill_attr_rank_override) const
     {
         switch (skill_id) // Special cases
         {
@@ -3693,8 +3693,8 @@ namespace HerosInsight
 
         if (this->base_duration)
         {
-            auto attr_lvl = skill_attr_lvl_override ? skill_attr_lvl_override.value() : caster.GetAttrLvlForSkill(*this);
-            auto base_duration = this->base_duration.Resolve(attr_lvl);
+            auto attr_rank = skill_attr_rank_override ? skill_attr_rank_override.value() : caster.GetAttrLvlForSkill(*this);
+            auto base_duration = this->base_duration.Resolve(attr_rank);
 
             switch (skill_id)
             {
@@ -3932,7 +3932,7 @@ namespace HerosInsight
         return false;
     }
 
-    void StaticSkillEffect::Apply(uint32_t caster_id, uint32_t target_id, uint8_t attr_lvl, std::function<bool(GW::AgentLiving &)> predicate) const
+    void StaticSkillEffect::Apply(uint32_t caster_id, uint32_t target_id, uint8_t attr_rank, std::function<bool(GW::AgentLiving &)> predicate) const
     {
         uint32_t effect_target_id;
         switch (location)
@@ -3985,7 +3985,7 @@ namespace HerosInsight
             }
         };
 
-        auto duration_or_count_resolved = duration_or_count.Resolve(attr_lvl);
+        auto duration_or_count_resolved = duration_or_count.Resolve(attr_rank);
         if (auto skill_id = std::get_if<SkillID>(&skill_id_or_removal))
         {
             auto base_duration = duration_or_count_resolved;
@@ -3999,7 +3999,7 @@ namespace HerosInsight
                     tracker.cause_agent_id = caster_id;
                     tracker.skill_id = *skill_id;
                     tracker.duration_sec = duration;
-                    tracker.attribute_level = attr_lvl;
+                    tracker.attribute_rank = attr_rank;
 
                     EffectTracking::AddTracker(agent.agent_id, tracker);
                 }

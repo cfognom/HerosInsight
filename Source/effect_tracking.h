@@ -55,7 +55,7 @@ namespace HerosInsight::EffectTracking
     {
         uint32_t cause_agent_id;
         GW::Constants::SkillID skill_id;
-        uint32_t attribute_level;
+        uint32_t attribute_rank;
         uint32_t effect_id;
         uint32_t duration_sec;
         DWORD begin_timestamp;

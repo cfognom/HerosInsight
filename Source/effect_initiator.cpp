@@ -96,8 +96,8 @@ namespace HerosInsight::EffectInitiator
     {
         GW::Constants::SkillID skill_id;
         GW::Constants::SkillID prep_skill_id;
-        uint8_t attr_lvl;
-        uint8_t prep_attr_lvl;
+        uint8_t attr_rank;
+        uint8_t prep_attr_rank;
         bool is_projectile;
 
         bool IsMelee() const { return !is_projectile; }
@@ -144,7 +144,7 @@ namespace HerosInsight::EffectInitiator
 
     void GetSpellEffects(
         uint32_t caster_id, uint32_t target_id,
-        GW::Constants::SkillID skill_id, uint8_t attr_lvl,
+        GW::Constants::SkillID skill_id, uint8_t attr_rank,
         OutBuf<StaticSkillEffect> result
     )
     {
@@ -234,7 +234,7 @@ namespace HerosInsight::EffectInitiator
 #endif
         auto &cskill = CustomSkillDataModule::GetCustomSkillData(skill_id);
         auto &caster = CustomAgentDataModule::GetCustomAgentData(caster_id);
-        auto attr_lvl = caster.GetAttrLvlForSkill(cskill);
+        auto attr_rank = caster.GetAttrLvlForSkill(cskill);
 
         auto &skill = *GW::SkillbarMgr::GetSkillConstantData(skill_id);
 
@@ -249,7 +249,7 @@ namespace HerosInsight::EffectInitiator
             {
                 case GW::Constants::SkillID::Signet_of_Illusions:
                 {
-                    caster.signet_of_illusions_charges = cskill.GetSkillParam(0).Resolve(attr_lvl);
+                    caster.signet_of_illusions_charges = cskill.GetSkillParam(0).Resolve(attr_rank);
                     break;
                 }
 
@@ -273,7 +273,7 @@ namespace HerosInsight::EffectInitiator
         if (has_init_effects)
         {
             FixedVector<StaticSkillEffect, 18> effects;
-            GetSpellEffects(caster_id, target_id, skill_id, attr_lvl, effects);
+            GetSpellEffects(caster_id, target_id, skill_id, attr_rank, effects);
 
             FixedSet<uint32_t, (size_t)(16 / 0.75)> handled_agents;
             {
@@ -283,7 +283,7 @@ namespace HerosInsight::EffectInitiator
                     {
                         if (packet.skill_id == skill_id)
                         {
-                            attr_lvl = packet.attribute_level;
+                            attr_rank = packet.attribute_rank;
 
                             // TODO: Check for liutenant's and account for it maybe?
                         }
@@ -312,7 +312,7 @@ namespace HerosInsight::EffectInitiator
                 effect.Apply(
                     caster_id,
                     target_id,
-                    attr_lvl,
+                    attr_rank,
                     [&](GW::AgentLiving &agent)
                     {
                         return !handled_agents.has(agent.agent_id);
@@ -332,7 +332,7 @@ namespace HerosInsight::EffectInitiator
                 auto effect_id = npc_packet.effect_id;
                 if (!lifetime)
                 {
-                    lifetime = GetSkillParam(skill, 2).Resolve(attr_lvl);
+                    lifetime = GetSkillParam(skill, 2).Resolve(attr_rank);
                     effect_id = 0;
                 }
                 EffectTracking::CreateAuraEffect(
@@ -349,7 +349,7 @@ namespace HerosInsight::EffectInitiator
             case GW::Constants::SkillType::Well:
             {
                 auto well_effect = co_await PacketAwaiter<StoC::PlayEffect>();
-                float duration = GetSkillParam(skill, 2).Resolve(attr_lvl);
+                float duration = GetSkillParam(skill, 2).Resolve(attr_rank);
                 EffectTracking::CreateAOEEffect(
                     GW::GamePos(well_effect.coords.x, well_effect.coords.y, well_effect.plane),
                     (float)Utils::Range::InTheArea,
@@ -423,7 +423,7 @@ namespace HerosInsight::EffectInitiator
                 case GW::Constants::SkillID::Glass_Arrows:
                 case GW::Constants::SkillID::Glass_Arrows_PvP:
                 {
-                    auto base_duration = Utils::LinearAttributeScale(10, 20, attack.prep_attr_lvl);
+                    auto base_duration = Utils::LinearAttributeScale(10, 20, attack.prep_attr_rank);
                     auto bleeding_effect = SkillEffect{GW::Constants::SkillID::Bleeding, GW::Constants::SkillID::Glass_Arrows, base_duration};
                     EffectTracking::ApplySkillEffect(defender_id, attacker_id, bleeding_effect);
                 }
@@ -467,7 +467,7 @@ namespace HerosInsight::EffectInitiator
                         auto defender = Utils::GetAgentLivingByID(defender_id);
                         if (defender)
                         {
-                            auto base_duration = Utils::LinearAttributeScale(5, 15, defender_effect.attribute_level);
+                            auto base_duration = Utils::LinearAttributeScale(5, 15, defender_effect.attribute_rank);
                             auto bleeding_effect = SkillEffect{GW::Constants::SkillID::Bleeding, GW::Constants::SkillID::Deflect_Arrows, base_duration};
                             Utils::ForEnemiesInCircle(
                                 defender->pos,
@@ -487,7 +487,7 @@ namespace HerosInsight::EffectInitiator
                     auto defender = Utils::GetAgentLivingByID(defender_id);
                     if (defender)
                     {
-                        auto base_duration = Utils::LinearAttributeScale(5, 20, defender_effect.attribute_level);
+                        auto base_duration = Utils::LinearAttributeScale(5, 20, defender_effect.attribute_rank);
                         auto weakness_effect = SkillEffect{GW::Constants::SkillID::Weakness, GW::Constants::SkillID::Shield_of_Force, base_duration};
                         Utils::ForEnemiesInCircle(
                             defender->pos,
@@ -512,7 +512,7 @@ namespace HerosInsight::EffectInitiator
                         auto defender = Utils::GetAgentLivingByID(defender_id);
                         if (defender && defender->weapon_type == 7) // Sword
                         {
-                            auto base_duration = Utils::LinearAttributeScale(3, 25, defender_effect.attribute_level);
+                            auto base_duration = Utils::LinearAttributeScale(3, 25, defender_effect.attribute_rank);
                             auto bleeding_effect = SkillEffect{GW::Constants::SkillID::Bleeding, GW::Constants::SkillID::Deadly_Riposte, base_duration};
                             EffectTracking::ApplySkillEffect(attacker_id, defender_id, bleeding_effect);
                             spent_charges.push_back(defender_effect.skill_id);
@@ -529,7 +529,7 @@ namespace HerosInsight::EffectInitiator
                     {
                         if (attack.IsMelee())
                         {
-                            auto base_duration = Utils::LinearAttributeScale(1, 6, defender_effect.attribute_level);
+                            auto base_duration = Utils::LinearAttributeScale(1, 6, defender_effect.attribute_rank);
                             auto burning_effect = SkillEffect{GW::Constants::SkillID::Burning, GW::Constants::SkillID::Burning_Shield, base_duration};
                             EffectTracking::ApplySkillEffect(attacker_id, defender_id, burning_effect);
                         }
@@ -560,7 +560,7 @@ namespace HerosInsight::EffectInitiator
                 {
                     if (is_melee) // Ranged is handeled elsewhere
                     {
-                        auto base_duration = Utils::LinearAttributeScale(3, 15, attacker_effect.attribute_level);
+                        auto base_duration = Utils::LinearAttributeScale(3, 15, attacker_effect.attribute_rank);
                         auto poison_effect = SkillEffect{GW::Constants::SkillID::Poison, GW::Constants::SkillID::Apply_Poison, base_duration};
                         out.try_push(poison_effect);
                     }
@@ -570,7 +570,7 @@ namespace HerosInsight::EffectInitiator
                 case GW::Constants::SkillID::Strike_as_One:
                 {
                     bool is_pet = Utils::GetIsPet(attacker_id);
-                    auto base_duration = Utils::LinearAttributeScale(5, 15, attacker_effect.attribute_level);
+                    auto base_duration = Utils::LinearAttributeScale(5, 15, attacker_effect.attribute_rank);
                     auto condition = is_pet ? GW::Constants::SkillID::Bleeding : GW::Constants::SkillID::Crippled;
                     out.try_push({condition, effect_skill_id, base_duration});
                     spent_charges.push_back(effect_skill_id);
@@ -593,7 +593,7 @@ namespace HerosInsight::EffectInitiator
                 case GW::Constants::SkillID::Find_Their_Weakness_PvP: // We dont spend charge yet. Needs special handling because it requires a critical hit.
                 {
                     auto &cskill = CustomSkillDataModule::GetCustomSkillData(effect_skill_id);
-                    cskill.GetInitConditions(attacker_effect.attribute_level, conditions);
+                    cskill.GetInitConditions(attacker_effect.attribute_rank, conditions);
 #ifdef _DEBUG
                     SOFT_ASSERT(conditions.size() > 0, L"Missing conditions for skill {}", Utils::GetSkillName(effect_skill_id));
 #endif
@@ -613,11 +613,11 @@ namespace HerosInsight::EffectInitiator
     {
         auto &caster_agent = CustomAgentDataModule::GetCustomAgentData(caster_id);
         auto &cskill = CustomSkillDataModule::GetCustomSkillData(skill_id);
-        auto attr_lvl = caster_agent.GetAttrLvlForSkill(cskill);
+        auto attr_rank = caster_agent.GetAttrLvlForSkill(cskill);
 
         Attack attack = {};
         attack.skill_id = skill_id;
-        attack.attr_lvl = attr_lvl;
+        attack.attr_rank = attr_rank;
         return attack;
     }
 
@@ -625,11 +625,11 @@ namespace HerosInsight::EffectInitiator
     {
         auto &caster_agent = CustomAgentDataModule::GetCustomAgentData(caster_id);
         auto &cskill = CustomSkillDataModule::GetCustomSkillData(skill_id);
-        auto attr_lvl = caster_agent.GetAttrLvlForSkill(cskill);
+        auto attr_rank = caster_agent.GetAttrLvlForSkill(cskill);
 
         Attack proj = {};
         proj.skill_id = skill_id;
-        proj.attr_lvl = attr_lvl;
+        proj.attr_rank = attr_rank;
         proj.is_projectile = true;
 
         auto caster_living = Utils::GetAgentLivingByID(caster_id);
@@ -647,7 +647,7 @@ namespace HerosInsight::EffectInitiator
                 (is_arrow && GW::SkillbarMgr::GetSkillConstantData(effect.skill_id)->type == GW::Constants::SkillType::Preparation))
             {
                 proj.prep_skill_id = effect.skill_id;
-                proj.prep_attr_lvl = effect.attribute_level;
+                proj.prep_attr_rank = effect.attribute_rank;
                 break;
             }
         }
@@ -813,7 +813,7 @@ namespace HerosInsight::EffectInitiator
         {
             if (effect_skill.attribute != 51)
             {
-                SetCasterAttr(effect_skill.attribute, packet.attribute_level);
+                SetCasterAttr(effect_skill.attribute, packet.attribute_rank);
             }
         }
     }
@@ -846,7 +846,7 @@ namespace HerosInsight::EffectInitiator
 
         auto &cskill = CustomSkillDataModule::GetCustomSkillData(skill_id);
         auto &caster = CustomAgentDataModule::GetCustomAgentData(caster_id);
-        const auto attr_lvl = caster.GetAttrLvlForSkill(cskill);
+        const auto attr_rank = caster.GetAttrLvlForSkill(cskill);
         OnSkillActivated(caster_id, target_id, skill_id);
 
         {
@@ -961,7 +961,7 @@ namespace HerosInsight::EffectInitiator
         EffectTracking::EffectTracker tracker = {};
         tracker.cause_agent_id = EffectClaimingScope::current_cause_agent_id;
         tracker.skill_id = (GW::Constants::SkillID)packet->skill_id;
-        tracker.attribute_level = packet->attribute_level;
+        tracker.attribute_rank = packet->attribute_rank;
         tracker.effect_id = packet->effect_id;
         tracker.duration_sec = duration;
 
