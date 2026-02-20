@@ -239,6 +239,7 @@ namespace HerosInsight::Utils
     size_t StrCountEqual(std::wstring_view a, std::wstring_view b);
     std::string_view PopWord(std::string_view &str);
     bool StartsWith(const wchar_t *str, const wchar_t *prefix);
+    bool TryReadTrailing(const char c, std::string_view &remaining);
     bool TryRead(const char c, std::string_view &remaining);
     bool TryRead(const wchar_t c, std::wstring_view &remaining);
     bool TryRead(const std::string_view str, std::string_view &remaining);

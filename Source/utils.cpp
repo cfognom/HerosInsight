@@ -229,6 +229,16 @@ namespace HerosInsight::Utils
             ++prefix;
         }
     }
+    bool TryReadTrailing(const char c, std::string_view &remaining)
+    {
+        auto last_idx = remaining.size() - 1;
+        if (remaining.size() && (c == remaining[last_idx] || std::tolower(c) == remaining[last_idx]))
+        {
+            remaining = remaining.substr(0, last_idx);
+            return true;
+        }
+        return false;
+    }
     bool TryRead(const char c, std::string_view &remaining)
     {
         if (remaining.size() && (c == remaining[0] || std::tolower(c) == remaining[0]))
