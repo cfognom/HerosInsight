@@ -82,6 +82,11 @@ namespace HerosInsight
                 uniques.clear();
             }
 
+            void reserve(size_t n_spans)
+            {
+                uniques.reserve(n_spans);
+            }
+
             Deduper() = default;
             Deduper(SpanVector *arena, size_t n_buckets)
                 : uniques(n_buckets, Hasher{arena}, Eq{arena}), arena(arena) {}
