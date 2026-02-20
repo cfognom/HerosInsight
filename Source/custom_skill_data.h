@@ -8,29 +8,6 @@
 
 namespace HerosInsight
 {
-    struct HighlightData
-    {
-        std::vector<uint16_t> offsets;
-        std::span<uint16_t> header_offsets;
-        std::span<uint16_t> value_offsets;
-
-        void clear()
-        {
-            offsets.clear();
-            header_offsets = {};
-            value_offsets = {};
-        }
-    };
-
-    struct SkillRegenType
-    {
-        static const uint32_t None = 0;
-        static const uint32_t NoRequirement = 1 << 0;
-        static const uint32_t PerCondition = 1 << 1;
-        static const uint32_t PerHex = 1 << 2;
-        static const uint32_t PerEnchantment = 1 << 3;
-    };
-
     enum struct Renewal
     {
         None = 0,
