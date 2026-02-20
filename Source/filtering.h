@@ -752,31 +752,71 @@ namespace HerosInsight::Filtering
         {
             Stopwatch stopwatch("SortItems");
 
-            struct MatchedContent
+            struct MatchedSortObject
             {
-                std::vector<uint16_t> subs;
-                std::string_view str;
+                I &impl;
+                SlotSpanVector<char> &cache;
+                Filter &filter;
+                bool negated;
 
-                std::strong_ordering operator<=>(const MatchedContent &other) const
+                size_t CalcMatched(size_t id)
                 {
-                    return CompareSubstrs(subs, str, other.subs, other.str);
-                }
+#ifdef _DEBUG
+                    assert(cache.GetPendingSpan().empty());
+                    assert(!cache.GetSpanId(id).has_value());
+#endif
+                    std::vector<char> candidate;
+                    std::vector<uint16_t> matches;
+                    candidate.reserve(128);
+                    matches.reserve(64);
+                    auto propset = impl.GetMetaPropset(filter.meta_prop_id);
+                    for (auto prop_id : propset.IterSetBits())
+                    {
+                        if (prop_id == I::PropCount())
+                            continue;
 
-                void Populate(Matcher &matcher, LoweredText &text)
+                        auto &prop = *impl.GetProperty(prop_id);
+                        auto str = prop.GetSearchableStr(prop.GetStrId(id));
+                        for (auto &matcher : filter.matchers)
+                        {
+                            size_t offset = 0;
+                            while (matcher.Match(str, offset, (matches.clear(), matches)))
+                            {
+                                if (matches.empty())
+                                    continue;
+
+                                auto current = cache.GetPendingSpan();
+                                bool no_current = current.empty();
+                                std::vector<char> &dst_vec = no_current ? cache.Elements() : (candidate.clear(), candidate);
+                                for (size_t i = 0; i < matches.size(); i += 2)
+                                {
+                                    dst_vec.append_range(str.text.substr(matches[i], matches[i + 1] - matches[i]));
+                                }
+                                if (no_current)
+                                    continue;
+
+                                auto cmp = (std::string_view)candidate <=> (std::string_view)current;
+                                if (cmp == 0)
+                                    continue;
+
+                                if ((cmp < 0) != negated)
+                                {
+                                    cache.DiscardWritten();
+                                    cache.Elements().append_range(candidate);
+                                }
+                            }
+                        }
+                    }
+                    return cache.CommitWrittenToIndex(id);
+                };
+                size_t GetOrCalcMatched(size_t id)
                 {
-                    subs.clear();
-                    str = text.text;
-                    bool is_match = matcher.Matches(text, subs);
-                    if (!is_match)
-                        subs.clear();
-                }
+                    auto opt_span_id = cache.GetSpanId(id);
+                    return opt_span_id.has_value() ? opt_span_id.value() : CalcMatched(id);
+                };
             };
 
-            MatchedContent matched[3];
-
-            MatchedContent *matched_a = &matched[0];
-            MatchedContent *matched_b = &matched[1];
-            MatchedContent *matched_temp = &matched[2];
+            std::vector<SlotSpanVector<char>> cache;
 
             std::stable_sort(
                 items.begin(), items.end(),
@@ -784,40 +824,23 @@ namespace HerosInsight::Filtering
                 {
                     for (auto &atom : query.sort_atoms)
                     {
+                        std::strong_ordering cmp;
                         if (atom.sort_by_matched)
                         {
-                            for (auto &filter : query.inclusion_filters)
+                            for (size_t f = 0; f < query.inclusion_filters.size(); ++f)
                             {
-                                matched_a->subs.clear();
-                                matched_b->subs.clear();
-                                auto propset = impl.GetMetaPropset(filter.meta_prop_id);
-                                std::strong_ordering cmp;
-                                for (auto prop_id : propset.IterSetBits())
-                                {
-                                    if (prop_id == I::PropCount())
-                                        continue;
-
-                                    auto &prop = *impl.GetProperty(prop_id);
-                                    auto str_a = prop.GetSearchableStr(prop.GetStrId(item_a));
-                                    auto str_b = prop.GetSearchableStr(prop.GetStrId(item_b));
-                                    for (auto &matcher : filter.matchers)
-                                    {
-                                        matched_temp->Populate(matcher, str_a);
-                                        if (matched_a->subs.empty() ||
-                                            (!matched_temp->subs.empty() && (cmp = *matched_temp <=> *matched_a, (cmp != 0 && ((cmp < 0) != atom.is_negated)))))
-                                        {
-                                            std::swap(matched_a, matched_temp);
-                                        }
-
-                                        matched_temp->Populate(matcher, str_b);
-                                        if (matched_b->subs.empty() ||
-                                            (!matched_temp->subs.empty() && (cmp = *matched_temp <=> *matched_b, (cmp != 0 && ((cmp < 0) != atom.is_negated)))))
-                                        {
-                                            std::swap(matched_b, matched_temp);
-                                        }
-                                    }
-                                }
-                                cmp = *matched_a <=> *matched_b;
+                                auto &c = f < cache.size() ? cache[f] : cache.emplace_back();
+                                MatchedSortObject obj{
+                                    .impl = impl,
+                                    .cache = c,
+                                    .filter = query.inclusion_filters[f],
+                                    .negated = atom.is_negated,
+                                };
+                                auto a_span_id = obj.GetOrCalcMatched(item_a);
+                                auto b_span_id = obj.GetOrCalcMatched(item_b);
+                                auto a_matched = c.CGet(a_span_id);
+                                auto b_matched = c.CGet(b_span_id);
+                                cmp = a_matched <=> b_matched;
                                 if (cmp != 0)
                                     return (cmp < 0) != atom.is_negated;
                             }
@@ -828,7 +851,7 @@ namespace HerosInsight::Filtering
                             auto &prop = *impl.GetProperty(prop_id);
                             auto str_a = prop.GetSearchableStr(prop.GetStrId(item_a));
                             auto str_b = prop.GetSearchableStr(prop.GetStrId(item_b));
-                            auto cmp = str_a.text <=> str_b.text;
+                            cmp = str_a.text <=> str_b.text;
                             if (cmp != 0)
                                 return (cmp < 0) != atom.is_negated;
                         }
