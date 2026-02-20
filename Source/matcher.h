@@ -229,8 +229,9 @@ namespace HerosInsight
         Matcher() = default;
         Matcher(std::string_view source);
 
-        bool Matches(LoweredText text, std::vector<uint16_t> &matches);
         bool Match(LoweredText text, size_t offset);
+        bool Match(LoweredText text, size_t &offset, std::vector<uint16_t> &matches);
+        bool Matches(LoweredText text, std::vector<uint16_t> &matches);
 
         bool IsEmpty() const { return atoms.empty(); }
 

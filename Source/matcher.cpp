@@ -421,6 +421,20 @@ namespace HerosInsight
         return true;
     }
 
+    bool Matcher::Match(LoweredText text, size_t &offset, std::vector<uint16_t> &matches)
+    {
+        if (!Match(text, offset))
+            return false;
+
+        for (auto &record : work_mem)
+        {
+            matches.push_back(record.begin);
+            matches.push_back(record.end);
+        }
+        offset = work_mem.back().end + 1;
+        return true;
+    }
+
     bool Matcher::Matches(LoweredText text, std::vector<uint16_t> &matches)
     {
         if (atoms.empty())
@@ -430,17 +444,9 @@ namespace HerosInsight
         bool matched = false;
         while (offset < text.text.size())
         {
-            if (!Match(text, offset))
+            if (!Match(text, offset, matches))
                 return matched;
-
             matched = true;
-
-            for (auto &record : work_mem)
-            {
-                matches.push_back(record.begin);
-                matches.push_back(record.end);
-            }
-            offset = work_mem.back().end + 1;
         }
         return matched;
     }
