@@ -1,5 +1,5 @@
 # CHANGELOG
-- Added a special sort target: "Matched", that sorts according to whatever is matched by the query, filter by filter.
+- Added a special sort target: "Matched" that sorts according to whatever is matched by the query, filter by filter. Also added an example in the help menu showcasing how this feature can be used.
 - Made "Additional matches in x description" be a bit more relaxed.
 - Fixed skill book not refreshing when changing attribute mode.
 - Improved handling of '<', '>', ':' and '=' in queries when not part of a number or in an untargeted query.

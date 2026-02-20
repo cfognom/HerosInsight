@@ -2193,7 +2193,12 @@ namespace HerosInsight::SkillBook
         DrawExample("recharge: <9", "Finds skills having less than 9 seconds recharge time");
         DrawExample("campaign!: prophecies", "Finds non-prophecies skills");
         DrawExample("type: stance & prof: mes|derv", "Finds mesmer or dervish stances");
-        DrawExample("type: attack & aoe /sort prof, aoe!", "Finds AoE attack skills. Sorts ascending by profession then descending by AoE.");
+        DrawExample("type: attack & aoe /sort prof, aoe!", "Finds AoE attack skills and sorts ascending by profession then descending by AoE.");
+        DrawExample(
+            "+# damage /sort matched!",
+            "Finds skills giving +damage and sorts descending by the amount. "
+            "Try using this together with the manual attributes slider. Then you can easily see which skills gives the most +damage at each attribute rank."
+        );
         ImGui::Spacing();
 
         ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
