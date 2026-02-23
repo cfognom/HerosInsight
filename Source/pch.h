@@ -25,8 +25,8 @@
 #include <cassert>
 #include <cstdint>
 #include <fixed_set.h>
+#include <make_color.h>
 
-#include "color_macros.h"
 #include "enum_as_int.h"
 
 #ifdef PRODUCTION_BUILD
