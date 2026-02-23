@@ -44,9 +44,6 @@ namespace Constants
     };
     inline Paths paths;
 
-#define rgb(r, g, b) (0xff000000 | (uint32_t(r) << 16) | (uint32_t(g) << 8) | uint32_t(b))
-#define rgba(r, g, b, a) ((uint32_t(a) << 24) | (uint32_t(r) << 16) | (uint32_t(g) << 8) | uint32_t(b))
-
     namespace GWColors
     {
         constexpr inline ImU32 damage_yellow = IM_COL32(255, 255, 120, 255);

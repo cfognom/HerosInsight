@@ -26,6 +26,7 @@
 #include <cstdint>
 #include <fixed_set.h>
 
+#include "color_macros.h"
 #include "enum_as_int.h"
 
 #ifdef PRODUCTION_BUILD
