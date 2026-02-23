@@ -7,6 +7,7 @@
 #include <tuple>
 
 #include <buffer.h>
+#include <compiletime_string.h>
 #include <constants.h>
 
 namespace
@@ -22,28 +23,8 @@ namespace
     struct TransformTag{};
     // clang-format on
 
-    template <size_t N>
-    struct FixedString
-    {
-        char data[N] = {};
-
-        constexpr FixedString(const char (&str)[N])
-        {
-            for (size_t i = 0; i < N; ++i)
-            {
-                data[i] = str[i];
-            }
-        }
-
-        // Conversion to string_view for easy use
-        constexpr std::string_view str() const
-        {
-            return std::string_view(data, N - 1); // Exclude null terminator
-        }
-    };
-
     // We embed a string directly into the struct at the type level
-    template <FixedString S>
+    template <CompiletimeString S>
     struct Lit : LitTag
     {
         constexpr static std::string_view str() { return S.str(); }
@@ -63,7 +44,7 @@ namespace
     struct Color : ColorTag, ToMember<MemberPtr>
     {
     };
-    template <FixedString S, auto MemberPtr>
+    template <CompiletimeString S, auto MemberPtr>
     struct CaptureUntil : CaptureUntilTag, ToMember<MemberPtr>
     {
         constexpr static std::string_view str() { return S.str(); }
