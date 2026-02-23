@@ -273,7 +273,7 @@ static void BlitGWGlyphsToFontAtlas(ImGuiIO &io)
             auto rect = io.Fonts->GetCustomRectByIndex(g.dstRect);
             auto slotPtr = atlasDataPtr.Index(rect->X, rect->Y);
 
-            GW::TextMgr::BlitFontARBG4444(font, blitDataPtr, glyphDataBuffer.data(), glyphDims, com.config.color, com.config.blitFlags);
+            GW::TextMgr::BlitFontARGB4444(font, blitDataPtr, glyphDataBuffer.data(), glyphDims, com.config.color, com.config.blitFlags);
 
             for (int y = 0; y < rect->Height; y++)
             {
