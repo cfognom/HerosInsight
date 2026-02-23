@@ -201,20 +201,20 @@ void AddFonts(ImGuiIO &io)
     });
 }
 
-uint32_t ARGB4444ToARGB8888(uint16_t px)
+uint32_t Col4444ToCol8888(uint16_t px)
 {
-    uint8_t a = (px >> 12) & 0xF; // high 4 bits
-    uint8_t r = (px >> 8) & 0xF;
-    uint8_t g = (px >> 4) & 0xF;
-    uint8_t b = px & 0xF;
+    uint8_t _1 = px & 0xF; // high 4 bits
+    uint8_t _2 = (px >> 4) & 0xF;
+    uint8_t _3 = (px >> 8) & 0xF;
+    uint8_t _4 = (px >> 12) & 0xF;
 
     // expand 4-bit to 8-bit
-    a = a * 0x11; // 0xF → 0xFF
-    r = r * 0x11;
-    g = g * 0x11;
-    b = b * 0x11;
+    _1 *= 0x11; // 0xF → 0xFF
+    _2 *= 0x11;
+    _3 *= 0x11;
+    _4 *= 0x11;
 
-    return (a << 24) | (r << 16) | (g << 8) | b;
+    return (_4 << 24) | (_3 << 16) | (_2 << 8) | _1;
 }
 
 inline constexpr uint8_t MulChannel(uint8_t a, uint8_t b)
@@ -281,7 +281,7 @@ static void BlitGWGlyphsToFontAtlas(ImGuiIO &io)
                 {
                     auto blittedValue = *blitDataPtr.Index(x + g.x_offset, y).data;
                     auto dstPx = slotPtr.Index(x, y).data;
-                    *dstPx = ARGB4444ToARGB8888(blittedValue);
+                    *dstPx = Col4444ToCol8888(blittedValue);
                 }
             }
         }
