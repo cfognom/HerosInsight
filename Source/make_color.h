@@ -21,7 +21,7 @@ namespace MakeColor
     namespace U32
     {
         inline constexpr uint32_t rgb(uint8_t r, uint8_t g, uint8_t b) { return IM_COL32(r, g, b, 255); }
-        inline constexpr uint32_t rgba(uint8_t r, uint8_t g, uint8_t b, double a) { return IM_COL32(r, b, g, a * 255.0 + 0.5); }
+        inline constexpr uint32_t rgba(uint8_t r, uint8_t g, uint8_t b, double a) { return IM_COL32(r, g, b, a * 255.0 + 0.5); }
 
         // Example: rgb_hex<"#RRGGBB">()
         template <CompiletimeString S>
