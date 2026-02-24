@@ -1999,8 +1999,7 @@ namespace HerosInsight::SkillBook
             MakeBookName(name, book_index);
 
             bool is_open = true;
-            ImGuiExt::WindowScope hi_wnd(name.data(), &is_open);
-            if (hi_wnd.begun)
+            if (ImGuiExt::WindowScope hi_wnd{name.data(), &is_open})
             {
                 ImGui::PushFont(Constants::Fonts::window_name_font);
                 DrawDupeButton();
@@ -2582,8 +2581,7 @@ namespace HerosInsight::SkillBook
         if (book_that_pressed_help)
         {
             bool is_open = true;
-            ImGuiExt::WindowScope hi_wnd("Search-syntax help", &is_open);
-            if (hi_wnd.begun)
+            if (ImGuiExt::WindowScope hi_wnd{"Search-syntax help", &is_open})
             {
                 DrawHelpContent(book_that_pressed_help);
             }

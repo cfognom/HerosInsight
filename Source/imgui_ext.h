@@ -22,6 +22,7 @@ namespace HerosInsight::ImGuiExt
             ImGui::End();
             ImGui::PopFont();
         }
+        explicit operator bool() const { return begun; }
     };
 
     inline bool Button(const char *label, const ImVec2 &size = ImVec2(0, 0))
