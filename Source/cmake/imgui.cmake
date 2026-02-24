@@ -26,4 +26,4 @@ set(SOURCES
 source_group(TREE "${imgui_SOURCE_DIR}" FILES ${SOURCES})
 target_sources(imgui PRIVATE ${SOURCES})
 target_include_directories(imgui PUBLIC "${imgui_SOURCE_DIR}")
-
+target_compile_definitions(imgui PUBLIC IMGUI_USER_CONFIG="${CMAKE_CURRENT_SOURCE_DIR}/my_imgui_config.h")
