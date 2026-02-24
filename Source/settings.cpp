@@ -59,7 +59,7 @@ namespace HerosInsight
 
     void DrawGeneral(Settings &settings)
     {
-        if (ImGuiExt::BeginTabItem("General"))
+        if (ImGuiExt::TabItemScope item{"General"})
         {
             ImGui::Checkbox("Scroll snap to item", &settings.general.scroll_snap_to_item.value);
 
@@ -85,14 +85,12 @@ namespace HerosInsight
                 SettingsManager::ForceDefaultScope guard{};
                 Utils::Reconstuct(settings);
             }
-
-            ImGui::EndTabItem();
         }
     }
 
     void DrawSkillBook(Settings &settings)
     {
-        if (ImGuiExt::BeginTabItem("Skill Book"))
+        if (ImGuiExt::TabItemScope item{"Skill Book"})
         {
             ImGui::Checkbox("Show help button", &settings.skill_book.show_help_button.value);
             ImGui::Checkbox("Show focused character", &settings.skill_book.show_focused_character.value);
@@ -105,25 +103,22 @@ namespace HerosInsight
                 SettingsManager::ForceDefaultScope guard{};
                 Utils::Reconstuct(settings.skill_book);
             }
-
-            ImGui::EndTabItem();
         }
     }
 
     void Settings::Draw(IDirect3DDevice9 *device)
     {
         ImGui::SetNextWindowSize(ImVec2(400, 200), ImGuiCond_FirstUseEver);
-        if (ImGuiExt::WindowScope scope{"Settings", &HerosInsight::UpdateManager::open_settings})
+        if (ImGuiExt::WindowScope wnd{"Settings", &HerosInsight::UpdateManager::open_settings})
         {
             // Make tabs: General, Skillbook
-            if (ImGui::BeginTabBar("SettingsTabs"))
+            if (ImGuiExt::TabBarScope bar{"SettingsTabs"})
             {
                 SettingsGuard g{};
                 auto &settings = g.Access();
                 DrawGeneral(settings);
                 DrawSkillBook(settings);
             }
-            ImGui::EndTabBar();
         }
     }
 

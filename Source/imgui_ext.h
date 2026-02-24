@@ -25,20 +25,34 @@ namespace HerosInsight::ImGuiExt
         explicit operator bool() const { return begun; }
     };
 
+    struct TabBarScope
+    {
+        bool result;
+        TabBarScope(const char *str_id, ImGuiTabBarFlags flags = 0)
+            : result(ImGui::BeginTabBar(str_id, flags)) {}
+        ~TabBarScope() { ImGui::EndTabBar(); }
+        explicit operator bool() const { return result; }
+    };
+
+    struct TabItemScope
+    {
+        bool opened;
+        TabItemScope(const char *label, bool *p_open = nullptr, ImGuiTabItemFlags flags = 0)
+        {
+            ImGui::PushFont(Constants::Fonts::button_font);
+            opened = ImGui::BeginTabItem(label, p_open, flags);
+            ImGui::PopFont();
+        }
+        ~TabItemScope() { ImGui::EndTabItem(); }
+        explicit operator bool() const { return opened; }
+    };
+
     inline bool Button(const char *label, const ImVec2 &size = ImVec2(0, 0))
     {
         ImGui::PushFont(Constants::Fonts::button_font);
         bool pressed = ImGui::Button(label, size);
         ImGui::PopFont();
         return pressed;
-    }
-
-    inline bool BeginTabItem(const char *label, bool *p_open = nullptr, ImGuiTabItemFlags flags = 0)
-    {
-        ImGui::PushFont(Constants::Fonts::button_font);
-        bool opened = ImGui::BeginTabItem(label, p_open, flags);
-        ImGui::PopFont();
-        return opened;
     }
 
     inline bool Combo(const char *label, int *current_item, const char *const items[], int items_count, int popup_max_height_in_items = -1)
