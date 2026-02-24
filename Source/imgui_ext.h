@@ -43,7 +43,10 @@ namespace HerosInsight::ImGuiExt
             opened = ImGui::BeginTabItem(label, p_open, flags);
             ImGui::PopFont();
         }
-        ~TabItemScope() { ImGui::EndTabItem(); }
+        ~TabItemScope()
+        {
+            if (opened) ImGui::EndTabItem();
+        }
         explicit operator bool() const { return opened; }
     };
 
