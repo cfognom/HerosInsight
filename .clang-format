@@ -13,6 +13,7 @@ NamespaceIndentation: All
 FixNamespaceComments: false
 # AlignAfterOpenBracket: DontAlign
 AlignAfterOpenBracket: BlockIndent
+BreakBeforeTemplateCloser: true
 PenaltyBreakBeforeFirstCallParameter: 1
 PenaltyReturnTypeOnItsOwnLine: 200
 PenaltyIndentedWhitespace: 10
