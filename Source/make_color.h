@@ -25,7 +25,7 @@ namespace MakeColor
 
         // Example: rgb_hex<"#RRGGBB">()
         template <CompiletimeString S>
-        constexpr uint32_t rgb_hex()
+        inline constexpr uint32_t rgb_hex()
         {
             constexpr auto hex = S.str();
             static_assert(hex.size() == 7 || hex.size() == 9, "Hex string must be either 7 or 9 characters");
@@ -39,7 +39,7 @@ namespace MakeColor
 
         // Example: rgb_hex<"#RRGGBBAA">()
         template <CompiletimeString S>
-        constexpr uint32_t rgba_hex()
+        inline constexpr uint32_t rgba_hex()
         {
             constexpr auto hex = S.str();
             static_assert(hex.size() == 9, "Hex string must be 9 characters");
@@ -55,12 +55,12 @@ namespace MakeColor
 
     namespace ImVec4
     {
-        inline ::ImVec4 rgb(uint8_t r, uint8_t g, uint8_t b)
+        inline constexpr ::ImVec4 rgb(uint8_t r, uint8_t g, uint8_t b)
         {
             return ::ImVec4(float(r) / 255.0f, float(g) / 255.0f, float(b) / 255.0f, 1.0f);
         }
 
-        inline ::ImVec4 rgba(uint8_t r, uint8_t g, uint8_t b, double a)
+        inline constexpr ::ImVec4 rgba(uint8_t r, uint8_t g, uint8_t b, double a)
         {
             return ::ImVec4(float(r) / 255.0f, float(g) / 255.0f, float(b) / 255.0f, float(a));
         }

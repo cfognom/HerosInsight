@@ -2076,7 +2076,7 @@ namespace HerosInsight::Utils
     }
 
     // Returns size of the bounding box
-    ImVec2 CalculateTextBoundingBox(ImFont *font, const char *text, ImVec2 &out_min, ImVec2 &out_max)
+    ImVec2 CalculateTextBoundingBox(ImFontBaked *font, const char *text, ImVec2 &out_min, ImVec2 &out_max)
     {
         float x = 0.0f; // Current x position for the next character
         bool first_glyph = true;

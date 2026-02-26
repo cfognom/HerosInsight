@@ -246,7 +246,7 @@ namespace HerosInsight::EnergyDisplay
             // ImVec2 text_size = ImGui::CalcTextSize(text.c_str());
             ImVec2 bb_min;
             ImVec2 bb_max;
-            ImVec2 text_size = Utils::CalculateTextBoundingBox(Constants::Fonts::skill_thick_font_15, text, bb_min, bb_max);
+            ImVec2 text_size = Utils::CalculateTextBoundingBox(Constants::Fonts::skill_thick_font_15->GetFontBaked(Constants::Fonts::skill_thick_font_15->LegacySize), text, bb_min, bb_max);
             // ImVec2 text_size = ImGui::CalcTextSize(text);
 
             // auto image_size = ImVec2(16, 16);

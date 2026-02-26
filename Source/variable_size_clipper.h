@@ -180,6 +180,7 @@ namespace HerosInsight
             auto trailing_height = CalcDistance(Position{i, 0}, Position{item_sizes.size(), 0}, IndexRange::All()); // We skip measuring for performance
             auto end_cursor_ss = item_cursor_ss + trailing_height;
             ImGui::SetCursorScreenPos(ImVec2(view_rect.Min.x, end_cursor_ss)); // This tricks ImGui into thinking we used all space up to end_cursor_ss
+            ImGui::Dummy(ImVec2(0, 0));
 
 // #ifdef _DEBUG
 //             DrawDebugInfo();

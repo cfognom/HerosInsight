@@ -531,7 +531,7 @@ namespace HerosInsight::WorldSpaceUI
                     else
                         time_str.PushFormat("%d", rem_sec_ceil);
                     const auto rem_sec_pos = icon_min + ImVec2(2, 2);
-                    const auto font_size = scale * Constants::Fonts::skill_thick_font_12->FontSize;
+                    const auto font_size = scale * Constants::Fonts::skill_thick_font_12->LegacySize;
 
                     bg_draw_list->AddText(
                         Constants::Fonts::skill_thick_font_12,

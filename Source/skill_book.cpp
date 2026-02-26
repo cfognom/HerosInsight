@@ -598,7 +598,7 @@ namespace HerosInsight::SkillBook
             auto simple_str = GetSimple(tag);
             if (simple_str.data() != nullptr)
             {
-                draw_list->AddText(BIG_FONT, BIG_FONT->FontSize, pos, color, simple_str.data(), simple_str.data() + simple_str.size());
+                draw_list->AddText(BIG_FONT, BIG_FONT->LegacySize, pos, color, simple_str.data(), simple_str.data() + simple_str.size());
                 return;
             }
 
@@ -629,7 +629,7 @@ namespace HerosInsight::SkillBook
             for (auto &local_clip_rect : local_clip_rects)
             {
                 auto clip_rect = local_clip_rect + ImVec4(slash_min.x, slash_min.y, slash_min.x, slash_min.y);
-                draw_list->AddText(BIG_FONT, BIG_FONT->FontSize, slash_min, color, base_str.data(), base_str.data() + base_str.size(), 0.0f, &clip_rect);
+                draw_list->AddText(BIG_FONT, BIG_FONT->LegacySize, slash_min, color, base_str.data(), base_str.data() + base_str.size(), 0.0f, &clip_rect);
 
 #ifdef DEBUG_FRACS
                 draw_list->AddRect(ImVec2(clip_rect.x, clip_rect.y), ImVec2(clip_rect.z, clip_rect.w), 0xFF0000FF, 0.0f, 0);
@@ -1273,7 +1273,7 @@ namespace HerosInsight::SkillBook
         void DrawDupeButton()
         {
             auto window = ImGui::GetCurrentWindow();
-            auto title_bar_height = window->TitleBarHeight();
+            auto title_bar_height = window->TitleBarHeight;
             auto title_bar_rect = window->TitleBarRect();
             const auto button_padding = 0;
             auto button_side = title_bar_height - 2 * button_padding;
@@ -1632,6 +1632,8 @@ namespace HerosInsight::SkillBook
                 current_x += text_width;
                 min_pos_x = current_x + 5;
             }
+
+            ImGui::Dummy(ImVec2(0, 0));
 
             ImGui::PopFont();
             ImGui::EndGroup();
