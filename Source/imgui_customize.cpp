@@ -336,7 +336,7 @@ void HerosInsight::ImGuiCustomize::Init()
     auto &io = ImGui::GetIO();
     AddFonts(io);
     BlitGWGlyphsToFontAtlas(io);
-    // InvertDefaultStyleColors();
+    InvertDefaultStyleColors();
 
     static std::string imgui_ini_path = (Constants::paths.cache() / "imgui.ini").string();
     static std::string imgui_log_path = (Constants::paths.cache() / "imgui_log.txt").string();
