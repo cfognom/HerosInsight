@@ -1,4 +1,6 @@
 # CHANGELOG
+## 0.7.1
+- Fixed compatibility with latest GW update.
 - Renamed 'Attribute level' to 'Attribute rank'.
 
 ## 0.7.0
