@@ -34,21 +34,6 @@ struct GWFontConfig
     }
 };
 
-struct GwFontData
-{
-    GWFontConfig cfg;
-};
-
-struct GWBakedFontData
-{
-    GW::TextMgr::FontHandle fontHandle;
-
-    GWBakedFontData(uint32_t fontIndex)
-        : fontHandle(fontIndex)
-    {
-    }
-};
-
 // struct IconMapping
 // {
 //     uint32_t gwImageFileId;
@@ -128,21 +113,45 @@ inline uint32_t MultiplyColors32(uint32_t c1, uint32_t c2)
 
 struct GwFontLoader : ImFontLoader
 {
+    struct LoaderData
+    {
+        GW::TextMgr::FontHandle fontHandle;
+
+        LoaderData(uint32_t fontIndex)
+            : fontHandle(fontIndex)
+        {
+        }
+    };
+
     static bool SrcInit(ImFontAtlas *atlas, ImFontConfig *src)
     {
+        auto *fontData = (GWFontConfig *)src->FontData;
+        assert(!src->FontLoaderData);
+        src->FontLoaderData = new LoaderData(fontData->fontIndex);
         return true;
     }
 
     static void SrcDestroy(ImFontAtlas *atlas, ImFontConfig *src)
     {
-        auto *loader_data = (GwFontData *)src->FontLoaderData;
+        auto *fontData = (GWFontConfig *)src->FontData;
+        auto *loaderData = (LoaderData *)src->FontLoaderData;
+        if (loaderData)
+        {
+            delete loaderData;
+            src->FontLoaderData = nullptr;
+        }
     }
 
     static bool SrcContainsGlyph(ImFontAtlas *atlas, ImFontConfig *src, ImWchar codepoint)
     {
-        // Example: ASCII + your private use icon range
-        if (codepoint >= 0x20 && codepoint <= 0xFF)
-            return true;
+        auto *loaderData = (LoaderData *)src->FontLoaderData;
+        auto font = loaderData->fontHandle.font;
+        auto fontRanges = font->fontRanges.span();
+        for (auto &range : fontRanges)
+        {
+            if (range.begin_ch <= codepoint && codepoint < range.term_ch)
+                return true;
+        }
         // if (codepoint >= 0xE000 && codepoint <= 0xE0FF) // adjust to your icons
         //     return true;
 
@@ -151,15 +160,11 @@ struct GwFontLoader : ImFontLoader
 
     static bool BakedInit(ImFontAtlas *atlas, ImFontConfig *src, ImFontBaked *baked, void *loader_data_for_baked_src)
     {
-        auto *fontData = (GwFontData *)src->FontData;
-        new (loader_data_for_baked_src) GWBakedFontData(fontData->cfg.fontIndex);
         return true;
     }
 
     static void BakedDestroy(ImFontAtlas *atlas, ImFontConfig *src, ImFontBaked *baked, void *loader_data_for_baked_src)
     {
-        auto *loader_data = (GWBakedFontData *)loader_data_for_baked_src;
-        loader_data->~GWBakedFontData();
     }
 
     static bool GwLoader_FontBakedLoadGlyph(
@@ -172,10 +177,8 @@ struct GwFontLoader : ImFontLoader
         float *out_advance_x
     )
     {
-        auto &bakedFontData = *(GWBakedFontData *)loader_data_for_baked_src;
-        auto &font_handle = bakedFontData.fontHandle;
-        auto &fontData = *(GwFontData *)src->FontData;
-        auto &cfg = fontData.cfg;
+        auto &cfg = *(GWFontConfig *)src->FontData;
+        auto *loaderData = (LoaderData *)src->FontLoaderData;
 
         const auto padding = cfg.glyphPadding;
 
@@ -189,7 +192,8 @@ struct GwFontLoader : ImFontLoader
 
         if (!is_icon)
         {
-            auto font = font_handle.font;
+            auto &fontHandle = loaderData->fontHandle;
+            auto font = fontHandle.font;
 
             const auto glyph_height = font->glyphHeight;
             const auto padded_height = glyph_height + padding * 2;
@@ -335,7 +339,7 @@ struct GwFontLoader : ImFontLoader
         FontBakedInit = BakedInit;
         FontBakedDestroy = BakedDestroy;
         FontBakedLoadGlyph = GwLoader_FontBakedLoadGlyph;
-        FontBakedSrcLoaderDataSize = sizeof(GWBakedFontData);
+        // FontBakedSrcLoaderDataSize = sizeof(GwFontSrcData);
     }
 };
 GwFontLoader g_GwFontLoader;
@@ -345,14 +349,15 @@ ImFont *CreateGWFont(GWFontConfig cfg)
     ImGuiIO &io = ImGui::GetIO();
 
     ImFontConfig config;
+    auto *fontData = new GWFontConfig(std::move(cfg));
+    config.FontData = fontData;
+    config.FontDataSize = sizeof(*fontData);
 
-    GW::TextMgr::FontHandle fontHandle(cfg.fontIndex);
+    GW::TextMgr::FontHandle fontHandle{cfg.fontIndex};
     auto font = fontHandle.font;
     const int padded_height = font->glyphHeight + cfg.glyphPadding * 2;
     config.SizePixels = (float)padded_height;
     config.FontLoader = &g_GwFontLoader;
-    config.FontData = new GwFontData(cfg);
-    config.FontDataSize = sizeof(GwFontData);
     ImFont *imFont = io.Fonts->AddFont(&config);
     imFont->Flags = ImFontFlags_LockBakedSizes;
     imFont->Scale = cfg.scale;
