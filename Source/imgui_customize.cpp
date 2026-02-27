@@ -890,6 +890,9 @@ void HerosInsight::ImGuiCustomize::Init()
     auto &io = ImGui::GetIO();
     auto &style = ImGui::GetStyle();
 
+    // style.WindowBorderSize = 1.f;
+    style.WindowBorderHoverPadding = 8.f;
+
     RefreshStyle();
 
     AddFonts(io);
