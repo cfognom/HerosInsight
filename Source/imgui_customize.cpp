@@ -13,13 +13,22 @@
 
 #include "imgui_customize.h"
 
+struct RectPadding
+{
+    float left = 0;
+    float right = 0;
+    float top = 0;
+    float bottom = 0;
+};
+
 struct GWFontConfig
 {
     uint32_t fontIndex = 0;
     GW::TextMgr::BlitFontFlags blitFlags = (GW::TextMgr::BlitFontFlags)0;
-    int32_t glyphPadding = 0;
+    int32_t blitPadding = 0; // Extra padding used when blitting. If zero, effects like ambient occlusion, might not have enough room
     int32_t advanceAdjustment = 0;
     ImVec2 glyphOffset = ImVec2(0, 0);
+    RectPadding logicalPadding = RectPadding(0, 0, 0, 0);
     ImVec2 iconOffset = ImVec2(0, 0);
     uint32_t color = 0xffffffff;
     float scale = 1.f;
@@ -55,7 +64,7 @@ struct GWFontConfig
 //         ImVec2 iconOffset{-1, -1};
 //         iconOffset.y += padding;
 //         auto iconEffectiveHeight = (int32_t)iconSize.height - 2;
-//         iconOffset.y += std::round(((float)font->glyphHeight * 0.8f - iconEffectiveHeight) / 2);
+//         iconOffset.y += std::round(((float)font.glyphHeight * 0.8f - iconEffectiveHeight) / 2);
 //         auto advanceAdjustment = -2;
 
 //         auto AddIconGlyph = [&](size_t atlas_index, uint32_t tint = IM_COL32_WHITE)
@@ -116,25 +125,36 @@ struct GwFontLoader : ImFontLoader
     struct LoaderData
     {
         GW::TextMgr::FontHandle fontHandle;
+        std::vector<uint8_t> decodeDataBuffer;
+        std::vector<uint16_t> blitDataBuffer;
+        size_t maxBlitSize;
 
-        LoaderData(uint32_t fontIndex)
-            : fontHandle(fontIndex)
+        LoaderData(GWFontConfig &fontData)
+            : fontHandle(fontData.fontIndex)
         {
+            auto &font = fontHandle.GetFont();
+            auto maxBlitWidth = font.glyphWidth + fontData.blitPadding * 2;
+            auto maxBlitHeight = font.glyphHeight + fontData.blitPadding * 2;
+            maxBlitSize = maxBlitWidth * maxBlitHeight;
+            decodeDataBuffer.resize(maxBlitSize);
+            blitDataBuffer.resize(maxBlitSize);
         }
     };
 
     static bool SrcInit(ImFontAtlas *atlas, ImFontConfig *src)
     {
-        auto *fontData = (GWFontConfig *)src->FontData;
+        auto &fontData = *(GWFontConfig *)src->FontData;
         assert(!src->FontLoaderData);
-        src->FontLoaderData = new LoaderData(fontData->fontIndex);
+        auto loaderData = new LoaderData(fontData);
+        src->FontLoaderData = loaderData;
+
         return true;
     }
 
     static void SrcDestroy(ImFontAtlas *atlas, ImFontConfig *src)
     {
-        auto *fontData = (GWFontConfig *)src->FontData;
-        auto *loaderData = (LoaderData *)src->FontLoaderData;
+        auto &fontData = *(GWFontConfig *)src->FontData;
+        auto loaderData = (LoaderData *)src->FontLoaderData;
         if (loaderData)
         {
             delete loaderData;
@@ -144,12 +164,12 @@ struct GwFontLoader : ImFontLoader
 
     static bool SrcContainsGlyph(ImFontAtlas *atlas, ImFontConfig *src, ImWchar codepoint)
     {
-        auto *loaderData = (LoaderData *)src->FontLoaderData;
-        auto font = loaderData->fontHandle.font;
-        auto fontRanges = font->fontRanges.span();
+        auto &loaderData = *(LoaderData *)src->FontLoaderData;
+        auto &font = loaderData.fontHandle.GetFont();
+        auto fontRanges = font.fontRanges.span();
         for (auto &range : fontRanges)
         {
-            if (range.begin_ch <= codepoint && codepoint < range.term_ch)
+            if (range.begin_ch <= codepoint && codepoint <= range.term_ch)
                 return true;
         }
         // if (codepoint >= 0xE000 && codepoint <= 0xE0FF) // adjust to your icons
@@ -178,106 +198,111 @@ struct GwFontLoader : ImFontLoader
     )
     {
         auto &cfg = *(GWFontConfig *)src->FontData;
-        auto *loaderData = (LoaderData *)src->FontLoaderData;
+        auto &loaderData = *(LoaderData *)src->FontLoaderData;
 
-        const auto padding = cfg.glyphPadding;
+        const auto blitPadding = cfg.blitPadding;
+        auto advanceAdjustment = cfg.GetAdvanceAdjustment(codepoint);
 
         ImFontGlyph &g = *out_glyph;
         g.Codepoint = codepoint;
 
         // Handle icons in your 0xE000+ range separately
-        const bool is_icon = (codepoint >= 0xE000);
-
-        uint32_t padded_width = 0;
+        const bool is_icon = codepoint >= 0xE000;
 
         if (!is_icon)
         {
-            auto &fontHandle = loaderData->fontHandle;
-            auto font = fontHandle.font;
+            auto &fontHandle = loaderData.fontHandle;
+            auto &font = fontHandle.GetFont();
 
-            const auto glyph_height = font->glyphHeight;
-            const auto padded_height = glyph_height + padding * 2;
+            const uint32_t glyphHeight = font.glyphHeight;
+            const uint32_t glyphPaddedHeight = glyphHeight + cfg.logicalPadding.top + cfg.logicalPadding.bottom;
+            uint32_t glyphWidth;
 
-            // Normal glyph path (same as your EnqueueRange)
-            uint32_t glyph_width, glyph_offset_x;
-            if (auto glyph = GW::TextMgr::GetGlyphByChar(font, codepoint))
+            auto encGlyph = GW::TextMgr::GetGlyphByChar(font, codepoint);
+            if (encGlyph)
             {
-                glyph_offset_x = std::numeric_limits<uint32_t>::max();
-                glyph_width = 0;
+                auto &metrics = encGlyph->metrics;
+                uint32_t glyphStart = std::numeric_limits<uint32_t>::max();
+                uint32_t glyphEnd = 0;
                 for (size_t i = 0; i < 4; ++i)
                 {
                     // GW uses 4 collision lanes for each glyph to achieve nice kerning, but imgui uses only one: We take max of all lanes
-                    glyph_offset_x = std::min(glyph_offset_x, glyph->metrics.lane_start[i]);
-                    glyph_width = std::max(glyph_width, glyph->metrics.lane_width[i]);
+                    uint32_t &lane_start = metrics.lane_start[i];
+                    uint32_t &lane_width = metrics.lane_width[i];
+                    uint32_t lane_end = 0;
+                    if (lane_start != std::numeric_limits<uint32_t>::max())
+                        lane_end = lane_start + lane_width;
+                    glyphStart = std::min(glyphStart, lane_start);
+                    glyphEnd = std::max(glyphEnd, lane_end);
                 }
-                g.Visible = true;
+                glyphWidth = glyphEnd - glyphStart;
+                const GW::Dims rectDims{
+                    glyphWidth + blitPadding * 2,
+                    glyphHeight + blitPadding * 2,
+                };
+                const GW::Dims blitDims{
+                    glyphEnd + blitPadding * 2,
+                    rectDims.height,
+                };
+
+                ImFontAtlasRect atlasRect;
+                auto packId = atlas->AddCustomRect(rectDims.width, rectDims.height, &atlasRect);
+                if (packId == -1)
+                    return false;
+                g.PackId = packId;
+                assert(atlasRect.w == rectDims.width);
+                assert(atlasRect.h == rectDims.height);
+
+                const uint32_t blitSize = blitDims.width * blitDims.height;
+                uint8_t *decodeDataBuffer = loaderData.decodeDataBuffer.data();
+                uint16_t *blitDataBuffer = loaderData.blitDataBuffer.data();
+                assert(loaderData.maxBlitSize >= blitSize);
+
+                GW::Ptr2D decodeDataPtr{decodeDataBuffer, blitDims.width};
+                GW::Ptr2D blitDataPtr{blitDataBuffer, blitDims.width};
+
+                std::memset(decodeDataBuffer, 0, blitSize * sizeof(decltype(*decodeDataBuffer)));
+                // std::memset(blitDataBuffer, 0, blitSize * sizeof(decltype(*blitDataBuffer)));
+
+                GW::TextMgr::DecodeGlyph(font, *encGlyph, decodeDataPtr.Index(blitPadding, blitPadding));
+
+                GW::TextMgr::BlitFontARGB4444(font, blitDataPtr, decodeDataBuffer, blitDims, cfg.color, cfg.blitFlags);
+
+                assert(atlas->TexData->BytesPerPixel == 4);
+                GW::Ptr2D<uint32_t> slotPtr{
+                    .data = (uint32_t *)atlas->TexData->GetPixelsAt(atlasRect.x, atlasRect.y),
+                    .pitch = (uint32_t)atlas->TexData->Width,
+                };
+
+                for (int y = 0; y < atlasRect.h; ++y)
+                {
+                    for (int x = 0; x < atlasRect.w; ++x)
+                    {
+                        auto blittedValue = *blitDataPtr.Index(glyphStart + x, y).data;
+                        auto dstPx = slotPtr.Index(x, y).data;
+                        *dstPx = Col4444ToCol8888(blittedValue);
+                    }
+                }
+
+                g.X0 = cfg.logicalPadding.left - blitPadding;
+                g.Y0 = cfg.logicalPadding.top - blitPadding;
+                g.X1 = g.X0 + atlasRect.w;
+                g.Y1 = g.Y0 + atlasRect.h;
             }
             else
             {
-                glyph_offset_x = 0;
-                glyph_width = font->advance_unit;
-                g.Visible = false;
+                glyphWidth = font.advance_unit;
             }
+            const uint32_t glyphPaddedWidth = glyphWidth + cfg.logicalPadding.left + cfg.logicalPadding.right;
 
-            padded_width = glyph_width + padding * 2;
-
-            uint32_t advanceAdjustment = cfg.GetAdvanceAdjustment(codepoint);
-
-            g.AdvanceX = float(glyph_width + advanceAdjustment);
-            g.Colored = false;
-
-            // Mimic your offset usage: (-padding, 0) + cfg.glyphOffset for text
-            auto offset = is_icon ? cfg.iconOffset
-                                  : (ImVec2(-padding, 0.0f) + cfg.glyphOffset);
-            g.X0 = offset.x;
-            g.Y0 = offset.y;
-            g.X1 = g.X0 + (float)padded_width;
-            g.Y1 = g.Y0 + (float)padded_height;
-
-            ImFontAtlasRect rect;
-            g.PackId = atlas->AddCustomRect(padded_width, padded_height, &rect);
-            if (g.PackId == -1)
-                return false;
-
-            const auto blitSize = padded_width * padded_height;
-
-            std::vector<uint8_t> glyphDataBuffer;
-            std::vector<uint16_t> blitDataBuffer;
-            glyphDataBuffer.resize(blitSize);
-            blitDataBuffer.resize(blitSize);
-
-            GW::Ptr2D glyphDataPtr{glyphDataBuffer.data(), padded_width};
-            GW::Ptr2D blitDataPtr{blitDataBuffer.data(), padded_width};
-
-            std::memset(glyphDataBuffer.data(), 0, blitSize * sizeof(decltype(glyphDataBuffer)::value_type));
-            std::memset(blitDataBuffer.data(), 0, blitSize * sizeof(decltype(blitDataBuffer)::value_type));
-
-            auto encGlyph = GW::TextMgr::GetGlyphByChar(font, codepoint);
-            GW::TextMgr::DecodeGlyph(font, encGlyph, glyphDataPtr.Index(padding, padding));
-
-            GW::Dims glyphDims{padded_width, padded_height};
-            GW::TextMgr::BlitFontARGB4444(font, blitDataPtr, glyphDataBuffer.data(), glyphDims, cfg.color, cfg.blitFlags);
-
-            GW::Ptr2D<uint32_t> slotPtr{
-                .data = (uint32_t *)atlas->TexData->GetPixelsAt(rect.x, rect.y),
-                .pitch = (uint32_t)atlas->TexData->Width,
-            };
-
-            for (int y = 0; y < rect.h; ++y)
-            {
-                for (int x = 0; x < rect.w; ++x)
-                {
-                    auto blittedValue = *blitDataPtr.Index(x + glyph_offset_x, y).data;
-                    auto dstPx = slotPtr.Index(x, y).data;
-                    *dstPx = Col4444ToCol8888(blittedValue);
-                }
-            }
+            g.Visible = encGlyph != nullptr;
+            g.AdvanceX = glyphPaddedWidth + advanceAdjustment;
+            g.Colored = cfg.color != 0xffffffff;
         }
         else
         {
             // Icon path similar to your AddIconGlyph, using a fixed size
-            const GW::Dims iconSize(16, 16); // or store in cfg
-            padded_width = iconSize.width;
+            const GW::Dims iconSize(16, 16);        // or store in cfg
             g.AdvanceX = float(iconSize.width - 2); // like your advanceAdjustment
         }
 
@@ -344,23 +369,24 @@ struct GwFontLoader : ImFontLoader
 };
 GwFontLoader g_GwFontLoader;
 
-ImFont *CreateGWFont(GWFontConfig cfg)
+ImFont *CreateGWFont(GWFontConfig gwcfg)
 {
     ImGuiIO &io = ImGui::GetIO();
 
-    ImFontConfig config;
-    auto *fontData = new GWFontConfig(std::move(cfg));
-    config.FontData = fontData;
-    config.FontDataSize = sizeof(*fontData);
+    ImFontConfig imcfg;
+    auto *fontData = new GWFontConfig(std::move(gwcfg));
+    imcfg.FontData = fontData;
+    imcfg.FontDataSize = sizeof(*fontData);
 
-    GW::TextMgr::FontHandle fontHandle{cfg.fontIndex};
-    auto font = fontHandle.font;
-    const int padded_height = font->glyphHeight + cfg.glyphPadding * 2;
-    config.SizePixels = (float)padded_height;
-    config.FontLoader = &g_GwFontLoader;
-    ImFont *imFont = io.Fonts->AddFont(&config);
+    GW::TextMgr::FontHandle fontHandle{gwcfg.fontIndex};
+    auto &font = fontHandle.GetFont();
+    const auto fontHeight = font.glyphHeight + gwcfg.logicalPadding.top + gwcfg.logicalPadding.bottom;
+    imcfg.SizePixels = fontHeight;
+    imcfg.FontLoader = &g_GwFontLoader;
+
+    ImFont *imFont = io.Fonts->AddFont(&imcfg);
     imFont->Flags = ImFontFlags_LockBakedSizes;
-    imFont->Scale = cfg.scale;
+    imFont->Scale = gwcfg.scale;
 
     return imFont;
 }
@@ -397,10 +423,10 @@ ImFont *CreateGWFontOld(GWFontConfig cfg)
     auto &io = ImGui::GetIO();
 
     GW::TextMgr::FontHandle fontHandle(cfg.fontIndex);
-    auto font = fontHandle.font;
+    auto &font = fontHandle.GetFont();
 
-    auto padding = cfg.glyphPadding;
-    int32_t padded_height = font->glyphHeight + padding * 2;
+    auto padding = cfg.blitPadding;
+    int32_t padded_height = font.glyphHeight + padding * 2;
 
     ImFontConfig config;
     config.SizePixels = padded_height;
@@ -431,7 +457,7 @@ ImFont *CreateGWFontOld(GWFontConfig cfg)
             else
             {
                 glyph_offset_x = 0;
-                glyph_width = font->advance_unit;
+                glyph_width = font.advance_unit;
             }
             uint32_t padded_width = glyph_width + padding * 2;
             auto advanceOverrride_it = cfg.advanceAdjustmentOverrides.find(ch);
@@ -465,7 +491,7 @@ ImFont *CreateGWFontOld(GWFontConfig cfg)
         ImVec2 iconOffset{-1, -1};
         iconOffset.y += padding;
         auto iconEffectiveHeight = (int32_t)iconSize.height - 2;
-        iconOffset.y += std::round(((float)font->glyphHeight * 0.8f - iconEffectiveHeight) / 2);
+        iconOffset.y += std::round(((float)font.glyphHeight * 0.8f - iconEffectiveHeight) / 2);
         auto advanceAdjustment = -2;
 
         auto AddIconGlyph = [&](size_t atlas_index, uint32_t tint = IM_COL32_WHITE)
