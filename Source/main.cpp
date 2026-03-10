@@ -72,9 +72,9 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 
 static long prevWndProc = 0;
 static std::atomic<bool> running = true;
-static std::atomic<bool> gtfo = false; // When this is set, we better gtfo
+static std::atomic<bool> gtfo = false; // When this is set, gw was closed and we better gtfo
 
-void SignalStopRunning();
+void StopRunning();
 
 static LRESULT CALLBACK WndProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lParam)
 {
@@ -304,7 +304,7 @@ static void OnRender_CheckPermission(void *data)
 #endif
     )
     {
-        SignalStopRunning();
+        StopRunning();
     }
 }
 
@@ -389,7 +389,7 @@ struct GameScope // Must be created from GW's thread
             {
                 if (!HerosInsight::CrashHandling::SafeCall(&OnRender_CheckPermission, &helper))
                 {
-                    SignalStopRunning();
+                    StopRunning();
                 }
             }
         );
@@ -403,7 +403,7 @@ struct GameScope // Must be created from GW's thread
                         }
                     ))
                 {
-                    SignalStopRunning();
+                    StopRunning();
                 }
             }
         );
@@ -413,7 +413,7 @@ struct GameScope // Must be created from GW's thread
             {
                 if (!HerosInsight::CrashHandling::SafeCall(&OnUpdate))
                 {
-                    SignalStopRunning();
+                    StopRunning();
                 }
             }
         );
@@ -459,7 +459,7 @@ struct SafeGameScope // Just a wrapper that lets us catch and rethrow any except
     }
 };
 OnceOrNever<SafeGameScope> game_scope;
-static void SignalStopRunning()
+static void StopRunning()
 {
     game_scope.Terminate();
     running = false;
@@ -488,7 +488,7 @@ struct MainScope
                 if (!game_scope.ConstructOnce(main->hWnd, helper.device))
                 {
                     GW::DisableHooks();
-                    SignalStopRunning();
+                    StopRunning();
                 }
             },
             this
@@ -550,7 +550,7 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
     else if (dwReason == DLL_PROCESS_DETACH)
     {
         gtfo = true;
-        SignalStopRunning();
+        StopRunning();
     }
 
     return TRUE;
