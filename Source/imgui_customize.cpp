@@ -32,9 +32,10 @@ struct GWFontConfig
     ImVec2 iconOffset = ImVec2(0, 0);
     uint32_t color = 0xffffffff;
     float scale = 1.f;
-    std::unordered_map<wchar_t, uint32_t> advanceAdjustmentOverrides;
+    std::optional<uint32_t> size;
+    std::unordered_map<wchar_t, int32_t> advanceAdjustmentOverrides;
 
-    uint32_t GetAdvanceAdjustment(wchar_t ch) const
+    int32_t GetAdvanceAdjustment(wchar_t ch) const
     {
         auto it = advanceAdjustmentOverrides.find(ch);
         if (it != advanceAdjustmentOverrides.end())
@@ -124,20 +125,65 @@ struct GwFontLoader : ImFontLoader
 {
     struct LoaderData
     {
-        GW::TextMgr::FontHandle fontHandle;
+        GWFontConfig &cfg;
+        GW::Constants::Language language = GW::Constants::Language::English;
+        struct Range
+        {
+            wchar_t first;
+            wchar_t last;
+        };
+        std::vector<Range> ranges;
+        GW::TextMgr::FontData *gwFontData = nullptr;
+
         std::vector<uint8_t> decodeDataBuffer;
         std::vector<uint16_t> blitDataBuffer;
-        size_t maxBlitSize;
 
-        LoaderData(GWFontConfig &fontData)
-            : fontHandle(fontData.fontIndex)
+        LoaderData(GWFontConfig &cfg)
+            : cfg(cfg)
         {
-            auto &font = fontHandle.GetFont();
-            auto maxBlitWidth = font.glyphWidth + fontData.blitPadding * 2;
-            auto maxBlitHeight = font.glyphHeight + fontData.blitPadding * 2;
-            maxBlitSize = maxBlitWidth * maxBlitHeight;
-            decodeDataBuffer.resize(maxBlitSize);
-            blitDataBuffer.resize(maxBlitSize);
+            auto fontDataArrays = GW::TextMgr::GetFontDataArrays(language);
+
+            std::span<GW::TextMgr::FontData::CharRange> charRanges{};
+            for (auto &fontDatas : fontDataArrays)
+            {
+                auto &fontData = fontDatas[cfg.fontIndex];
+                auto newCharRanges = fontData.GetCharRanges();
+                if (charRanges.empty())
+                    charRanges = newCharRanges;
+                assert(std::ranges::equal(charRanges, newCharRanges));
+            }
+
+            ranges.reserve(charRanges.size());
+            for (auto &range : charRanges)
+            {
+                ranges.push_back({range.first, range.last});
+            }
+        }
+
+        void BakeAndLock(ImFont &imFont)
+        {
+            auto fontDataArrays = GW::TextMgr::GetFontDataArrays(language);
+            for (auto &fontDatas : fontDataArrays)
+            {
+                gwFontData = &fontDatas[cfg.fontIndex];
+                auto height = cfg.logicalPadding.top + gwFontData->height + cfg.logicalPadding.bottom;
+                // imFont.LegacySize = height;
+                imFont.GetFontBaked(height);
+                gwFontData = nullptr;
+                // break;
+            }
+
+            imFont.Flags = ImFontFlags_LockBakedSizes;
+        }
+    };
+
+    struct BakedData
+    {
+        GW::TextMgr::FontHandle fontHandle;
+
+        BakedData(GW::TextMgr::FontData &fontData)
+            : fontHandle(fontData)
+        {
         }
     };
 
@@ -165,11 +211,10 @@ struct GwFontLoader : ImFontLoader
     static bool SrcContainsGlyph(ImFontAtlas *atlas, ImFontConfig *src, ImWchar codepoint)
     {
         auto &loaderData = *(LoaderData *)src->FontLoaderData;
-        auto &font = loaderData.fontHandle.GetFont();
-        auto fontRanges = font.fontRanges.span();
-        for (auto &range : fontRanges)
+
+        for (auto &range : loaderData.ranges)
         {
-            if (range.begin_ch <= codepoint && codepoint <= range.term_ch)
+            if (range.first <= codepoint && codepoint <= range.last)
                 return true;
         }
         // if (codepoint >= 0xE000 && codepoint <= 0xE0FF) // adjust to your icons
@@ -180,11 +225,27 @@ struct GwFontLoader : ImFontLoader
 
     static bool BakedInit(ImFontAtlas *atlas, ImFontConfig *src, ImFontBaked *baked, void *loader_data_for_baked_src)
     {
+        auto &fontData = *(GWFontConfig *)src->FontData;
+        auto &loaderData = *(LoaderData *)src->FontLoaderData;
+        if (loaderData.gwFontData == nullptr)
+            return false;
+
+        auto bakedData = new (loader_data_for_baked_src) BakedData(*loaderData.gwFontData);
+
+        auto font = bakedData->fontHandle.FontPtr();
+        if (font == nullptr)
+        {
+            bakedData->~BakedData();
+            return false;
+        }
+
         return true;
     }
 
     static void BakedDestroy(ImFontAtlas *atlas, ImFontConfig *src, ImFontBaked *baked, void *loader_data_for_baked_src)
     {
+        auto bakedData = (BakedData *)loader_data_for_baked_src;
+        bakedData->~BakedData();
     }
 
     static bool GwLoader_FontBakedLoadGlyph(
@@ -199,6 +260,7 @@ struct GwFontLoader : ImFontLoader
     {
         auto &cfg = *(GWFontConfig *)src->FontData;
         auto &loaderData = *(LoaderData *)src->FontLoaderData;
+        auto &bakedData = *(BakedData *)loader_data_for_baked_src;
 
         const auto blitPadding = cfg.blitPadding;
         auto advanceAdjustment = cfg.GetAdvanceAdjustment(codepoint);
@@ -211,11 +273,13 @@ struct GwFontLoader : ImFontLoader
 
         if (!is_icon)
         {
-            auto &fontHandle = loaderData.fontHandle;
-            auto &font = fontHandle.GetFont();
+            // auto &fontHandle = loaderData.fontHandle;
+            auto &fontHandle = bakedData.fontHandle;
+            auto &font = *fontHandle.FontPtr();
+            // auto scale = fontHandle.scale;
 
             const uint32_t glyphHeight = font.glyphHeight;
-            const uint32_t glyphPaddedHeight = glyphHeight + cfg.logicalPadding.top + cfg.logicalPadding.bottom;
+            const uint32_t glyphPaddedHeight = cfg.logicalPadding.top + glyphHeight + cfg.logicalPadding.bottom;
             uint32_t glyphWidth;
 
             auto encGlyph = GW::TextMgr::GetGlyphByChar(font, codepoint);
@@ -254,9 +318,10 @@ struct GwFontLoader : ImFontLoader
                 assert(atlasRect.h == rectDims.height);
 
                 const uint32_t blitSize = blitDims.width * blitDims.height;
+                loaderData.decodeDataBuffer.resize(blitSize);
+                loaderData.blitDataBuffer.resize(blitSize);
                 uint8_t *decodeDataBuffer = loaderData.decodeDataBuffer.data();
                 uint16_t *blitDataBuffer = loaderData.blitDataBuffer.data();
-                assert(loaderData.maxBlitSize >= blitSize);
 
                 GW::Ptr2D decodeDataPtr{decodeDataBuffer, blitDims.width};
                 GW::Ptr2D blitDataPtr{blitDataBuffer, blitDims.width};
@@ -293,7 +358,7 @@ struct GwFontLoader : ImFontLoader
             {
                 glyphWidth = font.advance_unit;
             }
-            const uint32_t glyphPaddedWidth = glyphWidth + cfg.logicalPadding.left + cfg.logicalPadding.right;
+            const uint32_t glyphPaddedWidth = cfg.logicalPadding.left + glyphWidth + cfg.logicalPadding.right;
 
             g.Visible = encGlyph != nullptr;
             g.AdvanceX = glyphPaddedWidth + advanceAdjustment;
@@ -311,47 +376,6 @@ struct GwFontLoader : ImFontLoader
             *out_advance_x = g.AdvanceX;
         }
 
-        // if (!is_icon)
-        // {
-        // }
-        // else
-        // {
-        //     // Icon glyph: copy from decoded image, apply tint, like your icon loop
-        //     // You’ll need some mapping from codepoint to (fileId, atlasIndex, tint).
-        //     // A simple approach is to encode that mapping into GWFontConfig or a
-        //     // separate global map keyed by codepoint.
-
-        //     auto it = iconMappings.find(codepoint);
-        //     if (it == iconMappings.end())
-        //         return false;
-
-        //     IconMapping &mapping = it->second;
-
-        //     GW::AssetMgr::DecodedImage decodedImg(mapping.gwImageFileId);
-        //     GW::Ptr2D<uint32_t> decodedPtr{(uint32_t *)decodedImg.image, decodedImg.dims.width};
-
-        //     ImVec2 uv0, uv1;
-        //     TextureModule::GetImageUVsInAtlas(decodedImg.dims, mapping.atlasSlotDims, mapping.atlasIndex, uv0, uv1);
-
-        //     auto slotPtr = atlasPtr.Index(rect->x, rect->y);
-        //     auto srcPtr = decodedPtr.Index(
-        //         (uint32_t)std::round(uv0.x * decodedImg.dims.width),
-        //         (uint32_t)std::round(uv0.y * decodedImg.dims.height)
-        //     );
-        //     srcPtr.CopyTo(slotPtr, mapping.atlasSlotDims);
-
-        //     if (mapping.tint != 0xFFFFFFFF)
-        //     {
-        //         slotPtr.ForEach(
-        //             [tint = mapping.tint](uint32_t &px)
-        //             {
-        //                 px = MultiplyColors32(px, tint);
-        //             },
-        //             mapping.atlasSlotDims
-        //         );
-        //     }
-        // }
-
         return true;
     }
 
@@ -364,7 +388,7 @@ struct GwFontLoader : ImFontLoader
         FontBakedInit = BakedInit;
         FontBakedDestroy = BakedDestroy;
         FontBakedLoadGlyph = GwLoader_FontBakedLoadGlyph;
-        // FontBakedSrcLoaderDataSize = sizeof(GwFontSrcData);
+        FontBakedSrcLoaderDataSize = sizeof(BakedData);
     }
 };
 GwFontLoader g_GwFontLoader;
@@ -378,15 +402,18 @@ ImFont *CreateGWFont(GWFontConfig gwcfg)
     imcfg.FontData = fontData;
     imcfg.FontDataSize = sizeof(*fontData);
 
-    GW::TextMgr::FontHandle fontHandle{gwcfg.fontIndex};
-    auto &font = fontHandle.GetFont();
-    const auto fontHeight = font.glyphHeight + gwcfg.logicalPadding.top + gwcfg.logicalPadding.bottom;
-    imcfg.SizePixels = fontHeight;
+    // GW::TextMgr::FontHandle fontHandle{gwcfg.fontIndex};
+    // auto &font = *fontHandle.FontPtr();
+    // const auto fontHeight = font.glyphHeight + gwcfg.logicalPadding.top + gwcfg.logicalPadding.bottom;
+    // imcfg.SizePixels = fontHeight;
     imcfg.FontLoader = &g_GwFontLoader;
 
     ImFont *imFont = io.Fonts->AddFont(&imcfg);
-    imFont->Flags = ImFontFlags_LockBakedSizes;
-    imFont->Scale = gwcfg.scale;
+    auto loaderData = (GwFontLoader::LoaderData *)imFont->Sources[0]->FontLoaderData;
+    assert(loaderData);
+    loaderData->BakeAndLock(*imFont);
+
+    // imFont->Scale = gwcfg.scale;
 
     return imFont;
 }
@@ -423,7 +450,7 @@ ImFont *CreateGWFontOld(GWFontConfig cfg)
     auto &io = ImGui::GetIO();
 
     GW::TextMgr::FontHandle fontHandle(cfg.fontIndex);
-    auto &font = fontHandle.GetFont();
+    auto &font = *fontHandle.FontPtr();
 
     auto padding = cfg.blitPadding;
     int32_t padded_height = font.glyphHeight + padding * 2;
@@ -908,17 +935,39 @@ void CreateGWTheme()
     );
 }
 
+void Roundify(ImGuiStyle &style, float radius)
+{
+    style.TabRounding = radius;
+    style.GrabRounding = radius;
+    style.ChildRounding = radius;
+    style.FrameRounding = radius;
+    style.ImageRounding = radius;
+    style.PopupRounding = radius;
+    style.WindowRounding = radius;
+    style.ScrollbarRounding = radius;
+    style.TreeLinesRounding = radius;
+    style.DragDropTargetRounding = radius;
+}
+
+void TweakStyle()
+{
+    auto &style = ImGui::GetStyle();
+
+    // style.WindowBorderSize = 1.f;
+    style.WindowBorderHoverPadding = 8.f;
+    style.ScrollbarSize = 20.f;
+    style.FontSizeBase = 18.f;
+    Roundify(style, 4.f);
+}
+
 void HerosInsight::ImGuiCustomize::Init()
 {
     SaveCurrentStyleColors(themes[Settings::Style::Theme::ImGuiDefault].colors);
     CreateGWTheme();
 
     auto &io = ImGui::GetIO();
-    auto &style = ImGui::GetStyle();
 
-    // style.WindowBorderSize = 1.f;
-    style.WindowBorderHoverPadding = 8.f;
-
+    TweakStyle();
     RefreshStyle();
 
     AddFonts(io);
