@@ -593,7 +593,7 @@ struct GwFontLoader : ImFontLoader
         {
             g.PackId = loaderData.iconBlitter.GetBlittedGlyph(codepoint, atlasRect);
 
-            float y_offset = ((float)atlasRect.h - baked->Size) / 2.f;
+            float y_offset = ((desiredHeight * 0.75f) - (float)atlasRect.h) / 2.f; // 0.75f is to skip the descender lane height when aligning icons
 
             g.X0 = 0;
             g.Y0 = y_offset;
