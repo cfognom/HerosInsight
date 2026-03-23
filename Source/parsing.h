@@ -12,8 +12,6 @@
 
 namespace
 {
-    using HerosInsight::OutBuf;
-
     // clang-format off
     struct LitTag{};
     struct ToMemberTag{};

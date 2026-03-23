@@ -540,7 +540,7 @@ namespace TextureModule
         auto number_size_scaled = number_size_actual * scale;
         auto number_stride_scaled = number_stride * scale;
 
-        HerosInsight::FixedVector<uint8_t, 16> digits;
+        FixedVector<uint8_t, 16> digits;
         auto rem = std::abs(number);
         while (rem)
         {
