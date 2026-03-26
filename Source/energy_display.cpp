@@ -51,6 +51,7 @@
 
 #include <constants.h>
 #include <debug_display.h>
+#include <imgui_ext.h>
 #include <packet_reader.h>
 #include <party_data.h>
 #include <texture_module.h>
@@ -227,7 +228,7 @@ namespace HerosInsight::EnergyDisplay
         const auto black_color = IM_COL32_BLACK;
         const auto white_color = IM_COL32_WHITE;
 
-        ImGui::PushFont(Constants::Fonts::skill_thick_font_15);
+        ImGuiExt::GWFontScope font_scope(Constants::Fonts::skill_thick_font_15);
         for (size_t i = 0; i < 8; i++)
         {
             const auto energy_cost = energy_costs[i];
@@ -246,7 +247,8 @@ namespace HerosInsight::EnergyDisplay
             // ImVec2 text_size = ImGui::CalcTextSize(text.c_str());
             ImVec2 bb_min;
             ImVec2 bb_max;
-            ImVec2 text_size = Utils::CalculateTextBoundingBox(Constants::Fonts::skill_thick_font_15->GetFontBaked(Constants::Fonts::skill_thick_font_15->LegacySize), text, bb_min, bb_max);
+            auto font_size = ImGui::GetFontSize();
+            ImVec2 text_size = Utils::CalculateTextBoundingBox(Constants::Fonts::skill_thick_font_15->GetFontBaked(font_size), text, bb_min, bb_max);
             // ImVec2 text_size = ImGui::CalcTextSize(text);
 
             // auto image_size = ImVec2(16, 16);
@@ -291,6 +293,5 @@ namespace HerosInsight::EnergyDisplay
                 color = IM_COL32_WHITE;
             background_draw_list->AddText(text_pos, color, text);
         }
-        ImGui::PopFont();
     }
 }

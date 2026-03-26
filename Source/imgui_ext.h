@@ -3,6 +3,7 @@
 #include <imgui.h>
 
 #include <constants.h>
+#include <imgui_customize.h>
 
 namespace HerosInsight::ImGuiExt
 {
@@ -98,4 +99,20 @@ namespace HerosInsight::ImGuiExt
         ImGui::PopFont();
         return pressed_any;
     }
+
+    struct GWFontScope
+    {
+        GWFontScope(ImFont *gwFont, GW::Constants::InterfaceSize size)
+        {
+            ImGuiCustomize::PushGWFont(gwFont, size);
+        }
+        GWFontScope(ImFont *gwFont)
+        {
+            ImGuiCustomize::PushGWFont(gwFont);
+        }
+        ~GWFontScope()
+        {
+            ImGui::PopFont();
+        }
+    };
 }

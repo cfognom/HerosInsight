@@ -465,10 +465,11 @@ namespace HerosInsight::SkillBook
                 auto &cell = cells[i];
 
                 auto style = GetStyle(x, y);
-                ImGui::PushFont(style.font);
-                auto text = x == 0 ? cell.str : cell.chars;
-                cell.width = ImGui::CalcTextSize(text).x;
-                ImGui::PopFont();
+                {
+                    ImGuiExt::GWFontScope font_scope(style.font);
+                    auto text = x == 0 ? cell.str : cell.chars;
+                    cell.width = ImGui::CalcTextSize(text).x;
+                }
             }
 
             float names_max_width = 0.f;
@@ -503,22 +504,23 @@ namespace HerosInsight::SkillBook
                 {
                     auto &cell = cells[y * cols + x];
                     auto style = GetStyle(x, y);
-                    ImGui::PushFont(style.font);
-                    auto color = ImGui::GetColorU32(style.color);
-                    auto c = cursor;
-                    c.y += y * text_height;
-                    if (x == 0)
                     {
-                        c.x += (names_max_width - cell.width) / 2;
-                        auto &name = cell.str;
-                        draw_list->AddText(c, color, name);
+                        ImGuiExt::GWFontScope font_scope(style.font);
+                        auto color = ImGui::GetColorU32(style.color);
+                        auto c = cursor;
+                        c.y += y * text_height;
+                        if (x == 0)
+                        {
+                            c.x += (names_max_width - cell.width) / 2;
+                            auto &name = cell.str;
+                            draw_list->AddText(c, color, name);
+                        }
+                        else
+                        {
+                            c.x += (values_max_width - cell.width) / 2;
+                            draw_list->AddText(c, color, cell.chars);
+                        }
                     }
-                    else
-                    {
-                        c.x += (values_max_width - cell.width) / 2;
-                        draw_list->AddText(c, color, cell.chars);
-                    }
-                    ImGui::PopFont();
                 }
                 cursor.x += x == 0 ? names_max_width : values_max_width;
                 cursor.x += x_padding;
@@ -607,7 +609,7 @@ namespace HerosInsight::SkillBook
 
             const std::string_view base_str = "½";
             const auto size = ImVec2(SLASH_SIZE.x, SLASH_SIZE.y);
-            ImGui::PushFont(BIG_FONT);
+            ImGuiExt::GWFontScope font_scope(BIG_FONT);
 #ifdef _DEBUG
             const auto size_check = ImGui::CalcTextSize(base_str.data(), base_str.data() + base_str.size());
             assert(size_check.x == size.x && size_check.y == size.y);
@@ -636,14 +638,11 @@ namespace HerosInsight::SkillBook
 #endif
             }
 
-            ImGui::PopFont();
-
-            ImGui::PushFont(Constants::Fonts::skill_thick_font_9);
+            ImGuiExt::GWFontScope font_scope2(Constants::Fonts::skill_thick_font_9);
             auto num_pos = pos;
             auto den_pos = slash_min + ImVec2(SLASH_DENOMINATOR_MIN.x, SLASH_DENOMINATOR_MIN.y - 1);
             draw_list->AddText(num_pos, color, caches[0].text);
             draw_list->AddText(den_pos, color, caches[1].text);
-            ImGui::PopFont();
 
             ImRect bb{pos, slash_max + ImVec2(caches[1].over_width, 0)};
             ImGui::ItemSize(bb);
@@ -661,15 +660,14 @@ namespace HerosInsight::SkillBook
             if (simple_str.data() != nullptr)
             {
 #ifdef _DEBUG
-                ImGui::PushFont(BIG_FONT);
+                ImGuiExt::GWFontScope font_scope(BIG_FONT);
                 auto size_check = ImGui::CalcTextSize(simple_str.data(), simple_str.data() + simple_str.size());
-                ImGui::PopFont();
                 assert(size_check.x == SLASH_SIZE.x && size_check.y == SLASH_SIZE.y);
 #endif
                 return total_width;
             }
 
-            ImGui::PushFont(SMALL_FONT);
+            ImGuiExt::GWFontScope font_scope(SMALL_FONT);
             caches[0].val = tag.num;
             caches[1].val = tag.den;
             for (auto &cache : caches)
@@ -680,7 +678,6 @@ namespace HerosInsight::SkillBook
                 cache.over_width = std::max(0.f, ImGui::CalcTextSize(cache.text, result.ptr).x - SLASH_NUMERATOR_MAX.x);
                 total_width += cache.over_width;
             }
-            ImGui::PopFont();
             return total_width;
         }
     };
@@ -1272,6 +1269,7 @@ namespace HerosInsight::SkillBook
         // Draws a button to duplicate the current book
         void DrawDupeButton()
         {
+            ImGuiExt::GWFontScope font_scope(Constants::Fonts::window_name_font); // Why??
             auto window = ImGui::GetCurrentWindow();
             auto title_bar_height = window->TitleBarHeight;
             auto title_bar_rect = window->TitleBarRect();
@@ -1518,11 +1516,10 @@ namespace HerosInsight::SkillBook
                 auto window = ImGui::GetCurrentWindow();
                 if (window->BeginCount == 1) // We only draw a tooltip if it wasn't written already
                 {
-                    ImGui::PushFont(Constants::Fonts::gw_font_16);
+                    ImGuiExt::GWFontScope font_scope(Constants::Fonts::gw_font_16);
                     ImGui::PushStyleColor(ImGuiCol_Text, 0xff64ffff);
                     text_drawer.DrawRichText(text, 0, -1, highlighting);
                     ImGui::PopStyleColor();
-                    ImGui::PopFont();
                 }
                 ImGui::EndTooltip();
             };
@@ -1569,7 +1566,7 @@ namespace HerosInsight::SkillBook
         void DrawSkillStats(const GW::Skill &skill)
         {
             ImGui::BeginGroup();
-            ImGui::PushFont(Constants::Fonts::skill_thick_font_15);
+            ImGuiExt::GWFontScope font_scope(Constants::Fonts::skill_thick_font_15);
 
             const auto skill_id = skill.skill_id;
 
@@ -1635,7 +1632,6 @@ namespace HerosInsight::SkillBook
 
             ImGui::Dummy(ImVec2(0, 0));
 
-            ImGui::PopFont();
             ImGui::EndGroup();
         }
 
@@ -1676,7 +1672,7 @@ namespace HerosInsight::SkillBook
                 auto width = wrapping_max - wrapping_min;
 
                 { // Draw skill name
-                    ImGui::PushFont(Constants::Fonts::skill_name_font);
+                    ImGuiExt::GWFontScope font_scope(Constants::Fonts::skill_name_font);
                     auto name_color = custom_sd.tags.Archived ? Constants::GWColors::skill_dull_gray : Constants::GWColors::header_beige;
                     ImGui::PushStyleColor(ImGuiCol_Text, name_color);
 
@@ -1730,7 +1726,6 @@ namespace HerosInsight::SkillBook
                     }
 
                     ImGui::PopStyleColor();
-                    ImGui::PopFont();
                 }
 
                 { // Draw skill stats
@@ -2003,9 +1998,7 @@ namespace HerosInsight::SkillBook
             bool is_open = true;
             if (ImGuiExt::WindowScope hi_wnd{name.data(), &is_open})
             {
-                ImGui::PushFont(Constants::Fonts::window_name_font);
                 DrawDupeButton();
-                ImGui::PopFont();
 
                 this->imgui_window = ImGui::GetCurrentWindow();
 
@@ -2165,9 +2158,10 @@ namespace HerosInsight::SkillBook
         );
 
         ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
-        ImGui::PushFont(Constants::Fonts::skill_name_font);
-        ImGui::Text("Examples");
-        ImGui::PopFont();
+        {
+            ImGuiExt::GWFontScope font_scope(Constants::Fonts::skill_name_font);
+            ImGui::Text("Examples");
+        }
         ImGui::PopStyleColor();
 
         auto button_counter = 0;
@@ -2203,9 +2197,10 @@ namespace HerosInsight::SkillBook
         ImGui::Spacing();
 
         ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
-        ImGui::PushFont(Constants::Fonts::skill_name_font);
-        ImGui::Text("Definitions");
-        ImGui::PopFont();
+        {
+            ImGuiExt::GWFontScope font_scope(Constants::Fonts::skill_name_font);
+            ImGui::Text("Definitions");
+        }
         ImGui::PopStyleColor();
         text_drawer.DrawRichText("The text typed in the search box is known as a <c=@skilldyn>query</c>.");
 

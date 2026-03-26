@@ -236,7 +236,7 @@ namespace HerosInsight
             /**/;
 
         auto current_font = ImGui::GetFont();
-        ImGui::PushFont(Constants::Fonts::window_name_font);
+        ImGuiExt::GWFontScope font_scope(Constants::Fonts::window_name_font);
 
         auto window_name = "Hero's Insight - Menu";
         auto window_name_width = ImGui::CalcTextSize(window_name).x //
@@ -272,7 +272,7 @@ namespace HerosInsight
             }
             if (visible_content)
             {
-                ImGui::PushFont(current_font);
+                ImGuiExt::GWFontScope font_scope(current_font);
 #ifdef _DEBUG
                 ImGui::TextUnformatted("Windows");
                 if (ImGui::Checkbox("Debug UI", &UpdateManager::enable_ui_debug))
@@ -308,16 +308,16 @@ namespace HerosInsight
                 ImGui::Text("(Debug build)");
                 ImGui::TextUnformatted("Alt + End => Terminate addon");
 #endif
-                ImGui::PopFont();
             }
             ImGui::End();
         }
-        ImGui::PopFont();
     }
 
     void UpdateManager::Draw(IDirect3DDevice9 *device)
     {
         assert(game_state != GameState::Null);
+
+        ImGuiExt::GWFontScope font_scope(Constants::Fonts::gw_font_16);
 
         const auto gw_ms = GW::MemoryMgr::GetSkillTimer();
         UpdateManager::render_delta_seconds = static_cast<float>(gw_ms - UpdateManager::render_elapsed_ms) / 1000.f;

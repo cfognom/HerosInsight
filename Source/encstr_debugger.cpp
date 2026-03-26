@@ -4,6 +4,7 @@
 #include <GWCA/Managers/AssetMgr.h>
 #include <GWCA/Managers/UIMgr.h>
 
+#include <imgui_ext.h>
 #include <span_vector.h>
 #include <update_manager.h>
 #include <utils.h>
@@ -76,9 +77,10 @@ namespace HerosInsight::EncstrDebugger
 
     void DrawEncStrBuilder()
     {
-        ImGui::PushFont(Constants::Fonts::skill_thick_font_15);
-        ImGui::Text("Builder");
-        ImGui::PopFont();
+        {
+            ImGuiExt::GWFontScope font_scope(Constants::Fonts::skill_thick_font_15);
+            ImGui::Text("Builder");
+        }
 
         static char input_buffer[1024] = {'\0'};
         static FixedVector<wchar_t, 1024> enc_buffer;
@@ -150,9 +152,10 @@ namespace HerosInsight::EncstrDebugger
 
         static std::vector<Entry> entries;
 
-        ImGui::PushFont(Constants::Fonts::skill_thick_font_15);
-        ImGui::Text("Explorer");
-        ImGui::PopFont();
+        {
+            ImGuiExt::GWFontScope font_scope(Constants::Fonts::skill_thick_font_15);
+            ImGui::Text("Explorer");
+        }
 
         auto count = GW::AssetMgr::GetStringIdEnd(GW::Constants::Language::English);
         entries.resize(count);
