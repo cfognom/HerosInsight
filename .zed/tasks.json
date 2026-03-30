@@ -1,0 +1,16 @@
+[
+  {
+    "label": "CMake: Configure (dev)",
+    "command": "cmake",
+    "args": ["--preset", "dev"],
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "env": {},
+    "use_new_terminal": false,
+    "allow_concurrent_runs": true,
+    "reveal": "always",
+    "hide": "never",
+    "shell": "system",
+    "show_summary": true,
+    "show_command": true,
+  },
+]
