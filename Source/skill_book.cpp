@@ -1568,7 +1568,14 @@ namespace HerosInsight::SkillBook
         void DrawSkillStats(const GW::Skill &skill)
         {
             ImGui::BeginGroup();
+            auto prev_line_height = ImGui::GetTextLineHeight();
             ImGuiExt::TextFont font_scope(Constants::Fonts::skill_thick_font);
+            auto line_height = ImGui::GetTextLineHeight();
+            if (line_height < prev_line_height)
+            {
+                auto height = prev_line_height - line_height;
+                ImGui::Dummy(ImVec2(0, height));
+            }
 
             const auto skill_id = skill.skill_id;
 
@@ -1577,17 +1584,12 @@ namespace HerosInsight::SkillBook
             const auto draw_list = ImGui::GetWindowDrawList();
 
             auto window = ImGui::GetCurrentWindow();
-            auto work_width = window->WorkRect.GetWidth();
+            auto work_end = window->WorkRect.Max.x;
 
-            float max_pos_x = work_width - 20;
-            auto cursor_start_pos = ImGui::GetCursorPos();
+            float max_pos_x = work_end - 20;
+            auto cursor_start_pos = ImGui::GetCursorScreenPos();
             float min_pos_x = cursor_start_pos.x;
-            float base_pos_y = cursor_start_pos.y + 1;
-
-            ImGui::SetCursorPosY(base_pos_y);
-
-            const auto icons = TextureModule::LoadTextureFromFileId(TextureModule::KnownFileIDs::UI_SkillStatsIcons);
-            const ImVec2 icon_size = ImVec2(16, 16);
+            float base_pos_y = cursor_start_pos.y;
 
             struct Layout
             {
@@ -1616,8 +1618,8 @@ namespace HerosInsight::SkillBook
                 const auto text_width = RichText::CalcTextSegmentsWidth(segments);
                 float start_x = max_pos_x - l.pos_from_right * width_per_stat - text_width;
                 float current_x = std::max(start_x, min_pos_x);
-                const auto stat_line_cursor = ImVec2(current_x, base_pos_y + 1);
-                ImGui::SetCursorPos(stat_line_cursor);
+                const auto stat_line_cursor = ImVec2(current_x, base_pos_y);
+                ImGui::SetCursorScreenPos(stat_line_cursor);
 
                 DrawProperty(
                     [&]()
@@ -1673,8 +1675,8 @@ namespace HerosInsight::SkillBook
                 auto wrapping_max = window->WorkRect.GetWidth();
                 auto width = wrapping_max - wrapping_min;
 
+                ImGuiExt::TextFont font_scope(Constants::Fonts::skill_name_font);
                 { // Draw skill name
-                    ImGuiExt::TextFont font_scope(Constants::Fonts::skill_name_font);
                     auto name_color = custom_sd.tags.Archived ? Constants::GWColors::skill_dull_gray : Constants::GWColors::header_beige;
                     ImGui::PushStyleColor(ImGuiCol_Text, name_color);
 
