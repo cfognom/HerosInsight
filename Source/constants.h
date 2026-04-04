@@ -69,15 +69,4 @@ namespace Constants
         constexpr inline ImU32 notify = MakeColor::U32::rgb(240, 240, 128);
         constexpr inline ImU32 highlight = MakeColor::U32::rgb(250, 148, 54);
     };
-
-    namespace Fonts
-    {
-        inline ImFont *gw_font_16;
-        inline ImFont *button_font;
-        inline ImFont *window_name_font;
-        inline ImFont *skill_name_font;
-        inline ImFont *skill_thick_font_15;
-        inline ImFont *skill_thick_font_12;
-        inline ImFont *skill_thick_font_9;
-    }
 }

@@ -236,7 +236,7 @@ namespace HerosInsight
             /**/;
 
         auto current_font = ImGui::GetFont();
-        ImGuiExt::GWFontScope font_scope(Constants::Fonts::window_name_font);
+        ImGuiExt::TextFont font_scope(Constants::Fonts::window_name_font);
 
         auto window_name = "Hero's Insight - Menu";
         auto window_name_width = ImGui::CalcTextSize(window_name).x //
@@ -272,7 +272,7 @@ namespace HerosInsight
             }
             if (visible_content)
             {
-                ImGuiExt::GWFontScope font_scope(current_font);
+                ImGuiExt::TextFont font_scope(current_font);
 #ifdef _DEBUG
                 ImGui::TextUnformatted("Windows");
                 if (ImGui::Checkbox("Debug UI", &UpdateManager::enable_ui_debug))
@@ -317,7 +317,7 @@ namespace HerosInsight
     {
         assert(game_state != GameState::Null);
 
-        ImGuiExt::GWFontScope font_scope(Constants::Fonts::gw_font_16);
+        ImGuiExt::TextSize text_size{};
 
         const auto gw_ms = GW::MemoryMgr::GetSkillTimer();
         UpdateManager::render_delta_seconds = static_cast<float>(gw_ms - UpdateManager::render_elapsed_ms) / 1000.f;

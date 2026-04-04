@@ -231,7 +231,7 @@ namespace HerosInsight
 
             if (wheel_display != 0 && (timestamp - wheel_display_timestamp) < 100)
             {
-                ImGuiExt::GWFontScope font_scope(Constants::Fonts::skill_name_font);
+                ImGuiExt::TextSize text_size_scope(24.f);
                 auto draw_list = ImGui::GetWindowDrawList();
                 auto window_pos = ImGui::GetWindowPos();
                 auto window_size = ImGui::GetWindowSize();

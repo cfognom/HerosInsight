@@ -1,6 +1,10 @@
 #pragma once
 
+#include <optional>
+
 #include <imgui.h>
+
+#include <GWCA/Managers/TextMgr.h>
 
 #include <constants.h>
 #include <imgui_customize.h>
@@ -100,19 +104,33 @@ namespace HerosInsight::ImGuiExt
         return pressed_any;
     }
 
-    struct GWFontScope
+    struct TextColor
     {
-        GWFontScope(ImFont *gwFont, GW::Constants::InterfaceSize size)
-        {
-            ImGuiCustomize::PushGWFont(gwFont, size);
-        }
-        GWFontScope(ImFont *gwFont)
-        {
-            ImGuiCustomize::PushGWFont(gwFont);
-        }
-        ~GWFontScope()
-        {
-            ImGui::PopFont();
-        }
+        TextColor(uint32_t color) { ImGui::PushStyleColor(ImGuiCol_Text, color); }
+        ~TextColor() { ImGui::PopStyleColor(); }
+    };
+
+    struct TextSize
+    {
+        TextSize() { ImGuiCustomize::PushFontSizeDefault(); }
+        TextSize(GW::Constants::InterfaceSize size) { ImGuiCustomize::PushFontSize(size); }
+        TextSize(int32_t interfaceSizeChange) { ImGuiCustomize::PushFontSize(interfaceSizeChange); }
+        TextSize(float size) { ImGui::PushFont(NULL, size); }
+        ~TextSize() { ImGui::PopFont(); }
+    };
+
+    struct TextFont
+    {
+        TextFont() { ImGuiCustomize::PushFont(GW::TextMgr::EngFont::Default); }
+        TextFont(GW::TextMgr::EngFont fontId) { ImGuiCustomize::PushFont(fontId); }
+        TextFont(ImFont *font) { ImGuiCustomize::PushFont(font); }
+        ~TextFont() { ImGui::PopFont(); }
+    };
+
+    struct TextEffect
+    {
+        TextEffect() { ImGuiCustomize::PushFontFlags(GW::TextMgr::BlitFontFlags::None); }
+        TextEffect(GW::TextMgr::BlitFontFlags flags) { ImGuiCustomize::PushFontFlags(flags); }
+        ~TextEffect() { ImGui::PopFont(); }
     };
 }

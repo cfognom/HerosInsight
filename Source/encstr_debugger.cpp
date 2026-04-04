@@ -78,7 +78,7 @@ namespace HerosInsight::EncstrDebugger
     void DrawEncStrBuilder()
     {
         {
-            ImGuiExt::GWFontScope font_scope(Constants::Fonts::skill_thick_font_15);
+            ImGuiExt::TextFont font_scope(Constants::Fonts::skill_thick_font);
             ImGui::Text("Builder");
         }
 
@@ -153,7 +153,7 @@ namespace HerosInsight::EncstrDebugger
         static std::vector<Entry> entries;
 
         {
-            ImGuiExt::GWFontScope font_scope(Constants::Fonts::skill_thick_font_15);
+            ImGuiExt::TextFont font_scope(Constants::Fonts::skill_thick_font);
             ImGui::Text("Explorer");
         }
 

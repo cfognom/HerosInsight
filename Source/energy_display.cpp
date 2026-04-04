@@ -228,7 +228,7 @@ namespace HerosInsight::EnergyDisplay
         const auto black_color = IM_COL32_BLACK;
         const auto white_color = IM_COL32_WHITE;
 
-        ImGuiExt::GWFontScope font_scope(Constants::Fonts::skill_thick_font_15);
+        ImGuiExt::TextFont font_scope(Constants::Fonts::skill_thick_font);
         for (size_t i = 0; i < 8; i++)
         {
             const auto energy_cost = energy_costs[i];
@@ -248,7 +248,7 @@ namespace HerosInsight::EnergyDisplay
             ImVec2 bb_min;
             ImVec2 bb_max;
             auto font_size = ImGui::GetFontSize();
-            ImVec2 text_size = Utils::CalculateTextBoundingBox(Constants::Fonts::skill_thick_font_15->GetFontBaked(font_size), text, bb_min, bb_max);
+            ImVec2 text_size = Utils::CalculateTextBoundingBox(Constants::Fonts::skill_thick_font->GetFontBaked(font_size), text, bb_min, bb_max);
             // ImVec2 text_size = ImGui::CalcTextSize(text);
 
             // auto image_size = ImVec2(16, 16);

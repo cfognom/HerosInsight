@@ -410,10 +410,13 @@ namespace HerosInsight::SkillBook
                 ImU32 color;
             };
 
+            auto default_font = ImGuiCustomize::GetOrCreateGWFont();
+            auto thick_font = ImGuiCustomize::GetOrCreateGWFont(GW::TextMgr::EngFont::Thick);
+
             auto GetStyle = [&](size_t col, size_t row)
             {
                 Style style{
-                    .font = Constants::Fonts::gw_font_16,
+                    .font = default_font,
                     .color = IM_COL32_WHITE
                 };
 
@@ -426,7 +429,7 @@ namespace HerosInsight::SkillBook
                         if (is_special)
                         {
                             style.color = Constants::Colors::highlight;
-                            style.font = Constants::Fonts::skill_thick_font_15;
+                            style.font = thick_font;
                         }
                         break;
                     }
@@ -434,7 +437,7 @@ namespace HerosInsight::SkillBook
                     {
                         if (is_special)
                         {
-                            style.font = Constants::Fonts::skill_thick_font_15;
+                            style.font = thick_font;
                         }
                         style.color = Constants::GWColors::skill_dynamic_green;
                         break;
@@ -466,7 +469,7 @@ namespace HerosInsight::SkillBook
 
                 auto style = GetStyle(x, y);
                 {
-                    ImGuiExt::GWFontScope font_scope(style.font);
+                    ImGuiExt::TextFont font_scope(style.font);
                     auto text = x == 0 ? cell.str : cell.chars;
                     cell.width = ImGui::CalcTextSize(text).x;
                 }
@@ -505,7 +508,7 @@ namespace HerosInsight::SkillBook
                     auto &cell = cells[y * cols + x];
                     auto style = GetStyle(x, y);
                     {
-                        ImGuiExt::GWFontScope font_scope(style.font);
+                        ImGuiExt::TextFont font_scope(style.font);
                         auto color = ImGui::GetColorU32(style.color);
                         auto c = cursor;
                         c.y += y * text_height;
@@ -564,9 +567,6 @@ namespace HerosInsight::SkillBook
 
         using FracTag = RichText::FracTag;
 
-#define BIG_FONT Constants::Fonts::skill_thick_font_15
-#define SMALL_FONT Constants::Fonts::skill_thick_font_9
-
         static constexpr GW::Vec2f SLASH_SIZE{15, 16};
         static constexpr GW::Vec2f SLASH_NUMERATOR_MAX{5, 7};
         static constexpr GW::Vec2f SLASH_DENOMINATOR_MIN{7, 5};
@@ -598,9 +598,11 @@ namespace HerosInsight::SkillBook
             auto draw_list = window->DrawList;
             auto color = ImGui::GetColorU32(ImGuiCol_Text);
             auto simple_str = GetSimple(tag);
+            auto current_font = ImGui::GetFont();
+            auto font_size = ImGui::GetFontSize();
             if (simple_str.data() != nullptr)
             {
-                draw_list->AddText(BIG_FONT, BIG_FONT->LegacySize, pos, color, simple_str.data(), simple_str.data() + simple_str.size());
+                draw_list->AddText(current_font, font_size, pos, color, simple_str.data(), simple_str.data() + simple_str.size());
                 return;
             }
 
@@ -609,7 +611,6 @@ namespace HerosInsight::SkillBook
 
             const std::string_view base_str = "½";
             const auto size = ImVec2(SLASH_SIZE.x, SLASH_SIZE.y);
-            ImGuiExt::GWFontScope font_scope(BIG_FONT);
 #ifdef _DEBUG
             const auto size_check = ImGui::CalcTextSize(base_str.data(), base_str.data() + base_str.size());
             assert(size_check.x == size.x && size_check.y == size.y);
@@ -631,14 +632,14 @@ namespace HerosInsight::SkillBook
             for (auto &local_clip_rect : local_clip_rects)
             {
                 auto clip_rect = local_clip_rect + ImVec4(slash_min.x, slash_min.y, slash_min.x, slash_min.y);
-                draw_list->AddText(BIG_FONT, BIG_FONT->LegacySize, slash_min, color, base_str.data(), base_str.data() + base_str.size(), 0.0f, &clip_rect);
+                draw_list->AddText(current_font, font_size, slash_min, color, base_str.data(), base_str.data() + base_str.size(), 0.0f, &clip_rect);
 
 #ifdef DEBUG_FRACS
                 draw_list->AddRect(ImVec2(clip_rect.x, clip_rect.y), ImVec2(clip_rect.z, clip_rect.w), 0xFF0000FF, 0.0f, 0);
 #endif
             }
 
-            ImGuiExt::GWFontScope font_scope2(Constants::Fonts::skill_thick_font_9);
+            ImGuiExt::TextSize font_scope2(-2);
             auto num_pos = pos;
             auto den_pos = slash_min + ImVec2(SLASH_DENOMINATOR_MIN.x, SLASH_DENOMINATOR_MIN.y - 1);
             draw_list->AddText(num_pos, color, caches[0].text);
@@ -657,17 +658,18 @@ namespace HerosInsight::SkillBook
         {
             float total_width = SLASH_SIZE.x;
             auto simple_str = GetSimple(tag);
+            auto current_font = ImGui::GetFont();
+            auto font_size = ImGui::GetFontSize();
             if (simple_str.data() != nullptr)
             {
 #ifdef _DEBUG
-                ImGuiExt::GWFontScope font_scope(BIG_FONT);
                 auto size_check = ImGui::CalcTextSize(simple_str.data(), simple_str.data() + simple_str.size());
                 assert(size_check.x == SLASH_SIZE.x && size_check.y == SLASH_SIZE.y);
 #endif
                 return total_width;
             }
 
-            ImGuiExt::GWFontScope font_scope(SMALL_FONT);
+            ImGuiExt::TextSize font_size_scope(-2);
             caches[0].val = tag.num;
             caches[1].val = tag.den;
             for (auto &cache : caches)
@@ -1269,7 +1271,7 @@ namespace HerosInsight::SkillBook
         // Draws a button to duplicate the current book
         void DrawDupeButton()
         {
-            ImGuiExt::GWFontScope font_scope(Constants::Fonts::window_name_font); // Why??
+            ImGuiExt::TextFont font_scope(Constants::Fonts::window_name_font); // Why??
             auto window = ImGui::GetCurrentWindow();
             auto title_bar_height = window->TitleBarHeight;
             auto title_bar_rect = window->TitleBarRect();
@@ -1516,7 +1518,7 @@ namespace HerosInsight::SkillBook
                 auto window = ImGui::GetCurrentWindow();
                 if (window->BeginCount == 1) // We only draw a tooltip if it wasn't written already
                 {
-                    ImGuiExt::GWFontScope font_scope(Constants::Fonts::gw_font_16);
+                    ImGuiExt::TextFont font_scope{};
                     ImGui::PushStyleColor(ImGuiCol_Text, 0xff64ffff);
                     text_drawer.DrawRichText(text, 0, -1, highlighting);
                     ImGui::PopStyleColor();
@@ -1566,7 +1568,7 @@ namespace HerosInsight::SkillBook
         void DrawSkillStats(const GW::Skill &skill)
         {
             ImGui::BeginGroup();
-            ImGuiExt::GWFontScope font_scope(Constants::Fonts::skill_thick_font_15);
+            ImGuiExt::TextFont font_scope(Constants::Fonts::skill_thick_font);
 
             const auto skill_id = skill.skill_id;
 
@@ -1672,7 +1674,7 @@ namespace HerosInsight::SkillBook
                 auto width = wrapping_max - wrapping_min;
 
                 { // Draw skill name
-                    ImGuiExt::GWFontScope font_scope(Constants::Fonts::skill_name_font);
+                    ImGuiExt::TextFont font_scope(Constants::Fonts::skill_name_font);
                     auto name_color = custom_sd.tags.Archived ? Constants::GWColors::skill_dull_gray : Constants::GWColors::header_beige;
                     ImGui::PushStyleColor(ImGuiCol_Text, name_color);
 
@@ -2159,7 +2161,7 @@ namespace HerosInsight::SkillBook
 
         ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
         {
-            ImGuiExt::GWFontScope font_scope(Constants::Fonts::skill_name_font);
+            ImGuiExt::TextFont font_scope(Constants::Fonts::skill_name_font);
             ImGui::Text("Examples");
         }
         ImGui::PopStyleColor();
@@ -2198,7 +2200,7 @@ namespace HerosInsight::SkillBook
 
         ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::header_beige);
         {
-            ImGuiExt::GWFontScope font_scope(Constants::Fonts::skill_name_font);
+            ImGuiExt::TextFont font_scope(Constants::Fonts::skill_name_font);
             ImGui::Text("Definitions");
         }
         ImGui::PopStyleColor();
