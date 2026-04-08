@@ -100,11 +100,15 @@ struct Buffer2D
 uint32_t GetBlitPadding(GW::TextMgr::BlitFontFlags flags)
 {
     if (HerosInsight::Utils::HasAnyFlag(flags, GW::TextMgr::BlitFontFlags::AmbientOcclusion))
+        return 3;
+
+    if (HerosInsight::Utils::HasAnyFlag(flags, GW::TextMgr::BlitFontFlags::ShadowBR | GW::TextMgr::BlitFontFlags::ShadowTL))
         return 2;
-    else if (HerosInsight::Utils::HasAnyFlag(flags, GW::TextMgr::BlitFontFlags::Outline))
+
+    if (HerosInsight::Utils::HasAnyFlag(flags, GW::TextMgr::BlitFontFlags::Outline))
         return 1;
-    else
-        return 0;
+
+    return 0;
 }
 
 template <typename B>
