@@ -1675,8 +1675,8 @@ namespace HerosInsight::SkillBook
                 auto wrapping_max = window->WorkRect.GetWidth();
                 auto width = wrapping_max - wrapping_min;
 
-                ImGuiExt::TextFont font_scope(Constants::Fonts::skill_name_font);
                 { // Draw skill name
+                    ImGuiExt::TextFont font_scope(Constants::Fonts::skill_name_font);
                     auto name_color = custom_sd.tags.Archived ? Constants::GWColors::skill_dull_gray : Constants::GWColors::header_beige;
                     ImGui::PushStyleColor(ImGuiCol_Text, name_color);
 
@@ -1730,11 +1730,11 @@ namespace HerosInsight::SkillBook
                     }
 
                     ImGui::PopStyleColor();
-                }
 
-                { // Draw skill stats
-                    ImGui::SameLine();
-                    DrawSkillStats(skill);
+                    { // Draw skill stats
+                        ImGui::SameLine();
+                        DrawSkillStats(skill);
+                    }
                 }
 
                 { // Draw skill type
