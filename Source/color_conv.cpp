@@ -7,7 +7,7 @@ ImVec4 ColorConv::RGBAToHSVA(ImVec4 rgba)
     float b = rgba.z;
     float a = rgba.w;
     float h, s, v;
-    ImGui::ColorConvertRGBtoHSV(r, b, g, h, s, v);
+    ImGui::ColorConvertRGBtoHSV(r, g, b, h, s, v);
     return ImVec4(h, s, v, a);
 }
 
