@@ -9,4 +9,6 @@ namespace ColorConv
 
     ImVec4 HSVAToHSLA(ImVec4 hsva);
     ImVec4 HSLAToHSVA(ImVec4 hsla);
+
+    ImVec4 InvertColorLightness(ImVec4 rgba);
 }

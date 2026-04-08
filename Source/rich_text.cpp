@@ -1,6 +1,7 @@
 #include <texture_module.h>
 #include <utils.h>
 
+#include <color_conv.h>
 #include <parsing.h>
 
 #include "rich_text.h"
@@ -316,7 +317,6 @@ namespace HerosInsight::RichText
         auto draw_list = window->DrawList;
 
         const auto highlight_color = ImGui::GetColorU32(Constants::Colors::highlight);
-        const auto highlight_text_color = ImGui::GetColorU32(IM_COL32_BLACK);
 
         // Screen-space bounding box
         ImRect bb = ImRect(ss_cursor, ss_cursor);
@@ -372,7 +372,9 @@ namespace HerosInsight::RichText
                     auto min_aligned = ImFloor(ImVec2(min.x, min.y + 1));
                     auto max_aligned = ImFloor(max);
                     draw_list->AddRectFilled(min_aligned, max_aligned, highlight_color);
-                    ImGui::PushStyleColor(ImGuiCol_Text, highlight_text_color);
+                    auto text_color = ImGui::GetStyleColorVec4(ImGuiCol_Text);
+                    auto hl_text_color = ColorConv::InvertColorLightness(text_color);
+                    ImGui::PushStyleColor(ImGuiCol_Text, hl_text_color);
                 }
 
                 if (seg.has_hidden_hl)
