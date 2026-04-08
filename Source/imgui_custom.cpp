@@ -112,8 +112,8 @@ uint32_t GetBlitPadding(GW::TextMgr::BlitFontFlags flags)
 }
 
 template <typename B>
-concept Blitter = requires(B blitter, wchar_t ch, GW::Dims &dims, GW::Ptr2D<uint32_t> dstPtr) {
-    { blitter.DetermineSize(ch, dims) } -> std::same_as<bool>;
+concept Blitter = requires(B blitter, wchar_t ch, GW::Dims &dims, float &outAdvance, GW::Ptr2D<uint32_t> dstPtr) {
+    { blitter.DetermineSize(ch, dims, outAdvance) } -> std::same_as<bool>;
     { blitter.Blit(ch, dstPtr, dims) };
 };
 
@@ -152,11 +152,14 @@ struct GWGlyphBlitter
     uint32_t glyphStart;
     GW::Dims blitDims;
 
-    bool DetermineSize(wchar_t ch, GW::Dims &dims)
+    bool DetermineSize(wchar_t ch, GW::Dims &dims, float &outAdvance)
     {
         encGlyph = GW::TextMgr::GetGlyphByChar(font, ch);
         if (!encGlyph)
+        {
+            outAdvance = font.fallback_advance;
             return false;
+        }
 
         auto &metrics = encGlyph->metrics;
         glyphStart = std::numeric_limits<uint32_t>::max();
@@ -182,6 +185,10 @@ struct GWGlyphBlitter
             glyphEnd + style.blitPadding * 2,
             dims.height,
         };
+        float advance = glyphWidth;
+        if (encGlyph->metrics.uses_lanes)
+            advance += font.base_advance; // This is how GW does it
+        outAdvance = advance;
         return true;
     }
 
@@ -284,14 +291,18 @@ struct GWIconBlitter
     };
     inline static Registry registry{};
 
-    bool DetermineSize(wchar_t ch, GW::Dims &dims)
+    bool DetermineSize(wchar_t ch, GW::Dims &dims, float &outAdvance)
     {
         assert(ch >= iconsBeginCodepoint);
         auto index = ch - iconsBeginCodepoint;
         if (index >= registry.iconTextures.size())
+        {
+            outAdvance = 0;
             return false;
+        }
         auto specifier = registry.iconTextures[index];
         dims = specifier.iconSize;
+        outAdvance = dims.width;
         return true;
     }
 
@@ -325,6 +336,12 @@ struct GWIconBlitter
     }
 };
 
+struct BlittedGlyph
+{
+    int32_t packId;
+    float advance;
+};
+
 template <Blitter B>
 struct ImGuiBlitter
 {
@@ -333,12 +350,16 @@ struct ImGuiBlitter
 
     ImGuiBlitter(ImFontAtlas &atlas, B &&blitter) : atlas(atlas), blitter(std::move(blitter)) {}
 
-    int32_t GetBlittedGlyph(wchar_t ch, ImFontAtlasRect &atlasRect)
+    BlittedGlyph GetBlittedGlyph(wchar_t ch, ImFontAtlasRect &atlasRect)
     {
         GW::Dims dims;
-        if (!blitter.DetermineSize(ch, dims))
-            return -1;
-        auto packId = atlas.AddCustomRect(dims.width, dims.height, &atlasRect);
+        BlittedGlyph glyph;
+        if (!blitter.DetermineSize(ch, dims, glyph.advance))
+        {
+            glyph.packId = -1;
+            return glyph;
+        }
+        glyph.packId = atlas.AddCustomRect(dims.width, dims.height, &atlasRect);
         assert(atlasRect.w == dims.width);
         assert(atlasRect.h == dims.height);
         assert(atlas.TexData->BytesPerPixel == 4);
@@ -347,47 +368,7 @@ struct ImGuiBlitter
             .pitch = (uint32_t)atlas.TexData->Width,
         };
         blitter.Blit(ch, dstPtr, dims);
-        return packId;
-    }
-};
-
-// Warning: PackIds are not stable!!! This cached blitter does not work!
-template <Blitter B>
-struct CachedImGuiBlitter
-{
-    struct BlittedGlyph
-    {
-        int32_t packId;
-    };
-
-    ImGuiBlitter<B> blitter;
-    std::unordered_map<wchar_t, BlittedGlyph> charToGlyph;
-
-    CachedImGuiBlitter(ImGuiBlitter<B> &&blitter) : blitter(std::move(blitter)) {}
-    ~CachedImGuiBlitter()
-    {
-        for (auto &[ch, g] : charToGlyph)
-        {
-            if (g.packId != -1)
-                blitter.atlas.RemoveCustomRect(g.packId);
-        }
-        charToGlyph.clear();
-    }
-
-    int32_t GetBlittedGlyph(wchar_t ch, ImFontAtlasRect &atlasRect)
-    {
-        auto [it, inserted] = charToGlyph.try_emplace(ch);
-        auto &g = it->second;
-        if (!inserted)
-        {
-            if (g.packId != -1)
-            {
-                blitter.atlas.GetCustomRect(g.packId, &atlasRect);
-            }
-            return g.packId;
-        }
-        g.packId = blitter.GetBlittedGlyph(ch, atlasRect);
-        return g.packId;
+        return glyph;
     }
 };
 
@@ -566,34 +547,30 @@ struct GwFontLoader : ImFontLoader
         const bool isIcon = GWIconBlitter::charRange.Contains(codepoint);
 
         ImFontAtlasRect atlasRect;
-        float advance;
         ImVec2 glyphPos;
         ImVec2 glyphSize;
+        BlittedGlyph bg;
         if (!isIcon)
         {
-            g.PackId = bakedData.glyphBlitter.GetBlittedGlyph(codepoint, atlasRect);
-            bool hasTexture = g.PackId != -1;
-            uint32_t width;
+            bg = bakedData.glyphBlitter.GetBlittedGlyph(codepoint, atlasRect);
+            bool hasTexture = bg.packId != -1;
             if (hasTexture)
             {
-                width = atlasRect.w - 2 * blitPadding + font.base_advance;
                 glyphPos.x = -(float)blitPadding * scale;
                 glyphPos.y = -(float)blitPadding * scale;
                 glyphSize.x = (float)atlasRect.w * scale;
                 glyphSize.y = (float)atlasRect.h * scale;
             }
-            else
-            {
-                width = font.fallback_advance;
-            }
 
             g.Visible = hasTexture;
             g.Colored = cfg.color != 0xffffffff;
-            advance = std::ceil((float)width * scale);
+            g.AdvanceX = std::ceil(bg.advance * scale);
         }
         else // isIcon
         {
-            g.PackId = loaderData.iconBlitter.GetBlittedGlyph(codepoint, atlasRect);
+            bg = loaderData.iconBlitter.GetBlittedGlyph(codepoint, atlasRect);
+            if (bg.packId == -1)
+                return false;
 
             float y_offset = ((desiredHeight * 0.75f) - (float)atlasRect.h) / 2.f; // 0.75f is to skip the descender lane height when aligning icons
 
@@ -604,14 +581,17 @@ struct GwFontLoader : ImFontLoader
 
             g.Visible = true;
             g.Colored = true;
-            advance = atlasRect.w;
+            g.AdvanceX = bg.advance;
         }
 
-        g.X0 = glyphPos.x;
-        g.Y0 = glyphPos.y + FontLineSpacing / 2.f;
-        g.X1 = g.X0 + glyphSize.x;
-        g.Y1 = g.Y0 + glyphSize.y;
-        g.AdvanceX = advance;
+        g.PackId = bg.packId;
+        if (g.PackId != -1)
+        {
+            g.X0 = glyphPos.x;
+            g.Y0 = glyphPos.y + FontLineSpacing / 2.f;
+            g.X1 = g.X0 + glyphSize.x;
+            g.Y1 = g.Y0 + glyphSize.y;
+        }
 
         if (out_advance_x)
         {
@@ -639,11 +619,11 @@ ImFont *CreateGWFont(GWFontConfig gwcfg)
 {
     ImGuiIO &io = ImGui::GetIO();
 
-    ImFontConfig imcfg;
     auto *fontData = new GWFontConfig(std::move(gwcfg));
+
+    ImFontConfig imcfg;
     imcfg.FontData = fontData;
     imcfg.FontDataSize = sizeof(*fontData);
-
     imcfg.FontLoader = &g_GwFontLoader;
 
     ImFont *imFont = io.Fonts->AddFont(&imcfg);
