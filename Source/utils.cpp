@@ -3602,15 +3602,11 @@ namespace HerosInsight::Utils
 
     GW::UI::Frame *GetDraggedSkillFrame()
     {
-        auto root = GW::UI::GetRootFrame();
-        if (root)
+        constexpr uint32_t child_offset_id = -2;
+        auto child = GW::UI::GetChildFrame(nullptr, child_offset_id); // nullptr means root.
+        if (child)
         {
-            constexpr uint32_t child_offset_id = -2;
-            auto child = GW::UI::GetChildFrame(root, child_offset_id);
-            if (child)
-            {
-                return child;
-            }
+            return child;
         }
         return nullptr;
     }
