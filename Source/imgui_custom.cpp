@@ -14,7 +14,7 @@
 #include <settings.h>
 #include <utils.h>
 
-#include "imgui_customize.h"
+#include "imgui_custom.h"
 
 struct GWFontConfig
 {
@@ -647,7 +647,7 @@ ImFont *CreateGWFont(GWFontConfig gwcfg)
     return imFont;
 }
 
-ImFont *HerosInsight::ImGuiCustomize::GetOrCreateGWFont(GW::TextMgr::EngFont fontId, GW::TextMgr::BlitFontFlags blitFlags)
+ImFont *HerosInsight::ImGuiCustom::GetOrCreateGWFont(GW::TextMgr::EngFont fontId, GW::TextMgr::BlitFontFlags blitFlags)
 {
     static std::unordered_map<GWFontConfig::Raw, ImFont *> fonts;
 
@@ -670,7 +670,7 @@ ImFontConfig *GetGWFontConfig(ImFont *font)
     return src;
 }
 
-void HerosInsight::ImGuiCustomize::PushFontSize(GW::Constants::InterfaceSize size)
+void HerosInsight::ImGuiCustom::PushFontSize(GW::Constants::InterfaceSize size)
 {
     auto currentFont = ImGui::GetFont();
     auto src = GetGWFontConfig(currentFont);
@@ -689,14 +689,14 @@ GW::Constants::InterfaceSize GetCurrentFontInterfaceSize()
     return loaderData.GetInterfaceSize(currentFontSize);
 }
 
-void HerosInsight::ImGuiCustomize::PushFontSize(int32_t interfaceSizeChange)
+void HerosInsight::ImGuiCustom::PushFontSize(int32_t interfaceSizeChange)
 {
     auto interfaceSize = GetCurrentFontInterfaceSize();
     auto newInterfaceSize = (GW::Constants::InterfaceSize)((int32_t)interfaceSize + interfaceSizeChange);
     PushFontSize(newInterfaceSize);
 }
 
-void HerosInsight::ImGuiCustomize::PushFontSizeDefault()
+void HerosInsight::ImGuiCustom::PushFontSizeDefault()
 {
     auto pref = GW::UI::GetPreference(GW::UI::EnumPreference::InterfaceSize);
     PushFontSize((GW::Constants::InterfaceSize)pref);
@@ -707,7 +707,7 @@ ImFont *GetOrCreateChangedFont(GW::TextMgr::EngFont fontId)
     auto currentFont = ImGui::GetFont();
     auto src = GetGWFontConfig(currentFont);
     auto cfg = *(GWFontConfig *)src->FontData;
-    return HerosInsight::ImGuiCustomize::GetOrCreateGWFont(fontId, cfg.BlitFlags());
+    return HerosInsight::ImGuiCustom::GetOrCreateGWFont(fontId, cfg.BlitFlags());
 }
 
 ImFont *GetOrCreateChangedFont(GW::TextMgr::BlitFontFlags blitFlags)
@@ -715,11 +715,11 @@ ImFont *GetOrCreateChangedFont(GW::TextMgr::BlitFontFlags blitFlags)
     auto currentFont = ImGui::GetFont();
     auto src = GetGWFontConfig(currentFont);
     auto cfg = *(GWFontConfig *)src->FontData;
-    return HerosInsight::ImGuiCustomize::GetOrCreateGWFont((GW::TextMgr::EngFont)cfg.fontIndex, blitFlags);
+    return HerosInsight::ImGuiCustom::GetOrCreateGWFont((GW::TextMgr::EngFont)cfg.fontIndex, blitFlags);
 }
 
 // Pushes font and ensures InterfaceSize is preserved.
-void HerosInsight::ImGuiCustomize::PushFont(ImFont *font)
+void HerosInsight::ImGuiCustom::PushFont(ImFont *font)
 {
     auto src = GetGWFontConfig(font);
     auto &loaderData = *(GwFontLoader::LoaderData *)src->FontLoaderData;
@@ -728,13 +728,13 @@ void HerosInsight::ImGuiCustomize::PushFont(ImFont *font)
     ImGui::PushFont(font, fontSize);
 }
 
-void HerosInsight::ImGuiCustomize::PushFont(GW::TextMgr::EngFont fontId)
+void HerosInsight::ImGuiCustom::PushFont(GW::TextMgr::EngFont fontId)
 {
     auto font = GetOrCreateChangedFont(fontId);
     PushFont(font);
 }
 
-void HerosInsight::ImGuiCustomize::PushFontFlags(GW::TextMgr::BlitFontFlags blitFlags)
+void HerosInsight::ImGuiCustom::PushFontFlags(GW::TextMgr::BlitFontFlags blitFlags)
 {
     auto font = GetOrCreateChangedFont(blitFlags);
     ImGui::PushFont(font, 0.0f); // 0.0f = use current font size
@@ -743,21 +743,21 @@ void HerosInsight::ImGuiCustomize::PushFontFlags(GW::TextMgr::BlitFontFlags blit
 void InitFonts()
 {
     // First font is used by default
-    Constants::Fonts::default_font = HerosInsight::ImGuiCustomize::GetOrCreateGWFont(
+    Constants::Fonts::default_font = HerosInsight::ImGuiCustom::GetOrCreateGWFont(
         GW::TextMgr::EngFont::Default
     );
-    Constants::Fonts::button_font = HerosInsight::ImGuiCustomize::GetOrCreateGWFont(
+    Constants::Fonts::button_font = HerosInsight::ImGuiCustom::GetOrCreateGWFont(
         GW::TextMgr::EngFont::Default,
         GW::TextMgr::BlitFontFlags::AmbientOcclusion
     );
-    Constants::Fonts::window_name_font = HerosInsight::ImGuiCustomize::GetOrCreateGWFont(
+    Constants::Fonts::window_name_font = HerosInsight::ImGuiCustom::GetOrCreateGWFont(
         GW::TextMgr::EngFont::Thick,
         GW::TextMgr::BlitFontFlags::AmbientOcclusion
     );
-    Constants::Fonts::skill_thick_font = HerosInsight::ImGuiCustomize::GetOrCreateGWFont(
+    Constants::Fonts::skill_thick_font = HerosInsight::ImGuiCustom::GetOrCreateGWFont(
         GW::TextMgr::EngFont::Thick
     );
-    Constants::Fonts::skill_name_font = HerosInsight::ImGuiCustomize::GetOrCreateGWFont(
+    Constants::Fonts::skill_name_font = HerosInsight::ImGuiCustom::GetOrCreateGWFont(
         GW::TextMgr::EngFont::DefaultL
     );
 }
@@ -946,7 +946,7 @@ struct ThemeCustomizer
     }
 };
 
-void HerosInsight::ImGuiCustomize::RefreshStyle()
+void HerosInsight::ImGuiCustom::RefreshStyle()
 {
     HerosInsight::SettingsGuard settings_guard{};
     auto &settings = settings_guard.Access();
@@ -1062,7 +1062,7 @@ void DebugGWFontData()
 }
 #endif
 
-void HerosInsight::ImGuiCustomize::Init()
+void HerosInsight::ImGuiCustom::Init()
 {
 #ifdef _DEBUG
     // DebugGWFontData();

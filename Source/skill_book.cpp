@@ -410,8 +410,8 @@ namespace HerosInsight::SkillBook
                 ImU32 color;
             };
 
-            auto default_font = ImGuiCustomize::GetOrCreateGWFont();
-            auto thick_font = ImGuiCustomize::GetOrCreateGWFont(GW::TextMgr::EngFont::Thick);
+            auto default_font = ImGuiCustom::GetOrCreateGWFont();
+            auto thick_font = ImGuiCustom::GetOrCreateGWFont(GW::TextMgr::EngFont::Thick);
 
             auto GetStyle = [&](size_t col, size_t row)
             {

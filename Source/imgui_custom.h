@@ -12,7 +12,7 @@ namespace Constants::Fonts
     inline ImFont *skill_thick_font;
 }
 
-namespace HerosInsight::ImGuiCustomize
+namespace HerosInsight::ImGuiCustom
 {
     ImFont *GetOrCreateGWFont(
         GW::TextMgr::EngFont fontId = GW::TextMgr::EngFont::Default,

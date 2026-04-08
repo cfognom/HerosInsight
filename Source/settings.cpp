@@ -4,6 +4,7 @@
 #include <string>
 
 #include <constants.h>
+#include <imgui_custom.h>
 #include <imgui_ext.h>
 #include <update_manager.h>
 

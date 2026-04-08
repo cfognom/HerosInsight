@@ -56,7 +56,7 @@
 #include <constants.h>
 #include <crash_handling.h>
 #include <imgui.h>
-#include <imgui_customize.h>
+#include <imgui_custom.h>
 #include <imgui_impl_dx9.h>
 #include <imgui_impl_win32.h>
 #include <imgui_internal.h>
@@ -350,7 +350,7 @@ struct ImGuiScope
           implWin32(hWnd),
           implDx9(device)
     {
-        HerosInsight::ImGuiCustomize::Init();
+        HerosInsight::ImGuiCustom::Init();
     }
 };
 
