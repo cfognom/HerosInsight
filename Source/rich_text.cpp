@@ -379,9 +379,16 @@ namespace HerosInsight::RichText
 
                 if (seg.has_hidden_hl)
                 {
-                    auto min_aligned = ImFloor(ImVec2(min.x - 1, min.y + 1));
-                    auto max_aligned = ImFloor(ImVec2(min.x + 1, max.y));
+                    constexpr float hidden_hl_rect_width = 2.f;
+                    constexpr float w = hidden_hl_rect_width / 2.f;
+#ifdef _DEBUG
+                    assert(segment_size.x == 0);
+#endif
+                    auto min_aligned = ImFloor(ImVec2(min.x - w, min.y + 1));
+                    auto max_aligned = ImFloor(ImVec2(min.x + w, max.y));
+                    ImGui::PushClipRect(window->InnerRect.Min - ImVec2(w, 0), window->InnerRect.Max + ImVec2(w, 0), false);
                     draw_list->AddRectFilled(min_aligned, max_aligned, highlight_color);
+                    ImGui::PopClipRect();
                 }
 
                 // Draw segment content
