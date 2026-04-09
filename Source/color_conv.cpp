@@ -11,6 +11,11 @@ ImVec4 ColorConv::RGBAToHSVA(ImVec4 rgba)
     return ImVec4(h, s, v, a);
 }
 
+ImVec4 ColorConv::RGBAToHSLA(ImVec4 rgba)
+{
+    return HSVAToHSLA(RGBAToHSVA(rgba));
+}
+
 ImVec4 ColorConv::HSVAToRGBA(ImVec4 hsva)
 {
     float h = hsva.x;
@@ -37,6 +42,11 @@ ImVec4 ColorConv::HSVAToHSLA(ImVec4 hsva)
     return ImVec4(h, s, l, a);
 }
 
+ImVec4 ColorConv::HSLAToRGBA(ImVec4 hsla)
+{
+    return HSVAToRGBA(HSLAToHSVA(hsla));
+}
+
 ImVec4 ColorConv::HSLAToHSVA(ImVec4 hsla)
 {
     float h = hsla.x;
@@ -54,7 +64,7 @@ ImVec4 ColorConv::HSLAToHSVA(ImVec4 hsla)
 
 ImVec4 ColorConv::InvertColorLightness(ImVec4 rgba)
 {
-    auto hsla = ColorConv::HSVAToHSLA(ColorConv::RGBAToHSVA(rgba));
+    auto hsla = ColorConv::RGBAToHSLA(rgba);
     hsla.z = 1.f - hsla.z;
-    return ColorConv::HSVAToRGBA(ColorConv::HSLAToHSVA(hsla));
+    return ColorConv::HSLAToRGBA(hsla);
 }
