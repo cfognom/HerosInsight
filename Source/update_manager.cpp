@@ -25,7 +25,7 @@
 #include <worldspaceUI.h>
 
 #include "update_manager.h"
-#include <imgui_ext.h>
+#include <imgui_custom.h>
 #include <utils.h>
 
 namespace HerosInsight
@@ -236,7 +236,7 @@ namespace HerosInsight
             /**/;
 
         auto current_font = ImGui::GetFont();
-        ImGuiExt::TextFont font_scope(Constants::Fonts::window_name_font);
+        ImGuiCustom::TextFont font_scope(Constants::Fonts::window_name_font);
 
         auto window_name = "Hero's Insight - Menu";
         auto window_name_width = ImGui::CalcTextSize(window_name).x //
@@ -272,7 +272,7 @@ namespace HerosInsight
             }
             if (visible_content)
             {
-                ImGuiExt::TextFont font_scope(current_font);
+                ImGuiCustom::TextFont font_scope(current_font);
 #ifdef _DEBUG
                 ImGui::TextUnformatted("Windows");
                 if (ImGui::Checkbox("Debug UI", &UpdateManager::enable_ui_debug))
@@ -298,7 +298,7 @@ namespace HerosInsight
 
                 ImGui::Spacing();
 
-                if (ImGuiExt::Button("Open Github"))
+                if (ImGuiCustom::Button("Open Github"))
                 {
                     Utils::OpenURL("https://github.com/cfognom/HerosInsight");
                 }
@@ -317,7 +317,7 @@ namespace HerosInsight
     {
         assert(game_state != GameState::Null);
 
-        ImGuiExt::TextSize text_size{};
+        ImGuiCustom::TextSize text_size{};
 
         const auto gw_ms = GW::MemoryMgr::GetSkillTimer();
         UpdateManager::render_delta_seconds = static_cast<float>(gw_ms - UpdateManager::render_elapsed_ms) / 1000.f;

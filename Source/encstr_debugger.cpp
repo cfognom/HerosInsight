@@ -4,7 +4,7 @@
 #include <GWCA/Managers/AssetMgr.h>
 #include <GWCA/Managers/UIMgr.h>
 
-#include <imgui_ext.h>
+#include <imgui_custom.h>
 #include <span_vector.h>
 #include <update_manager.h>
 #include <utils.h>
@@ -78,7 +78,7 @@ namespace HerosInsight::EncstrDebugger
     void DrawEncStrBuilder()
     {
         {
-            ImGuiExt::TextFont font_scope(Constants::Fonts::skill_thick_font);
+            ImGuiCustom::TextFont font_scope(Constants::Fonts::skill_thick_font);
             ImGui::Text("Builder");
         }
 
@@ -153,7 +153,7 @@ namespace HerosInsight::EncstrDebugger
         static std::vector<Entry> entries;
 
         {
-            ImGuiExt::TextFont font_scope(Constants::Fonts::skill_thick_font);
+            ImGuiCustom::TextFont font_scope(Constants::Fonts::skill_thick_font);
             ImGui::Text("Explorer");
         }
 

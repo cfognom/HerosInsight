@@ -5,7 +5,6 @@
 
 #include <constants.h>
 #include <imgui_custom.h>
-#include <imgui_ext.h>
 #include <update_manager.h>
 
 #include "settings.h"
@@ -60,28 +59,30 @@ namespace HerosInsight
 
     void DrawGeneral(Settings &settings)
     {
-        if (ImGuiExt::TabItemScope item{"General"})
+        if (ImGuiCustom::TabItemScope item{"General"})
         {
             ImGui::Checkbox("Scroll snap to item", &settings.general.scroll_snap_to_item.value);
 
             auto &io = ImGui::GetIO();
-            auto ini_filename = io.IniFilename;
-            auto cache_dir_string = Constants::paths.cache().string();
-            std::string_view imgui_ini_filename_str{ini_filename};
-            if (imgui_ini_filename_str.starts_with(cache_dir_string.c_str()) &&
-                std::filesystem::path(ini_filename).is_absolute()) // Safety
             {
-                if (ImGuiExt::Button("Clear window cache"))
+                auto ini_filename = io.IniFilename;
+                auto cache_dir_string = Constants::paths.cache().string();
+                std::string_view imgui_ini_filename_str{ini_filename};
+                if (imgui_ini_filename_str.starts_with(cache_dir_string.c_str()) &&
+                    std::filesystem::path(ini_filename).is_absolute()) // Safety
                 {
-                    std::remove(ini_filename);
+                    if (ImGuiCustom::Button("Clear window cache"))
+                    {
+                        std::remove(ini_filename);
+                    }
                 }
             }
-            if (ImGuiExt::Button("Reset to default"))
+            if (ImGuiCustom::Button("Reset to default"))
             {
                 SettingsManager::ForceDefaultScope guard{};
                 Utils::Reconstuct(settings.general);
             }
-            if (ImGuiExt::Button("Reset ALL settings to default"))
+            if (ImGuiCustom::Button("Reset ALL settings to default"))
             {
                 SettingsManager::ForceDefaultScope guard{};
                 Utils::Reconstuct(settings);
@@ -91,15 +92,15 @@ namespace HerosInsight
 
     void DrawSkillBook(Settings &settings)
     {
-        if (ImGuiExt::TabItemScope item{"Skill Book"})
+        if (ImGuiCustom::TabItemScope item{"Skill Book"})
         {
             ImGui::Checkbox("Show help button", &settings.skill_book.show_help_button.value);
             ImGui::Checkbox("Show focused character", &settings.skill_book.show_focused_character.value);
 
             const char *feedback_items[] = {"Hidden", "Concise", "Detailed"};
-            ImGuiExt::Combo("Feedback", &settings.skill_book.feedback.value, feedback_items, IM_ARRAYSIZE(feedback_items));
+            ImGuiCustom::Combo("Feedback", &settings.skill_book.feedback.value, feedback_items, IM_ARRAYSIZE(feedback_items));
 
-            if (ImGuiExt::Button("Reset to default"))
+            if (ImGuiCustom::Button("Reset to default"))
             {
                 SettingsManager::ForceDefaultScope guard{};
                 Utils::Reconstuct(settings.skill_book);
@@ -110,10 +111,10 @@ namespace HerosInsight
     void Settings::Draw(IDirect3DDevice9 *device)
     {
         ImGui::SetNextWindowSize(ImVec2(400, 200), ImGuiCond_FirstUseEver);
-        if (ImGuiExt::WindowScope wnd{"Settings", &HerosInsight::UpdateManager::open_settings})
+        if (ImGuiCustom::WindowScope wnd{"Settings", &HerosInsight::UpdateManager::open_settings})
         {
             // Make tabs: General, Skillbook
-            if (ImGuiExt::TabBarScope bar{"SettingsTabs"})
+            if (ImGuiCustom::TabBarScope bar{"SettingsTabs"})
             {
                 SettingsGuard g{};
                 auto &settings = g.Access();

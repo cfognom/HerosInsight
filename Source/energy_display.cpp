@@ -51,7 +51,7 @@
 
 #include <constants.h>
 #include <debug_display.h>
-#include <imgui_ext.h>
+#include <imgui_custom.h>
 #include <packet_reader.h>
 #include <party_data.h>
 #include <texture_module.h>
@@ -228,7 +228,7 @@ namespace HerosInsight::EnergyDisplay
         const auto black_color = IM_COL32_BLACK;
         const auto white_color = IM_COL32_WHITE;
 
-        ImGuiExt::TextFont font_scope(Constants::Fonts::skill_thick_font);
+        ImGuiCustom::TextFont font_scope(Constants::Fonts::skill_thick_font);
         for (size_t i = 0; i < 8; i++)
         {
             const auto energy_cost = energy_costs[i];

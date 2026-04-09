@@ -4,7 +4,7 @@
 #include <numbers>
 #include <update_manager.h>
 
-#include <imgui_ext.h>
+#include <imgui_custom.h>
 
 // #define PRINT_VARIABLE_SIZE_CLIPPER_TIMING
 
@@ -231,7 +231,7 @@ namespace HerosInsight
 
             if (wheel_display != 0 && (timestamp - wheel_display_timestamp) < 100)
             {
-                ImGuiExt::TextSize text_size_scope(24.f);
+                ImGuiCustom::TextSize text_size_scope(24.f);
                 auto draw_list = ImGui::GetWindowDrawList();
                 auto window_pos = ImGui::GetWindowPos();
                 auto window_size = ImGui::GetWindowSize();

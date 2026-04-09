@@ -87,7 +87,6 @@
 #include <constants.h>
 #include <debug_display.h>
 #include <imgui_custom.h>
-#include <imgui_ext.h>
 #include <party_data.h>
 #include <texture_module.h>
 #include <update_manager.h>
@@ -359,9 +358,9 @@ namespace HerosInsight::WorldSpaceUI
 
         auto bg_draw_list = ImGui::GetBackgroundDrawList();
 
-        ImGuiExt::TextFont text_font_guard(GW::TextMgr::EngFont::Thick);
-        ImGuiExt::TextEffect text_effect_guard(GW::TextMgr::BlitFontFlags::AmbientOcclusion);
-        ImGuiExt::TextSize text_size_guard(-1); // -1 interface size
+        ImGuiCustom::TextFont text_font_guard(GW::TextMgr::EngFont::Thick);
+        ImGuiCustom::TextEffect text_effect_guard(GW::TextMgr::BlitFontFlags::AmbientOcclusion);
+        ImGuiCustom::TextSize text_size_guard(-1); // -1 interface size
         auto base_font_size = ImGui::GetStyle().FontSizeBase;
 
         GW::Vec3f icon_world_pos = GW::Vec3f(0, 0, 0);
@@ -539,7 +538,7 @@ namespace HerosInsight::WorldSpaceUI
                         time_str.PushFormat("%d", rem_sec_ceil);
                     const auto rem_sec_pos = icon_min + ImVec2(2, 0);
                     const auto font_size = scale * base_font_size;
-                    ImGuiExt::TextSize text_size_guard(font_size);
+                    ImGuiCustom::TextSize text_size_guard(font_size);
 
                     bg_draw_list->AddText(
                         rem_sec_pos,
