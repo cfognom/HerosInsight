@@ -1306,7 +1306,7 @@ namespace HerosInsight::SkillBook
 
         void DrawScopeSlider()
         {
-            if (ImGui::SliderInt("Scope", (int *)&settings.scope, 0, (int)BookSettings::Scope::COUNT - 1, ""))
+            if (ImGuiCustom::SliderInt("Scope", (int *)&settings.scope, 0, (int)BookSettings::Scope::COUNT - 1, ""))
             {
                 dirty_flags |= DirtyFlags::SkillList;
             }
@@ -1379,7 +1379,7 @@ namespace HerosInsight::SkillBook
 
             if (settings.attr_src.type == AttributeSource::Type::Manual)
             {
-                if (ImGui::SliderInt("Attribute rank", &settings.attr_rank_slider, 0, 21))
+                if (ImGuiCustom::SliderInt("Attribute rank", &settings.attr_rank_slider, 0, 21))
                 {
                     dirty_flags |= DirtyFlags::Props;
                     settings.attr_src.value = settings.attr_rank_slider;

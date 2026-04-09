@@ -118,6 +118,14 @@ namespace HerosInsight::ImGuiCustom
         return opened;
     }
 
+    inline bool SliderInt(const char *label, int *v, int v_min, int v_max, const char *format = "%d", ImGuiSliderFlags flags = 0)
+    {
+        ImGui::PushFont(Constants::Fonts::button_font);
+        bool changed = ImGui::SliderInt(label, v, v_min, v_max, format, flags);
+        ImGui::PopFont();
+        return changed;
+    }
+
     inline bool RadioArray(const char *label, int *current_item, const char *const items[], int items_count)
     {
         ImGui::PushFont(Constants::Fonts::button_font);
