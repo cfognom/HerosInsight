@@ -61,10 +61,3 @@ ImVec4 ColorConv::HSLAToHSVA(ImVec4 hsla)
     }
     return ImVec4(h, s, v, a);
 }
-
-ImVec4 ColorConv::InvertColorLightness(ImVec4 rgba)
-{
-    auto hsla = ColorConv::RGBAToHSLA(rgba);
-    hsla.z = 1.f - hsla.z;
-    return ColorConv::HSLAToRGBA(hsla);
-}

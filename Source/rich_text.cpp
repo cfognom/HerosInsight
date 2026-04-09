@@ -317,6 +317,8 @@ namespace HerosInsight::RichText
         auto draw_list = window->DrawList;
 
         const auto highlight_color = ImGui::GetColorU32(Constants::Colors::highlight);
+        const auto highlight_color_hsla = ColorConv::RGBAToHSLA(ImGui::ColorConvertU32ToFloat4(highlight_color));
+        bool hl_is_light = highlight_color_hsla.z > 0.5f;
 
         // Screen-space bounding box
         ImRect bb = ImRect(ss_cursor, ss_cursor);
@@ -373,8 +375,14 @@ namespace HerosInsight::RichText
                     auto max_aligned = ImFloor(max);
                     draw_list->AddRectFilled(min_aligned, max_aligned, highlight_color);
                     auto text_color = ImGui::GetStyleColorVec4(ImGuiCol_Text);
-                    auto hl_text_color = ColorConv::InvertColorLightness(text_color);
-                    ImGui::PushStyleColor(ImGuiCol_Text, hl_text_color);
+                    auto text_color_hsla = ColorConv::RGBAToHSLA(text_color);
+                    bool text_is_light = text_color_hsla.z > 0.5f;
+                    if (hl_is_light == text_is_light)
+                    {
+                        text_color_hsla.z = 1.f - text_color_hsla.z;
+                        text_color = ColorConv::HSLAToRGBA(text_color_hsla);
+                    }
+                    ImGui::PushStyleColor(ImGuiCol_Text, text_color);
                 }
 
                 if (seg.has_hidden_hl)
