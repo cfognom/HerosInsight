@@ -1929,12 +1929,11 @@ namespace HerosInsight::SkillBook
             ImGui::PopStyleColor();
 
             { // Draw skill id
-                ImGui::SetWindowFontScale(0.7f);
                 auto r = filter_device.CalcItemResult(query, (size_t)SkillProp::Id, (size_t)skill_id);
                 const auto id_str_size = ImGui::CalcTextSize(r.presentable_text.data(), r.presentable_text.data() + r.presentable_text.size());
                 ImGui::SetCursorPosX(work_width - id_str_size.x - 4);
-                ImVec4 color(1, 1, 1, 0.3f);
-                ImGui::PushStyleColor(ImGuiCol_Text, color);
+                ImGuiCustom::TextColor text_color_guard(MakeColor::U32::rgb(77, 77, 77));
+                ImGuiCustom::TextSize text_size_guard(-2);
                 DrawProperty(
                     [&]()
                     {
@@ -1942,8 +1941,6 @@ namespace HerosInsight::SkillBook
                     },
                     (size_t)SkillProp::Id, true
                 );
-                ImGui::PopStyleColor();
-                ImGui::SetWindowFontScale(1.f);
             }
         }
 
