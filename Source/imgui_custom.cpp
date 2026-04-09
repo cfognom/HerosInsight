@@ -1014,7 +1014,7 @@ void TweakStyle()
     auto &style = ImGui::GetStyle();
 
     // style.WindowBorderSize = 1.f;
-    style.WindowBorderHoverPadding = 8.f;
+    style.WindowBorderHoverPadding = 4.f;
     style.ScrollbarSize = 20.f;
     Roundify(style, 4.f);
 }
