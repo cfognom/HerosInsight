@@ -65,7 +65,9 @@ namespace HerosInsight::ImGuiCustom
         {
             auto current_font = ImGui::GetFont();
             ImGui::PushFont(Constants::Fonts::window_name_font);
+            ImGui::PushStyleColor(ImGuiCol_Text, Constants::GWColors::window_title_text);
             begun = ImGui::Begin(name, p_open, flags);
+            ImGui::PopStyleColor();
             ImGui::PushFont(current_font);
         }
         ~WindowScope()
@@ -158,4 +160,20 @@ namespace HerosInsight::ImGuiCustom
         ImGui::PopFont();
         return pressed_any;
     }
+
+    struct DisableWindowMenuButtonScope
+    {
+        ImGuiDir &current_value;
+        ImGuiDir old_value;
+        DisableWindowMenuButtonScope()
+            : current_value(ImGui::GetStyle().WindowMenuButtonPosition)
+        {
+            old_value = current_value;
+            current_value = ImGuiDir_None;
+        }
+        ~DisableWindowMenuButtonScope()
+        {
+            current_value = old_value;
+        }
+    };
 }

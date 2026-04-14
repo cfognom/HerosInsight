@@ -216,8 +216,6 @@ namespace HerosInsight
         if (!UpdateManager::open_main_menu)
             return;
 
-        auto &style = ImGui::GetStyle();
-
         if (first_draw)
         {
             auto vpw = GW::Render::GetViewportWidth();
@@ -229,87 +227,90 @@ namespace HerosInsight
             first_draw = false;
         }
 
+        struct HIMainMenuWindowScope
+        {
+            std::optional<ImGuiCustom::WindowScope> hi_wnd; // We use optional to delay construction until all prep work is done
+            HIMainMenuWindowScope(const char *name, bool *p_open = nullptr, ImGuiWindowFlags flags = 0)
+            {
+                auto &style = ImGui::GetStyle();
+
+                float name_width;
+                {
+                    ImGuiCustom::TextFont font_scope{Constants::Fonts::window_name_font}; // We change font for CalcTextSize
+                    name_width = ImGui::CalcTextSize(name).x                              //
+                                 + style.WindowPadding.x * 2.0f                           //
+                                 + style.FramePadding.x * 2.0f                            //
+                                 + 10.0f;                                                 // For good measure :)
+                }
+
+                ImGui::SetNextWindowSize(
+                    ImVec2(0.0f, 0.0f),
+                    ImGuiCond_Always
+                );
+
+                ImGui::SetNextWindowSizeConstraints(
+                    ImVec2(name_width, 0.0f),
+                    ImVec2(FLT_MAX, FLT_MAX)
+                );
+
+                ImGuiCustom::DisableWindowMenuButtonScope disable_window_menu_button_scope{};
+
+                hi_wnd.emplace(name, p_open, flags);
+
+                const auto window = ImGui::GetCurrentWindow();
+                const bool is_hovered = ImGui::IsWindowHovered();
+                window->Collapsed = !is_hovered;
+                if (is_hovered)
+                {
+                    ImGui::FocusWindow(window);
+                }
+            }
+
+            explicit operator bool() const { return hi_wnd.value().begun; }
+        };
+
         const auto flags = 0                           //
                            | ImGuiWindowFlags_NoResize //
                                                        // | ImGuiWindowFlags_AlwaysAutoResize //
                                                        // | ImGuiWindowFlags_NoCollapse       //
             /**/;
 
-        auto current_font = ImGui::GetFont();
-        ImGuiCustom::TextFont font_scope(Constants::Fonts::window_name_font);
-
-        auto window_name = "Hero's Insight - Menu";
-        auto window_name_width = ImGui::CalcTextSize(window_name).x //
-                                 + style.WindowPadding.x * 2.0f     //
-                                 + style.FramePadding.x * 2.0f      //
-                                 + 10.0f;                           // For good measure :)
-
-        ImGui::SetNextWindowSize(
-            ImVec2(0.0f, 0.0f),
-            ImGuiCond_Always
-        );
-        ImGui::SetNextWindowSizeConstraints(
-            ImVec2(window_name_width, 0.0f),
-            ImVec2(FLT_MAX, FLT_MAX)
-        );
-
-        const auto window_menu_button_position = style.WindowMenuButtonPosition;
-        style.WindowMenuButtonPosition = ImGuiDir_None;
+        if (HIMainMenuWindowScope hi_wnd{"Hero's Insight - Menu", &UpdateManager::open_main_menu, flags})
         {
-            bool visible_content = ImGui::Begin(window_name, &UpdateManager::open_main_menu, flags);
-            style.WindowMenuButtonPosition = window_menu_button_position;
-
-            const auto window = ImGui::GetCurrentWindow();
-            const bool is_collapsed = window->Collapsed;
-            const auto window_min = window->Pos;
-            const auto window_size = window->Size;
-            const auto window_max = window_min + window_size;
-            const bool is_hovered = ImGui::IsMouseHoveringRect(window_min, window_max, false);
-            window->Collapsed = !is_hovered;
-            if (is_hovered)
-            {
-                ImGui::FocusWindow(window);
-            }
-            if (visible_content)
-            {
-                ImGuiCustom::TextFont font_scope(current_font);
 #ifdef _DEBUG
-                ImGui::TextUnformatted("Windows");
-                if (ImGui::Checkbox("Debug UI", &UpdateManager::enable_ui_debug))
-                {
-                    if (UpdateManager::enable_ui_debug)
-                        HerosInsight::DebugUI::EnableUIMessageLogging();
-                    else
-                        HerosInsight::DebugUI::DisableUIMessageLogging();
-                }
-                ImGui::Checkbox("Debug Display", &UpdateManager::open_debug);
-                ImGui::Checkbox("Texture Viewer", &UpdateManager::open_texture_viewer);
-                ImGui::Checkbox("Encoded String Debugger", &UpdateManager::open_encstr_debugger);
+            if (ImGui::Checkbox("Debug UI", &UpdateManager::enable_ui_debug))
+            {
+                if (UpdateManager::enable_ui_debug)
+                    HerosInsight::DebugUI::EnableUIMessageLogging();
+                else
+                    HerosInsight::DebugUI::DisableUIMessageLogging();
+            }
+            ImGui::Checkbox("Debug Display", &UpdateManager::open_debug);
+            ImGui::Checkbox("Texture Viewer", &UpdateManager::open_texture_viewer);
+            ImGui::Checkbox("Encoded String Debugger", &UpdateManager::open_encstr_debugger);
 #endif
-                ImGui::Checkbox("Skill Book", &UpdateManager::open_skill_book);
-                Utils::ImGuiDisabledCheckboxWithTooltip("Party statistics", "This feature is not yet stabilized.");
-                Utils::ImGuiDisabledCheckboxWithTooltip("Effect UI", "This feature is not yet stabilized.");
-                ImGui::Checkbox("Settings", &UpdateManager::open_settings);
+            ImGui::Checkbox("Skill Book", &UpdateManager::open_skill_book);
+            Utils::ImGuiDisabledCheckboxWithTooltip("Party statistics", "This feature is not yet stabilized.");
+            Utils::ImGuiDisabledCheckboxWithTooltip("Effect UI", "This feature is not yet stabilized.");
+            ImGui::Checkbox("Settings", &UpdateManager::open_settings);
 #ifdef EXPERIMENTAL_FEATURES
-                ImGui::Checkbox("Damage Display", &DamageDisplay::enabled);
+            ImGui::Checkbox("Damage Display", &DamageDisplay::enabled);
 #endif
-                // const auto content_size = ImGui::GetItemRectMax();
-                // window->Size = content_size - ImVec2(0, 50);
+            // const auto content_size = ImGui::GetItemRectMax();
+            // window->Size = content_size - ImVec2(0, 50);
 
-                ImGui::Spacing();
+            ImGui::Spacing();
 
-                if (ImGuiCustom::Button("Open Github"))
-                {
-                    Utils::OpenURL("https://github.com/cfognom/HerosInsight");
-                }
-
-                ImGui::Text("Version: %s", HEROSINSIGHT_VERSION_STRING);
-#ifdef _DEBUG
-                ImGui::Text("(Debug build)");
-                ImGui::TextUnformatted("Alt + End => Terminate addon");
-#endif
+            if (ImGuiCustom::Button("Open Github"))
+            {
+                Utils::OpenURL("https://github.com/cfognom/HerosInsight");
             }
-            ImGui::End();
+
+            ImGui::Text("Version: %s", HEROSINSIGHT_VERSION_STRING);
+#ifdef _DEBUG
+            ImGui::Text("(Debug build)");
+            ImGui::TextUnformatted("Alt + End => Terminate addon");
+#endif
         }
     }
 
