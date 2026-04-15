@@ -210,6 +210,91 @@ namespace HerosInsight
         }
     }
 
+    struct HIMainMenuWindowScope
+    {
+        static void PushStyleColor_AlphaMul(ImGuiCol_ col, float alpha_mul)
+        {
+            auto color = ImGui::GetStyleColorVec4(col);
+            color.w *= alpha_mul;
+            ImGui::PushStyleColor(col, color);
+        }
+
+        std::optional<ImGuiCustom::WindowScope> hi_wnd; // We use optional to delay construction until all prep work is done
+        bool alpha_override;
+        HIMainMenuWindowScope(const char *name, bool *p_open = nullptr, ImGuiWindowFlags flags = 0)
+        {
+            auto &style = ImGui::GetStyle();
+
+            float name_width;
+            {
+                ImGuiCustom::TextFont font_scope{Constants::Fonts::window_name_font}; // We change font for CalcTextSize
+                name_width = ImGui::CalcTextSize(name).x                              //
+                             + style.WindowPadding.x * 2.0f                           //
+                             + style.FramePadding.x * 2.0f                            //
+                             + 10.0f;                                                 // For good measure :)
+            }
+
+            ImGui::SetNextWindowSize(
+                ImVec2(0.0f, 0.0f),
+                ImGuiCond_Always
+            );
+
+            ImGui::SetNextWindowSizeConstraints(
+                ImVec2(name_width, 0.0f),
+                ImVec2(FLT_MAX, FLT_MAX)
+            );
+
+            static std::unordered_map<ImGuiID, float> alpha_map;
+            auto window_ID = ImGui::GetID(name);
+            float &alpha = alpha_map[window_ID];
+
+            this->alpha_override = 0.f < alpha && alpha < 1.f;
+            if (this->alpha_override)
+            {
+                PushStyleColor_AlphaMul(ImGuiCol_WindowBg, alpha);
+                PushStyleColor_AlphaMul(ImGuiCol_Border, alpha);
+            }
+
+            ImGuiCustom::DisableWindowMenuButtonScope disable_window_menu_button_scope{};
+            hi_wnd.emplace(name, p_open, flags);
+
+            if (this->alpha_override)
+            {
+                ImGui::PushStyleVar(ImGuiStyleVar_Alpha, alpha);
+            }
+
+            auto window = ImGui::GetCurrentWindow();
+            bool is_hovered = ImGui::IsWindowHovered(
+                ImGuiHoveredFlags_ChildWindows |
+                ImGuiHoveredFlags_AllowWhenBlockedByPopup |
+                ImGuiHoveredFlags_AllowWhenBlockedByActiveItem
+            );
+            if (is_hovered)
+            {
+                alpha = 1.f;
+                ImGui::FocusWindow(window);
+            }
+            else
+            {
+                float fadeout_secs = SettingsGuard{}.Access().general.main_menu_fadeout_seconds.value;
+                float dt = UpdateManager::render_delta_seconds;
+                alpha = std::max((alpha * fadeout_secs - dt) / fadeout_secs, 0.f);
+            }
+            bool visible = is_hovered || alpha > 0.f;
+            window->Collapsed = !visible;
+        }
+        ~HIMainMenuWindowScope()
+        {
+            if (this->alpha_override)
+            {
+                ImGui::PopStyleVar();
+                ImGui::PopStyleColor(2);
+            }
+        }
+
+        explicit operator bool() const { return hi_wnd.value().begun; }
+    };
+
     bool first_draw = true;
     void DrawMenu()
     {
@@ -226,48 +311,6 @@ namespace HerosInsight
             ImGui::SetNextWindowCollapsed(true, ImGuiCond_FirstUseEver);
             first_draw = false;
         }
-
-        struct HIMainMenuWindowScope
-        {
-            std::optional<ImGuiCustom::WindowScope> hi_wnd; // We use optional to delay construction until all prep work is done
-            HIMainMenuWindowScope(const char *name, bool *p_open = nullptr, ImGuiWindowFlags flags = 0)
-            {
-                auto &style = ImGui::GetStyle();
-
-                float name_width;
-                {
-                    ImGuiCustom::TextFont font_scope{Constants::Fonts::window_name_font}; // We change font for CalcTextSize
-                    name_width = ImGui::CalcTextSize(name).x                              //
-                                 + style.WindowPadding.x * 2.0f                           //
-                                 + style.FramePadding.x * 2.0f                            //
-                                 + 10.0f;                                                 // For good measure :)
-                }
-
-                ImGui::SetNextWindowSize(
-                    ImVec2(0.0f, 0.0f),
-                    ImGuiCond_Always
-                );
-
-                ImGui::SetNextWindowSizeConstraints(
-                    ImVec2(name_width, 0.0f),
-                    ImVec2(FLT_MAX, FLT_MAX)
-                );
-
-                ImGuiCustom::DisableWindowMenuButtonScope disable_window_menu_button_scope{};
-
-                hi_wnd.emplace(name, p_open, flags);
-
-                const auto window = ImGui::GetCurrentWindow();
-                const bool is_hovered = ImGui::IsWindowHovered();
-                window->Collapsed = !is_hovered;
-                if (is_hovered)
-                {
-                    ImGui::FocusWindow(window);
-                }
-            }
-
-            explicit operator bool() const { return hi_wnd.value().begun; }
-        };
 
         const auto flags = 0                           //
                            | ImGuiWindowFlags_NoResize //

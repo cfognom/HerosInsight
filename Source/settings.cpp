@@ -57,11 +57,24 @@ namespace HerosInsight
         }
     }
 
+    template <typename T>
+    bool ResetButton(const char *label, T &value)
+    {
+        bool pressed = ImGuiCustom::Button(label);
+        if (pressed)
+        {
+            SettingsManager::ForceDefaultScope guard{};
+            Utils::Reconstuct(value);
+        }
+        return pressed;
+    }
+
     void DrawGeneral(Settings &settings)
     {
         if (ImGuiCustom::TabItemScope item{"General"})
         {
             ImGui::Checkbox("Scroll snap to item", &settings.general.scroll_snap_to_item.value);
+            ImGuiCustom::SliderFloat("Menu fadeout (s)", &settings.general.main_menu_fadeout_seconds.value, 0.f, 3.f, "%.2f");
 
             auto &io = ImGui::GetIO();
             {
@@ -77,16 +90,11 @@ namespace HerosInsight
                     }
                 }
             }
-            if (ImGuiCustom::Button("Reset to default"))
-            {
-                SettingsManager::ForceDefaultScope guard{};
-                Utils::Reconstuct(settings.general);
-            }
-            if (ImGuiCustom::Button("Reset ALL settings to default"))
-            {
-                SettingsManager::ForceDefaultScope guard{};
-                Utils::Reconstuct(settings);
-            }
+
+            ImGui::Separator();
+
+            ResetButton("Reset to default", settings.general);
+            ResetButton("Reset ALL settings to default", settings);
         }
     }
 
@@ -100,11 +108,9 @@ namespace HerosInsight
             const char *feedback_items[] = {"Hidden", "Concise", "Detailed"};
             ImGuiCustom::Combo("Feedback", &settings.skill_book.feedback.value, feedback_items, IM_ARRAYSIZE(feedback_items));
 
-            if (ImGuiCustom::Button("Reset to default"))
-            {
-                SettingsManager::ForceDefaultScope guard{};
-                Utils::Reconstuct(settings.skill_book);
-            }
+            ImGui::Separator();
+
+            ResetButton("Reset to default", settings.skill_book);
         }
     }
 

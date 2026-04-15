@@ -115,6 +115,7 @@ namespace HerosInsight
         struct General
         {
             Setting<bool> scroll_snap_to_item{"general.scroll_snap_to_item", true};
+            Setting<float> main_menu_fadeout_seconds{"general.main_menu_fadeout_seconds", 0.33f};
         };
         struct SkillBook
         {
