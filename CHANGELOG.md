@@ -1,6 +1,13 @@
 # CHANGELOG
-## 
-- Fixed compatibility with latest GW update.
+## 0.8.0
+- Fixed compatibility with latest GW update. (Sorry for the delay!)
+- Updated ImGui to the latest version: 1.92.6.
+- Added main menu fadeout. (To restore old behavior: Go to Settings/General and set 'Menu fadeout' to 0 s.)
+- Added a setting to control roundness of UI elements.
+- Added dynamic text coloring for highlighted text, so it is now possible to distinguish which color is underneath the highlighting.
+- Added a color theme setting and settings to broadly tweak them.
+- Added a new default style inspired by the Guild Wars UI. (May change in the future.) (To restore old look: Go to Settings/Style, use the "ImGui Redshifted" color theme and set Roundness to 0 px.)
+- Font size can now be controlled through GW's interface size setting without having to restart the mod.
 
 ## 0.7.1
 - Fixed compatibility with latest GW update.
