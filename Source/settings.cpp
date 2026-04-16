@@ -98,6 +98,33 @@ namespace HerosInsight
         }
     }
 
+    void DrawStyle(Settings &settings)
+    {
+        if (ImGuiCustom::TabItemScope item{"Style"})
+        {
+            bool changed = false;
+            const char *theme_items[] = {"ImGui Default", "ImGui Redshifted", "Guild Wars"};
+            changed |= ImGuiCustom::Combo("Color Theme", &settings.style.color_theme.value, theme_items, IM_ARRAYSIZE(theme_items));
+            changed |= ImGuiCustom::SliderFloat("Hue shift", &settings.style.hue_shift.value, 0.f, 360.f, "%.1f °");
+            changed |= ImGuiCustom::SliderFloat("Saturation shift", &settings.style.saturation_shift.value, -100.f, 100.f, "%+.1f %%");
+            changed |= ImGuiCustom::SliderFloat("Lightness shift", &settings.style.lightness_shift.value, -100.f, 100.f, "%+.1f %%");
+            changed |= ImGuiCustom::SliderInt("Roundness", &settings.style.roundness.value, 0, 16, "%d px");
+
+            ImGui::Separator();
+
+            if (ResetButton("Reset to default", settings.style))
+            {
+                changed = true;
+            }
+
+            if (changed)
+            {
+                // TODO: Fix this not running when resetting ALL settings.
+                HerosInsight::ImGuiCustom::ApplyStyleSettings(settings.style);
+            }
+        }
+    }
+
     void DrawSkillBook(Settings &settings)
     {
         if (ImGuiCustom::TabItemScope item{"Skill Book"})
@@ -125,6 +152,7 @@ namespace HerosInsight
                 SettingsGuard g{};
                 auto &settings = g.Access();
                 DrawGeneral(settings);
+                DrawStyle(settings);
                 DrawSkillBook(settings);
             }
         }

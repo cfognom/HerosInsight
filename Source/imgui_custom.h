@@ -2,6 +2,7 @@
 
 #include <GWCA/Constants/Constants.h>
 #include <GWCA/Managers/TextMgr.h>
+#include <settings.h>
 
 namespace Constants::Fonts
 {
@@ -25,7 +26,8 @@ namespace HerosInsight::ImGuiCustom
     void PushFont(GW::TextMgr::EngFont fontId);
     void PushFontFlags(GW::TextMgr::BlitFontFlags blitFlags);
 
-    void RefreshStyle();
+    void ApplyStyleSettings(HerosInsight::Settings::Style &style);
+    void ApplyStyleSettings();
     void Init();
 
     struct TextColor
@@ -124,6 +126,14 @@ namespace HerosInsight::ImGuiCustom
     {
         ImGui::PushFont(Constants::Fonts::button_font);
         bool changed = ImGui::SliderInt(label, v, v_min, v_max, format, flags);
+        ImGui::PopFont();
+        return changed;
+    }
+
+    inline bool SliderFloat(const char *label, float *v, float v_min, float v_max, const char *format = "%.3f", ImGuiSliderFlags flags = 0)
+    {
+        ImGui::PushFont(Constants::Fonts::button_font);
+        bool changed = ImGui::SliderFloat(label, v, v_min, v_max, format, flags);
         ImGui::PopFont();
         return changed;
     }

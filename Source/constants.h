@@ -4,6 +4,8 @@
 #include <imgui.h>
 #include <iostream>
 
+#include <make_color.h>
+
 namespace Constants
 {
     struct Paths : public std::array<std::filesystem::path, 4>
@@ -46,21 +48,29 @@ namespace Constants
 
     namespace GWColors
     {
-        constexpr inline ImU32 damage_yellow = IM_COL32(255, 255, 120, 255);
-        constexpr inline ImU32 header_beige = IM_COL32(228, 214, 171, 255);
-        constexpr inline ImU32 skill_dynamic_green = IM_COL32(143, 255, 143, 255);
-        constexpr inline ImU32 heal_blue = IM_COL32(106, 195, 219, 255);
-        constexpr inline ImU32 hp_red = IM_COL32(212, 48, 48, 255);
-        constexpr inline ImU32 energy_blue = IM_COL32(65, 150, 215, 255);
-        constexpr inline ImU32 elite_gold = IM_COL32(202, 164, 75, 255);
-        constexpr inline ImU32 skill_dull_gray = IM_COL32(178, 178, 178, 255);
+        // clang-format off
+        constexpr inline ImU32 damage_yellow       = MakeColor::U32::rgb(255, 255, 120);
+        constexpr inline ImU32 header_beige        = MakeColor::U32::rgb(228, 214, 171);
+        constexpr inline ImU32 skill_dynamic_green = MakeColor::U32::rgb(143, 255, 143);
+        constexpr inline ImU32 heal_blue           = MakeColor::U32::rgb(106, 195, 219);
+        constexpr inline ImU32 hp_red              = MakeColor::U32::rgb(212, 48, 48);
+        constexpr inline ImU32 energy_blue         = MakeColor::U32::rgb(65, 150, 215);
+        constexpr inline ImU32 elite_gold          = MakeColor::U32::rgb(202, 164, 75);
+        constexpr inline ImU32 skill_dull_gray     = MakeColor::U32::rgb(178, 178, 178);
+        constexpr inline ImU32 window_title_text   = MakeColor::U32::rgb(221, 221, 221);
+        constexpr inline ImVec4 button_blue        = MakeColor::ImVec4::rgb(55, 85, 124);
+        constexpr inline ImVec4 button_green       = MakeColor::ImVec4::rgb(31, 107, 57);
+        constexpr inline ImVec4 button_red         = MakeColor::ImVec4::rgb(93, 37, 36);
+        constexpr inline ImVec4 checkmark_beige    = MakeColor::ImVec4::rgb(225, 215, 178);
+        constexpr inline ImVec4 checkbox_blue      = MakeColor::ImVec4::rgb(41, 50, 63);
+        // clang-format on
         constexpr inline ImU32 effect_border_colors[6] = {
-            0x00000000, // null
-            0xFF46834a, // default green
-            0xFF32a8d4, // condition yellow
-            0xFF3ad1a6, // enchantment green
-            0xFFa729df, // hex purple
-            0xFF977930  // dervish blue
+            MakeColor::U32::rgba_hex<"#00000000">(), // null
+            MakeColor::U32::rgb_hex<"#4a8346">(),    // default green
+            MakeColor::U32::rgb_hex<"#d4a832">(),    // condition yellow
+            MakeColor::U32::rgb_hex<"#a6d13a">(),    // enchantment green
+            MakeColor::U32::rgb_hex<"#df29a7">(),    // hex purple
+            MakeColor::U32::rgb_hex<"#307997">()     // dervish blue
         };
     }
 

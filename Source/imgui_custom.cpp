@@ -746,32 +746,90 @@ void InitFonts()
     );
 }
 
-void InvertDefaultStyleColors()
-{
-    auto &style = ImGui::GetStyle();
-    auto &colors = style.Colors;
-    // Inverting red and blue channels as a simple method for getting a unique style.
-    for (int i = 0; i < ImGuiCol_COUNT; i++)
-    {
-        ImVec4 &col = colors[i];
-        float temp = col.x;
-        col.x = col.z;
-        col.z = temp;
-    }
-}
-
 float GeometricalMul(float a, float b)
 {
     return std::clamp(std::sqrt(a * b), 0.f, 1.f);
 };
 
+struct ImGuiColorDescriptor
+{
+    BitArray<ImGuiCol_COUNT> included;
+
+    // We cannot use a constructor since an arg-less constructor cannot specify template arguments
+    template <size_t... ColorId>
+    static constexpr ImGuiColorDescriptor Make()
+    {
+        ImGuiColorDescriptor cd;
+        ((cd.included[ColorId] = true), ...);
+        return cd;
+    }
+    static constexpr ImGuiColorDescriptor All()
+    {
+        return ImGuiColorDescriptor{BitArray<ImGuiCol_COUNT>{true}};
+    }
+};
+
+float WeirdMul(float value, float factor)
+{
+    float result;
+    if (factor <= 0.f)
+    {
+        result = (value * factor) + value;
+    }
+    else
+    {
+        result = value + factor - (value * factor);
+    }
+    return std::clamp(result, 0.f, 1.f);
+}
+
+ImVec4 ShiftColor(ImVec4 color, float hue_shift, float saturation_shift, float lightness_shift)
+{
+    auto hsla = ColorConv::RGBAToHSLA(color);
+    hsla.x += (hue_shift / 360.f);
+    float int_part;
+    hsla.x = std::modf(hsla.x, &int_part);
+    hsla.y = WeirdMul(hsla.y, saturation_shift / 100.f);
+    hsla.z = WeirdMul(hsla.z, lightness_shift / 100.f);
+    return ColorConv::HSLAToRGBA(hsla);
+}
+
+using ColorSpan = std::span<ImVec4, ImGuiCol_COUNT>;
 struct ColorTheme
 {
     ImVec4 colors[ImGuiCol_COUNT];
-    operator std::span<ImVec4, ImGuiCol_COUNT>() { return std::span<ImVec4, ImGuiCol_COUNT>(colors); }
+    operator ColorSpan() { return ColorSpan(colors); }
 };
 
-ColorTheme themes[HerosInsight::Settings::Style::Theme::COUNT];
+struct Colors
+{
+    ColorSpan colors;
+    Colors(ColorSpan colors) : colors(colors) {}
+
+    operator ColorSpan() { return colors; }
+
+    void SetColors(ImGuiColorDescriptor color_desc, ImVec4 color)
+    {
+        BitView affected = color_desc.included;
+        for (auto color_id : affected.IterSetBits())
+        {
+            colors[color_id] = color;
+        }
+    }
+
+    void ShiftColors(ImGuiColorDescriptor color_desc, float hue_shift, float saturation_shift, float lightness_shift)
+    {
+        BitView affected = color_desc.included;
+
+        for (auto color_idx : affected.IterSetBits())
+        {
+            auto &color = colors[color_idx];
+            color = ShiftColor(color, hue_shift, saturation_shift, lightness_shift);
+        }
+    }
+};
+
+ColorTheme themes[HerosInsight::Settings::Style::ColorTheme::COUNT];
 
 float Dot(const ImVec2 &a, const ImVec2 &b)
 {
@@ -812,139 +870,60 @@ ImVec2 HueVec(float h)
     return ImVec2{std::cos(h_rad), std::sin(h_rad)};
 }
 
-struct ColorDescriptor
+struct ColorTransformer
 {
-    BitArray<ImGuiCol_COUNT> targets;
-    template <size_t... ColorId>
-    static constexpr ColorDescriptor Make()
+    ColorSpan src_colors;
+    ColorSpan dst_colors;
+
+    ColorTransformer(ColorSpan src_colors, ColorSpan dst_colors)
+        : src_colors(src_colors), dst_colors(dst_colors)
     {
-        ColorDescriptor cd;
-        ((cd.targets[ColorId] = true), ...);
-        return cd;
     }
-};
 
-struct ThemeCustomizer
-{
-    BitArray<ImGuiCol_COUNT> unmodified_colors{true};
-    std::span<ImVec4, ImGuiCol_COUNT> src_colors;
-    std::span<ImVec4, ImGuiCol_COUNT> dst_colors;
-
-    ThemeCustomizer(std::span<ImVec4, ImGuiCol_COUNT> src_colors, std::span<ImVec4, ImGuiCol_COUNT> dst_colors)
-        : src_colors(src_colors), dst_colors(dst_colors) {}
-
-    void TintColors(ColorDescriptor &&colors, ImVec4 tint)
+    void ApplySrcColors()
     {
-        BitView affected = colors.targets;
-        float th, ts, tv;
+        std::memcpy(dst_colors.data(), src_colors.data(), sizeof(src_colors[0]) * std::size(src_colors));
+    }
+
+    void ApplySrcColors(ImGuiColorDescriptor colors)
+    {
+        BitView affected = colors.included;
+        for (auto color_idx : affected.IterSetBits())
         {
-            ImGui::ColorConvertRGBtoHSV(tint.x, tint.y, tint.z, th, ts, tv);
+            dst_colors[color_idx] = src_colors[color_idx];
         }
+    }
+
+    void ApplySrcColors(ImGuiColorDescriptor colors, ImVec4 tint)
+    {
+        BitView affected = colors.included;
+
+        auto tint_hsla = ColorConv::RGBAToHSLA(tint);
+
         for (auto color_idx : affected.IterSetBits())
         {
             auto color = src_colors[color_idx];
-            float h, s, v;
-            ImGui::ColorConvertRGBtoHSV(color.x, color.y, color.z, h, s, v);
-            ImGui::ColorConvertHSVtoRGB(th, GeometricalMul(s, ts), GeometricalMul(v, tv), color.x, color.y, color.z);
-            color.w = color.w * tint.w;
-            dst_colors[color_idx] = color;
-        }
-    }
-
-    void RebaseColors(ColorDescriptor &colors, ImVec4 base_color)
-    {
-        BitView affected = colors.targets;
-
-        const auto count = affected.PopCount();
-
-        std::vector<ImVec4> hsla_colors;
-        std::vector<ImVec2> hue_vecs;
-        hsla_colors.reserve(count);
-        hue_vecs.reserve(count);
-        for (auto color_idx : affected.IterSetBits())
-        {
-            auto &rgba = src_colors[color_idx];
-            auto hsva = ColorConv::RGBAToHSVA(rgba);
-            hsla_colors.push_back(hsva);
-            auto hue = hsva.x;
-            hue_vecs.push_back(HueVec(hue));
-        }
-
-        ImVec4 base_color_hsla = ColorConv::RGBAToHSVA(base_color);
-        ImVec2 base_hue_vec = HueVec(base_color_hsla.x);
-        ImVec4 avg_hsla{0, 0, 0, 0};
-        ImVec2 avg_hue{0, 0};
-        for (size_t i = 0; i < count; ++i)
-        {
-            auto &color = hsla_colors[i];
-            auto &hue_vec = hue_vecs[i];
-            avg_hsla = avg_hsla + color;
-            avg_hue = avg_hue + hue_vec;
-        }
-        avg_hsla.x /= count;
-        avg_hsla.y /= count;
-        avg_hsla.z /= count;
-        avg_hsla.w /= count;
-        avg_hue /= count;
-        size_t i = 0;
-        auto avg_hue_rads = std::atan2(avg_hue.y, avg_hue.x);
-        auto base_hue_rads = std::atan2(base_hue_vec.y, base_hue_vec.x);
-        auto hue_rads_diff = base_hue_rads - avg_hue_rads;
-        for (auto color_idx : affected.IterSetBits())
-        {
-            auto &hsva = hsla_colors[i];
-            auto &hue_vec = hue_vecs[i];
-            ++i;
-
-            auto hue_rads = std::atan2(hue_vec.y, hue_vec.x);
-            hue_rads += base_hue_rads;
-            auto hue = hue_rads / (2.f * std::numbers::pi_v<float>);
-            hue -= std::floor(hue);
-            hue = std::clamp(hue, 0.f, 1.f);
-
-            // auto rebased_color_hsla = base_color_hsla + color - avg_hsla;
-            ImVec4 new_hsla{hue, hsva.y, hsva.z, hsva.w};
-            auto rgba = ColorConv::HSVAToRGBA(new_hsla);
-            dst_colors[color_idx] = rgba;
-        }
-    }
-
-    void SetColors(ColorDescriptor &&colors, ImVec4 color)
-    {
-        BitView affected = colors.targets;
-        for (auto color_id : affected.IterSetBits())
-        {
-            unmodified_colors[color_id] = false;
-            dst_colors[color_id] = color;
-        }
-    }
-
-    void UseDefault(ColorDescriptor &&colors)
-    {
-        BitView affected = colors.targets;
-        for (auto color_id : affected.IterSetBits())
-        {
-            unmodified_colors[color_id] = false;
-            dst_colors[color_id] = src_colors[color_id];
+            auto hsla = ColorConv::RGBAToHSLA(color);
+            auto new_hsla = ImVec4(
+                tint_hsla.x,
+                GeometricalMul(tint_hsla.y, hsla.y),
+                GeometricalMul(tint_hsla.z, hsla.z),
+                tint_hsla.w * hsla.w
+            );
+            dst_colors[color_idx] = ColorConv::HSLAToRGBA(new_hsla);
         }
     }
 };
 
-void HerosInsight::ImGuiCustom::RefreshStyle()
+void ApplyTheme(HerosInsight::Settings::Style::ColorTheme themeId)
 {
-    HerosInsight::SettingsGuard settings_guard{};
-    auto &settings = settings_guard.Access();
-    auto &style = settings.style;
-    auto themeId = (Settings::Style::Theme)style.theme.value;
-    auto &theme = themes[themeId];
-
-    auto &style_colors = ImGui::GetStyle().Colors;
-    ThemeCustomizer customizer(
+    Colors theme(themes[themeId]);
+    Colors style_colors(ImGui::GetStyle().Colors);
+    ColorTransformer transformer(
         theme,
         style_colors
     );
-
-    // TintStyleColors(base_colors_set, style.base_tint.value);
+    transformer.ApplySrcColors();
 }
 
 void SaveCurrentStyleColors(std::span<ImVec4, ImGuiCol_COUNT> dst_colors)
@@ -955,48 +934,125 @@ void SaveCurrentStyleColors(std::span<ImVec4, ImGuiCol_COUNT> dst_colors)
     std::memcpy(dst_colors.data(), colors, sizeof(ImVec4) * std::size(colors));
 }
 
+void TransferLightness(ImVec4 src_rgba, ImVec4 &dst_rgba)
+{
+    auto src_hsla = ColorConv::RGBAToHSLA(src_rgba);
+    auto dst_hsla = ColorConv::RGBAToHSLA(dst_rgba);
+    dst_hsla.z = src_hsla.z;
+    dst_rgba = ColorConv::HSLAToRGBA(dst_hsla);
+}
+
 void CreateGWTheme()
 {
-    ThemeCustomizer customizer(
-        themes[HerosInsight::Settings::Style::Theme::ImGuiDefault],
-        themes[HerosInsight::Settings::Style::Theme::GuildWars]
+    Colors dst_theme(themes[HerosInsight::Settings::Style::ColorTheme::GuildWars]);
+    ColorTransformer transformer(
+        themes[HerosInsight::Settings::Style::ColorTheme::ImGuiDefault],
+        dst_theme
     );
+    transformer.ApplySrcColors();
 
-    customizer.SetColors(
-        ColorDescriptor::Make<ImGuiCol_WindowBg>(),
-        MakeColor::ImVec4::rgba(15, 15, 15, 0.92)
-    );
-    customizer.UseDefault(
-        ColorDescriptor::Make<
-            ImGuiCol_Text,
-            ImGuiCol_TextDisabled,
-            ImGuiCol_TextSelectedBg
-        >()
-    );
-    customizer.TintColors(
-        ColorDescriptor::Make<
-            ImGuiCol_TabHovered,
-            ImGuiCol_TabActive,
-            ImGuiCol_TabUnfocusedActive
-        >(),
-        Constants::GWColors::tabs_blue
-    );
-    customizer.SetColors(
-        ColorDescriptor::Make<ImGuiCol_CheckMark>(),
-        Constants::GWColors::checkmark_beige
-    );
-    customizer.TintColors(
-        ColorDescriptor::Make<
+    dst_theme.colors[ImGuiCol_WindowBg] = MakeColor::ImVec4::rgba(15, 15, 15, 0.89);
+    dst_theme.colors[ImGuiCol_CheckMark] = Constants::GWColors::checkmark_beige;
+    // dst_theme.colors[ImGuiCol_Border] = MakeColor::ImVec4::rgb(202, 199, 194);
+
+    // transformer.ApplySrcColors(
+    //     ImGuiColorDescriptor::Make<
+    //         ImGuiCol_FrameBg,
+    //         ImGuiCol_FrameBgHovered,
+    //         ImGuiCol_FrameBgActive
+    //     >(),
+    //     MakeColor::ImVec4::rgb(41, 50, 63)
+    // );
+    auto scrollbar_bg_color = MakeColor::ImVec4::rgba(71, 67, 57, 0.3);
+    // dst_theme.colors[ImGuiCol_FrameBg] = scrollbar_bg_color;
+    auto frame_bg_color_hovered = MakeColor::ImVec4::rgb(55, 61, 69);
+    auto frame_bg_color_active = MakeColor::ImVec4::rgb(47, 53, 59);
+    auto frame_bg_color = MakeColor::ImVec4::rgba(69, 71, 68, 0.6);
+    dst_theme.colors[ImGuiCol_FrameBg] = frame_bg_color;
+    dst_theme.colors[ImGuiCol_FrameBgHovered] = frame_bg_color_hovered;
+    dst_theme.colors[ImGuiCol_FrameBgActive] = frame_bg_color_active;
+    // dst_theme.SetColors(
+    //     ImGuiColorDescriptor::Make<
+    //         ImGuiCol_FrameBgHovered,
+    //         ImGuiCol_FrameBgActive
+    //     >(),
+    //     MakeColor::ImVec4::rgba(69, 71, 68, 0.6)
+    // );
+    transformer.ApplySrcColors(
+        ImGuiColorDescriptor::Make<
             ImGuiCol_Button,
             ImGuiCol_ButtonHovered,
             ImGuiCol_ButtonActive
         >(),
-        Constants::GWColors::button_blue
+        MakeColor::ImVec4::rgb(70, 102, 145)
     );
+    dst_theme.colors[ImGuiCol_SliderGrab] = dst_theme.colors[ImGuiCol_Button];
+    dst_theme.colors[ImGuiCol_SliderGrabActive] = dst_theme.colors[ImGuiCol_ButtonActive];
+    dst_theme.colors[ImGuiCol_SliderGrab] = Constants::GWColors::checkmark_beige;
+    dst_theme.colors[ImGuiCol_SliderGrabActive] = Constants::GWColors::checkmark_beige;
+    transformer.ApplySrcColors(
+        ImGuiColorDescriptor::Make<
+            ImGuiCol_TabHovered,
+            ImGuiCol_TabSelected,
+            ImGuiCol_TabSelectedOverline,
+            ImGuiCol_TabDimmedSelected,
+            ImGuiCol_TabDimmedSelectedOverline
+        >(),
+        MakeColor::ImVec4::rgb(40, 41, 45)
+    );
+    TransferLightness(
+        dst_theme.colors[ImGuiCol_ButtonHovered],
+        dst_theme.colors[ImGuiCol_TabHovered]
+    );
+    transformer.ApplySrcColors(
+        ImGuiColorDescriptor::Make<
+            ImGuiCol_TitleBg,
+            ImGuiCol_TitleBgActive,
+            ImGuiCol_TitleBgCollapsed,
+            ImGuiCol_Tab,
+            ImGuiCol_TabDimmed
+        >(),
+        MakeColor::ImVec4::rgb(44, 44, 44)
+    );
+    auto scroll_grab_color = MakeColor::ImVec4::rgb(63, 71, 82);
+    dst_theme.colors[ImGuiCol_ScrollbarGrab] = scroll_grab_color;
+    dst_theme.colors[ImGuiCol_ScrollbarGrabHovered] = scroll_grab_color;
+    dst_theme.colors[ImGuiCol_ScrollbarGrabActive] = scroll_grab_color;
+    TransferLightness(
+        dst_theme.colors[ImGuiCol_ButtonHovered],
+        dst_theme.colors[ImGuiCol_ScrollbarGrabHovered]
+    );
+    TransferLightness(
+        dst_theme.colors[ImGuiCol_ButtonActive],
+        dst_theme.colors[ImGuiCol_ScrollbarGrabActive]
+    );
+    TransferLightness(
+        dst_theme.colors[ImGuiCol_ButtonActive],
+        dst_theme.colors[ImGuiCol_SliderGrabActive]
+    );
+    dst_theme.colors[ImGuiCol_ScrollbarBg] = scrollbar_bg_color;
 }
 
-void Roundify(ImGuiStyle &style, float radius)
+void CreateImGuiRedshiftedTheme()
 {
+    auto &dst_theme = themes[HerosInsight::Settings::Style::ColorTheme::ImGuiRedshifted];
+    ColorTransformer transformer(
+        themes[HerosInsight::Settings::Style::ColorTheme::ImGuiDefault],
+        dst_theme
+    );
+    transformer.ApplySrcColors();
+
+    for (auto &color : dst_theme.colors)
+    {
+        auto red = color.x;
+        color.x = color.z;
+        color.z = red;
+    }
+}
+
+void Roundify(float radius)
+{
+    auto &style = ImGui::GetStyle();
     style.TabRounding = radius;
     style.GrabRounding = radius;
     style.ChildRounding = radius;
@@ -1009,6 +1065,29 @@ void Roundify(ImGuiStyle &style, float radius)
     style.DragDropTargetRounding = radius;
 }
 
+void HerosInsight::ImGuiCustom::ApplyStyleSettings(HerosInsight::Settings::Style &style)
+{
+    ApplyTheme((Settings::Style::ColorTheme)style.color_theme.value);
+    Roundify((float)style.roundness.value);
+
+    Colors style_colors(ImGui::GetStyle().Colors);
+    style_colors.ShiftColors(
+        ImGuiColorDescriptor::All(),
+        style.hue_shift.value,
+        style.saturation_shift.value,
+        style.lightness_shift.value
+    );
+}
+
+void HerosInsight::ImGuiCustom::ApplyStyleSettings()
+{
+    HerosInsight::SettingsGuard settings_guard{};
+    auto &settings = settings_guard.Access();
+    auto &style = settings.style;
+
+    ApplyStyleSettings(style);
+}
+
 void TweakStyle()
 {
     auto &style = ImGui::GetStyle();
@@ -1016,13 +1095,12 @@ void TweakStyle()
     // style.WindowBorderSize = 1.f;
     style.WindowBorderHoverPadding = 4.f;
     style.ScrollbarSize = 20.f;
-    Roundify(style, 4.f);
 }
 
 #ifdef _DEBUG
 void DebugGWFontData()
 {
-    FixedVector<GW::TextMgr::FontHandle, 100> fontHandles;
+    FixedVector<GW::TextMgr::FontHandle, 100> fontHandles; // We use FixedVector because FontHandle cannot be moved
 
     struct FontRelatedData
     {
@@ -1052,16 +1130,16 @@ void HerosInsight::ImGuiCustom::Init()
     // DebugGWFontData();
 #endif
 
-    SaveCurrentStyleColors(themes[Settings::Style::Theme::ImGuiDefault].colors);
+    SaveCurrentStyleColors(themes[Settings::Style::ColorTheme::ImGuiDefault].colors);
+    CreateImGuiRedshiftedTheme();
     CreateGWTheme();
 
-    auto &io = ImGui::GetIO();
-
     TweakStyle();
-    RefreshStyle();
+    ApplyStyleSettings();
 
     InitFonts();
 
+    auto &io = ImGui::GetIO();
     static std::string imgui_ini_path = (Constants::paths.cache() / "imgui.ini").string();
     static std::string imgui_log_path = (Constants::paths.cache() / "imgui_log.txt").string();
     io.IniFilename = imgui_ini_path.c_str();

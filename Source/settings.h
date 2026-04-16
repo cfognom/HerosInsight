@@ -8,7 +8,21 @@
 #include <unordered_map>
 #include <vector>
 
+#include <constants.h>
+#include <make_color.h>
+
 struct IDirect3DDevice9;
+
+inline std::istream &operator>>(std::istream &is, ImVec4 &col)
+{
+    return is >> col.x >> col.y >> col.z >> col.w;
+}
+
+inline std::ostream &operator<<(std::ostream &os, const ImVec4 &col)
+{
+    os << col.x << ' ' << col.y << ' ' << col.z << ' ' << col.w;
+    return os;
+}
 
 namespace HerosInsight
 {
@@ -56,7 +70,10 @@ namespace HerosInsight
             std::lock_guard<std::recursive_mutex> lock(m_mutex);
             assert(m_active_settings > 0 && "StoreSetting called without LoadSettingOrDefault");
             --m_active_settings;
-            m_settings[key] = std::to_string(value);
+
+            std::ostringstream oss;
+            oss << value;
+            m_settings[key] = oss.str();
         }
 
         std::unordered_map<std::string, std::string> m_settings;
@@ -117,6 +134,30 @@ namespace HerosInsight
             Setting<bool> scroll_snap_to_item{"general.scroll_snap_to_item", true};
             Setting<float> main_menu_fadeout_seconds{"general.main_menu_fadeout_seconds", 0.33f};
         };
+        struct Style
+        {
+            enum ColorTheme : int
+            {
+                ImGuiDefault,
+                ImGuiRedshifted,
+                GuildWars,
+                COUNT,
+            };
+            Setting<std::underlying_type_t<ColorTheme>> color_theme{"style.color_theme", (std::underlying_type_t<ColorTheme>)ColorTheme::GuildWars};
+            Setting<float> hue_shift{"style.hue_shift", 0.0f};
+            Setting<float> saturation_shift{"style.saturation_shift", 0.f};
+            Setting<float> lightness_shift{"style.lightness_shift", 0.f};
+            Setting<int> roundness{"style.roundness", 4};
+            // clang-format off
+            // Setting<ImVec4> base_tint       {"style.base_tint"       , ImGui::ColorConvertU32ToFloat4(Constants::GWColors::window_grey    )};
+            // Setting<ImVec4> button_tint     {"style.button_tint"     , ImGui::ColorConvertU32ToFloat4(Constants::GWColors::button_blue    )};
+            // Setting<ImVec4> tab_tint        {"style.tab_tint"        , ImGui::ColorConvertU32ToFloat4(Constants::GWColors::tabs_blue      )};
+            // Setting<ImVec4> header_tint     {"style.header_tint"     , ImGui::ColorConvertU32ToFloat4(Constants::GWColors::header_beige   )};
+            // Setting<ImVec4> checkmark_color {"style.checkmark_color" , ImGui::ColorConvertU32ToFloat4(Constants::GWColors::checkmark_beige)};
+            // Setting<ImVec4> checkbox_color  {"style.checkbox_color"  , ImGui::ColorConvertU32ToFloat4(Constants::GWColors::checkbox_blue  )};
+            // Setting<ImVec4> background_color{"style.background_color", ImVec4(0.06f, 0.06f, 0.06f, 0.92f)};
+            // clang-format on
+        };
         struct SkillBook
         {
             Setting<bool> show_help_button{"skill_book.show_help_button", true};
@@ -130,6 +171,7 @@ namespace HerosInsight
             Setting<int> feedback{"skill_book.feedback", (int)FeedbackSetting::Concise};
         };
         General general;
+        Style style;
         SkillBook skill_book;
 
         static void Draw(IDirect3DDevice9 *device);
