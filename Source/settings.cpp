@@ -73,8 +73,8 @@ namespace HerosInsight
     {
         if (ImGuiCustom::TabItemScope item{"General"})
         {
-            ImGui::Checkbox("Scroll snap to item", &settings.general.scroll_snap_to_item.value);
-            ImGuiCustom::SliderFloat("Menu fadeout (s)", &settings.general.main_menu_fadeout_seconds.value, 0.f, 3.f, "%.2f");
+            ImGui::Checkbox("Scroll: Snap to item", &settings.general.scroll_snap_to_item.value);
+            ImGuiCustom::SliderFloat("Menu fadeout", &settings.general.main_menu_fadeout_seconds.value, 0.f, 3.f, "%.2f s");
 
             auto &io = ImGui::GetIO();
             {
