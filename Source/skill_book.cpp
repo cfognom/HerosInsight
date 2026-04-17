@@ -1352,7 +1352,7 @@ namespace HerosInsight::SkillBook
         void DrawRulesetSelection()
         {
             const char *options[] = {"Mixed", "PvE", "PvP"};
-            if (ImGuiCustom::RadioArray("Skill Ruleset", (int *)&settings.ruleset, options, IM_ARRAYSIZE(options)))
+            if (ImGuiCustom::RadioArray("Skill Ruleset:", (int *)&settings.ruleset, options, IM_ARRAYSIZE(options)))
             {
                 dirty_flags |= DirtyFlags::SkillList;
             }
@@ -1361,7 +1361,7 @@ namespace HerosInsight::SkillBook
         void DrawAttributeModeSelection()
         {
             const char *options[] = {"(0...15)", "Character's", "Manual"};
-            if (ImGuiCustom::RadioArray("Attributes", (int *)&settings.attr_src.type, options, IM_ARRAYSIZE(options)))
+            if (ImGuiCustom::RadioArray("Attributes:", (int *)&settings.attr_src.type, options, IM_ARRAYSIZE(options)))
             {
                 dirty_flags |= DirtyFlags::Props;
                 switch (settings.attr_src.type)
