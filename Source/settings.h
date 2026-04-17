@@ -133,7 +133,7 @@ namespace HerosInsight
         {
             Setting<bool> scroll_snap_to_item{"general.scroll_snap_to_item", true};
             Setting<float> main_menu_fadeout_seconds{"general.main_menu_fadeout_seconds", 0.33f};
-        };
+        } general;
         struct Style
         {
             enum ColorTheme : int
@@ -148,16 +148,7 @@ namespace HerosInsight
             Setting<float> saturation_shift{"style.saturation_shift", 0.f};
             Setting<float> lightness_shift{"style.lightness_shift", 0.f};
             Setting<int> roundness{"style.roundness", 4};
-            // clang-format off
-            // Setting<ImVec4> base_tint       {"style.base_tint"       , ImGui::ColorConvertU32ToFloat4(Constants::GWColors::window_grey    )};
-            // Setting<ImVec4> button_tint     {"style.button_tint"     , ImGui::ColorConvertU32ToFloat4(Constants::GWColors::button_blue    )};
-            // Setting<ImVec4> tab_tint        {"style.tab_tint"        , ImGui::ColorConvertU32ToFloat4(Constants::GWColors::tabs_blue      )};
-            // Setting<ImVec4> header_tint     {"style.header_tint"     , ImGui::ColorConvertU32ToFloat4(Constants::GWColors::header_beige   )};
-            // Setting<ImVec4> checkmark_color {"style.checkmark_color" , ImGui::ColorConvertU32ToFloat4(Constants::GWColors::checkmark_beige)};
-            // Setting<ImVec4> checkbox_color  {"style.checkbox_color"  , ImGui::ColorConvertU32ToFloat4(Constants::GWColors::checkbox_blue  )};
-            // Setting<ImVec4> background_color{"style.background_color", ImVec4(0.06f, 0.06f, 0.06f, 0.92f)};
-            // clang-format on
-        };
+        } style;
         struct SkillBook
         {
             Setting<bool> show_help_button{"skill_book.show_help_button", true};
@@ -169,10 +160,7 @@ namespace HerosInsight
                 Detailed,
             };
             Setting<int> feedback{"skill_book.feedback", (int)FeedbackSetting::Concise};
-        };
-        General general;
-        Style style;
-        SkillBook skill_book;
+        } skill_book;
 
         static void Draw(IDirect3DDevice9 *device);
     };
