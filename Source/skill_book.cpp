@@ -122,93 +122,102 @@ namespace HerosInsight::SkillBook
 {
     struct BookState;
 
-    std::vector<uint16_t> base_skills; // skill ids
+    std::array<uint16_t, GW::Constants::SkillMax - 1> base_skills; // skill ids
 
     using SkillID = GW::Constants::SkillID;
 
-    void InitBaseSkills()
+    void SortSkills(std::span<uint16_t> skills)
     {
-        auto &text_provider = Text::GetTextProvider(GW::Constants::Language::English);
+        Stopwatch stopwatch("SortSkills");
 
-        base_skills.reserve(GW::Constants::SkillMax - 1);
-        for (uint16_t i = 1; i < GW::Constants::SkillMax; i++)
+        struct Comparer
         {
-            base_skills.push_back(i);
-        }
+            std::span<GW::Skill> skills = GW::SkillbarMgr::GetSkills();
+            std::span<CustomSkillData> cskills = CustomSkillDataModule::GetSkills();
+            Text::Provider &text_provider = Text::GetTextProvider(GW::Constants::Language::English);
 
-        auto skills = GW::SkillbarMgr::GetSkills();
-        auto cskills = CustomSkillDataModule::GetSkills();
-
-        auto Comparer = [&text_provider, skills, cskills](uint16_t a, uint16_t b)
-        {
-            std::strong_ordering cmp;
-
-            auto &a_skill = skills[a];
-            auto &b_skill = skills[b];
-            // If the skill is a pvp version, refer to the pve version
-            auto a_pve_id = a_skill.IsPvP() ? (uint16_t)a_skill.skill_id_pvp : a;
-            auto b_pve_id = b_skill.IsPvP() ? (uint16_t)b_skill.skill_id_pvp : b;
-            auto &a_pve_skill = skills[a_pve_id];
-            auto &b_pve_skill = skills[b_pve_id];
-            if (a_pve_id == b_pve_id)
+            bool operator()(uint16_t a, uint16_t b) const
             {
-                cmp = a_skill.IsPvP() <=> b_skill.IsPvP(); // Put pve version before pvp version
-                if (cmp != 0)
-                    return cmp < 0;
-            }
-            else
-            {
-                auto &a_pve_cskill = cskills[a_pve_id];
-                auto &b_pve_cskill = cskills[b_pve_id];
+                std::strong_ordering cmp;
 
-                auto ca = a_pve_cskill.context;
-                auto cb = b_pve_cskill.context;
-                cmp = ca <=> cb;
-                if (cmp != 0)
-                    return cmp < 0;
-
-                auto pa = (uint32_t)a_pve_skill.profession - 1; // We do this so that None comes last
-                auto pb = (uint32_t)b_pve_skill.profession - 1;
-                cmp = pa <=> pb;
-                if (cmp != 0)
-                    return cmp < 0;
-
-                auto attr_a = a_pve_cskill.attribute.value;
-                auto attr_b = b_pve_cskill.attribute.value;
-                cmp = attr_a <=> attr_b;
-                if (cmp != 0)
-                    return cmp < 0;
-
-                // Skills with neither profession nor attribute/title are sorted by type and campaign
-                if (a_pve_skill.profession == GW::Constants::ProfessionByte::None &&
-                    a_pve_cskill.attribute.IsNone())
+                auto &a_skill = skills[a];
+                auto &b_skill = skills[b];
+                // If the skill is a pvp version, refer to the pve version
+                auto a_pve_id = a_skill.IsPvP() ? (uint16_t)a_skill.skill_id_pvp : a;
+                auto b_pve_id = b_skill.IsPvP() ? (uint16_t)b_skill.skill_id_pvp : b;
+                auto &a_pve_skill = skills[a_pve_id];
+                auto &b_pve_skill = skills[b_pve_id];
+                if (a_pve_id == b_pve_id)
                 {
-                    assert(b_pve_skill.profession == GW::Constants::ProfessionByte::None);
-                    assert(b_pve_cskill.attribute.IsNone());
+                    cmp = a_skill.IsPvP() <=> b_skill.IsPvP(); // Put pve version before pvp version
+                    if (cmp != 0)
+                        return cmp < 0;
+                }
+                else
+                {
+                    auto &a_pve_cskill = cskills[a_pve_id];
+                    auto &b_pve_cskill = cskills[b_pve_id];
 
-                    auto ty_a = a_pve_cskill.GetTypeString();
-                    auto ty_b = b_pve_cskill.GetTypeString();
-                    cmp = ty_a <=> ty_b;
+                    auto ca = a_pve_cskill.context;
+                    auto cb = b_pve_cskill.context;
+                    cmp = ca <=> cb;
                     if (cmp != 0)
                         return cmp < 0;
 
-                    auto ca = a_pve_skill.campaign;
-                    auto cb = b_pve_skill.campaign;
-                    cmp = ca <=> cb;
+                    auto pa = (uint32_t)a_pve_skill.profession - 1; // We do this so that None comes last
+                    auto pb = (uint32_t)b_pve_skill.profession - 1;
+                    cmp = pa <=> pb;
+                    if (cmp != 0)
+                        return cmp < 0;
+
+                    auto attr_a = a_pve_cskill.attribute.value;
+                    auto attr_b = b_pve_cskill.attribute.value;
+                    cmp = attr_a <=> attr_b;
+                    if (cmp != 0)
+                        return cmp < 0;
+
+                    // Skills with neither profession nor attribute/title are sorted by type and campaign
+                    if (a_pve_skill.profession == GW::Constants::ProfessionByte::None &&
+                        a_pve_cskill.attribute.IsNone())
+                    {
+                        assert(b_pve_skill.profession == GW::Constants::ProfessionByte::None);
+                        assert(b_pve_cskill.attribute.IsNone());
+
+                        auto ty_a = a_pve_cskill.GetTypeString();
+                        auto ty_b = b_pve_cskill.GetTypeString();
+                        cmp = ty_a <=> ty_b;
+                        if (cmp != 0)
+                            return cmp < 0;
+
+                        auto ca = a_pve_skill.campaign;
+                        auto cb = b_pve_skill.campaign;
+                        cmp = ca <=> cb;
+                        if (cmp != 0)
+                            return cmp < 0;
+                    }
+
+                    auto n_a = text_provider.GetName((GW::Constants::SkillID)a_pve_id);
+                    auto n_b = text_provider.GetName((GW::Constants::SkillID)b_pve_id);
+                    cmp = n_a <=> n_b;
                     if (cmp != 0)
                         return cmp < 0;
                 }
 
-                auto n_a = text_provider.GetName((GW::Constants::SkillID)a_pve_id);
-                auto n_b = text_provider.GetName((GW::Constants::SkillID)b_pve_id);
-                cmp = n_a <=> n_b;
-                if (cmp != 0)
-                    return cmp < 0;
+                return a < b;
             }
-
-            return a < b;
         };
-        std::sort(base_skills.begin(), base_skills.end(), Comparer);
+        std::sort(skills.begin(), skills.end(), Comparer{});
+    }
+
+    void InitBaseSkills()
+    {
+        using element_t = std::ranges::range_value_t<decltype(base_skills)>;
+        element_t next_skill_id = 1;
+        for (auto &skill_id : base_skills)
+        {
+            skill_id = next_skill_id++;
+        }
+        SortSkills(base_skills);
     }
 
     enum struct AttributeMode : uint32_t
