@@ -863,7 +863,7 @@ namespace HerosInsight::SkillBook
             auto cskills = CustomSkillDataModule::GetSkills();
 
             filtered_skills.clear();
-            for (auto skill_id_16 : SkillFiltering::GetBaseSkills())
+            for (auto skill_id_16 : SkillFiltering::base_skills)
             {
                 auto &skill = skills[skill_id_16];
                 auto &cskill = cskills[skill_id_16];

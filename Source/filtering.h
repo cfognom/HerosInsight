@@ -58,6 +58,16 @@ namespace HerosInsight::Filtering
         std::string_view filter_text;
         std::vector<Matcher> matchers; // We have several because we can OR them
         bool inverted;
+
+        bool Match(LoweredText text) // Does not account for filter inversion
+        {
+            for (auto &matcher : matchers)
+            {
+                if (matcher.Match(text, 0))
+                    return true;
+            }
+            return false;
+        }
     };
     struct SortCommand
     {
@@ -287,7 +297,6 @@ namespace HerosInsight::Filtering
         requires {
             typename I::index_type;
             // call static constexpr functions on the type itself
-            { I::MaxSpanCount() } -> std::convertible_to<size_t>;
             { I::PropCount() } -> std::convertible_to<size_t>;
         } &&
         requires(I &d, size_t metaId, size_t propId) {
@@ -592,28 +601,49 @@ namespace HerosInsight::Filtering
         {
             Stopwatch stopwatch("RunFilters");
 
-            size_t n_filters = filters.size();
             size_t n_items = items.size();
-            size_t n_spans = impl.MaxSpanCount();
             size_t n_props = I::PropCount();
             size_t n_meta = impl.MetaCount();
 
-            // clang-format off
-            //   NAME                            TYPE               COUNT
-            auto items_bits = MultiBuffer::Spec< BitView::word_t >( BitView::CalcWordCount(n_items) );
-            auto span_bits  = MultiBuffer::Spec< BitView::word_t >( BitView::CalcWordCount(n_spans) );
-            // clang-format on
-            auto allocation = MultiBuffer::HeapAllocated(
-                items_bits,
-                span_bits
-            );
+            using index_t = typename I::index_type;
 
+            struct Package
+            {
+                index_t item;
+                index_t str_id;
+                index_t index;
+                bool is_match;
+            };
+
+            MultiBuffer::Spec<Package> packages_spec{n_items};
+            MultiBuffer::HeapAllocated allocation{packages_spec};
+            auto packages = packages_spec.Span();
+            stopwatch.Checkpoint("alloc");
+
+            // Initialize the packages
+            for (size_t i = 0; i < n_items; ++i)
+            {
+                auto &package = packages[i];
+                package.item = items[i];
+                package.index = i;
+            }
             stopwatch.Checkpoint("init");
+
             for (auto &filter : filters)
             {
                 BitView propset = impl.GetMetaPropset(filter.meta_prop_id);
 
-                BitView unconfirmed_match(items_bits.ptr, items.size(), true);
+                struct Partitioner
+                {
+                    std::span<Package> unmatched;
+
+                    static bool Predicate(Package &package) { return package.is_match; }
+                    void PartitionMatches()
+                    {
+                        auto unmatched_group_it = std::partition(unmatched.begin(), unmatched.end(), Predicate);
+                        unmatched = std::span{unmatched_group_it, unmatched.end()};
+                    }
+                } partitioner{packages};
 
                 for (auto prop_id : propset.IterSetBits())
                 {
@@ -638,33 +668,17 @@ namespace HerosInsight::Filtering
                                     if (is_meta) // Meta properties cannot be "had"
                                         continue;
                                     auto &prop = *impl.GetProperty(prop_id);
+
                                     // Iterate the items and check which ones "has values" in this property
-                                    bool all_matched = true;
-                                    for (auto index : unconfirmed_match.IterSetBits())
+                                    for (auto &package : partitioner.unmatched)
                                     {
-                                        auto item = items[index];
-                                        auto str_id = prop.GetStrId(item);
+                                        auto str_id = prop.GetStrId(package.item);
                                         auto str = prop.GetSearchableStr(str_id);
-                                        if (!str.text.empty())
-                                        {
-                                            // If they have a value, mark the item as confirmed
-                                            unconfirmed_match[index] = false;
-                                            continue;
-                                        }
-                                        all_matched = false;
+                                        bool is_match = !str.text.empty();
+                                        package.is_match = is_match;
                                     }
-                                    if (all_matched)
-                                    {
-                                        if constexpr (is_exclusion)
-                                        {
-                                            items.clear();
-                                            return;
-                                        }
-                                        else
-                                        {
-                                            goto next_filter;
-                                        }
-                                    }
+
+                                    partitioner.PartitionMatches();
                                 }
                             }
                         }
@@ -672,82 +686,76 @@ namespace HerosInsight::Filtering
                     else // Non-meta
                     {
                         auto &prop = *impl.GetProperty(prop_id);
-                        BitView marked_spans(span_bits.ptr, n_spans, false);
 
-                        // Iterate the unconfirmed items and mark which spans we use
-                        for (auto index : unconfirmed_match.IterSetBits())
+                        // Tag the items with their string ids
+                        for (auto &package : partitioner.unmatched)
                         {
-                            auto item = items[index];
-                            auto span_id = prop.GetStrId(item);
-                            marked_spans[span_id] = true;
+                            package.str_id = prop.GetStrId(package.item);
                         }
-                        const auto unique_count = prop.GetUniqueCount();
-                        marked_spans = marked_spans.Subview(0, unique_count);
-                        stopwatch.Checkpoint(std::format("prop_{} marking", prop_id));
+                        stopwatch.Checkpoint(std::format("prop_{} tagging", prop_id));
 
-                        // Iterate marked spans and unmark those that don't match
-                        for (auto span_id : marked_spans.IterSetBits())
-                        {
-                            auto str = prop.GetSearchableStr(span_id);
-
-                            for (auto &matcher : filter.matchers)
+                        // Sort by string id so we can avoid processing duplicates
+                        std::sort(
+                            partitioner.unmatched.begin(), partitioner.unmatched.end(),
+                            [](auto &a, auto &b)
                             {
-                                if (matcher.Match(str, 0))
-                                    goto next;
+                                return a.str_id < b.str_id;
                             }
-                            marked_spans[span_id] = false;
-                        next:;
+                        );
+                        stopwatch.Checkpoint(std::format("prop_{} sorting", prop_id));
+
+                        // Iterate the items and mark which ones match
+                        index_t prev_str_id = std::numeric_limits<index_t>::max();
+                        bool is_match;
+                        for (auto &package : partitioner.unmatched)
+                        {
+                            auto str_id = package.str_id;
+                            if (str_id != prev_str_id)
+                            {
+                                prev_str_id = str_id;
+                                auto str = prop.GetSearchableStr(str_id);
+                                is_match = filter.Match(str);
+                            }
+                            package.is_match = is_match;
                         }
                         stopwatch.Checkpoint(std::format("prop_{} matching", prop_id));
 
-                        // Iterate the items and record which ones' spans matched
-                        bool all_matched = true;
-                        for (auto index : unconfirmed_match.IterSetBits())
-                        {
-                            auto item = items[index];
-                            auto span_id = prop.GetStrId(item);
-                            bool is_match = marked_spans[span_id];
-                            if (is_match)
-                            {
-                                unconfirmed_match[index] = false;
-                                continue;
-                            }
-                            all_matched = false;
-                        }
-                        stopwatch.Checkpoint(std::format("prop_{} checking", prop_id));
-                        if (all_matched)
-                        {
-                            if constexpr (is_exclusion)
-                            {
-                                items.clear();
-                                return;
-                            }
-                            else
-                            {
-                                goto next_filter;
-                            }
-                        }
+                        partitioner.PartitionMatches();
+                        stopwatch.Checkpoint(std::format("prop_{} partitioning", prop_id));
                     }
                 }
 
+                // Only keep the items that passed this filter. For exclusion filters we dont need to do anything.
+                if constexpr (!is_exclusion)
                 {
-                    // Iterate the matched items and repopulate the items vector with them
-                    size_t new_items_size = 0;
-                    if constexpr (!is_exclusion)
-                    {
-                        unconfirmed_match.Flip(); // It becomes "confirmed match"
-                    }
-                    for (auto index : unconfirmed_match.IterSetBits())
-                    {
-                        items[new_items_size++] = items[index];
-                    }
-                    items.resize(new_items_size);
+                    packages = std::span{packages.begin(), partitioner.unmatched.begin()};
                 }
+                // 'packages' now contain only the items that passed this filter
+
             next_filter:
                 stopwatch.Checkpoint("filter");
             }
             stopwatch.Checkpoint("filters");
+
+            std::sort(
+                packages.begin(), packages.end(),
+                [](auto &a, auto &b)
+                {
+                    return a.index < b.index;
+                }
+            );
+            stopwatch.Checkpoint("restore order");
+
+            // Populate the output with the matched items
+            auto dst = items.begin();
+            for (auto &package : packages)
+            {
+                *dst++ = package.item;
+            }
+            items.resize(packages.size());
+            stopwatch.Checkpoint("populate output");
         }
+
         void SortItems(Query &query, std::span<typename I::index_type> items)
         {
             Stopwatch stopwatch("SortItems");
