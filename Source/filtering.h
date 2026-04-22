@@ -687,12 +687,14 @@ namespace HerosInsight::Filtering
                     {
                         auto &prop = *impl.GetProperty(prop_id);
 
+                        // Tag the items with their string ids
                         for (auto &package : partitioner.unmatched)
                         {
                             package.str_id = prop.GetStrId(package.item);
                         }
+                        stopwatch.Checkpoint(std::format("prop_{} tagging", prop_id));
 
-                        // Sort so we can avoid processing duplicates
+                        // Sort by string id so we can avoid processing duplicates
                         std::sort(
                             partitioner.unmatched.begin(), partitioner.unmatched.end(),
                             [](auto &a, auto &b)
@@ -700,11 +702,10 @@ namespace HerosInsight::Filtering
                                 return a.str_id < b.str_id;
                             }
                         );
-
-                        stopwatch.Checkpoint(std::format("prop_{} marking", prop_id));
+                        stopwatch.Checkpoint(std::format("prop_{} sorting", prop_id));
 
                         // Iterate the items and mark which ones match
-                        index_t prev_str_id = -1;
+                        index_t prev_str_id = std::numeric_limits<index_t>::max();
                         bool is_match;
                         for (auto &package : partitioner.unmatched)
                         {
@@ -717,10 +718,10 @@ namespace HerosInsight::Filtering
                             }
                             package.is_match = is_match;
                         }
+                        stopwatch.Checkpoint(std::format("prop_{} matching", prop_id));
 
                         partitioner.PartitionMatches();
-
-                        stopwatch.Checkpoint(std::format("prop_{} matching", prop_id));
+                        stopwatch.Checkpoint(std::format("prop_{} partitioning", prop_id));
                     }
                 }
 
