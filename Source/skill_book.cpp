@@ -122,7 +122,9 @@ namespace HerosInsight::SkillBook
 {
     struct BookState;
 
-    std::array<uint16_t, GW::Constants::SkillMax - 1> base_skills; // skill ids
+    constexpr size_t SkillCount = GW::Constants::SkillMax - 1;
+
+    std::array<uint16_t, SkillCount> base_skills; // skill ids
 
     using SkillID = GW::Constants::SkillID;
 
@@ -1086,7 +1088,6 @@ namespace HerosInsight::SkillBook
         }
 
         using index_type = uint16_t;
-        constexpr static size_t MaxSpanCount() { return GW::Constants::SkillMax; }
         constexpr static size_t PropCount() { return PROP_COUNT; }
         size_t MetaCount() const { return ts.meta_propsets.size(); }
 
