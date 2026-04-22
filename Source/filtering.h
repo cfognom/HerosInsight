@@ -59,14 +59,14 @@ namespace HerosInsight::Filtering
         std::vector<Matcher> matchers; // We have several because we can OR them
         bool inverted;
 
-        bool Match(LoweredText text)
+        bool Match(LoweredText text) // Does not account for filter inversion
         {
             for (auto &matcher : matchers)
             {
                 if (matcher.Match(text, 0))
-                    return !inverted;
+                    return true;
             }
-            return inverted;
+            return false;
         }
     };
     struct SortCommand
@@ -615,8 +615,8 @@ namespace HerosInsight::Filtering
                 bool is_match;
             };
 
-            auto packages_spec = MultiBuffer::Spec<Package>(n_items);
-            auto allocation = MultiBuffer::HeapAllocated(packages_spec);
+            MultiBuffer::Spec<Package> packages_spec{n_items};
+            MultiBuffer::HeapAllocated allocation{packages_spec};
             auto packages = packages_spec.Span();
             stopwatch.Checkpoint("alloc");
 
@@ -627,13 +627,23 @@ namespace HerosInsight::Filtering
                 package.item = items[i];
                 package.index = i;
             }
-
             stopwatch.Checkpoint("init");
+
             for (auto &filter : filters)
             {
                 BitView propset = impl.GetMetaPropset(filter.meta_prop_id);
 
-                size_t pivot = is_exclusion ? n_items : 0; // Boundary between matched and unmatched
+                struct Partitioner
+                {
+                    std::span<Package> unmatched;
+
+                    static bool Predicate(Package &package) { return package.is_match; }
+                    void PartitionMatches()
+                    {
+                        auto unmatched_group_it = std::partition(unmatched.begin(), unmatched.end(), Predicate);
+                        unmatched = std::span{unmatched_group_it, unmatched.end()};
+                    }
+                } partitioner{packages};
 
                 for (auto prop_id : propset.IterSetBits())
                 {
@@ -658,26 +668,17 @@ namespace HerosInsight::Filtering
                                     if (is_meta) // Meta properties cannot be "had"
                                         continue;
                                     auto &prop = *impl.GetProperty(prop_id);
-                                    auto rem_packages = is_exclusion ? packages.subspan(0, pivot) : packages.subspan(pivot);
 
                                     // Iterate the items and check which ones "has values" in this property
-                                    for (auto &package : rem_packages)
+                                    for (auto &package : partitioner.unmatched)
                                     {
                                         auto str_id = prop.GetStrId(package.item);
                                         auto str = prop.GetSearchableStr(str_id);
                                         bool is_match = !str.text.empty();
-                                        package.is_match = is_match ^ is_exclusion;
+                                        package.is_match = is_match;
                                     }
 
-                                    // Partition the matched and unmatched
-                                    auto unmatched_group_it = std::partition(
-                                        rem_packages.begin(), rem_packages.end(),
-                                        [](auto &package)
-                                        {
-                                            return package.is_match;
-                                        }
-                                    );
-                                    pivot = unmatched_group_it - packages.begin();
+                                    partitioner.PartitionMatches();
                                 }
                             }
                         }
@@ -685,16 +686,15 @@ namespace HerosInsight::Filtering
                     else // Non-meta
                     {
                         auto &prop = *impl.GetProperty(prop_id);
-                        auto rem_packages = is_exclusion ? packages.subspan(0, pivot) : packages.subspan(pivot);
 
-                        for (auto &package : rem_packages)
+                        for (auto &package : partitioner.unmatched)
                         {
                             package.str_id = prop.GetStrId(package.item);
                         }
 
                         // Sort so we can avoid processing duplicates
                         std::sort(
-                            rem_packages.begin(), rem_packages.end(),
+                            partitioner.unmatched.begin(), partitioner.unmatched.end(),
                             [](auto &a, auto &b)
                             {
                                 return a.str_id < b.str_id;
@@ -706,7 +706,7 @@ namespace HerosInsight::Filtering
                         // Iterate the items and mark which ones match
                         index_t prev_str_id = -1;
                         bool is_match;
-                        for (auto &package : rem_packages)
+                        for (auto &package : partitioner.unmatched)
                         {
                             auto str_id = package.str_id;
                             if (str_id != prev_str_id)
@@ -718,22 +718,17 @@ namespace HerosInsight::Filtering
                             package.is_match = is_match;
                         }
 
-                        // Partition the matched and unmatched
-                        auto unmatched_group_it = std::partition(
-                            rem_packages.begin(), rem_packages.end(),
-                            [](auto &package)
-                            {
-                                return package.is_match;
-                            }
-                        );
-                        pivot = unmatched_group_it - packages.begin();
+                        partitioner.PartitionMatches();
 
                         stopwatch.Checkpoint(std::format("prop_{} matching", prop_id));
                     }
                 }
 
-                // Remove the items that don't match.
-                packages = packages.subspan(0, pivot);
+                // Only keep the items that passed this filter. For exclusion filters we dont need to do anything.
+                if constexpr (!is_exclusion)
+                {
+                    packages = std::span{packages.begin(), partitioner.unmatched.begin()};
+                }
                 // 'packages' now contain only the items that passed this filter
 
             next_filter:
