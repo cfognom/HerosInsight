@@ -709,11 +709,11 @@ namespace HerosInsight::Filtering
                 }
             }
 
-            // Only keep the items that passed this filter. For exclusion filters we dont need to do anything.
-            if constexpr (!is_exclusion)
-            {
+            // Only keep the items that passed this filter.
+            if (filter.inverted)
+                units = partitioner.unmatched;
+            else
                 units = std::span{units.begin(), partitioner.unmatched.begin()};
-            }
             // 'units' now contain only the items that passed this filter
         }
         template <bool is_exclusion>
