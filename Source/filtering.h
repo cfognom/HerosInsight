@@ -98,7 +98,7 @@ namespace HerosInsight::Filtering
 
     struct Query
     {
-        std::vector<Filter> filters;
+        std::vector<Filter> filters; // Exclusion filters first, then inclusion
         std::vector<size_t> filters_in_decl_order;
         std::span<Filter> exclusion_filters;
         std::span<Filter> inclusion_filters;
@@ -607,7 +607,6 @@ namespace HerosInsight::Filtering
             bool is_match;
         };
 
-        template <bool is_exclusion>
         void FilterUnits(Filter &filter, std::span<FilterUnit> &units)
         {
             Stopwatch stopwatch("FilterUnits");
@@ -716,7 +715,6 @@ namespace HerosInsight::Filtering
                 units = std::span{units.begin(), partitioner.unmatched.begin()};
             // 'units' now contain only the items that passed this filter
         }
-        template <bool is_exclusion>
         void RunFilters(std::span<Filter> filters, std::vector<index_t> &items)
         {
             Stopwatch stopwatch("RunFilters");
@@ -741,7 +739,7 @@ namespace HerosInsight::Filtering
 
             for (auto &filter : filters)
             {
-                FilterUnits<is_exclusion>(filter, units);
+                FilterUnits(filter, units);
             }
             stopwatch.Checkpoint("FilterUnits");
 
@@ -878,14 +876,9 @@ namespace HerosInsight::Filtering
         }
         void RunQuery(Query &query, std::vector<typename I::index_type> &items)
         {
-            if (!query.exclusion_filters.empty())
+            if (!query.filters.empty())
             {
-                RunFilters<true>(query.exclusion_filters, items);
-            }
-
-            if (!query.inclusion_filters.empty())
-            {
-                RunFilters<false>(query.inclusion_filters, items);
+                RunFilters(query.filters, items);
             }
 
             if (query.reverse_output)
