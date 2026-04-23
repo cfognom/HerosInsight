@@ -532,10 +532,6 @@ namespace HerosInsight::Filtering
                 }
             };
 
-            // inclusion filters go into temporary storage
-            std::vector<Filter> inclusion_filters_temp;
-            constexpr uint32_t InclusionMarkerBit = 0x80000000;
-
             auto rem = source;
             while (!rem.empty())
             {
@@ -563,40 +559,41 @@ namespace HerosInsight::Filtering
                 if (filter_opt.has_value())
                 {
                     auto &filter = filter_opt.value();
-                    uint32_t index;
-                    if (filter.inverted)
-                    {
-                        index = query.filters.size();
-                        query.filters.emplace_back(std::move(filter));
-                    }
-                    else
-                    {
-                        index = inclusion_filters_temp.size();
-                        index |= InclusionMarkerBit;
-                        inclusion_filters_temp.emplace_back(std::move(filter));
-                    }
-                    query.filters_in_decl_order.push_back(index);
+                    query.filters.emplace_back(std::move(filter));
                 }
             }
 
-            auto offset = query.filters.size();
-            // Copy in the inclusion filters
-            for (auto &f : inclusion_filters_temp)
+            // We now need to put exclusion filters first, then inclusion while also keeping track of their original order
+            std::span<Filter> filters = query.filters;
+            auto n_filters = filters.size();
+
+            // Create mapping from original index to new index
+            query.filters_in_decl_order.resize(n_filters);
+            size_t dst_index = 0;
+            for (size_t i = 0; i < n_filters; ++i)
             {
-                query.filters.emplace_back(std::move(f));
+                if (filters[i].inverted)
+                    query.filters_in_decl_order[i] = dst_index++;
             }
-            // Fix their indices
-            for (auto &index : query.filters_in_decl_order)
+            size_t inclusion_start = dst_index;
+            for (size_t i = 0; i < n_filters; ++i)
             {
-                if (index & InclusionMarkerBit)
+                if (!filters[i].inverted)
+                    query.filters_in_decl_order[i] = dst_index++;
+            }
+
+            // Partition the filters so that exclusion filters come first
+            std::stable_partition(
+                filters.begin(), filters.end(),
+                [](const Filter &f)
                 {
-                    index &= ~InclusionMarkerBit;
-                    index += offset;
+                    return f.inverted;
                 }
-            }
+            );
+
             // Make the spans
-            query.exclusion_filters = std::span<Filter>(query.filters.data(), offset);
-            query.inclusion_filters = std::span<Filter>(query.filters.data() + offset, query.filters.size() - offset);
+            query.exclusion_filters = filters.subspan(0, inclusion_start);
+            query.inclusion_filters = filters.subspan(inclusion_start);
         }
 
         struct FilterUnit
