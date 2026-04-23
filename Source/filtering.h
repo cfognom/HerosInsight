@@ -57,7 +57,7 @@ namespace HerosInsight::Filtering
         std::string_view source_text;
         std::string_view filter_text;
         std::vector<Matcher> matchers; // We have several because we can OR them
-        bool inverted;
+        bool is_exclusion;
 
         bool Match(LoweredText text) // Does not account for filter inversion
         {
@@ -374,7 +374,7 @@ namespace HerosInsight::Filtering
                 }
             }
 
-            filter.inverted = Utils::TryRead('!', rem);
+            filter.is_exclusion = Utils::TryRead('!', rem);
             if (filter.meta_prop_id)
             {
                 Utils::TryRead(':', rem) || Utils::TryRead('=', rem);
@@ -572,13 +572,13 @@ namespace HerosInsight::Filtering
             size_t dst_index = 0;
             for (size_t i = 0; i < n_filters; ++i)
             {
-                if (filters[i].inverted)
+                if (filters[i].is_exclusion)
                     query.filters_in_decl_order[i] = dst_index++;
             }
             size_t inclusion_start = dst_index;
             for (size_t i = 0; i < n_filters; ++i)
             {
-                if (!filters[i].inverted)
+                if (!filters[i].is_exclusion)
                     query.filters_in_decl_order[i] = dst_index++;
             }
 
@@ -587,7 +587,7 @@ namespace HerosInsight::Filtering
                 filters.begin(), filters.end(),
                 [](const Filter &f)
                 {
-                    return f.inverted;
+                    return f.is_exclusion;
                 }
             );
 
@@ -706,7 +706,7 @@ namespace HerosInsight::Filtering
             }
 
             // Only keep the items that passed this filter.
-            if (filter.inverted)
+            if (filter.is_exclusion)
                 units = partitioner.unmatched;
             else
                 units = std::span{units.begin(), partitioner.unmatched.begin()};
@@ -942,7 +942,7 @@ namespace HerosInsight::Filtering
                     FixedVector<char, 128> meta_name;
                     impl.GetMetaName(filter.meta_prop_id).GetRenderableString(meta_name);
                     auto meta_name_str = (std::string_view)meta_name;
-                    auto cond = filter.inverted ? ControlColor "not " CloseColor : "";
+                    auto cond = filter.is_exclusion ? ControlColor "not " CloseColor : "";
                     auto musty = meta_name_str.empty() ? "Must" : " must";
                     std::format_to(inserter, ControlColor "{}</c>{} {}contain: ", meta_name_str, musty, cond);
                     for (size_t m = 0; m < filter.matchers.size(); ++m)
