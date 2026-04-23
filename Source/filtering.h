@@ -312,6 +312,8 @@ namespace HerosInsight::Filtering
     template <DeviceImpl I>
     struct Device
     {
+        using index_t = typename I::index_type;
+
         I &impl;
         SpanVector<RelevantMeta> relevant_metas_per_prop; // For each prop this is sorted from most specific to least
 
@@ -596,8 +598,126 @@ namespace HerosInsight::Filtering
             query.exclusion_filters = std::span<Filter>(query.filters.data(), offset);
             query.inclusion_filters = std::span<Filter>(query.filters.data() + offset, query.filters.size() - offset);
         }
+
+        struct FilterUnit
+        {
+            index_t item;
+            index_t str_id;
+            index_t index;
+            bool is_match;
+        };
+
         template <bool is_exclusion>
-        void RunFilters(std::span<Filter> filters, std::vector<typename I::index_type> &items)
+        void FilterUnits(Filter &filter, std::span<FilterUnit> &units)
+        {
+            Stopwatch stopwatch("FilterUnits");
+
+            size_t n_props = I::PropCount();
+            size_t n_meta = impl.MetaCount();
+
+            BitView propset = impl.GetMetaPropset(filter.meta_prop_id);
+
+            struct Partitioner
+            {
+                std::span<FilterUnit> unmatched;
+
+                static bool Predicate(FilterUnit &unit) { return unit.is_match; }
+                void PartitionMatches()
+                {
+                    auto unmatched_group_it = std::partition(unmatched.begin(), unmatched.end(), Predicate);
+                    unmatched = std::span{unmatched_group_it, unmatched.end()};
+                }
+            } partitioner{units};
+
+            for (auto prop_id : propset.IterSetBits())
+            {
+                bool is_meta = prop_id == n_props;
+                if (is_meta) // Special case for meta properties
+                {
+                    // Iterate the meta properties and check for name matches
+                    for (size_t i_meta = 0; i_meta < n_meta; ++i_meta)
+                    {
+                        LoweredText str = impl.GetMetaName(i_meta);
+                        for (auto &matcher : filter.matchers)
+                        {
+                            if (!matcher.Match(str, 0))
+                                continue;
+
+                            // The filter matched against this meta name, now we need to find out which items "have it"
+
+                            BitView meta_propset = impl.GetMetaPropset(i_meta);
+                            for (auto prop_id : meta_propset.IterSetBits())
+                            {
+                                bool is_meta = prop_id == n_props;
+                                if (is_meta) // Meta properties cannot be "had"
+                                    continue;
+                                auto &prop = *impl.GetProperty(prop_id);
+
+                                // Iterate the items and check which ones "has values" in this property
+                                for (auto &package : partitioner.unmatched)
+                                {
+                                    auto str_id = prop.GetStrId(package.item);
+                                    auto str = prop.GetSearchableStr(str_id);
+                                    bool is_match = !str.text.empty();
+                                    package.is_match = is_match;
+                                }
+
+                                partitioner.PartitionMatches();
+                            }
+                        }
+                    }
+                }
+                else // Non-meta
+                {
+                    auto &prop = *impl.GetProperty(prop_id);
+
+                    // Tag the items with their string ids
+                    for (auto &package : partitioner.unmatched)
+                    {
+                        package.str_id = prop.GetStrId(package.item);
+                    }
+                    stopwatch.Checkpoint(std::format("prop_{} tagging", prop_id));
+
+                    // Sort by string id so we can avoid processing duplicates
+                    std::sort(
+                        partitioner.unmatched.begin(), partitioner.unmatched.end(),
+                        [](auto &a, auto &b)
+                        {
+                            return a.str_id < b.str_id;
+                        }
+                    );
+                    stopwatch.Checkpoint(std::format("prop_{} sorting", prop_id));
+
+                    // Iterate the items and mark which ones match
+                    index_t prev_str_id = std::numeric_limits<index_t>::max();
+                    bool is_match;
+                    for (auto &package : partitioner.unmatched)
+                    {
+                        auto str_id = package.str_id;
+                        if (str_id != prev_str_id)
+                        {
+                            prev_str_id = str_id;
+                            auto str = prop.GetSearchableStr(str_id);
+                            is_match = filter.Match(str);
+                        }
+                        package.is_match = is_match;
+                    }
+                    stopwatch.Checkpoint(std::format("prop_{} matching", prop_id));
+
+                    partitioner.PartitionMatches();
+                    stopwatch.Checkpoint(std::format("prop_{} partitioning", prop_id));
+                }
+            }
+
+            // Only keep the items that passed this filter. For exclusion filters we dont need to do anything.
+            if constexpr (!is_exclusion)
+            {
+                units = std::span{units.begin(), partitioner.unmatched.begin()};
+            }
+            // 'units' now contain only the items that passed this filter
+        }
+        template <bool is_exclusion>
+        void RunFilters(std::span<Filter> filters, std::vector<index_t> &items)
         {
             Stopwatch stopwatch("RunFilters");
 
@@ -605,25 +725,15 @@ namespace HerosInsight::Filtering
             size_t n_props = I::PropCount();
             size_t n_meta = impl.MetaCount();
 
-            using index_t = typename I::index_type;
-
-            struct Package
-            {
-                index_t item;
-                index_t str_id;
-                index_t index;
-                bool is_match;
-            };
-
-            MultiBuffer::Spec<Package> packages_spec{n_items};
-            MultiBuffer::HeapAllocated allocation{packages_spec};
-            auto packages = packages_spec.Span();
+            MultiBuffer::Spec<FilterUnit> units_spec{n_items};
+            MultiBuffer::HeapAllocated allocation{units_spec};
+            auto units = units_spec.Span();
             stopwatch.Checkpoint("alloc");
 
-            // Initialize the packages
+            // Initialize the units
             for (size_t i = 0; i < n_items; ++i)
             {
-                auto &package = packages[i];
+                auto &package = units[i];
                 package.item = items[i];
                 package.index = i;
             }
@@ -631,114 +741,12 @@ namespace HerosInsight::Filtering
 
             for (auto &filter : filters)
             {
-                BitView propset = impl.GetMetaPropset(filter.meta_prop_id);
-
-                struct Partitioner
-                {
-                    std::span<Package> unmatched;
-
-                    static bool Predicate(Package &package) { return package.is_match; }
-                    void PartitionMatches()
-                    {
-                        auto unmatched_group_it = std::partition(unmatched.begin(), unmatched.end(), Predicate);
-                        unmatched = std::span{unmatched_group_it, unmatched.end()};
-                    }
-                } partitioner{packages};
-
-                for (auto prop_id : propset.IterSetBits())
-                {
-                    bool is_meta = prop_id == n_props;
-                    if (is_meta) // Special case for meta properties
-                    {
-                        // Iterate the meta properties and check for name matches
-                        for (size_t i_meta = 0; i_meta < n_meta; ++i_meta)
-                        {
-                            LoweredText str = impl.GetMetaName(i_meta);
-                            for (auto &matcher : filter.matchers)
-                            {
-                                if (!matcher.Match(str, 0))
-                                    continue;
-
-                                // The filter matched against this meta name, now we need to find out which items "have it"
-
-                                BitView meta_propset = impl.GetMetaPropset(i_meta);
-                                for (auto prop_id : meta_propset.IterSetBits())
-                                {
-                                    bool is_meta = prop_id == n_props;
-                                    if (is_meta) // Meta properties cannot be "had"
-                                        continue;
-                                    auto &prop = *impl.GetProperty(prop_id);
-
-                                    // Iterate the items and check which ones "has values" in this property
-                                    for (auto &package : partitioner.unmatched)
-                                    {
-                                        auto str_id = prop.GetStrId(package.item);
-                                        auto str = prop.GetSearchableStr(str_id);
-                                        bool is_match = !str.text.empty();
-                                        package.is_match = is_match;
-                                    }
-
-                                    partitioner.PartitionMatches();
-                                }
-                            }
-                        }
-                    }
-                    else // Non-meta
-                    {
-                        auto &prop = *impl.GetProperty(prop_id);
-
-                        // Tag the items with their string ids
-                        for (auto &package : partitioner.unmatched)
-                        {
-                            package.str_id = prop.GetStrId(package.item);
-                        }
-                        stopwatch.Checkpoint(std::format("prop_{} tagging", prop_id));
-
-                        // Sort by string id so we can avoid processing duplicates
-                        std::sort(
-                            partitioner.unmatched.begin(), partitioner.unmatched.end(),
-                            [](auto &a, auto &b)
-                            {
-                                return a.str_id < b.str_id;
-                            }
-                        );
-                        stopwatch.Checkpoint(std::format("prop_{} sorting", prop_id));
-
-                        // Iterate the items and mark which ones match
-                        index_t prev_str_id = std::numeric_limits<index_t>::max();
-                        bool is_match;
-                        for (auto &package : partitioner.unmatched)
-                        {
-                            auto str_id = package.str_id;
-                            if (str_id != prev_str_id)
-                            {
-                                prev_str_id = str_id;
-                                auto str = prop.GetSearchableStr(str_id);
-                                is_match = filter.Match(str);
-                            }
-                            package.is_match = is_match;
-                        }
-                        stopwatch.Checkpoint(std::format("prop_{} matching", prop_id));
-
-                        partitioner.PartitionMatches();
-                        stopwatch.Checkpoint(std::format("prop_{} partitioning", prop_id));
-                    }
-                }
-
-                // Only keep the items that passed this filter. For exclusion filters we dont need to do anything.
-                if constexpr (!is_exclusion)
-                {
-                    packages = std::span{packages.begin(), partitioner.unmatched.begin()};
-                }
-                // 'packages' now contain only the items that passed this filter
-
-            next_filter:
-                stopwatch.Checkpoint("filter");
+                FilterUnits<is_exclusion>(filter, units);
             }
-            stopwatch.Checkpoint("filters");
+            stopwatch.Checkpoint("FilterUnits");
 
             std::sort(
-                packages.begin(), packages.end(),
+                units.begin(), units.end(),
                 [](auto &a, auto &b)
                 {
                     return a.index < b.index;
@@ -748,11 +756,11 @@ namespace HerosInsight::Filtering
 
             // Populate the output with the matched items
             auto dst = items.begin();
-            for (auto &package : packages)
+            for (auto &package : units)
             {
                 *dst++ = package.item;
             }
-            items.resize(packages.size());
+            items.resize(units.size());
             stopwatch.Checkpoint("populate output");
         }
 
