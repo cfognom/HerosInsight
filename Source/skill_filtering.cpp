@@ -2,6 +2,7 @@
 
 #include <buffer.h>
 #include <custom_skill_data.h>
+#include <profiling.h>
 #include <text_provider.h>
 
 #include "skill_filtering.h"
@@ -13,7 +14,7 @@ namespace HerosInsight::SkillFiltering
 
     void SortSkills(std::span<uint16_t> skills)
     {
-        Stopwatch stopwatch("SortSkills");
+        ProfilingScope profiler;
 
         struct Comparer
         {

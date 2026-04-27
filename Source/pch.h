@@ -30,7 +30,7 @@
 #else // NOT PRODUCTION_BUILD
 
 #define EXPERIMENTAL_FEATURES
-#define _STOPWATCH
+#define _PROFILING
 // #define ENABLE_SAFECALL
 
 #endif

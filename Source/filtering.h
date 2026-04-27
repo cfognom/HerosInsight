@@ -8,8 +8,8 @@
 #include <front_back_pair.h>
 #include <matcher.h>
 #include <multibuffer.h>
+#include <profiling.h>
 #include <span_vector.h>
-#include <stopwatch.h>
 #include <string_manager.h>
 #include <text_provider.h>
 #include <utils.h>
@@ -606,7 +606,7 @@ namespace HerosInsight::Filtering
 
         void FilterUnits(Filter &filter, std::span<FilterUnit> &units)
         {
-            Stopwatch stopwatch("FilterUnits");
+            ProfilingScope profiler;
 
             size_t n_props = I::PropCount();
             size_t n_meta = impl.MetaCount();
@@ -620,6 +620,7 @@ namespace HerosInsight::Filtering
                 static bool Predicate(FilterUnit &unit) { return unit.is_match; }
                 void PartitionMatches()
                 {
+                    ProfilingScope profiler;
                     auto unmatched_group_it = std::partition(unmatched.begin(), unmatched.end(), Predicate);
                     unmatched = std::span{unmatched_group_it, unmatched.end()};
                 }
@@ -667,41 +668,44 @@ namespace HerosInsight::Filtering
                 {
                     auto &prop = *impl.GetProperty(prop_id);
 
-                    // Tag the items with their string ids
-                    for (auto &package : partitioner.unmatched)
-                    {
-                        package.str_id = prop.GetStrId(package.item);
-                    }
-                    stopwatch.Checkpoint(std::format("prop_{} tagging", prop_id));
-
-                    // Sort by string id so we can avoid processing duplicates
-                    std::sort(
-                        partitioner.unmatched.begin(), partitioner.unmatched.end(),
-                        [](auto &a, auto &b)
+                    { // Tag the items with their string ids
+                        ProfilingScope profiler{"tagging"};
+                        for (auto &package : partitioner.unmatched)
                         {
-                            return a.str_id < b.str_id;
+                            package.str_id = prop.GetStrId(package.item);
                         }
-                    );
-                    stopwatch.Checkpoint(std::format("prop_{} sorting", prop_id));
-
-                    // Iterate the items and mark which ones match
-                    index_t prev_str_id = std::numeric_limits<index_t>::max();
-                    bool is_match;
-                    for (auto &package : partitioner.unmatched)
-                    {
-                        auto str_id = package.str_id;
-                        if (str_id != prev_str_id)
-                        {
-                            prev_str_id = str_id;
-                            auto str = prop.GetSearchableStr(str_id);
-                            is_match = filter.Match(str);
-                        }
-                        package.is_match = is_match;
                     }
-                    stopwatch.Checkpoint(std::format("prop_{} matching", prop_id));
+
+                    { // Sort by string id so we can avoid processing duplicates
+                        ProfilingScope profiler{"sorting"};
+                        std::sort(
+                            partitioner.unmatched.begin(), partitioner.unmatched.end(),
+                            [](auto &a, auto &b)
+                            {
+                                return a.str_id < b.str_id;
+                            }
+                        );
+                    }
+
+                    { // Iterate the items and mark which ones match
+                        ProfilingScope profiler{"matching"};
+
+                        index_t prev_str_id = std::numeric_limits<index_t>::max();
+                        bool is_match;
+                        for (auto &package : partitioner.unmatched)
+                        {
+                            auto str_id = package.str_id;
+                            if (str_id != prev_str_id)
+                            {
+                                prev_str_id = str_id;
+                                auto str = prop.GetSearchableStr(str_id);
+                                is_match = filter.Match(str);
+                            }
+                            package.is_match = is_match;
+                        }
+                    }
 
                     partitioner.PartitionMatches();
-                    stopwatch.Checkpoint(std::format("prop_{} partitioning", prop_id));
                 }
             }
 
@@ -714,7 +718,7 @@ namespace HerosInsight::Filtering
         }
         void RunFilters(std::span<Filter> filters, std::vector<index_t> &items)
         {
-            Stopwatch stopwatch("RunFilters");
+            ProfilingScope profiler;
 
             size_t n_items = items.size();
             size_t n_props = I::PropCount();
@@ -723,45 +727,49 @@ namespace HerosInsight::Filtering
             MultiBuffer::Spec<FilterUnit> units_spec{n_items};
             MultiBuffer::HeapAllocated allocation{units_spec};
             auto units = units_spec.Span();
-            stopwatch.Checkpoint("alloc");
 
-            // Initialize the units
-            for (size_t i = 0; i < n_items; ++i)
-            {
-                auto &package = units[i];
-                package.item = items[i];
-                package.index = i;
+            { // Initialize the units
+                ProfilingScope profiler{"init"};
+                for (size_t i = 0; i < n_items; ++i)
+                {
+                    auto &package = units[i];
+                    package.item = items[i];
+                    package.index = i;
+                }
             }
-            stopwatch.Checkpoint("init");
 
             for (auto &filter : filters)
             {
                 FilterUnits(filter, units);
             }
-            stopwatch.Checkpoint("FilterUnits");
 
-            std::sort(
-                units.begin(), units.end(),
-                [](auto &a, auto &b)
-                {
-                    return a.index < b.index;
-                }
-            );
-            stopwatch.Checkpoint("restore order");
+            { // Restore the order of the items
+                ProfilingScope profiler{"restore order"};
 
-            // Populate the output with the matched items
-            auto dst = items.begin();
-            for (auto &package : units)
-            {
-                *dst++ = package.item;
+                std::sort(
+                    units.begin(), units.end(),
+                    [](auto &a, auto &b)
+                    {
+                        return a.index < b.index;
+                    }
+                );
             }
-            items.resize(units.size());
-            stopwatch.Checkpoint("populate output");
+
+            { // Populate the output with the matched items
+                ProfilingScope profiler{"populate output"};
+
+                auto dst = items.begin();
+                for (auto &package : units)
+                {
+                    *dst++ = package.item;
+                }
+                items.resize(units.size());
+            }
         }
 
         void SortItems(Query &query, std::span<typename I::index_type> items)
         {
-            Stopwatch stopwatch("SortItems");
+            ProfilingScope profiler;
 
             struct MatchedSortObject
             {
