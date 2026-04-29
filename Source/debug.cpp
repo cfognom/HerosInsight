@@ -590,12 +590,14 @@ namespace HerosInsight::Debug
         DebugDisplay::PushToDisplay(L"Char context player_flags: {}", cc->player_flags);
         DebugDisplay::PushToDisplay(L"Char context player_number: {}", cc->player_number);
 
-        for (uint32_t i = 0; i < std::size(cc->h0248); i++)
-            DebugDisplay::PushToDisplay(L"Char context h0248[{}]: {}", i, cc->h0248[i]);
-        for (uint32_t i = 0; i < std::size(cc->h02A8); i++)
-            DebugDisplay::PushToDisplay(L"Char context h02A8[{}]: {}", i, cc->h02A8[i]);
-        for (uint32_t i = 0; i < std::size(cc->h034C); i++)
-            DebugDisplay::PushToDisplay(L"Char context h034C[{}]: {}", i, cc->h034C[i]);
+        for (uint32_t i = 0; i < std::size(cc->h0240); i++)
+            DebugDisplay::PushToDisplay(L"Char context h0240[{}]: {}", i, cc->h0240[i]);
+        for (uint32_t i = 0; i < std::size(cc->h0264); i++)
+            DebugDisplay::PushToDisplay(L"Char context h0264[{}]: {}", i, cc->h0264[i]);
+        for (uint32_t i = 0; i < std::size(cc->h02B0); i++)
+            DebugDisplay::PushToDisplay(L"Char context h02B0[{}]: {}", i, cc->h02B0[i]);
+        for (uint32_t i = 0; i < std::size(cc->h0354); i++)
+            DebugDisplay::PushToDisplay(L"Char context h0354[{}]: {}", i, cc->h0354[i]);
     }
 
     void DebugWorldContext()
