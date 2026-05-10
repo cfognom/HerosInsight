@@ -728,7 +728,7 @@ namespace HerosInsight::Filtering
                 // Only keep the items that passed this filter. For exclusion filters we dont need to do anything.
                 if constexpr (!is_exclusion)
                 {
-                    packages = std::span{packages.begin(), partitioner.unmatched.begin()};
+                    packages = std::span{packages.data(), partitioner.unmatched.data()};
                 }
                 // 'packages' now contain only the items that passed this filter
 
