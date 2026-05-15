@@ -733,7 +733,7 @@ namespace HerosInsight::Debug
 
             uintptr_t start_address = reinterpret_cast<uintptr_t>(living_agent);
             uintptr_t end_address = start_address + sizeof(GW::AgentLiving);
-            uintptr_t address = GW::Scanner::FindInRange(pattern, nullptr, 0, start_address, end_address);
+            uintptr_t address = GW::Scanner::FindInRange(pattern, {}, 0, start_address, end_address);
 
             if (address == 0)
                 continue;
@@ -773,7 +773,7 @@ namespace HerosInsight::Debug
 
             uintptr_t start_address = reinterpret_cast<uintptr_t>(party_info);
             uintptr_t end_address = start_address + sizeof(GW::PartyInfo);
-            uintptr_t address = GW::Scanner::FindInRange(pattern, nullptr, 0, start_address, end_address);
+            uintptr_t address = GW::Scanner::FindInRange(pattern, {}, 0, start_address, end_address);
 
             if (address == 0)
                 continue;
