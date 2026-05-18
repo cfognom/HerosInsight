@@ -213,7 +213,7 @@ namespace HerosInsight
 #else
     struct ProfilingScope
     {
-        FORCE_INLINE ProfilingScope(std::string_view, float = 0.f) noexcept {}
+        FORCE_INLINE ProfilingScope(std::string_view = {}, float = 0.f) noexcept {}
     };
 #endif
 }
