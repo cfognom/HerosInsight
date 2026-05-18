@@ -197,8 +197,38 @@ namespace HerosInsight
                         continue;
 
                     buffer.AppendFormat(
-                        "\n{:.0f}% - {}:{}",
+                        "\n{:.0f}%, n={}",
                         usage * 100.f,
+                        value.count
+                    );
+
+                    float avg_usage = value.AvgCycles() / tot_meas.cycles;
+                    if (avg_usage >= report_threshold)
+                    {
+                        buffer.AppendFormat(
+                            ", avg={:.0f}%",
+                            avg_usage * 100.f
+                        );
+                    }
+                    float min_usage = value.cycles.min / tot_meas.cycles;
+                    if (min_usage >= report_threshold)
+                    {
+                        buffer.AppendFormat(
+                            ", min={:.0f}%",
+                            min_usage * 100.f
+                        );
+                    }
+                    float max_usage = value.cycles.max / tot_meas.cycles;
+                    if (max_usage >= report_threshold)
+                    {
+                        buffer.AppendFormat(
+                            ", max={:.0f}%",
+                            max_usage * 100.f
+                        );
+                    }
+
+                    buffer.AppendFormat(
+                        " - {}:{}",
                         key.FindFuncName(),
                         key.context
                     );
