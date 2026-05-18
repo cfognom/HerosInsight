@@ -1,4 +1,7 @@
 # CHANGELOG
+## 0.8.3
+- Fixed exclusion filters being broken.
+
 ## 0.8.2
 - Fixed compatibility with latest GW update.
 
