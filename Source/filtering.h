@@ -713,7 +713,7 @@ namespace HerosInsight::Filtering
             if (filter.is_exclusion)
                 units = partitioner.unmatched;
             else
-                units = std::span{units.begin(), partitioner.unmatched.begin()};
+                units = std::span{units.data(), partitioner.unmatched.data()};
             // 'units' now contain only the items that passed this filter
         }
         void RunFilters(std::span<Filter> filters, std::vector<index_t> &items)

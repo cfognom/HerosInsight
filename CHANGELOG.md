@@ -1,4 +1,10 @@
 # CHANGELOG
+## 0.8.2
+- Fixed compatibility with latest GW update.
+
+## 0.8.1
+- Fixed compatibility with GW 21st anniversary update.
+
 ## 0.8.0
 - Fixed compatibility with latest GW update. (Sorry for the delay!)
 - Updated ImGui to the latest version: 1.92.6.
