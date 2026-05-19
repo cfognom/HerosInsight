@@ -42,32 +42,52 @@ namespace HerosInsight
 
         struct Stat
         {
+            struct MedianBins // Used to calculate approximate median
+            {
+                uint32_t counts[256]; // indexed by float exponent (8 bits)
+            };
+
             float total = 0;
-            float max = 0;
+            float max = std::numeric_limits<float>::lowest();
             float min = std::numeric_limits<float>::max();
+            uint32_t count = 0;
+            MedianBins median_bins;
+
+            float Avg() const
+            {
+                GWCA_ASSERT(count > 0);
+                return total / count;
+            }
+            float CalcApproxMedian() const
+            {
+                GWCA_ASSERT(count > 0);
+                uint32_t target_index = count / 2;
+                for (uint32_t exp_index = 0; exp_index < std::size(median_bins.counts); ++exp_index)
+                {
+                    auto bin_count = median_bins.counts[exp_index];
+                    if (target_index < bin_count)
+                    {
+                        constexpr uint64_t max_mantissa = 0x007FFFFF;
+                        uint32_t mantissa = ((uint64_t)target_index * max_mantissa) / bin_count; // We assume uniform distribution within a bin, and do a linear interpolation.
+                        GWCA_ASSERT(mantissa <= max_mantissa);
+                        uint32_t float_bits = (exp_index << 23) | mantissa;
+                        return std::bit_cast<float>(float_bits);
+                    }
+                    target_index -= bin_count;
+                }
+                return 0; // Should never be hit
+            }
 
             void Assimilate(float value)
             {
+                GWCA_ASSERT(value >= 0);
                 total += value;
                 max = std::max(max, value);
                 min = std::min(min, value);
+                ++count;
+                auto exp_index = (std::bit_cast<uint32_t>(value) >> 23) & 0xFF;
+                ++median_bins.counts[exp_index];
             }
-        };
-
-        struct Measurements
-        {
-            Stat seconds{};
-            Stat cycles{};
-            uint32_t count = 0;
-
-            void Assimilate(Measurement &measurement)
-            {
-                seconds.Assimilate(measurement.seconds);
-                cycles.Assimilate(measurement.cycles);
-                count++;
-            }
-            float AvgSeconds() const { return seconds.total / count; }
-            float AvgCycles() const { return cycles.total / count; }
         };
 
         struct SrcLocHash
@@ -120,14 +140,14 @@ namespace HerosInsight
 
         struct ThreadData
         {
-            std::unordered_map<ProfilerKey, Measurements, ProfilerKey::Hasher> profilers_accum;
+            std::unordered_map<ProfilerKey, Stat, ProfilerKey::Hasher> profiler_cycles_accum;
             ProfilingScope *current_scope = nullptr;
         };
 
         inline static thread_local ThreadData thread_data;
 
         ProfilingScope *parent;
-        Measurements sub_measurements;
+        float child_cycles = 0; // How many cycles were spent in child scopes. Used to calculate "self" cycles.
         std::string_view context;
         float report_threshold;
         ProfilerKey key;
@@ -141,7 +161,6 @@ namespace HerosInsight
             const std::source_location &loc = std::source_location::current()
         )
             : parent(thread_data.current_scope),
-              sub_measurements(),
               context(context),
               report_threshold(report_threshold),
               key(loc, loc_hash, context),
@@ -150,25 +169,17 @@ namespace HerosInsight
             thread_data.current_scope = this;
         }
 
-        Measurement CalcSelfMeasurement(const Measurement &tot_meas)
-        {
-            auto self_meas = tot_meas;
-            self_meas.seconds -= sub_measurements.seconds.total;
-            self_meas.cycles -= sub_measurements.cycles.total;
-            return self_meas;
-        }
-
         ~ProfilingScope()
         {
             thread_data.current_scope = parent;
 
             Measurement tot_meas{this->active_meas};
-            Measurement self_meas = CalcSelfMeasurement(tot_meas);
+            float self_cycles = tot_meas.cycles - child_cycles;
 
             if (parent)
             {
-                parent->sub_measurements.Assimilate(tot_meas);
-                thread_data.profilers_accum[key].Assimilate(self_meas);
+                parent->child_cycles += tot_meas.cycles;
+                thread_data.profiler_cycles_accum[key].Assimilate(self_cycles);
             }
             else
             {
@@ -181,7 +192,7 @@ namespace HerosInsight
                     Utils::ToHumanReadable(tot_meas.cycles)
                 );
 
-                float self_usage = self_meas.cycles / tot_meas.cycles;
+                float self_usage = self_cycles / tot_meas.cycles;
                 if (self_usage >= report_threshold)
                 {
                     buffer.AppendFormat(
@@ -190,41 +201,54 @@ namespace HerosInsight
                     );
                 }
 
-                for (auto &[key, value] : thread_data.profilers_accum)
+                for (auto &[key, cycles] : thread_data.profiler_cycles_accum)
                 {
-                    float usage = value.cycles.total / tot_meas.cycles;
+                    GWCA_ASSERT(cycles.count > 0);
+
+                    float usage = cycles.total / tot_meas.cycles;
                     if (usage < report_threshold)
                         continue;
 
                     buffer.AppendFormat(
                         "\n{:.0f}%, n={}",
                         usage * 100.f,
-                        value.count
+                        cycles.count
                     );
 
-                    float avg_usage = value.AvgCycles() / tot_meas.cycles;
-                    if (avg_usage >= report_threshold)
+                    if (cycles.count > 1)
                     {
-                        buffer.AppendFormat(
-                            ", avg={:.0f}%",
-                            avg_usage * 100.f
-                        );
-                    }
-                    float min_usage = value.cycles.min / tot_meas.cycles;
-                    if (min_usage >= report_threshold)
-                    {
-                        buffer.AppendFormat(
-                            ", min={:.0f}%",
-                            min_usage * 100.f
-                        );
-                    }
-                    float max_usage = value.cycles.max / tot_meas.cycles;
-                    if (max_usage >= report_threshold)
-                    {
-                        buffer.AppendFormat(
-                            ", max={:.0f}%",
-                            max_usage * 100.f
-                        );
+                        float med_usage = cycles.CalcApproxMedian() / tot_meas.cycles;
+                        if (med_usage >= report_threshold)
+                        {
+                            buffer.AppendFormat(
+                                ", med={:.0f}%",
+                                med_usage * 100.f
+                            );
+                        }
+                        float avg_usage = cycles.Avg() / tot_meas.cycles;
+                        if (avg_usage >= report_threshold)
+                        {
+                            buffer.AppendFormat(
+                                ", avg={:.0f}%",
+                                avg_usage * 100.f
+                            );
+                        }
+                        float min_usage = cycles.min / tot_meas.cycles;
+                        if (min_usage >= report_threshold)
+                        {
+                            buffer.AppendFormat(
+                                ", min={:.0f}%",
+                                min_usage * 100.f
+                            );
+                        }
+                        float max_usage = cycles.max / tot_meas.cycles;
+                        if (max_usage >= report_threshold)
+                        {
+                            buffer.AppendFormat(
+                                ", max={:.0f}%",
+                                max_usage * 100.f
+                            );
+                        }
                     }
 
                     buffer.AppendFormat(
@@ -233,7 +257,7 @@ namespace HerosInsight
                         key.context
                     );
                 }
-                thread_data.profilers_accum.clear();
+                thread_data.profiler_cycles_accum.clear();
                 buffer.push_back('\0');
                 Utils::WriteToChat(buffer.data());
             }
