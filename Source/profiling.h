@@ -1,8 +1,10 @@
 #pragma once
 
 #include <source_location>
-#include <utils.h>
 #include <vector>
+
+#include <return_address.h>
+#include <utils.h>
 
 #include <GWCA/Managers/MemoryMgr.h>
 
@@ -90,25 +92,11 @@ namespace HerosInsight
             }
         };
 
-        struct SrcLocHash
-        {
-            size_t value;
-
-            constexpr size_t CalcHash(const std::source_location &loc)
-            {
-                return size_t(loc.file_name()) >> 4 ^
-                       size_t(loc.function_name()) >> 4 ^
-                       size_t(loc.line() * 1024 + loc.column());
-            }
-
-            constexpr SrcLocHash(const std::source_location &loc) : value(CalcHash(loc)) {}
-        };
-
-        struct ProfilerKey
+        struct ProfilerId
         {
             std::source_location loc;
-            SrcLocHash loc_hash;
-            std::string_view context;
+            size_t caller_id;
+            std::string_view name;
 
             std::string_view FindFuncName() const
             {
@@ -122,25 +110,21 @@ namespace HerosInsight
                 return std::string_view{p, end};
             }
 
-            bool operator==(const ProfilerKey &rhs) const
+            bool operator==(const ProfilerId &rhs) const
             {
-                return loc_hash.value == rhs.loc_hash.value &&
-                       context.data() == rhs.context.data() &&
-                       loc.line() == rhs.loc.line() &&
-                       loc.column() == rhs.loc.column() &&
-                       loc.file_name() == rhs.loc.file_name() &&
-                       loc.function_name() == rhs.loc.function_name();
+                // We assume that if caller_id's are equal, so must std::source_location be. True?
+                return caller_id == rhs.caller_id;
             }
 
             struct Hasher
             {
-                size_t operator()(const ProfilerKey &key) const { return key.loc_hash.value ^ size_t(key.context.data()); }
+                size_t operator()(const ProfilerId &id) const { return id.caller_id; }
             };
         };
 
         struct ThreadData
         {
-            std::unordered_map<ProfilerKey, Stat, ProfilerKey::Hasher> profiler_cycles_accum;
+            std::unordered_map<ProfilerId, Stat, ProfilerId::Hasher> profiler_cycles;
             ProfilingScope *current_scope = nullptr;
         };
 
@@ -148,22 +132,19 @@ namespace HerosInsight
 
         ProfilingScope *parent;
         float child_cycles = 0; // How many cycles were spent in child scopes. Used to calculate "self" cycles.
-        std::string_view context;
         float report_threshold;
-        ProfilerKey key;
+        ProfilerId id;
         ActiveMeasurement active_meas;
 
     public:
-        ProfilingScope(
-            std::string_view context = {},
-            float report_threshold = 0.1f,
-            SrcLocHash loc_hash = SrcLocHash{std::source_location::current()},
+        NO_INLINE ProfilingScope(
+            std::string_view name = {},
+            float report_threshold = 0.1f, // How large a measurement must be relative to the outer scope in order to be reported.
             const std::source_location &loc = std::source_location::current()
         )
             : parent(thread_data.current_scope),
-              context(context),
               report_threshold(report_threshold),
-              key(loc, loc_hash, context),
+              id(loc, (size_t)RETURN_ADDRESS(), name), // RETURN_ADDRESS + NO_INLINE is used as a makeshift id for call-site.
               active_meas()
         {
             thread_data.current_scope = this;
@@ -179,15 +160,15 @@ namespace HerosInsight
             if (parent)
             {
                 parent->child_cycles += tot_meas.cycles;
-                thread_data.profiler_cycles_accum[key].Assimilate(self_cycles);
+                thread_data.profiler_cycles[id].Assimilate(self_cycles);
             }
             else
             {
                 FixedVector<char, 1024> buffer;
                 buffer.AppendFormat(
                     "{}:{} took {}s, {}cyc",
-                    key.FindFuncName(),
-                    context,
+                    id.FindFuncName(),
+                    id.name,
                     Utils::ToHumanReadable(tot_meas.seconds),
                     Utils::ToHumanReadable(tot_meas.cycles)
                 );
@@ -201,7 +182,7 @@ namespace HerosInsight
                     );
                 }
 
-                for (auto &[key, cycles] : thread_data.profiler_cycles_accum)
+                for (auto &[id, cycles] : thread_data.profiler_cycles)
                 {
                     GWCA_ASSERT(cycles.count > 0);
 
@@ -253,11 +234,12 @@ namespace HerosInsight
 
                     buffer.AppendFormat(
                         " - {}:{}",
-                        key.FindFuncName(),
-                        key.context
+                        id.FindFuncName(),
+                        id.name
                     );
                 }
-                thread_data.profiler_cycles_accum.clear();
+                thread_data.profiler_cycles.clear();
+
                 buffer.push_back('\0');
                 Utils::WriteToChat(buffer.data());
             }
