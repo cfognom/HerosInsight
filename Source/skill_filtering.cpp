@@ -111,7 +111,7 @@ namespace HerosInsight::SkillFiltering
         std::array<Filtering::IncrementalProp, PROP_COUNT> static_props;
         std::vector<Propset> meta_propsets;
         LoweredStringVector meta_prop_names;
-        std::vector<Filtering::Device::MetaProp> meta_props;
+        std::vector<Filtering::MetaProp> meta_props;
 
         template <auto Func, auto Unit, auto Icon>
         static Text::StringTemplateAtom NumberAndIcon(Text::StringTemplateAtom::Builder &b, size_t skill_id, void *)
