@@ -292,42 +292,32 @@ namespace HerosInsight::Filtering
         std::string command_feedback;
     };
 
-    template <typename I>
-    concept DeviceImpl =
-        requires {
-            typename I::index_type;
-            // call static constexpr functions on the type itself
-            { I::PropCount() } -> std::convertible_to<size_t>;
-        } &&
-        requires(I &d, size_t metaId, size_t propId) {
-            // meta
-            { d.MetaCount() } -> std::convertible_to<size_t>;
-            { d.GetMetaName(metaId) } -> std::same_as<LoweredText>;
-            { d.GetMetaPropset(metaId) } -> std::same_as<BitView>;
-
-            // props
-            { d.GetProperty(propId) } -> std::same_as<IncrementalProp *>;
-        };
-
-    template <DeviceImpl I>
     struct Device
     {
-        using index_t = typename I::index_type;
+        struct MetaProp
+        {
+            LoweredText name;
+            BitView propset; // Which props this meta-prop targets
+        };
 
-        I &impl;
+        using index_t = uint16_t;
+
+        std::span<MetaProp> metas;
+        std::span<IncrementalProp *> props;
         SpanVector<RelevantMeta> relevant_metas_per_prop; // For each prop this is sorted from most specific to least
 
-        Device(I &impl) : impl(impl)
+        Device(std::span<MetaProp> metas, std::span<IncrementalProp *> props)
+            : metas(metas), props(props)
         {
-            auto n_meta = impl.MetaCount();
-            auto n_props = I::PropCount();
+            auto n_meta = metas.size();
+            auto n_props = props.size();
             auto deduper = relevant_metas_per_prop.CreateDeduper(n_props);
             relevant_metas_per_prop.Reserve(n_props, n_props * 2);
             for (size_t prop_id = 0; prop_id <= n_props; ++prop_id)
             {
                 for (size_t meta_id = 0; meta_id < n_meta; ++meta_id)
                 {
-                    auto propset = impl.GetMetaPropset(meta_id);
+                    auto propset = metas[meta_id].propset;
                     if (propset[prop_id])
                     {
                         relevant_metas_per_prop.Elements().emplace_back(meta_id, propset.PopCount());
@@ -466,7 +456,7 @@ namespace HerosInsight::Filtering
         {
             query.clear();
 
-            BitArray<I::PropCount() + 1> sorting_props;
+            BitVector sorting_props{props.size(), false};
 
             auto ParseTrailingCommands = [&](std::string_view &stmt)
             {
@@ -510,10 +500,10 @@ namespace HerosInsight::Filtering
                                         query.sort_atoms.emplace_back(0, arg.is_negated, true);
                                         continue;
                                     }
-                                    auto propset = impl.GetMetaPropset(arg.sort_target_id);
+                                    auto propset = metas[arg.sort_target_id].propset;
                                     for (auto prop_id : propset.IterSetBits())
                                     {
-                                        if (prop_id == I::PropCount())
+                                        if (prop_id == props.size())
                                             continue;
                                         if (sorting_props[prop_id])
                                             continue;
@@ -608,10 +598,10 @@ namespace HerosInsight::Filtering
         {
             ProfilingScope profiler;
 
-            size_t n_props = I::PropCount();
-            size_t n_meta = impl.MetaCount();
+            size_t n_props = props.size();
+            size_t n_meta = metas.size();
 
-            BitView propset = impl.GetMetaPropset(filter.meta_prop_id);
+            BitView propset = metas[filter.meta_prop_id].propset;
 
             struct Partitioner
             {
@@ -634,7 +624,7 @@ namespace HerosInsight::Filtering
                     // Iterate the meta properties and check for name matches
                     for (size_t i_meta = 0; i_meta < n_meta; ++i_meta)
                     {
-                        LoweredText str = impl.GetMetaName(i_meta);
+                        LoweredText str = metas[i_meta].name;
                         for (auto &matcher : filter.matchers)
                         {
                             if (!matcher.Match(str, 0))
@@ -642,13 +632,13 @@ namespace HerosInsight::Filtering
 
                             // The filter matched against this meta name, now we need to find out which items "have it"
 
-                            BitView meta_propset = impl.GetMetaPropset(i_meta);
+                            BitView meta_propset = metas[i_meta].propset;
                             for (auto prop_id : meta_propset.IterSetBits())
                             {
                                 bool is_meta = prop_id == n_props;
                                 if (is_meta) // Meta properties cannot be "had"
                                     continue;
-                                auto &prop = *impl.GetProperty(prop_id);
+                                auto &prop = *props[prop_id];
 
                                 // Iterate the items and check which ones "has values" in this property
                                 for (auto &package : partitioner.unmatched)
@@ -666,7 +656,7 @@ namespace HerosInsight::Filtering
                 }
                 else // Non-meta
                 {
-                    auto &prop = *impl.GetProperty(prop_id);
+                    auto &prop = *props[prop_id];
 
                     { // Tag the items with their string ids
                         ProfilingScope profiler{"tagging"};
@@ -721,8 +711,8 @@ namespace HerosInsight::Filtering
             ProfilingScope profiler;
 
             size_t n_items = items.size();
-            size_t n_props = I::PropCount();
-            size_t n_meta = impl.MetaCount();
+            size_t n_props = props.size();
+            size_t n_meta = metas.size();
 
             MultiBuffer::Spec<FilterUnit> units_spec{n_items};
             MultiBuffer::HeapAllocated allocation{units_spec};
@@ -767,13 +757,13 @@ namespace HerosInsight::Filtering
             }
         }
 
-        void SortItems(Query &query, std::span<typename I::index_type> items)
+        void SortItems(Query &query, std::span<index_t> items)
         {
             ProfilingScope profiler;
 
             struct MatchedSortObject
             {
-                I &impl;
+                Device &device;
                 SlotSpanVector<char> &cache;
                 Filter &filter;
                 bool negated;
@@ -788,13 +778,13 @@ namespace HerosInsight::Filtering
                     std::vector<uint16_t> matches;
                     candidate.reserve(128);
                     matches.reserve(64);
-                    auto propset = impl.GetMetaPropset(filter.meta_prop_id);
+                    auto propset = device.metas[filter.meta_prop_id].propset;
                     for (auto prop_id : propset.IterSetBits())
                     {
-                        if (prop_id == I::PropCount())
+                        if (prop_id == device.props.size())
                             continue;
 
-                        auto &prop = *impl.GetProperty(prop_id);
+                        auto &prop = *device.props[prop_id];
                         auto str = prop.GetSearchableStr(prop.GetStrId(id));
                         for (auto &matcher : filter.matchers)
                         {
@@ -850,7 +840,7 @@ namespace HerosInsight::Filtering
                             {
                                 auto &c = f < cache.size() ? cache[f] : cache.emplace_back();
                                 MatchedSortObject obj{
-                                    .impl = impl,
+                                    .device = *this,
                                     .cache = c,
                                     .filter = query.inclusion_filters[f],
                                     .negated = atom.is_negated,
@@ -867,7 +857,7 @@ namespace HerosInsight::Filtering
                         else
                         {
                             auto prop_id = atom.prop_id;
-                            auto &prop = *impl.GetProperty(prop_id);
+                            auto &prop = *props[prop_id];
                             auto str_a = prop.GetSearchableStr(prop.GetStrId(item_a));
                             auto str_b = prop.GetSearchableStr(prop.GetStrId(item_b));
                             cmp = str_a.text <=> str_b.text;
@@ -879,7 +869,7 @@ namespace HerosInsight::Filtering
                 }
             );
         }
-        void RunQuery(Query &query, std::vector<typename I::index_type> &items)
+        void RunQuery(Query &query, std::vector<index_t> &items)
         {
             if (!query.filters.empty())
             {
@@ -948,7 +938,7 @@ namespace HerosInsight::Filtering
                     auto &filter = query.GetFilterInDeclOrder(f);
 
                     FixedVector<char, 128> meta_name;
-                    impl.GetMetaName(filter.meta_prop_id).GetRenderableString(meta_name);
+                    metas[filter.meta_prop_id].name.GetRenderableString(meta_name);
                     auto meta_name_str = (std::string_view)meta_name;
                     auto cond = filter.is_exclusion ? ControlColor "not " CloseColor : "";
                     auto musty = meta_name_str.empty() ? "Must" : " must";
@@ -1089,9 +1079,9 @@ namespace HerosInsight::Filtering
             }
         }
 
-        ResultItem CalcItemResult(Query &q, size_t prop_id, I::index_type item_id)
+        ResultItem CalcItemResult(Query &q, size_t prop_id, index_t item_id)
         {
-            auto &prop = *impl.GetProperty(prop_id);
+            auto &prop = *props[prop_id];
             auto str_id = prop.GetStrId(item_id);
             ResultItem result;
             result.searchable_text = prop.GetSearchableStr(str_id);
@@ -1116,7 +1106,7 @@ namespace HerosInsight::Filtering
         ResultItem CalcPropResult(Query &q, size_t prop_id)
         {
             ResultItem result;
-            auto meta_prop_id = I::PropCount();
+            auto meta_prop_id = props.size();
             auto relevant_metas = relevant_metas_per_prop.Get(prop_id);
             if (!relevant_metas.empty())
             {
@@ -1126,7 +1116,7 @@ namespace HerosInsight::Filtering
                     auto &relevant_meta = relevant_metas[i];
 
                     size_t offset = result.presentable_text.size();
-                    LoweredText lowered = impl.GetMetaName(relevant_meta.meta_id);
+                    LoweredText lowered = metas[relevant_meta.meta_id].name;
                     if (lowered.text.empty()) // We allow empty meta names; just skip
                         continue;
                     auto size = result._hl_storage.size();
@@ -1160,7 +1150,7 @@ namespace HerosInsight::Filtering
                 auto hl_size_before = hl.size();
                 for (auto &filter : q.inclusion_filters)
                 {
-                    auto propset = impl.GetMetaPropset(filter.meta_prop_id);
+                    auto propset = metas[filter.meta_prop_id].propset;
                     if (propset[prop_id])
                     {
                         for (auto &matcher : filter.matchers)
@@ -1183,9 +1173,9 @@ namespace HerosInsight::Filtering
 
         inline LoweredText GetSortTargetName(size_t sort_target_id)
         {
-            auto n_meta = impl.MetaCount();
+            auto n_meta = metas.size();
             if (sort_target_id < n_meta)
-                return impl.GetMetaName(sort_target_id);
+                return metas[sort_target_id].name;
 
             assert(sort_target_id == n_meta);
             return (LoweredText)matched_target;
@@ -1199,7 +1189,7 @@ namespace HerosInsight::Filtering
                 {
                     return this->GetSortTargetName(id);
                 },
-                impl.MetaCount() + 1
+                metas.size() + 1
             );
         }
 
@@ -1209,9 +1199,9 @@ namespace HerosInsight::Filtering
                 subject,
                 [this](size_t metaId)
                 {
-                    return this->impl.GetMetaName(metaId);
+                    return this->metas[metaId].name;
                 },
-                impl.MetaCount()
+                metas.size()
             );
         }
     };

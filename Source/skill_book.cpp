@@ -543,7 +543,7 @@ namespace HerosInsight::SkillBook
         Scope scope = Scope::Default;
         int attr_rank_slider = 12;
 
-        SkillFiltering::Adapter::Settings adapter_settings{
+        SkillFiltering::Setup::Config filtering_config{
             .use_exact_adrenaline = false,
             .attr_src = {},
         };
@@ -639,8 +639,8 @@ namespace HerosInsight::SkillBook
         };
         std::optional<WindowDims> init_dims = std::nullopt;
         BookSettings settings;
-        SkillFiltering::Adapter adapter{settings.adapter_settings};
-        SkillFiltering::Device filter_device{adapter};
+        SkillFiltering::Setup filtering_setup{settings.filtering_config};
+        Filtering::Device filtering_device = filtering_setup.CreateFilteringDevice();
         Filtering::Query query;
         std::vector<uint16_t> filtered_skills; // skill ids
         ImGuiWindow *imgui_window = nullptr;
@@ -824,7 +824,7 @@ namespace HerosInsight::SkillBook
         void DrawAttributeModeSelection()
         {
             const char *options[] = {"(0...15)", "Character's", "Manual"};
-            auto &attr_src = settings.adapter_settings.attr_src;
+            auto &attr_src = settings.filtering_config.attr_src;
             if (ImGuiCustom::RadioArray("Attributes:", (int *)&attr_src.type, options, IM_ARRAYSIZE(options)))
             {
                 dirty_flags |= DirtyFlags::Props;
@@ -933,14 +933,14 @@ namespace HerosInsight::SkillBook
         void UpdateFeedback(int feedback_style)
         {
             bool verbose = feedback_style == (int)Settings::SkillBook::FeedbackSetting::Detailed;
-            filter_device.GetFeedback(query, feedback, verbose);
+            filtering_device.GetFeedback(query, feedback, verbose);
         }
 
         void UpdateQuery()
         {
             if (Utils::HasAnyFlag(dirty_flags, DirtyFlags::Props))
             {
-                adapter.RefreshDynamicProps();
+                filtering_setup.RefreshDynamicProps();
                 dirty_flags |= DirtyFlags::Query;
             }
             if (Utils::HasAnyFlag(dirty_flags, DirtyFlags::SkillList))
@@ -953,10 +953,10 @@ namespace HerosInsight::SkillBook
             {
                 auto input_text_view = std::string_view(input_text, strlen(input_text));
                 scroll_tracking.UpdateScrollTracking(input_text_view, clipper);
-                filter_device.ParseQuery(input_text_view, query);
+                filtering_device.ParseQuery(input_text_view, query);
 
                 InitFilterList();
-                this->filter_device.RunQuery(this->query, this->filtered_skills);
+                this->filtering_device.RunQuery(this->query, this->filtered_skills);
 
                 UpdateFeedback(feedback_checker.last_value);
             }
@@ -966,7 +966,7 @@ namespace HerosInsight::SkillBook
         template <typename DrawContent>
         void DrawProperty(DrawContent &&draw_content, size_t prop_id, bool is_hidden_header = false)
         {
-            auto meta_names = filter_device.CalcPropResult(query, prop_id);
+            auto meta_names = filtering_device.CalcPropResult(query, prop_id);
             std::string_view header{};
             if (!is_hidden_header)
             {
@@ -995,8 +995,8 @@ namespace HerosInsight::SkillBook
             bool is_header_hovered = ImGui::IsItemHovered();
             if (is_header_hovered)
             {
-                auto meta_prop_id = adapter.PropCount();
-                auto meta_meta_names = filter_device.CalcPropResult(query, meta_prop_id);
+                auto meta_prop_id = filtering_setup.props.size();
+                auto meta_meta_names = filtering_device.CalcPropResult(query, meta_prop_id);
                 DrawTooltip(meta_meta_names.presentable_text, meta_meta_names.presentable_hl);
             }
             ImGui::SameLine(0, 0);
@@ -1016,7 +1016,7 @@ namespace HerosInsight::SkillBook
 
         void DrawProperty(size_t prop_id, size_t skill_id, float wrapping_min, float wrapping_max, bool is_hidden_header = false)
         {
-            auto content = filter_device.CalcItemResult(query, prop_id, skill_id);
+            auto content = filtering_device.CalcItemResult(query, prop_id, skill_id);
             if (content.presentable_text.empty())
                 return;
 
@@ -1075,7 +1075,7 @@ namespace HerosInsight::SkillBook
 
             for (const auto &l : layout)
             {
-                auto r = filter_device.CalcItemResult(query, (size_t)l.id, (size_t)skill_id);
+                auto r = filtering_device.CalcItemResult(query, (size_t)l.id, (size_t)skill_id);
                 if (r.presentable_text.empty())
                     continue;
                 FixedVector<RichText::TextSegment, 16> segments;
@@ -1145,7 +1145,7 @@ namespace HerosInsight::SkillBook
                     auto name_color = custom_sd.tags.Archived ? Constants::GWColors::skill_dull_gray : Constants::GWColors::header_beige;
                     ImGui::PushStyleColor(ImGuiCol_Text, name_color);
 
-                    auto r = filter_device.CalcItemResult(query, (size_t)SkillProp::Name, (size_t)skill_id);
+                    auto r = filtering_device.CalcItemResult(query, (size_t)SkillProp::Name, (size_t)skill_id);
                     FixedVector<RichText::TextSegment, 32> segments;
                     text_drawer.MakeTextSegments(r.presentable_text, segments, r.presentable_hl);
                     DrawProperty(
@@ -1318,15 +1318,15 @@ namespace HerosInsight::SkillBook
         void DrawDescription(GW::Constants::SkillID skill_id, float work_width)
         {
             auto &cskill = CustomSkillDataModule::GetSkills()[(size_t)skill_id];
-            auto attr_rank = settings.adapter_settings.attr_src.GetAttrLvl(cskill.attribute);
+            auto attr_rank = settings.filtering_config.attr_src.GetAttrLvl(cskill.attribute);
             auto tt_provider = SkillTooltipProvider(skill_id, attr_rank);
             text_drawer.tooltip_provider = &tt_provider;
 
             auto main_prop = settings.prefer_concise_descriptions ? SkillProp::Concise : SkillProp::Description;
             auto alt_prop = settings.prefer_concise_descriptions ? SkillProp::Description : SkillProp::Concise;
 
-            auto main_r = filter_device.CalcItemResult(query, (size_t)main_prop, (size_t)skill_id);
-            auto alt_r = filter_device.CalcItemResult(query, (size_t)alt_prop, (size_t)skill_id);
+            auto main_r = filtering_device.CalcItemResult(query, (size_t)main_prop, (size_t)skill_id);
+            auto alt_r = filtering_device.CalcItemResult(query, (size_t)alt_prop, (size_t)skill_id);
 
             DrawProperty(
                 [&]
@@ -1394,7 +1394,7 @@ namespace HerosInsight::SkillBook
             ImGui::PopStyleColor();
 
             { // Draw skill id
-                auto r = filter_device.CalcItemResult(query, (size_t)SkillProp::Id, (size_t)skill_id);
+                auto r = filtering_device.CalcItemResult(query, (size_t)SkillProp::Id, (size_t)skill_id);
                 const auto id_str_size = ImGui::CalcTextSize(r.presentable_text.data(), r.presentable_text.data() + r.presentable_text.size());
                 ImGui::SetCursorPosX(work_width - id_str_size.x - 4);
                 ImGuiCustom::TextColor text_color_guard(MakeColor::U32::rgb(77, 77, 77));
@@ -1528,7 +1528,7 @@ namespace HerosInsight::SkillBook
                             {
                                 if (ctrl_down)
                                 {
-                                    auto r = filter_device.CalcItemResult(query, (size_t)SkillProp::Name, (size_t)skill_id);
+                                    auto r = filtering_device.CalcItemResult(query, (size_t)SkillProp::Name, (size_t)skill_id);
                                     Utils::OpenWikiPage(r.presentable_text);
                                 }
                                 else
@@ -1758,7 +1758,7 @@ namespace HerosInsight::SkillBook
         {
             for (auto &book : books)
             {
-                if (book->settings.adapter_settings.attr_src.type == AttributeSource::Type::FromAgent)
+                if (book->settings.filtering_config.attr_src.type == AttributeSource::Type::FromAgent)
                 {
                     // auto attr = AttributeOrTitle((GW::Constants::AttributeByte)p->attribute);
                     // attributes[attr.value] = p->value;
@@ -1772,7 +1772,7 @@ namespace HerosInsight::SkillBook
     {
         for (auto &book : books)
         {
-            if (book->settings.adapter_settings.attr_src.type == AttributeSource::Type::FromAgent)
+            if (book->settings.filtering_config.attr_src.type == AttributeSource::Type::FromAgent)
             {
                 // auto attr = AttributeOrTitle((GW::Constants::TitleID)packet->title_id);
                 // attributes[attr.value] = packet->new_value;
@@ -1790,7 +1790,7 @@ namespace HerosInsight::SkillBook
         focused_agent_id = agent_id;
         for (auto &book : books)
         {
-            book->settings.adapter_settings.FocusAgent(agent_id);
+            book->settings.filtering_config.FocusAgent(agent_id);
             book->dirty_flags |= BookState::DirtyFlags::Props;
         }
     }

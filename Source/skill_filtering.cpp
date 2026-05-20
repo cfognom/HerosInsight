@@ -111,6 +111,7 @@ namespace HerosInsight::SkillFiltering
         std::array<Filtering::IncrementalProp, PROP_COUNT> static_props;
         std::vector<Propset> meta_propsets;
         LoweredTextVector meta_prop_names;
+        std::vector<Filtering::Device::MetaProp> meta_props;
 
         template <auto Func, auto Unit, auto Icon>
         static Text::StringTemplateAtom NumberAndIcon(Text::StringTemplateAtom::Builder &b, size_t skill_id, void *)
@@ -279,6 +280,15 @@ namespace HerosInsight::SkillFiltering
 
             meta_prop_names.LowercaseFold();
             meta_prop_names.arena.StoreCapacityHint(capacity_hint_key);
+
+            assert(meta_prop_names.arena.SpanCount() == meta_propsets.size());
+            size_t n_meta = meta_propsets.size();
+
+            meta_props.reserve(n_meta);
+            for (size_t i = 0; i < n_meta; ++i)
+            {
+                meta_props.push_back({meta_prop_names[i], meta_propsets[i]});
+            }
         }
 
         bool is_initialized = false;
@@ -296,25 +306,25 @@ namespace HerosInsight::SkillFiltering
     template <bool IsConcise>
     Text::StringTemplateAtom MakeDescription(Text::StringTemplateAtom::Builder &b, size_t skill_id, void *data)
     {
-        auto &settings = *(Adapter::Settings *)data;
+        auto &config = *(Setup::Config *)data;
         auto &cskill = CustomSkillDataModule::GetSkills()[skill_id];
         auto &text_provider = Text::GetTextProvider(GW::Constants::Language::English);
-        auto attr_rank = settings.attr_src.GetAttrLvl(cskill.attribute);
+        auto attr_rank = config.attr_src.GetAttrLvl(cskill.attribute);
         return text_provider.MakeSkillDescription(b, (GW::Constants::SkillID)skill_id, IsConcise, attr_rank);
     }
 
-    Adapter::Adapter(Adapter::Settings &settings)
+    Setup::Setup(Setup::Config &config)
     {
         text_storage.TryInitialize();
 
         dynamic_props.reserve(8);
-        dynamic_props[SkillProp::Description].SetupIncremental(&settings, MakeDescription<false>);
-        dynamic_props[SkillProp::Concise].SetupIncremental(&settings, MakeDescription<true>);
+        dynamic_props[SkillProp::Description].SetupIncremental(&config, MakeDescription<false>);
+        dynamic_props[SkillProp::Concise].SetupIncremental(&config, MakeDescription<true>);
         dynamic_props[SkillProp::Adrenaline].SetupIncremental(
-            &settings,
+            &config,
             +[](Text::StringTemplateAtom::Builder &b, size_t skill_id, void *data) -> Text::StringTemplateAtom
             {
-                auto &settings = *(Adapter::Settings *)data;
+                auto &config = *(Setup::Config *)data;
                 auto &skill = GW::SkillbarMgr::GetSkills()[skill_id];
                 auto adrenaline = skill.adrenaline;
                 if (adrenaline == 0)
@@ -323,7 +333,7 @@ namespace HerosInsight::SkillFiltering
                 auto adrenaline_strikes = adrenaline / 25;
                 auto adrenaline_units = adrenaline % 25;
 
-                if (!settings.use_exact_adrenaline)
+                if (!config.use_exact_adrenaline)
                 {
                     if (adrenaline_units > 0)
                     {
@@ -339,10 +349,10 @@ namespace HerosInsight::SkillFiltering
             }
         );
         dynamic_props[SkillProp::Tag].SetupIncremental(
-            &settings,
+            &config,
             +[](Text::StringTemplateAtom::Builder &b, size_t skill_id, void *data) -> Text::StringTemplateAtom
             {
-                auto &settings = *(Adapter::Settings *)data;
+                auto &config = *(Setup::Config *)data;
                 auto skills = GW::SkillbarMgr::GetSkills();
                 auto cskills = CustomSkillDataModule::GetSkills();
                 auto &skill = skills[skill_id];
@@ -353,10 +363,10 @@ namespace HerosInsight::SkillFiltering
 
                 auto &tags = cskill.tags;
                 bool is_unlocked = GW::SkillbarMgr::GetIsSkillUnlocked(skill_id_to_check);
-                bool is_learned = Utils::IsSkillLearned(pve_skill, settings.focused_agent_id);
-                bool is_equipable = Utils::IsSkillEquipable(skill, settings.focused_agent_id);
+                bool is_learned = Utils::IsSkillLearned(pve_skill, config.focused_agent_id);
+                bool is_equipable = Utils::IsSkillEquipable(skill, config.focused_agent_id);
                 bool is_locked = tags.Unlockable && !is_unlocked;
-                bool is_learnable = Utils::IsSkillLearnable(pve_cskill, settings.focused_agent_id);
+                bool is_learnable = Utils::IsSkillLearnable(pve_cskill, config.focused_agent_id);
                 bool is_unlearned = is_learnable && !is_learned;
 
                 FixedVector<Text::StringTemplateAtom, 16> args;
@@ -438,19 +448,9 @@ namespace HerosInsight::SkillFiltering
         }
     }
 
-    size_t Adapter::MetaCount() const
+    Filtering::Device Setup::CreateFilteringDevice()
     {
-        return text_storage.meta_propsets.size();
-    }
-
-    LoweredText Adapter::GetMetaName(size_t meta)
-    {
-        return text_storage.meta_prop_names.Get(meta);
-    }
-
-    BitView Adapter::GetMetaPropset(size_t meta) const
-    {
-        return text_storage.meta_propsets[meta];
+        return Filtering::Device{text_storage.meta_props, this->props};
     }
 
     int8_t SkillFiltering::AttributeSource::GetAttrLvl(AttributeOrTitle id) const
