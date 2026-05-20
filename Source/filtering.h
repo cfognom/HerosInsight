@@ -59,7 +59,7 @@ namespace HerosInsight::Filtering
         std::vector<Matcher> matchers; // We have several because we can OR them
         bool is_exclusion;
 
-        bool Match(LoweredText text) // Does not account for filter inversion
+        bool Match(LoweredStringView text) // Does not account for filter inversion
         {
             for (auto &matcher : matchers)
             {
@@ -129,7 +129,7 @@ namespace HerosInsight::Filtering
 
     struct ResultItem
     {
-        LoweredText searchable_text;
+        LoweredStringView searchable_text;
         FixedVector<char, 512> presentable_text;
         std::span<uint16_t> searchable_hl;
         std::span<uint16_t> presentable_hl;
@@ -147,7 +147,7 @@ namespace HerosInsight::Filtering
             );
 
         Text::StringManager &mgr = Text::s_Manager;
-        LoweredTextVector searchable_text;
+        LoweredStringVector searchable_text;
         SpanVector<Text::StringTemplateAtom> stringTemplates;
         SpanVector<Text::StringTemplateAtom>::Deduper stringTemplates_deduper;
         std::vector<uint16_t> item_to_str;
@@ -165,7 +165,7 @@ namespace HerosInsight::Filtering
 
         void PopulateItems(SlotSpanVector<char> &src)
         {
-            searchable_text = LoweredTextVector(src);
+            searchable_text = LoweredStringVector(src);
             item_to_str = src.index_to_id;
         }
 
@@ -263,7 +263,7 @@ namespace HerosInsight::Filtering
             return strId;
         }
 
-        LoweredText GetSearchableStr(size_t strId)
+        LoweredStringView GetSearchableStr(size_t strId)
         {
             return searchable_text[strId];
         }
@@ -296,7 +296,7 @@ namespace HerosInsight::Filtering
     {
         struct MetaProp
         {
-            LoweredText name;
+            LoweredStringView name;
             BitView propset; // Which props this meta-prop targets
         };
 
@@ -404,7 +404,7 @@ namespace HerosInsight::Filtering
             if (!Utils::TryRead('/', rem))
                 return false;
 
-            LoweredTextOwned sort_command_name("SORT");
+            LoweredString sort_command_name("SORT");
 
             auto command_name_end = std::min(rem.find(' '), rem.size());
             auto command_name = rem.substr(0, command_name_end);
@@ -414,7 +414,7 @@ namespace HerosInsight::Filtering
                 command_name,
                 [&](size_t index)
                 {
-                    return (LoweredText)sort_command_name;
+                    return (LoweredStringView)sort_command_name;
                 },
                 1
             );
@@ -451,7 +451,7 @@ namespace HerosInsight::Filtering
 
             return true;
         }
-        inline static LoweredTextOwned matched_target{"Matched"};
+        inline static LoweredString matched_target{"Matched"};
         void ParseQuery(std::string_view source, Query &query)
         {
             query.clear();
@@ -624,7 +624,7 @@ namespace HerosInsight::Filtering
                     // Iterate the meta properties and check for name matches
                     for (size_t i_meta = 0; i_meta < n_meta; ++i_meta)
                     {
-                        LoweredText str = metas[i_meta].name;
+                        LoweredStringView str = metas[i_meta].name;
                         for (auto &matcher : filter.matchers)
                         {
                             if (!matcher.Match(str, 0))
@@ -1116,7 +1116,7 @@ namespace HerosInsight::Filtering
                     auto &relevant_meta = relevant_metas[i];
 
                     size_t offset = result.presentable_text.size();
-                    LoweredText lowered = metas[relevant_meta.meta_id].name;
+                    LoweredStringView lowered = metas[relevant_meta.meta_id].name;
                     if (lowered.text.empty()) // We allow empty meta names; just skip
                         continue;
                     auto size = result._hl_storage.size();
@@ -1143,7 +1143,7 @@ namespace HerosInsight::Filtering
         }
 
     private:
-        inline void CalcHL(Query &q, size_t prop_id, LoweredText lowered, std::vector<uint16_t> &hl)
+        inline void CalcHL(Query &q, size_t prop_id, LoweredStringView lowered, std::vector<uint16_t> &hl)
         {
             if (!lowered.text.empty())
             {
@@ -1171,14 +1171,14 @@ namespace HerosInsight::Filtering
             }
         }
 
-        inline LoweredText GetSortTargetName(size_t sort_target_id)
+        inline LoweredStringView GetSortTargetName(size_t sort_target_id)
         {
             auto n_meta = metas.size();
             if (sort_target_id < n_meta)
                 return metas[sort_target_id].name;
 
             assert(sort_target_id == n_meta);
-            return (LoweredText)matched_target;
+            return (LoweredStringView)matched_target;
         }
 
         inline std::optional<size_t> TryGetSortTargetIdFromName(std::string_view subject)

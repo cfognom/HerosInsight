@@ -110,7 +110,7 @@ namespace HerosInsight::SkillFiltering
     {
         std::array<Filtering::IncrementalProp, PROP_COUNT> static_props;
         std::vector<Propset> meta_propsets;
-        LoweredTextVector meta_prop_names;
+        LoweredStringVector meta_prop_names;
         std::vector<Filtering::Device::MetaProp> meta_props;
 
         template <auto Func, auto Unit, auto Icon>

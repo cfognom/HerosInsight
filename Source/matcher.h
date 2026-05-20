@@ -25,10 +25,10 @@ namespace HerosInsight
         return c;
     }
 
-    struct LoweredText;
+    struct LoweredStringView;
     // CRTP base
     template <class Derived>
-    struct LoweredTextBase
+    struct LoweredStringBase
     {
         constexpr std::string_view Text() const
         {
@@ -50,7 +50,7 @@ namespace HerosInsight
             }
         }
 
-        constexpr LoweredText SubStr(size_t offset, size_t count);
+        constexpr LoweredStringView SubStr(size_t offset, size_t count);
 
         constexpr static void FoldText(std::span<char> text, BitView uppercase)
         {
@@ -68,29 +68,29 @@ namespace HerosInsight
         }
     };
 
-    struct LoweredText : LoweredTextBase<LoweredText>
+    struct LoweredStringView : LoweredStringBase<LoweredStringView>
     {
         std::string_view text;
         BitView uppercase;
 
-        LoweredText() = default;
-        LoweredText(std::string_view text, BitView uppercase) : text(text), uppercase(uppercase) {}
+        LoweredStringView() = default;
+        LoweredStringView(std::string_view text, BitView uppercase) : text(text), uppercase(uppercase) {}
 
         constexpr std::string_view TextView() const { return text; }
         constexpr BitView UppercaseView() const { return uppercase; }
     };
 
     template <typename Derived>
-    constexpr LoweredText LoweredTextBase<Derived>::SubStr(size_t offset, size_t count)
+    constexpr LoweredStringView LoweredStringBase<Derived>::SubStr(size_t offset, size_t count)
     {
-        return LoweredText{
+        return LoweredStringView{
             Text().substr(offset, count),
             Uppercase().Subview(offset, count)
         };
     }
 
     template <size_t N>
-    struct LoweredTextOwned : LoweredTextBase<LoweredTextOwned<N>>
+    struct LoweredString : LoweredStringBase<LoweredString<N>>
     {
         std::array<char, N> text;
         BitArray<N> uppercase;
@@ -99,29 +99,29 @@ namespace HerosInsight
 
         constexpr BitView UppercaseView() { return (BitView)uppercase; }
 
-        constexpr operator LoweredText() { return LoweredText(TextView(), UppercaseView()); }
+        constexpr operator LoweredStringView() { return LoweredStringView(TextView(), UppercaseView()); }
 
-        constexpr explicit LoweredTextOwned(std::string_view chars)
+        constexpr explicit LoweredString(std::string_view chars)
         {
             for (size_t i = 0; i < N; ++i)
                 text[i] = chars[i];
-            LoweredTextBase<LoweredTextOwned<N>>::FoldText(std::span<char>(text.data(), N), (BitView)uppercase);
+            LoweredStringBase<LoweredString<N>>::FoldText(std::span<char>(text.data(), N), (BitView)uppercase);
         }
     };
 
     template <size_t M>
-    LoweredTextOwned(const char (&)[M])
-        -> LoweredTextOwned<M - 1>;
+    LoweredString(const char (&)[M])
+        -> LoweredString<M - 1>;
 
-    struct LoweredTextVector
+    struct LoweredStringVector
     {
         SpanVector<char> arena;
         BitVector uppercase;
 
-        LoweredTextVector() = default;
+        LoweredStringVector() = default;
         template <std::ranges::input_range R>
             requires std::convertible_to<std::ranges::range_reference_t<R>, std::string_view>
-        LoweredTextVector(R &&r)
+        LoweredStringVector(R &&r)
         {
             size_t element_count = 0;
             size_t span_count = 0;
@@ -138,11 +138,11 @@ namespace HerosInsight
             }
             LowercaseFold();
         }
-        LoweredTextVector(const SpanVector<char> &arena) : arena(arena)
+        LoweredStringVector(const SpanVector<char> &arena) : arena(arena)
         {
             LowercaseFold();
         }
-        LoweredTextVector(SpanVector<char> &&arena) : arena(std::move(arena))
+        LoweredStringVector(SpanVector<char> &&arena) : arena(std::move(arena))
         {
             LowercaseFold();
         }
@@ -154,21 +154,21 @@ namespace HerosInsight
             auto size = arena.Elements().size();
             uppercase.resize(size, false);
             auto pending_uppercase = uppercase.Subview(committed.data() - arena.Elements().data(), committed.size());
-            LoweredText::FoldText(committed, pending_uppercase);
+            LoweredStringView::FoldText(committed, pending_uppercase);
             return strId;
         }
 
-        LoweredText Get(size_t index)
+        LoweredStringView Get(size_t index)
         {
             std::string_view str(arena[index]);
             auto offset = str.data() - arena.Elements().data();
-            return LoweredText{
+            return LoweredStringView{
                 str,
                 uppercase.Subview(offset, str.size())
             };
         }
 
-        LoweredText operator[](size_t index)
+        LoweredStringView operator[](size_t index)
         {
             return Get(index);
         }
@@ -179,7 +179,7 @@ namespace HerosInsight
             std::span<char> chars = arena.Elements();
             uppercase.clear();
             uppercase.resize(chars.size(), false);
-            LoweredText::FoldText(chars, uppercase);
+            LoweredStringView::FoldText(chars, uppercase);
         }
     };
 
@@ -219,7 +219,7 @@ namespace HerosInsight
             uint8_t within_count = 0;
             std::string_view src_str;
             Text::EncodedNumber enc_num;
-            LoweredText needle;
+            LoweredStringView needle;
 
             std::string_view GetNeedleStr() const { return type == Type::String ? needle.text : std::string_view(enc_num.data(), enc_num.size()); }
 
@@ -229,9 +229,9 @@ namespace HerosInsight
         Matcher() = default;
         Matcher(std::string_view source);
 
-        bool Match(LoweredText text, size_t offset);
-        bool Match(LoweredText text, size_t &offset, std::vector<uint16_t> &matches);
-        bool Matches(LoweredText text, std::vector<uint16_t> &matches);
+        bool Match(LoweredStringView text, size_t offset);
+        bool Match(LoweredStringView text, size_t &offset, std::vector<uint16_t> &matches);
+        bool Matches(LoweredStringView text, std::vector<uint16_t> &matches);
 
         bool IsEmpty() const { return atoms.empty(); }
 
@@ -248,7 +248,7 @@ namespace HerosInsight
             uint16_t end;
         };
 
-        LoweredTextVector strings;
+        LoweredStringVector strings;
         std::vector<MatchRecord> work_mem;
     };
 }
