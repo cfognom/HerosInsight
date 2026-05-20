@@ -51,7 +51,9 @@ namespace HerosInsight
 
             float total = 0;
             float max = std::numeric_limits<float>::lowest();
+            uint32_t max_idx = 0;
             float min = std::numeric_limits<float>::max();
+            uint32_t min_idx = 0;
             uint32_t count = 0;
             MedianBins median_bins;
 
@@ -84,8 +86,16 @@ namespace HerosInsight
             {
                 GWCA_ASSERT(value >= 0);
                 total += value;
-                max = std::max(max, value);
-                min = std::min(min, value);
+                if (value > max)
+                {
+                    max = value;
+                    max_idx = count;
+                }
+                if (value < min)
+                {
+                    min = value;
+                    min_idx = count;
+                }
                 ++count;
                 auto exp_index = (std::bit_cast<uint32_t>(value) >> 23) & 0xFF;
                 ++median_bins.counts[exp_index];
@@ -218,7 +228,8 @@ namespace HerosInsight
                         if (min_usage >= report_threshold)
                         {
                             buffer.AppendFormat(
-                                ", min={:.0f}%",
+                                ", min@{}={:.0f}%",
+                                cycles.min_idx,
                                 min_usage * 100.f
                             );
                         }
@@ -226,7 +237,8 @@ namespace HerosInsight
                         if (max_usage >= report_threshold)
                         {
                             buffer.AppendFormat(
-                                ", max={:.0f}%",
+                                ", max@{}={:.0f}%",
+                                cycles.max_idx,
                                 max_usage * 100.f
                             );
                         }
