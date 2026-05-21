@@ -397,7 +397,7 @@ namespace HerosInsight::Filtering
             }
         }
 
-        // We now need to put exclusion filters first, then inclusion while also keeping track of their original order
+        // We now need to put exclusion filters before inclusion filters while also keeping track of their original order
         std::span<Filter> filters = query.filters;
         auto n_filters = filters.size();
 
@@ -556,8 +556,6 @@ namespace HerosInsight::Filtering
         ProfilingScope profiler;
 
         size_t n_items = items.size();
-        size_t n_props = device.props.size();
-        size_t n_meta = device.metas.size();
 
         MultiBuffer::Spec<FilterUnit> units_spec{n_items};
         MultiBuffer::HeapAllocated allocation{units_spec};
