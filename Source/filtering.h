@@ -115,25 +115,19 @@ namespace HerosInsight::Filtering
 
         Text::StringManager &mgr = Text::s_Manager;
         LoweredStringVector searchable_text;
-        SpanVector<Text::StringTemplateAtom> stringTemplates;
-        SpanVector<Text::StringTemplateAtom>::Deduper stringTemplates_deduper;
+        SpanVector<Text::StringTemplateAtom> string_templates;
+        SpanVector<Text::StringTemplateAtom>::Deduper string_templates_deduper;
         std::vector<uint16_t> item_to_str;
-        void *buildTemplate_data;
-        BuildTemplateFn BuildTemplate_fn;
+        void *build_template_data;
+        BuildTemplateFn Build_template_fn;
 
         size_t GetUniqueCount() const { return searchable_text.arena.SpanCount(); }
 
         void SetupIncremental(void *data, BuildTemplateFn fn)
         {
-            buildTemplate_data = data;
-            BuildTemplate_fn = fn;
-            stringTemplates_deduper = stringTemplates.CreateDeduper(0);
-        }
-
-        void PopulateItems(SlotSpanVector<char> &src)
-        {
-            searchable_text = LoweredStringVector(src);
-            item_to_str = src.index_to_id;
+            build_template_data = data;
+            Build_template_fn = fn;
+            string_templates_deduper = string_templates.CreateDeduper(0);
         }
 
         void PopulateItems(std::string_view hint_key, size_t count, auto &&itemPropertyGetter, bool dedupe = true)
@@ -169,88 +163,12 @@ namespace HerosInsight::Filtering
             }
             arena.StoreCapacityHint(hint_key);
         }
+        void Reset();
 
-        void MarkDirty()
-        {
-            searchable_text.arena.clear();
-            stringTemplates.clear();
-            stringTemplates_deduper.clear();
-            item_to_str.clear();
-        }
-
-        Text::StringTemplate GetStringTemplate(size_t strId)
-        {
-            auto span = stringTemplates[strId];
-            auto root = span.back();
-            return Text::StringTemplate{
-                .root = root,
-                .rest = span
-            };
-        }
-
-        size_t GetStrId(size_t itemId)
-        {
-            if (itemId >= item_to_str.size())
-                item_to_str.resize(itemId + 1, std::numeric_limits<uint16_t>::max());
-            auto &strId = item_to_str[itemId];
-            if (strId == std::numeric_limits<uint16_t>::max())
-            {
-                stringTemplates.AppendWriteBuffer(
-                    32,
-                    [&](std::span<Text::StringTemplateAtom> &buffer)
-                    {
-                        SpanWriter<Text::StringTemplateAtom> writer(buffer);
-                        OutBuf<Text::StringTemplateAtom> out(writer);
-                        Text::StringTemplateAtom::Builder b(out);
-                        out.push_back(BuildTemplate_fn(b, itemId, buildTemplate_data));
-                        buffer = writer.WrittenSpan();
-                    }
-                );
-                strId = stringTemplates.CommitWritten(&stringTemplates_deduper);
-                if (strId == searchable_text.arena.SpanCount())
-                {
-                    auto t = GetStringTemplate(strId);
-                    if (t.root.header.type != Text::StringTemplateAtom::Type::Null)
-                    {
-                        searchable_text.arena.AppendWriteBuffer(
-                            512,
-                            [&](std::span<char> &buffer)
-                            {
-                                SpanWriter<char> writer(buffer);
-                                OutBuf<char> out(writer);
-                                mgr.AssembleSearchableString(t, out);
-                                buffer = writer.WrittenSpan();
-                            }
-                        );
-                    }
-                    auto strId2 = searchable_text.CommitAndFold();
-                    assert(strId == strId2);
-                }
-            }
-            return strId;
-        }
-
-        LoweredStringView GetSearchableStr(size_t strId)
-        {
-            return searchable_text[strId];
-        }
-
-        void GetRenderableString(size_t strId, OutBuf<char> out, OutBuf<Text::PosDelta> deltas)
-        {
-            if (stringTemplates.SpanCount() == 0) // Temp hack
-            {
-                auto text = GetSearchableStr(strId);
-                text.GetRenderableString(out);
-                return;
-            }
-
-            auto t = GetStringTemplate(strId);
-            if (t.root.header.type != Text::StringTemplateAtom::Type::Null)
-            {
-                mgr.AssembleRenderableString(t, out, &deltas);
-                return;
-            }
-        }
+        size_t GetStrId(size_t itemId);
+        Text::StringTemplate GetStringTemplate(size_t strId);
+        LoweredStringView GetSearchableStr(size_t strId) { return searchable_text[strId]; }
+        void GetReadableString(size_t strId, OutBuf<char> out, OutBuf<Text::PosDelta> deltas);
     };
 
     struct Feedback

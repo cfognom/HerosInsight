@@ -213,7 +213,7 @@ namespace HerosInsight::Text
                 }
                 else
                 {
-                    a.CommitStr(StringTemplateAtom::Constraint::RenderableOnly, tag_str);
+                    a.CommitStr(StringTemplateAtom::Constraint::ReadableOnly, tag_str);
                 }
             }
         };
@@ -277,17 +277,17 @@ namespace HerosInsight::Text
     template <typename Mode>
     struct StringTemplateAssembler
     {
-        constexpr static bool is_renderable = std::is_same_v<Mode, AssembleMode::Renderable>;
+        constexpr static bool is_readable = std::is_same_v<Mode, AssembleMode::Readable>;
         constexpr static bool is_searchable = std::is_same_v<Mode, AssembleMode::Searchable>;
         constexpr static bool is_measure = std::is_same_v<Mode, AssembleMode::Measure>;
 
         StringManager &mgr;
         std::span<StringTemplateAtom> nodes;
         OutBuf<char> dst;
-        OutBuf<PosDelta> *searchable_to_renderable = nullptr;
+        OutBuf<PosDelta> *searchable_to_readable = nullptr;
         Plurality plurality = Plurality::Null;
         size_t searchable_pos = 0;
-        int32_t searchable_to_renderable_delta = 0;
+        int32_t searchable_to_readable_delta = 0;
 
         void Assemble(std::span<StringTemplateAtom> atoms, std::span<StringTemplateAtom> subs)
         {
@@ -310,9 +310,9 @@ namespace HerosInsight::Text
                     (atom.header.constraint == StringTemplateAtom::Constraint::PluralOnly && plurality != Plurality::Plural))
                     continue;
 
-                if constexpr (!is_renderable)
+                if constexpr (!is_readable)
                 {
-                    if (atom.header.constraint == StringTemplateAtom::Constraint::RenderableOnly)
+                    if (atom.header.constraint == StringTemplateAtom::Constraint::ReadableOnly)
                         goto skip;
                 }
 
@@ -345,16 +345,16 @@ namespace HerosInsight::Text
 #else
                         if (subs_index >= subs.size())
                         {
-                            if constexpr (is_renderable)
+                            if constexpr (is_readable)
                                 dst.AppendString("<c=#FFFF0000>");
                             dst.AppendString("[Missing Text]");
-                            if constexpr (is_renderable)
+                            if constexpr (is_readable)
                                 dst.AppendString("</c>");
                             plurality = Plurality::Singular;
                             goto skip;
                         }
 #endif
-                        if constexpr (is_renderable)
+                        if constexpr (is_readable)
                         {
                             // We need to recalc the PosDeltas so we cant use cached_subs
                             Assemble(subs.subspan(subs_index, 1), {});
@@ -409,7 +409,7 @@ namespace HerosInsight::Text
                         // {
                         //     auto num = atom.num.value;
                         //     auto den = atom.num.den;
-                        //     if constexpr (is_renderable)
+                        //     if constexpr (is_readable)
                         //     {
                         //         // clang-format off
                         //         if (num == 1 && den == 2) dst.AppendString("½"); else
@@ -434,7 +434,7 @@ namespace HerosInsight::Text
                     case StringTemplateAtom::Type::Number:
                     {
                         float value = atom.number.GetValue();
-                        if constexpr (is_renderable)
+                        if constexpr (is_readable)
                         {
                             if (value == 0.f)
                             {
@@ -491,18 +491,18 @@ namespace HerosInsight::Text
 
             skip:
 
-                if constexpr (is_renderable)
+                if constexpr (is_readable)
                 {
-                    if (searchable_to_renderable &&
+                    if (searchable_to_readable &&
                         atom.header.type < StringTemplateAtom::Type::__LEAF_END__)
                     {
-                        // Make offset mapper between searchable text and renderable text
+                        // Make offset mapper between searchable text and readable text
                         // This code works but is wonky, how to improve?
 
                         auto pos = dst.size();
-                        size_t renderable_atom_len = pos - start_pos;
+                        size_t readable_atom_len = pos - start_pos;
                         size_t searchable_atom_len = 0;
-                        if (atom.header.constraint != StringTemplateAtom::Constraint::RenderableOnly)
+                        if (atom.header.constraint != StringTemplateAtom::Constraint::ReadableOnly)
                         {
                             switch (atom.header.type)
                             {
@@ -511,27 +511,27 @@ namespace HerosInsight::Text
                                     break;
 
                                 default:
-                                    searchable_atom_len = renderable_atom_len;
+                                    searchable_atom_len = readable_atom_len;
                                     break;
                             }
                         }
 
                         if (searchable_atom_len)
                         {
-                            if (searchable_pos + searchable_to_renderable_delta != start_pos)
+                            if (searchable_pos + searchable_to_readable_delta != start_pos)
                             {
-                                searchable_to_renderable_delta = start_pos - searchable_pos;
-                                auto &delta_entry = searchable_to_renderable->emplace_back();
+                                searchable_to_readable_delta = start_pos - searchable_pos;
+                                auto &delta_entry = searchable_to_readable->emplace_back();
                                 delta_entry.pos = searchable_pos;
-                                delta_entry.delta = searchable_to_renderable_delta;
+                                delta_entry.delta = searchable_to_readable_delta;
                             }
                             searchable_pos += searchable_atom_len;
-                            // if (searchable_pos + searchable_to_renderable_delta != pos)
+                            // if (searchable_pos + searchable_to_readable_delta != pos)
                             // {
-                            //     searchable_to_renderable_delta = pos - searchable_pos;
-                            //     auto &delta_entry = searchable_to_renderable->emplace_back();
+                            //     searchable_to_readable_delta = pos - searchable_pos;
+                            //     auto &delta_entry = searchable_to_readable->emplace_back();
                             //     delta_entry.pos = searchable_pos;
-                            //     delta_entry.delta = searchable_to_renderable_delta;
+                            //     delta_entry.delta = searchable_to_readable_delta;
                             // }
                         }
                     }
@@ -549,13 +549,13 @@ namespace HerosInsight::Text
         };
         a.Assemble(std::span<StringTemplateAtom>(&t.root, 1), {});
     }
-    void StringManager::AssembleRenderableString(StringTemplate t, OutBuf<char> dst, OutBuf<PosDelta> *searchable_to_renderable)
+    void StringManager::AssembleReadableString(StringTemplate t, OutBuf<char> dst, OutBuf<PosDelta> *searchable_to_readable)
     {
-        auto a = StringTemplateAssembler<AssembleMode::Renderable>{
+        auto a = StringTemplateAssembler<AssembleMode::Readable>{
             .mgr = *this,
             .nodes = t.rest,
             .dst = dst,
-            .searchable_to_renderable = searchable_to_renderable,
+            .searchable_to_readable = searchable_to_readable,
         };
         a.Assemble(std::span<StringTemplateAtom>(&t.root, 1), {});
     }

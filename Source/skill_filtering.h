@@ -82,11 +82,11 @@ namespace HerosInsight::SkillFiltering
         std::unordered_map<SkillProp, Filtering::IncrementalProp> dynamic_props;
         std::array<Filtering::IncrementalProp *, PROP_COUNT> props;
 
-        void RefreshDynamicProps()
+        void ResetDynamicProps()
         {
             for (auto &prop : dynamic_props)
             {
-                prop.second.MarkDirty();
+                prop.second.Reset();
             }
         }
 

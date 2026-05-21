@@ -40,7 +40,7 @@ namespace HerosInsight
             return static_cast<const Derived *>(this)->UppercaseView();
         }
 
-        void GetRenderableString(OutBuf<char> out) const
+        void GetReadableString(OutBuf<char> out) const
         {
             auto size = out.size();
             out.AppendRange(Text());
@@ -160,7 +160,7 @@ namespace HerosInsight
 
         LoweredStringView Get(size_t index)
         {
-            std::string_view str(arena[index]);
+            auto str = arena.CGet(index);
             auto offset = str.data() - arena.Elements().data();
             return LoweredStringView{
                 str,

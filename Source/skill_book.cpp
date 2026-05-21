@@ -940,7 +940,7 @@ namespace HerosInsight::SkillBook
         {
             if (Utils::HasAnyFlag(dirty_flags, DirtyFlags::Props))
             {
-                filtering_setup.RefreshDynamicProps();
+                filtering_setup.ResetDynamicProps();
                 dirty_flags |= DirtyFlags::Query;
             }
             if (Utils::HasAnyFlag(dirty_flags, DirtyFlags::SkillList))

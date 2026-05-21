@@ -85,6 +85,83 @@ namespace HerosInsight::Filtering
         return cmp;
     }
 
+    void IncrementalProp::Reset()
+    {
+        searchable_text.arena.clear();
+        string_templates.clear();
+        string_templates_deduper.clear();
+        item_to_str.clear();
+    }
+
+    size_t IncrementalProp::GetStrId(size_t itemId)
+    {
+        if (itemId >= item_to_str.size())
+            item_to_str.resize(itemId + 1, std::numeric_limits<uint16_t>::max());
+        auto &strId = item_to_str[itemId];
+        if (strId == std::numeric_limits<uint16_t>::max())
+        {
+            string_templates.AppendWriteBuffer(
+                32,
+                [&](std::span<Text::StringTemplateAtom> &buffer)
+                {
+                    SpanWriter<Text::StringTemplateAtom> writer(buffer);
+                    OutBuf<Text::StringTemplateAtom> out(writer);
+                    Text::StringTemplateAtom::Builder b(out);
+                    out.push_back(Build_template_fn(b, itemId, build_template_data));
+                    buffer = writer.WrittenSpan();
+                }
+            );
+            strId = string_templates.CommitWritten(&string_templates_deduper);
+            if (strId == searchable_text.arena.SpanCount())
+            {
+                auto t = GetStringTemplate(strId);
+                if (t.root.header.type != Text::StringTemplateAtom::Type::Null)
+                {
+                    searchable_text.arena.AppendWriteBuffer(
+                        512,
+                        [&](std::span<char> &buffer)
+                        {
+                            SpanWriter<char> writer(buffer);
+                            OutBuf<char> out(writer);
+                            mgr.AssembleSearchableString(t, out);
+                            buffer = writer.WrittenSpan();
+                        }
+                    );
+                }
+                auto strId2 = searchable_text.CommitAndFold();
+                assert(strId == strId2);
+            }
+        }
+        return strId;
+    }
+
+    Text::StringTemplate IncrementalProp::GetStringTemplate(size_t strId)
+    {
+        auto span = string_templates[strId];
+        auto root = span.back();
+        return Text::StringTemplate{
+            .root = root,
+            .rest = span
+        };
+    }
+
+    void IncrementalProp::GetReadableString(size_t strId, OutBuf<char> out, OutBuf<Text::PosDelta> deltas)
+    {
+        if (string_templates.SpanCount() == 0) // Temp hack
+        {
+            auto text = GetSearchableStr(strId);
+            text.GetReadableString(out);
+            return;
+        }
+
+        auto t = GetStringTemplate(strId);
+        if (t.root.header.type != Text::StringTemplateAtom::Type::Null)
+        {
+            mgr.AssembleReadableString(t, out, &deltas);
+            return;
+        }
+    }
+
     // Returns the index of the "best" match
     template <typename TextGetter>
     static std::optional<size_t> BestMatch(std::string_view subject, TextGetter &&getter, size_t count)
@@ -783,7 +860,7 @@ namespace HerosInsight::Filtering
                 auto &filter = query.GetFilterInDeclOrder(f);
 
                 FixedVector<char, 128> meta_name;
-                metas[filter.meta_prop_id].name.GetRenderableString(meta_name);
+                metas[filter.meta_prop_id].name.GetReadableString(meta_name);
                 auto meta_name_str = (std::string_view)meta_name;
                 auto cond = filter.is_exclusion ? ControlColor "not " CloseColor : "";
                 auto musty = meta_name_str.empty() ? "Must" : " must";
@@ -906,7 +983,7 @@ namespace HerosInsight::Filtering
                 else
                 {
                     FixedVector<char, 128> name;
-                    GetSortTargetName(this->metas, arg.sort_target_id).GetRenderableString(name);
+                    GetSortTargetName(this->metas, arg.sort_target_id).GetReadableString(name);
                     sort_target_name = name;
                 }
 
@@ -960,7 +1037,7 @@ namespace HerosInsight::Filtering
         result.searchable_text = prop.GetSearchableStr(str_id);
         CalcHL(*this, q, prop_id, result.searchable_text, result._hl_storage);
         FixedVector<Text::PosDelta, 128> deltas;
-        prop.GetRenderableString(str_id, result.presentable_text, deltas);
+        prop.GetReadableString(str_id, result.presentable_text, deltas);
         if (deltas.empty())
         {
             result.searchable_hl = result.presentable_hl = result._hl_storage;
@@ -995,7 +1072,7 @@ namespace HerosInsight::Filtering
                 auto size = result._hl_storage.size();
                 CalcHL(*this, q, meta_prop_id, lowered, result._hl_storage);
                 result.searchable_hl = result.presentable_hl = result._hl_storage;
-                lowered.GetRenderableString(result.presentable_text);
+                lowered.GetReadableString(result.presentable_text);
                 if (offset > 0)
                 {
                     for (size_t i = size; i < result._hl_storage.size(); i++)
