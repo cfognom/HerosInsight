@@ -130,6 +130,7 @@ namespace HerosInsight::Filtering
             string_templates_deduper = string_templates.CreateDeduper(0);
         }
 
+        // TODO: Settle on one strategy?: incremental or this.
         void PopulateItems(std::string_view hint_key, size_t count, auto &&itemPropertyGetter, bool dedupe = true)
         {
             auto &arena = searchable_text.arena;
