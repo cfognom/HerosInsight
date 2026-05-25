@@ -509,152 +509,162 @@ namespace HerosInsight::Filtering
 
     struct FilterUnit
     {
+        union
+        {
+            Device::index_t str_id;
+            bool is_match;
+        };
         Device::index_t item;
-        Device::index_t str_id;
         Device::index_t index;
-        bool is_match;
     };
 
-    static void FilterUnits(const Filtering::Device &device, Filter &filter, std::span<FilterUnit> &units)
+    static bool MatchesAny(std::span<Matcher> matchers, LoweredStringView text)
     {
-        ProfilingScope profiler;
-
-        size_t n_props = device.props.size();
-        size_t n_meta = device.metas.size();
-
-        BitView propset = device.metas[filter.meta_prop_id].propset;
-
-        struct Partitioner
+        for (auto &matcher : matchers)
         {
-            std::span<FilterUnit> unmatched;
-
-            static bool Predicate(FilterUnit &unit) { return unit.is_match; }
-            void PartitionMatches()
-            {
-                ProfilingScope profiler;
-                auto unmatched_group_it = std::partition(unmatched.begin(), unmatched.end(), Predicate);
-                unmatched = std::span{unmatched_group_it, unmatched.end()};
-            }
-        } partitioner{units};
-
-        for (auto prop_id : propset.IterSetBits())
-        {
-            bool is_meta = prop_id == n_props;
-            if (is_meta) // Special case for meta properties
-            {
-                // Iterate the meta properties and check for name matches
-                for (size_t i_meta = 0; i_meta < n_meta; ++i_meta)
-                {
-                    LoweredStringView str = device.metas[i_meta].name;
-                    for (auto &matcher : filter.matchers)
-                    {
-                        if (!matcher.Match(str, 0))
-                            continue;
-
-                        // The filter matched against this meta name, now we need to find out which items "have it"
-
-                        BitView meta_propset = device.metas[i_meta].propset;
-                        for (auto prop_id : meta_propset.IterSetBits())
-                        {
-                            bool is_meta = prop_id == n_props;
-                            if (is_meta) // Meta properties cannot be "had"
-                                continue;
-                            auto &prop = *device.props[prop_id];
-
-                            // Iterate the items and check which ones "has values" in this property
-                            for (auto &package : partitioner.unmatched)
-                            {
-                                auto str_id = prop.GetStrId(package.item);
-                                auto str = prop.GetSearchableStr(str_id);
-                                bool is_match = !str.text.empty();
-                                package.is_match = is_match;
-                            }
-
-                            partitioner.PartitionMatches();
-                        }
-                    }
-                }
-            }
-            else // Non-meta
-            {
-                auto &prop = *device.props[prop_id];
-
-                { // Tag the items with their string ids
-                    ProfilingScope profiler{"tagging"};
-                    for (auto &package : partitioner.unmatched)
-                    {
-                        package.str_id = prop.GetStrId(package.item);
-                    }
-                }
-
-                { // Sort by string id so we can avoid processing duplicates
-                    ProfilingScope profiler{"sorting"};
-                    std::sort(
-                        partitioner.unmatched.begin(), partitioner.unmatched.end(),
-                        [](auto &a, auto &b)
-                        {
-                            return a.str_id < b.str_id;
-                        }
-                    );
-                }
-
-                { // Iterate the items and mark which ones match
-                    ProfilingScope profiler{"matching"};
-
-                    auto prev_str_id = std::numeric_limits<Device::index_t>::max();
-                    bool is_match;
-                    for (auto &package : partitioner.unmatched)
-                    {
-                        auto str_id = package.str_id;
-                        if (str_id != prev_str_id)
-                        {
-                            prev_str_id = str_id;
-                            auto str = prop.GetSearchableStr(str_id);
-                            is_match = filter.Match(str);
-                        }
-                        package.is_match = is_match;
-                    }
-                }
-
-                partitioner.PartitionMatches();
-            }
+            if (matcher.Match(text, 0))
+                return true;
         }
-
-        // Only keep the items that passed this filter.
-        if (filter.is_exclusion)
-            units = partitioner.unmatched;
-        else
-            units = std::span{units.data(), partitioner.unmatched.data()};
-        // 'units' now contain only the items that passed this filter
+        return false;
     }
 
-    static void RunFilters(const Filtering::Device &device, std::span<Filter> filters, std::vector<Device::index_t> &items)
+    struct Partitioner
     {
-        ProfilingScope profiler;
+        FilterUnit *units;
+        std::span<FilterUnit> unmatched;
+        std::span<FilterUnit> Matched() { return std::span{units, unmatched.data()}; }
 
-        size_t n_items = items.size();
+        Partitioner(std::span<FilterUnit> units) : units(units.data()), unmatched(units) {}
 
-        MultiBuffer::Spec<FilterUnit> units_spec{n_items};
-        MultiBuffer::HeapAllocated allocation{units_spec};
-        auto units = units_spec.Span();
+        static bool Predicate(FilterUnit &unit) { return unit.is_match; }
+        void PartitionMatched()
+        {
+            auto unmatched_group_it = std::partition(unmatched.begin(), unmatched.end(), Predicate);
+            unmatched = std::span{unmatched_group_it, unmatched.end()};
+        }
 
-        { // Initialize the units
-            ProfilingScope profiler{"init"};
-            for (size_t i = 0; i < n_items; ++i)
+        void AssignStrIds(IncrementalProp &prop)
+        {
+            ProfilingScope profiler;
+
+            for (auto &unit : unmatched)
             {
-                auto &package = units[i];
-                package.item = items[i];
-                package.index = i;
+                unit.str_id = prop.GetStrId(unit.item);
             }
         }
 
-        for (auto &filter : filters)
+        void SortByStrId()
         {
-            FilterUnits(device, filter, units);
+            ProfilingScope profiler;
+
+            std::sort(
+                unmatched.begin(), unmatched.end(),
+                [](auto &a, auto &b)
+                {
+                    return a.str_id < b.str_id;
+                }
+            );
         }
 
-        { // Restore the order of the items
-            ProfilingScope profiler{"restore order"};
+        void PartitionByPropMatch(IncrementalProp &prop, std::span<Matcher> matchers)
+        {
+            AssignStrIds(prop); // Tag the items with their string ids
+            SortByStrId();      // Sort by string id so we can avoid processing duplicates (This might not be needed since the input is mostly sorted)
+
+            { // Iterate the units and mark which ones match
+                ProfilingScope profiler{"matching"};
+
+                auto prev_str_id = std::numeric_limits<Device::index_t>::max();
+                bool is_match;
+                for (auto &unit : unmatched)
+                {
+                    auto str_id = unit.str_id;
+                    if (str_id != prev_str_id)
+                    {
+                        prev_str_id = str_id;
+                        auto str = prop.GetSearchableStr(str_id);
+                        is_match = MatchesAny(matchers, str);
+                    }
+                    unit.is_match = is_match;
+                }
+            }
+
+            PartitionMatched();
+        }
+
+        void PartitionByPropExistence(IncrementalProp &prop)
+        {
+            // Iterate the units and check which ones "has" this property
+            for (auto &unit : unmatched)
+            {
+                auto str_id = prop.GetStrId(unit.item);
+                auto str = prop.GetSearchableStr(str_id);
+                bool has_prop = !str.text.empty();
+                unit.is_match = has_prop;
+            }
+
+            PartitionMatched();
+        }
+    };
+
+    struct UnitFilterer
+    {
+        const Filtering::Device &device;
+        std::span<FilterUnit> units;
+        BitView::word_t *propset_alloc;
+
+        void Init(std::span<Filtering::Device::index_t> items)
+        {
+            ProfilingScope profiler;
+
+            for (size_t i = 0; i < items.size(); ++i)
+            {
+                auto &unit = units[i];
+                unit.item = items[i];
+                unit.index = i;
+            }
+        }
+
+        void ApplyFilter(Filter &filter)
+        {
+            ProfilingScope profiler;
+
+            size_t n_props = device.props.size();
+
+            auto &meta_prop = device.metas[filter.meta_prop_id];
+
+            Partitioner partitioner{units};
+
+            for (auto prop_id : meta_prop.propset.IterSetBits())
+            {
+                bool is_meta = prop_id == n_props;
+                if (is_meta) // Special case for meta properties
+                {
+                    // Iterate the meta properties, check for name matches and OR togheter their propsets
+                    BitView propset{propset_alloc, n_props, false};
+                    for (auto &meta_prop : device.metas)
+                    {
+                        if (MatchesAny(filter.matchers, meta_prop.name))
+                            propset |= meta_prop.propset;
+                    }
+                    for (auto prop_id : propset.IterSetBits())
+                    {
+                        auto &prop = *device.props[prop_id];
+                        partitioner.PartitionByPropExistence(prop);
+                    }
+                }
+                else // Non-meta
+                {
+                    auto &prop = *device.props[prop_id];
+                    partitioner.PartitionByPropMatch(prop, filter.matchers);
+                }
+            }
+            units = filter.is_exclusion ? partitioner.unmatched : partitioner.Matched();
+        }
+
+        void RestoreOrder()
+        {
+            ProfilingScope profiler;
 
             std::sort(
                 units.begin(), units.end(),
@@ -665,16 +675,40 @@ namespace HerosInsight::Filtering
             );
         }
 
-        { // Populate the output with the matched items
-            ProfilingScope profiler{"populate output"};
+        void Export(std::vector<Device::index_t> &dst_items)
+        {
+            ProfilingScope profiler;
 
-            auto dst = items.begin();
-            for (auto &package : units)
+            dst_items.resize(units.size());
+            auto dst = dst_items.begin();
+            for (auto &unit : units)
             {
-                *dst++ = package.item;
+                *dst++ = unit.item;
             }
-            items.resize(units.size());
         }
+    };
+
+    static void ApplyFilters(const Filtering::Device &device, std::span<Filter> filters, std::vector<Device::index_t> &items)
+    {
+        ProfilingScope profiler;
+
+        size_t n_items = items.size();
+        size_t n_props = device.props.size();
+
+        MultiBuffer::Spec<FilterUnit> units_spec{n_items};
+        MultiBuffer::Spec<BitView::word_t> propset_spec{BitView::CalcWordCount(n_props)};
+        MultiBuffer::HeapAllocated allocation{units_spec, propset_spec};
+
+        UnitFilterer filterer{device, units_spec.Span(), propset_spec.ptr};
+        filterer.Init(items);
+
+        for (auto &filter : filters)
+        {
+            filterer.ApplyFilter(filter);
+        }
+
+        filterer.RestoreOrder();
+        filterer.Export(items);
     }
 
     static void SortItems(const Filtering::Device &device, Query &query, std::span<Device::index_t> items)
@@ -794,7 +828,7 @@ namespace HerosInsight::Filtering
     {
         if (!query.filters.empty())
         {
-            RunFilters(*this, query.filters, items);
+            ApplyFilters(*this, query.filters, items);
         }
 
         if (query.reverse_output)

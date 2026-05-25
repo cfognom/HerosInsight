@@ -25,16 +25,6 @@ namespace HerosInsight::Filtering
         std::string_view filter_text;
         std::vector<Matcher> matchers; // We have several because we can OR them
         bool is_exclusion;
-
-        bool Match(LoweredStringView text) // Does not account for filter inversion
-        {
-            for (auto &matcher : matchers)
-            {
-                if (matcher.Match(text, 0))
-                    return true;
-            }
-            return false;
-        }
     };
     struct SortCommand
     {

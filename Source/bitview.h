@@ -132,6 +132,26 @@ public:
         return (data()[pos.word_offset] & (word_t(1) << pos.bit_offset)) != word_t(0);
     }
 
+    template <typename T>
+    constexpr Derived &operator|=(BitViewBase<T> &other)
+    {
+        if (this->bit_offset() == other.bit_offset())
+        {
+            auto data = uncompress();
+            auto other_data = other.uncompress();
+            auto min_size = std::min(data.whole_words.size(), other_data.whole_words.size());
+            if (data.has_partial_head)
+                data.head.SetMaskedWord(*data.head.word | other_data.head.GetMaskedWord());
+            for (size_t i = 0; i < min_size; ++i)
+                data.whole_words[i] |= other_data.whole_words[i];
+            if (data.has_partial_tail)
+                data.tail.SetMaskedWord(*data.tail.word | other_data.tail.GetMaskedWord());
+            return as_derived();
+        }
+
+        throw std::runtime_error("Not implemented");
+    }
+
     constexpr word_t *data() { return as_derived().data(); }
     constexpr const word_t *data() const { return as_derived().data(); }
     constexpr size_t WordCount() const { return CalcWordCount(size()); }
