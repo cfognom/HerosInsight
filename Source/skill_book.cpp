@@ -966,7 +966,7 @@ namespace HerosInsight::SkillBook
         template <typename DrawContent>
         void DrawProperty(DrawContent &&draw_content, size_t prop_id, bool is_hidden_header = false)
         {
-            auto meta_names = filtering_device.CalcPropResult(query, prop_id);
+            auto meta_names = filtering_device.CalcHeaderResult(query, prop_id);
             std::string_view header{};
             if (!is_hidden_header)
             {
@@ -996,7 +996,7 @@ namespace HerosInsight::SkillBook
             if (is_header_hovered)
             {
                 auto meta_prop_id = filtering_setup.props.size();
-                auto meta_meta_names = filtering_device.CalcPropResult(query, meta_prop_id);
+                auto meta_meta_names = filtering_device.CalcHeaderResult(query, meta_prop_id);
                 DrawTooltip(meta_meta_names.presentable_text, meta_meta_names.presentable_hl);
             }
             ImGui::SameLine(0, 0);
@@ -1337,15 +1337,21 @@ namespace HerosInsight::SkillBook
                 true
             );
 
-            bool draw_alt = alt_r.searchable_hl.size() > main_r.searchable_hl.size() ||
-                            Filtering::CompareSubstrs(
-                                main_r.searchable_hl.subspan(0, alt_r.searchable_hl.size()),
-                                main_r.searchable_text.text,
-                                alt_r.searchable_hl,
-                                alt_r.searchable_text.text
-                            ) != 0;
+            // We draw alt desc if it or its header has "novel" matches compared main.
+            auto ShouldDrawAlt = [&]() -> bool
+            {
+                if (alt_r.IsNovelTo(main_r))
+                    return true;
 
-            if (draw_alt)
+                auto main_header_r = filtering_device.CalcHeaderResult(query, (size_t)main_prop);
+                auto alt_header_r = filtering_device.CalcHeaderResult(query, (size_t)alt_prop);
+                if (alt_header_r.IsNovelTo(main_header_r))
+                    return true;
+
+                return false;
+            };
+
+            if (ShouldDrawAlt())
             {
                 ImGui::Spacing();
                 ImGui::PushStyleColor(ImGuiCol_Text, Constants::Colors::notify);

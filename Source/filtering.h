@@ -17,6 +17,7 @@
 namespace HerosInsight::Filtering
 {
     std::strong_ordering CompareSubstrs(std::span<const uint16_t> asubs, std::string_view astr, std::span<const uint16_t> bsubs, std::string_view bstr);
+    bool SubstrsContainsSubstrs(std::span<const uint16_t> asubs, std::string_view astr, std::span<const uint16_t> bsubs, std::string_view bstr);
 
     struct Filter
     {
@@ -92,6 +93,15 @@ namespace HerosInsight::Filtering
         std::span<uint16_t> presentable_hl;
 
         std::vector<uint16_t> _hl_storage; // Highlight
+
+        bool IsNovelTo(const ResultItem &other) const
+        {
+            // "Other does not contain this."
+            return !Filtering::SubstrsContainsSubstrs(
+                other.searchable_hl, other.searchable_text.text,
+                searchable_hl, searchable_text.text
+            );
+        }
     };
 
     struct IncrementalProp
@@ -189,6 +199,6 @@ namespace HerosInsight::Filtering
 
         void GetFeedback(Query &query, Feedback &out, bool verbose = false) const;
         ResultItem CalcItemResult(Query &q, size_t prop_id, index_t item_id) const;
-        ResultItem CalcPropResult(Query &q, size_t prop_id) const;
+        ResultItem CalcHeaderResult(Query &q, size_t prop_id) const;
     };
 }

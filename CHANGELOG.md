@@ -1,4 +1,7 @@
 # CHANGELOG
+## x.x.x
+- Fixed secondary description not showing if matches were only in its header.
+
 ## 0.8.3
 - Fixed exclusion filters being broken.
 

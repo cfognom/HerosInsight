@@ -85,6 +85,24 @@ namespace HerosInsight::Filtering
         return cmp;
     }
 
+    bool SubstrsContainsSubstrs(std::span<const uint16_t> asubs, std::string_view astr, std::span<const uint16_t> bsubs, std::string_view bstr)
+    {
+    retry:
+        if (asubs.size() < bsubs.size())
+            return false;
+        for (size_t i = 0; i < bsubs.size(); i += 2)
+        {
+            auto asub = astr.substr(asubs[i], asubs[i + 1] - asubs[i]);
+            auto bsub = bstr.substr(bsubs[i], bsubs[i + 1] - bsubs[i]);
+            if (asub != bsub)
+            {
+                asubs = asubs.subspan(2);
+                goto retry;
+            }
+        }
+        return true;
+    }
+
     void IncrementalProp::Reset()
     {
         searchable_text.arena.clear();
