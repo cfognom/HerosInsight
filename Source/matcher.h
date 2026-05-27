@@ -40,14 +40,20 @@ namespace HerosInsight
             return static_cast<const Derived *>(this)->UppercaseView();
         }
 
-        void GetReadableString(OutBuf<char> out) const
+        void ToReadableString(char *dst) const
         {
-            auto size = out.size();
-            out.AppendRange(Text());
+            auto src = Text();
+            std::memcpy(dst, src.data(), src.size());
             for (auto index : Uppercase().IterSetBits())
             {
-                out[size + index] -= 32;
+                dst[index] -= 32; // Make uppercase
             }
+        }
+
+        void GetReadableString(OutBuf<char> out) const
+        {
+            auto dst = out.AppendDstBuffer(Text().size());
+            GetReadableString(dst);
         }
 
         constexpr LoweredStringView SubStr(size_t offset, size_t count);
