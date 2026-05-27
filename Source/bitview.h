@@ -477,6 +477,14 @@ public:
         this->words.resize(CalcWordCount(n_bits), value ? std::numeric_limits<word_t>::max() : word_t(0));
         this->n_bits = n_bits;
     }
+    void append_range(const BitView &range)
+    {
+        // TODO: Maybe do this with bit shifting instead?
+        size_t original_size = this->n_bits;
+        this->resize(original_size + range.size(), false);
+        for (auto index : range.IterSetBits())
+            this->ref_unchecked(original_size + index).Set(true);
+    }
     constexpr word_t *data() { return words.data(); }
     constexpr const word_t *data() const { return words.data(); }
     constexpr size_t size() const { return n_bits; }
