@@ -133,7 +133,7 @@ public:
     }
 
     template <typename T>
-    constexpr Derived &operator|=(BitViewBase<T> &other)
+    constexpr Derived &operator|=(const BitViewBase<T> &other)
     {
         if (this->bit_offset() == other.bit_offset())
         {
