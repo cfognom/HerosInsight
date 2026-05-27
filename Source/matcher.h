@@ -153,6 +153,12 @@ namespace HerosInsight
             LowercaseFold();
         }
 
+        void clear()
+        {
+            arena.clear();
+            uppercase.clear();
+        }
+
         size_t CommitAndFold()
         {
             auto strId = arena.CommitWritten();

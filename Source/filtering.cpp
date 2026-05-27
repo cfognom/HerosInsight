@@ -105,7 +105,7 @@ namespace HerosInsight::Filtering
 
     void IncrementalProp::Reset()
     {
-        searchable_text.arena.clear();
+        searchable_text.clear();
         string_templates.clear();
         string_templates_deduper.clear();
         item_to_str.clear();
