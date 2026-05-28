@@ -432,10 +432,10 @@ namespace HerosInsight
         bool Bundle : 1;
         bool Bounty : 1;
         bool Spell : 1;
+        bool ExploitsCorpse : 1;
         bool EndsOnIncDamage : 1;
         bool Projectile : 1;
         bool HitBased : 1; // Skills whose effects are applied on hit rather than on activation.
-        bool ExploitsCorpse : 1;
         bool Temporary : 1;
         bool Learnable : 1;
         bool Unlockable : 1;

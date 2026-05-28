@@ -518,6 +518,20 @@ namespace
         return skills.has(skill.skill_id);
     }
 
+    bool IsExploitsCorpseSkill(const GW::Skill &skill)
+    {
+        auto skill_id = skill.skill_id;
+
+        if (skill_id == SkillID::Holiday_Blues)
+            return false;
+
+        return (skill.special & (uint32_t)Utils::SkillSpecialFlags::ExploitsCorpse) ||
+               skill_id == SkillID::Well_of_Ruin ||
+               skill_id == SkillID::Aura_of_the_Lich ||
+               skill_id == SkillID::Queen_Heal ||
+               skill_id == SkillID::Junundu_Feast;
+    }
+
     bool IsDragonArenaSkill(SkillID skill_id)
     {
         return (skill_id >= SkillID::Spirit_of_the_Festival && skill_id <= SkillID::Imperial_Majesty);
@@ -3321,15 +3335,12 @@ namespace HerosInsight
         this->Bundle = IsBundleSkill(skill_id);
         this->Bounty = IsBounty(skill);
         this->Spell = IsSpellSkill(skill);
+        this->ExploitsCorpse = IsExploitsCorpseSkill(skill);
         this->EndsOnIncDamage = ::EndsOnIncDamage(skill_id);
         this->Projectile = IsProjectileSkill(skill);
 
         this->HitBased = (this->Projectile && skill_id != SkillID::Ice_Spear) ||
                          skill.type == SkillType::Attack;
-
-        this->ExploitsCorpse = (skill.special & (uint32_t)Utils::SkillSpecialFlags::ExploitsCorpse) ||
-                               skill_id == SkillID::Well_of_Ruin ||
-                               skill_id == SkillID::Aura_of_the_Lich;
 
         this->Temporary = (context != Utils::SkillContext::Null) ||
                           this->Mission ||
