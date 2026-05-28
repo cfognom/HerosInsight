@@ -1,4 +1,7 @@
 # CHANGELOG
+## 0.8.5
+- Fixed compatibility with latest GW update.
+
 ## 0.8.4
 - Fixed compatibility with latest GW update.
 - Made mod more resilient to future skill additions.
