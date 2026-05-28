@@ -24,7 +24,7 @@ namespace HerosInsight::Text
 {
     Provider &GetTextProvider(GW::Constants::Language language)
     {
-        static std::unique_ptr<Provider> providers[GW::Constants::LangMax] = {};
+        static std::unique_ptr<Provider> providers[GW::Constants::LangCount] = {};
 
         auto &provider = providers[static_cast<size_t>(language)];
         if (!provider)
@@ -132,6 +132,7 @@ namespace HerosInsight::Text
         {
             throw std::runtime_error("Failed to get skill texts");
         }
+        auto skill_count = GW::SkillbarMgr::GetSkillCount();
         auto &mgr = s_Manager;
         for (size_t type = 0; type < SkillTextType::COUNT; ++type)
         {
@@ -139,8 +140,9 @@ namespace HerosInsight::Text
             auto &skillId_to_strId = this->skill_strIds[type];
             // auto deduper1 = assembler.pieces.CreateDeduper(0);
             // auto deduper2 = assembler.strings.CreateDeduper(0);
+            skillId_to_strId.reserve(skill_count);
             std::vector<uint16_t> remapper(raw_texts.SpanCount(), std::numeric_limits<uint16_t>::max());
-            for (size_t skill_id = 0; skill_id < GW::Constants::SkillMax; ++skill_id)
+            for (size_t skill_id = 0; skill_id < skill_count; ++skill_id)
             {
                 auto src_span_id = raw_texts.GetSpanId(skill_id).value();
                 auto &dst_span_id = remapper[src_span_id];
@@ -149,7 +151,8 @@ namespace HerosInsight::Text
                     auto raw_text = raw_texts.CGet(src_span_id);
                     dst_span_id = mgr.AssimilateString(raw_text);
                 }
-                skillId_to_strId[skill_id] = dst_span_id;
+                assert(skillId_to_strId.size() == skill_id);
+                skillId_to_strId.push_back(dst_span_id);
             }
         }
     }

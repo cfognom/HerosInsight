@@ -416,16 +416,11 @@ namespace HerosInsight
     struct SkillTags
     {
         bool Archived : 1;
-
-        bool EffectOnly : 1;
-        bool Unlockable : 1;
-        bool Learnable : 1;
-        bool Temporary : 1;
+        bool DeveloperSkill : 1;
         bool MonsterSkill : 1;
         bool EnvironmentSkill : 1;
-        bool DeveloperSkill : 1;
         bool SpiritAttack : 1;
-
+        bool EffectOnly : 1;
         bool PvEOnly : 1;
         bool PvPOnly : 1;
         bool PvEVersion : 1;
@@ -436,13 +431,17 @@ namespace HerosInsight
         bool Mission : 1;
         bool Bundle : 1;
         bool Bounty : 1;
-
         bool Spell : 1;
-        bool ConditionSource : 1;
-        bool ExploitsCorpse : 1;
         bool EndsOnIncDamage : 1;
         bool Projectile : 1;
         bool HitBased : 1; // Skills whose effects are applied on hit rather than on activation.
+        bool ExploitsCorpse : 1;
+        bool Temporary : 1;
+        bool Learnable : 1;
+        bool Unlockable : 1;
+        bool ConditionSource : 1;
+
+        SkillTags(const GW::Skill &skill, const Utils::SkillContext &context, const std::span<HerosInsight::ParsedSkillData> &parsed_data);
     };
     static_assert(sizeof(SkillTags) <= 8);
 
@@ -562,12 +561,13 @@ namespace HerosInsight
         GW::Constants::SkillID skill_id;
         GW::Skill &skill;
 
-        SkillTags tags;
         Utils::SkillContext context;
         AttributeOrTitle attribute;
         Renewal renewal;
-        SkillParam base_duration;
         std::vector<ParsedSkillData> parsed_data;
+        SkillTags tags;
+        SkillParam base_duration;
+
         std::vector<StaticSkillEffect> init_effects;
         std::vector<StaticSkillEffect> end_effects;
         std::vector<StaticSkillEffect> drop_effects;

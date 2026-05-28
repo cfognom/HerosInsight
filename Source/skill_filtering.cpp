@@ -98,10 +98,13 @@ namespace HerosInsight::SkillFiltering
     void InitBaseSkills()
     {
         using element_t = std::ranges::range_value_t<decltype(base_skills)>;
-        element_t next_skill_id = 1;
-        for (auto &skill_id : base_skills)
+        element_t first_skill_id = 1;
+        element_t end_skill_id = GW::SkillbarMgr::GetSkillCount();
+        auto base_skill_count = end_skill_id - first_skill_id;
+        base_skills.reserve(base_skill_count);
+        for (element_t skill_id = first_skill_id; skill_id < end_skill_id; ++skill_id)
         {
-            skill_id = next_skill_id++;
+            base_skills.push_back(skill_id);
         }
         SortSkills(base_skills);
     }
@@ -147,6 +150,7 @@ namespace HerosInsight::SkillFiltering
 
         void InitProps()
         {
+            const auto skill_count = GW::SkillbarMgr::GetSkillCount();
             static std::string_view Percent = "%";
 
             static_props[(size_t)SkillProp::Energy].SetupIncremental(nullptr, NumberAndIcon<&CustomSkillData::GetEnergy, nullptr, &RichText::Icons::EnergyOrb>);
@@ -166,10 +170,10 @@ namespace HerosInsight::SkillFiltering
                 }
             );
 
-            static_props[(size_t)SkillProp::Type].PopulateItems("SkillBookProp_Type", GW::Constants::SkillMax, GetSkillProp<&CustomSkillData::GetTypeString>);
-            static_props[(size_t)SkillProp::Attribute].PopulateItems("SkillBookProp_Attribute", GW::Constants::SkillMax, GetSkillProp<&CustomSkillData::GetAttributeStr>);
-            static_props[(size_t)SkillProp::Profession].PopulateItems("SkillBookProp_Profession", GW::Constants::SkillMax, GetSkillProp<&CustomSkillData::GetProfessionStr>);
-            static_props[(size_t)SkillProp::Campaign].PopulateItems("SkillBookProp_Campaign", GW::Constants::SkillMax, GetSkillProp<&CustomSkillData::GetCampaignStr>);
+            static_props[(size_t)SkillProp::Type].PopulateItems("SkillBookProp_Type", skill_count, GetSkillProp<&CustomSkillData::GetTypeString>);
+            static_props[(size_t)SkillProp::Attribute].PopulateItems("SkillBookProp_Attribute", skill_count, GetSkillProp<&CustomSkillData::GetAttributeStr>);
+            static_props[(size_t)SkillProp::Profession].PopulateItems("SkillBookProp_Profession", skill_count, GetSkillProp<&CustomSkillData::GetProfessionStr>);
+            static_props[(size_t)SkillProp::Campaign].PopulateItems("SkillBookProp_Campaign", skill_count, GetSkillProp<&CustomSkillData::GetCampaignStr>);
             static_props[(size_t)SkillProp::Id].SetupIncremental(
                 nullptr,
                 +[](Text::StringTemplateAtom::Builder &b, size_t skill_id, void *) -> Text::StringTemplateAtom
@@ -359,7 +363,7 @@ namespace HerosInsight::SkillFiltering
                 bool is_learnable = Utils::IsSkillLearnable(pve_cskill, settings.focused_agent_id);
                 bool is_unlearned = is_learnable && !is_learned;
 
-                FixedVector<Text::StringTemplateAtom, 16> args;
+                FixedVector<Text::StringTemplateAtom, 128> args;
 
                 auto PushTag = [&](std::string_view str, ImU32 color = NULL, std::string_view icon = {})
                 {

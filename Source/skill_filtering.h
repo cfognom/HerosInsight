@@ -7,9 +7,7 @@
 
 namespace HerosInsight::SkillFiltering
 {
-    constexpr size_t SkillCount = GW::Constants::SkillMax - 1;
-
-    inline std::array<uint16_t, SkillCount> base_skills; // skill ids
+    inline std::vector<uint16_t> base_skills; // skill ids
 
     // The order they are listed in here is also the order the properties are filtered by.
     // This order has big impacts in the filtering speed.
@@ -93,7 +91,6 @@ namespace HerosInsight::SkillFiltering
         explicit Adapter(Settings &settings);
 
         using index_type = uint16_t;
-        constexpr static size_t MaxSpanCount() { return GW::Constants::SkillMax; }
         constexpr static size_t PropCount() { return PROP_COUNT; }
         size_t MetaCount() const;
 

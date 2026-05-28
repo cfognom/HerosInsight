@@ -121,7 +121,7 @@ namespace HerosInsight::Debug
         }
 
         if (skill_id == GW::Constants::SkillID::No_Skill ||
-            skill_id >= GW::Constants::SkillID::Count)
+            skill_id >= (GW::Constants::SkillID)GW::SkillbarMgr::GetSkillCount())
             return;
 
         const auto &cskill = CustomSkillDataModule::GetCustomSkillData(skill_id);
