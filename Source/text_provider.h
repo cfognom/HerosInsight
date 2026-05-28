@@ -127,7 +127,7 @@ namespace HerosInsight::Text
 
         GW::Constants::Language language;
 
-        std::array<StringManager::StrId, GW::Constants::SkillMax> skill_strIds[SkillTextType::COUNT];
+        std::vector<StringManager::StrId> skill_strIds[SkillTextType::COUNT];
         SlotSpanVector<char> skill_raw[SkillTextType::COUNT];
     };
 

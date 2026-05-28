@@ -97,10 +97,12 @@
 
 #include "custom_skill_data.h"
 
-namespace HerosInsight
+using SkillID = GW::Constants::SkillID;
+using SkillType = GW::Constants::SkillType;
+
+namespace
 {
-    using SkillID = GW::Constants::SkillID;
-    using SkillType = GW::Constants::SkillType;
+    using namespace HerosInsight;
 
     bool IsDeveloperSkill(const GW::Skill &skill)
     {
@@ -116,7 +118,7 @@ namespace HerosInsight
                dev_skills.has(skill.skill_id);
     }
 
-    bool IsArchivedSkill(CustomSkillData &custom_sd)
+    bool IsArchivedSkill(const GW::Skill &skill)
     {
         constexpr static auto archived_skills = MakeFixedSet<SkillID>(
             SkillID::UNUSED_Complicate,
@@ -348,14 +350,16 @@ namespace HerosInsight
             (SkillID)756   // Barrage (passive effect)
         );
 
-        if (IsDeveloperSkill(custom_sd.skill) ||
-            archived_skills.has(custom_sd.skill_id))
+        auto skill_id = skill.skill_id;
+
+        if (IsDeveloperSkill(skill) ||
+            archived_skills.has(skill_id))
             return true;
 
-        if (custom_sd.skill.IsPvP())
+        if (skill.IsPvP())
         {
-            auto non_pvp_version = GW::SkillbarMgr::GetSkillConstantData(custom_sd.skill.skill_id_pvp);
-            if (non_pvp_version->skill_id_pvp != custom_sd.skill_id)
+            auto &non_pvp_version = *GW::SkillbarMgr::GetSkillConstantData(skill.skill_id_pvp);
+            if (non_pvp_version.skill_id_pvp != skill_id)
             {
                 // The non-pvp version does not point back to the pvp version,
                 // this is a sign that the skill is an archived pvp skill.
@@ -364,9 +368,9 @@ namespace HerosInsight
         }
 
         auto &text_provider = Text::GetTextProvider(GW::Constants::Language::English);
-        auto name = text_provider.GetName(custom_sd.skill_id);
-        auto full = text_provider.GetRawDescription(custom_sd.skill_id, false);
-        auto concise = text_provider.GetRawDescription(custom_sd.skill_id, true);
+        auto name = text_provider.GetName(skill_id);
+        auto full = text_provider.GetRawDescription(skill_id, false);
+        auto concise = text_provider.GetRawDescription(skill_id, true);
 
         if (name == "..." &&
             full == "..." &&
@@ -387,7 +391,7 @@ namespace HerosInsight
         return false;
     }
 
-    bool IsBounty(GW::Skill &skill)
+    bool IsBounty(const GW::Skill &skill)
     {
         if (skill.type != SkillType::Bounty)
             return false;
@@ -419,7 +423,7 @@ namespace HerosInsight
         return false;
     }
 
-    bool IsSpellSkill(GW::Skill &skill)
+    bool IsSpellSkill(const GW::Skill &skill)
     {
         return skill.type == SkillType::Spell ||
                skill.type == SkillType::Enchantment ||
@@ -447,7 +451,7 @@ namespace HerosInsight
         return skills.has(skill_id);
     }
 
-    bool IsProjectileSkill(GW::Skill &skill)
+    bool IsProjectileSkill(const GW::Skill &skill)
     {
         constexpr static auto skills = MakeFixedSet<SkillID>(
             SkillID::Spear_of_Light,
@@ -512,6 +516,20 @@ namespace HerosInsight
         }
 
         return skills.has(skill.skill_id);
+    }
+
+    bool IsExploitsCorpseSkill(const GW::Skill &skill)
+    {
+        auto skill_id = skill.skill_id;
+
+        if (skill_id == SkillID::Holiday_Blues)
+            return false;
+
+        return (skill.special & (uint32_t)Utils::SkillSpecialFlags::ExploitsCorpse) ||
+               skill_id == SkillID::Well_of_Ruin ||
+               skill_id == SkillID::Aura_of_the_Lich ||
+               skill_id == SkillID::Queen_Heal ||
+               skill_id == SkillID::Junundu_Feast;
     }
 
     bool IsDragonArenaSkill(SkillID skill_id)
@@ -1214,7 +1232,7 @@ namespace HerosInsight
         return true;
     }
 
-    FixedVector<CustomSkillData, GW::Constants::SkillMax> custom_skill_datas;
+    static std::vector<CustomSkillData> custom_skill_datas;
 
     bool IsNumber(char c)
     {
@@ -1263,7 +1281,10 @@ namespace HerosInsight
         auto end = p + after.size();
         SkipWhitespace(p, end);
     }
+}
 
+namespace HerosInsight
+{
     enum struct DescToken
     {
         Null,
@@ -2070,13 +2091,13 @@ namespace HerosInsight
         }
     }
 
-    void ParseSkillData(CustomSkillData &cskill)
+    std::vector<ParsedSkillData> ParseSkillData(GW::Constants::SkillID skill_id)
     {
-        auto &parsed_data = cskill.parsed_data;
+        std::vector<ParsedSkillData> parsed_data;
         ParsedSkillData pd = {};
 
         // Hardcoded cases
-        switch (cskill.skill_id)
+        switch (skill_id)
         {
             case SkillID::Unseen_Fury:
             {
@@ -2086,7 +2107,7 @@ namespace HerosInsight
                 pd.type = ParsedSkillData::Type::Duration;
                 pd.param = {10, 30};
                 parsed_data.push_back(pd);
-                return;
+                return parsed_data;
             }
 
             case SkillID::Ursan_Roar_Blood_Washes_Blood:
@@ -2101,7 +2122,7 @@ namespace HerosInsight
 
                 pd.type = ParsedSkillData::Type::Weakness;
                 parsed_data.push_back(pd);
-                return;
+                return parsed_data;
             }
 
             case SkillID::Ash_Blast:
@@ -2117,7 +2138,7 @@ namespace HerosInsight
                 pd.type = ParsedSkillData::Type::ChanceToMiss;
                 pd.param = {20, 75};
                 parsed_data.push_back(pd);
-                return;
+                return parsed_data;
             }
 
             case SkillID::Crippling_Victory: // Has weird formatting for a skill which applies a condition
@@ -2129,7 +2150,7 @@ namespace HerosInsight
                 pd.damage_type = DamageType::Earth;
                 pd.param = {10, 30};
                 parsed_data.push_back(pd);
-                return;
+                return parsed_data;
             }
 
             case SkillID::Hungers_Bite:
@@ -2153,11 +2174,11 @@ namespace HerosInsight
                     pd.type = type;
                     parsed_data.push_back(pd);
                 }
-                return;
+                return parsed_data;
             }
         }
 
-        auto desc = Text::GetTextProvider(GW::Constants::Language::English).GetRawDescription(cskill.skill_id, false);
+        auto desc = Text::GetTextProvider(GW::Constants::Language::English).GetRawDescription(skill_id, false);
         auto tokenized_desc = TokenizedDesc(desc);
 
         auto tokens = tokenized_desc.tokens;
@@ -2198,6 +2219,8 @@ namespace HerosInsight
             }
             w++;
         }
+
+        return parsed_data;
     }
 
     Utils::SkillContext GetSkillContext(GW::Skill &skill)
@@ -2307,8 +2330,7 @@ namespace HerosInsight
             ImGui::SameLine();
             ImGui::Text("%%");
         }
-        else if (type > ParsedSkillData::Type::SECONDS_START &&
-                 type < ParsedSkillData::Type::SECONDS_END)
+        else if (type > ParsedSkillData::Type::SECONDS_START && type < ParsedSkillData::Type::SECONDS_END)
         {
             ImGui::SameLine();
             ImGui::Text(" seconds");
@@ -2423,8 +2445,8 @@ namespace HerosInsight
         void Initialize()
         {
             auto skills = GW::SkillbarMgr::GetSkills();
-            assert(skills.data());
 
+            custom_skill_datas.reserve(skills.size());
             for (auto &skill : skills)
             {
                 custom_skill_datas.emplace_back(skill);
@@ -2438,35 +2460,33 @@ namespace HerosInsight
 
         CustomSkillData &GetCustomSkillData(SkillID skill_id)
         {
-            assert((uint32_t)skill_id < GW::Constants::SkillMax);
-            return custom_skill_datas[(uint32_t)skill_id];
+            return custom_skill_datas[(std::underlying_type_t<decltype(skill_id)>)skill_id];
         }
     }
 
-    SkillParam DetermineBaseDuration(CustomSkillData &cskill)
+    SkillParam DetermineBaseDuration(const GW::Skill &skill, SkillTags &tags, std::span<ParsedSkillData> parsed_data)
     {
-        auto &parsed_data = cskill.parsed_data;
-
-        // Typically this param is the duration, but it may sometimes be condition duration or other.
-        auto base_duration = cskill.GetSkillParam(2);
+        // Typically this param is the duration, but it may sometimes be condition duration or other...
+        auto skill_id = skill.skill_id;
+        auto base_duration = GetSkillParam(skill, 2);
 
         // Special cases
-        switch (cskill.skill_id)
+        switch (skill_id)
         {
             case SkillID::Pious_Assault:
             case SkillID::Pious_Assault_PvP:
                 return {0, 0};
             default:
             {
-                if (cskill.tags.SpiritAttack)
+                if (tags.SpiritAttack)
                 {
                     return {0, 0};
                 }
 
                 if (!base_duration.IsNull() &&
-                    cskill.skill.type == SkillType::Attack)
+                    skill.type == SkillType::Attack)
                 {
-                    auto desc = Text::GetTextProvider(GW::Constants::Language::English).GetRawDescription(cskill.skill_id, true);
+                    auto desc = Text::GetTextProvider(GW::Constants::Language::English).GetRawDescription(skill_id, true);
                     if (desc.contains("nock"))
                     {
                         return {0, 0};
@@ -2477,7 +2497,7 @@ namespace HerosInsight
 
         if (!base_duration.IsNull())
         {
-            // So we have to cross-check with the parsed params
+            // ...so we have to cross-check with the parsed params
             for (auto pd : parsed_data)
             {
                 if (pd.type == ParsedSkillData::Type::Duration &&
@@ -3292,79 +3312,73 @@ namespace HerosInsight
         DetermineRemovals();
     }
 
-    CustomSkillData::CustomSkillData(GW::Skill &skill)
-        : skill_id(skill.skill_id),
-          skill(skill),
-          context(GetSkillContext(skill))
+    SkillTags::SkillTags(const GW::Skill &skill, const Utils::SkillContext &context, const std::span<HerosInsight::ParsedSkillData> &parsed_data)
     {
-        // clang-format off
-        if (IsArchivedSkill(*this))       tags.Archived = true;
-        if (IsEffectOnly(skill))          tags.EffectOnly = true;
-        if (IsDeveloperSkill(skill))      tags.DeveloperSkill = true;
-        if (IsMonsterSkill(skill))        tags.MonsterSkill = true;
-        if (IsEnvironmentSkill(skill))    tags.EnvironmentSkill = true;
-        if (IsSpiritAttackSkill(skill))   tags.SpiritAttack = true;
-        if (IsPvEOnlySkill(skill))        tags.PvEOnly = true;
-        if (IsPvPOnlySkill(skill))        tags.PvPOnly = true;
-        if (skill.IsPvP())                tags.PvPVersion = true;
-        if (skill.skill_id_pvp < SkillID::Count &&
-           !skill.IsPvP())                tags.PvEVersion = true;
-        if (IsConsumableItemSkill(skill)) tags.Consumable = true;
-        if (IsMaintainedSkill(skill))     tags.Maintained = true;
-        if (IsMissionSkill(skill_id))     tags.Mission = true;
-        if (IsCelestialSkill(skill_id))   tags.Celestial = true;
-        if (IsBundleSkill(skill_id))      tags.Bundle = true;
-        if (IsBounty(skill))              tags.Bounty = true;
+        std::memset((void *)this, 0, sizeof(*this));
 
-        if (IsSpellSkill(skill))          tags.Spell = true;
-        if (EndsOnIncDamage(skill_id))    tags.EndsOnIncDamage = true;
-        if (IsProjectileSkill(skill))     tags.Projectile = true;
-        // clang-format on
+        auto skill_id = skill.skill_id;
 
-        if (context != Utils::SkillContext::Null ||
-            tags.Mission ||
-            tags.Celestial ||
-            tags.Bundle)
-            tags.Temporary = true;
+        this->Archived = IsArchivedSkill(skill);
+        this->DeveloperSkill = IsDeveloperSkill(skill);
+        this->MonsterSkill = IsMonsterSkill(skill);
+        this->EnvironmentSkill = IsEnvironmentSkill(skill);
+        this->SpiritAttack = IsSpiritAttackSkill(skill);
+        this->EffectOnly = IsEffectOnly(skill);
+        this->PvEOnly = IsPvEOnlySkill(skill);
+        this->PvPOnly = IsPvPOnlySkill(skill);
+        this->PvEVersion = !skill.IsPvP() && static_cast<uint32_t>(skill.skill_id_pvp) < GW::SkillbarMgr::GetSkillCount();
+        this->PvPVersion = skill.IsPvP();
+        this->Maintained = IsMaintainedSkill(skill);
+        this->Consumable = IsConsumableItemSkill(skill);
+        this->Celestial = IsCelestialSkill(skill_id);
+        this->Mission = IsMissionSkill(skill_id);
+        this->Bundle = IsBundleSkill(skill_id);
+        this->Bounty = IsBounty(skill);
+        this->Spell = IsSpellSkill(skill);
+        this->ExploitsCorpse = IsExploitsCorpseSkill(skill);
+        this->EndsOnIncDamage = ::EndsOnIncDamage(skill_id);
+        this->Projectile = IsProjectileSkill(skill);
 
-        if (!tags.EffectOnly &&
-            !tags.DeveloperSkill &&
-            !tags.MonsterSkill &&
-            !tags.EnvironmentSkill &&
-            !tags.SpiritAttack &&
-            !tags.Consumable &&
-            !tags.Temporary)
-            tags.Learnable = true;
+        this->HitBased = (this->Projectile && skill_id != SkillID::Ice_Spear) ||
+                         skill.type == SkillType::Attack;
 
-        if (skill.profession != GW::Constants::ProfessionByte::None &&
-            tags.Learnable &&
-            !tags.PvEOnly)
-            tags.Unlockable = true;
+        this->Temporary = (context != Utils::SkillContext::Null) ||
+                          this->Mission ||
+                          this->Celestial ||
+                          this->Bundle;
 
-        if (skill.special & (uint32_t)Utils::SkillSpecialFlags::ExploitsCorpse ||
-            skill_id == SkillID::Well_of_Ruin ||
-            skill_id == SkillID::Aura_of_the_Lich)
-            tags.ExploitsCorpse = true;
+        this->Learnable = !this->EffectOnly &&
+                          !this->DeveloperSkill &&
+                          !this->MonsterSkill &&
+                          !this->EnvironmentSkill &&
+                          !this->SpiritAttack &&
+                          !this->Consumable &&
+                          !this->Temporary;
 
-        if ((tags.Projectile && skill_id != SkillID::Ice_Spear) ||
-            skill.type == SkillType::Attack)
-            tags.HitBased = true;
-
-        ParseSkillData(*this);
+        this->Unlockable = (skill.profession != GW::Constants::ProfessionByte::None) &&
+                           this->Learnable &&
+                           !this->PvEOnly;
 
         for (auto &pd : parsed_data)
         {
             if (pd.IsCondition())
             {
-                tags.ConditionSource = true;
+                this->ConditionSource = true;
                 break;
             }
         }
+    }
 
-        renewal = Renewal::None;
-        attribute = AttributeOrTitle(skill);
-
-        this->base_duration = DetermineBaseDuration(*this);
+    CustomSkillData::CustomSkillData(GW::Skill &skill)
+        : skill_id(skill.skill_id),
+          skill(skill),
+          context(GetSkillContext(skill)),
+          renewal(Renewal::None),
+          attribute(skill),
+          parsed_data(ParseSkillData(skill.skill_id)),
+          tags(skill, context, parsed_data),
+          base_duration(DetermineBaseDuration(skill, tags, parsed_data))
+    {
 #ifdef EXPERIMENTAL_FEATURES
         DetermineEffects(*this);
 #endif

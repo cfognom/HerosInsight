@@ -76,7 +76,10 @@ namespace HerosInsight
                 sizeof(T) <= sizeof(uint16_t), uint16_t,
                 typename std::conditional<
                     sizeof(T) <= sizeof(uint32_t), uint32_t,
-                    uint64_t>::type>::type>::type;
+                    uint64_t
+                >::type
+            >::type
+        >::type;
 
         constexpr std::size_t custom_hash(const T &element) const
         {

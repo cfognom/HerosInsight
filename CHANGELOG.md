@@ -2,6 +2,10 @@
 ## x.x.x
 - Fixed secondary description not showing if matches were only in its header.
 
+## 0.8.4
+- Fixed compatibility with latest GW update.
+- Made mod more resilient to future skill additions.
+
 ## 0.8.3
 - Fixed exclusion filters being broken.
 
