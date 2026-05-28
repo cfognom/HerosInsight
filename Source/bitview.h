@@ -436,8 +436,11 @@ public:
     constexpr const word_t *data() const { return words.data(); }
     constexpr size_t size() const { return N; }
 
-    constexpr BitArray() : BitArray(false) {}
-    constexpr BitArray(bool inital_value) : words{inital_value ? std::numeric_limits<word_t>::max() : 0} {}
+    constexpr BitArray() : words{} {} // Sets all bits to 0
+    constexpr BitArray(bool inital_value)
+    {
+        words.fill(inital_value ? std::numeric_limits<word_t>::max() : 0);
+    }
 
 private:
     constexpr size_t bit_offset() const { return 0; }
