@@ -21,7 +21,7 @@ namespace HerosInsight::Filtering
 
     struct Filter
     {
-        size_t meta_prop_id = 0;
+        size_t meta_id;
         std::string_view source_text;
         std::string_view filter_text;
         std::vector<Matcher> matchers; // We have several because we can OR them
@@ -79,20 +79,15 @@ namespace HerosInsight::Filtering
         }
     };
 
-    struct RelevantMeta
-    {
-        uint32_t meta_id;
-        uint32_t popcount;
-    };
-
     struct ResultItem
     {
-        LoweredStringView searchable_text;
-        FixedVector<char, 512> presentable_text;
+        ConstLoweredStringView searchable_text;
+        std::string_view presentable_text;
         std::span<uint16_t> searchable_hl;
         std::span<uint16_t> presentable_hl;
 
         std::vector<uint16_t> _hl_storage; // Highlight
+        std::string presentable_text_storage;
 
         bool IsNovelTo(const ResultItem &other) const
         {
@@ -168,7 +163,7 @@ namespace HerosInsight::Filtering
 
         size_t GetStrId(size_t itemId);
         Text::StringTemplate GetStringTemplate(size_t strId);
-        LoweredStringView GetSearchableStr(size_t strId) { return searchable_text[strId]; }
+        ConstLoweredStringView GetSearchableStr(size_t strId) { return std::as_const(searchable_text)[strId]; }
         void GetReadableString(size_t strId, OutBuf<char> out, OutBuf<Text::PosDelta> deltas);
     };
 
@@ -180,19 +175,35 @@ namespace HerosInsight::Filtering
 
     struct MetaProp
     {
-        LoweredStringView name;
-        BitView propset; // Which props this meta-prop targets
+        ConstLoweredStringView name;
+        ConstBitView propset; // Which props this meta-prop targets
+    };
+
+    struct MetaSetup
+    {
+        std::span<MetaProp> metas;        // Sorted from most specific to least.
+        LoweredStringVector prop_headers; // Headers for each prop. I.e. comma separated string of meta-props targeting this prop, sorted from most specific to least.
+
+        MetaSetup(std::span<MetaProp> metas);
     };
 
     struct Device
     {
         using index_t = uint16_t;
 
-        std::span<MetaProp> metas;
+        std::span<const MetaProp> metas;
+        const LoweredStringVector &prop_headers;
         std::span<IncrementalProp *> props;
-        SpanVector<RelevantMeta> relevant_metas_per_prop; // For each prop this is sorted from most specific to least
 
-        Device(std::span<MetaProp> metas, std::span<IncrementalProp *> props);
+        Device(const MetaSetup &setup, std::span<IncrementalProp *> props)
+            : metas(setup.metas), prop_headers(setup.prop_headers), props(props)
+        {
+#ifdef _DEBUG
+            assert(this->metas.size() > 0);
+            assert(this->prop_headers.size() > 0);
+            assert(this->props.size() > 0);
+#endif
+        }
 
         void ParseQuery(std::string_view source, Query &query) const;
         void RunQuery(Query &query, std::vector<index_t> &items) const;

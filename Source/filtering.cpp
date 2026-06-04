@@ -43,7 +43,7 @@ namespace HerosInsight::Filtering
         }
     }
 
-    static void ConnectHighlighting(std::string_view text, std::span<uint16_t> &hl)
+    static void ConnectSpaceSeparatedHighlighting(std::string_view text, std::span<uint16_t> &hl)
     {
         if (hl.size() < 4)
             return;
@@ -115,9 +115,11 @@ namespace HerosInsight::Filtering
     {
         if (itemId >= item_to_str.size())
             item_to_str.resize(itemId + 1, std::numeric_limits<uint16_t>::max());
+
         auto &strId = item_to_str[itemId];
         if (strId == std::numeric_limits<uint16_t>::max())
         {
+            // We dont have the string template: Build it!
             string_templates.AppendWriteBuffer(
                 32,
                 [&](std::span<Text::StringTemplateAtom> &buffer)
@@ -130,8 +132,11 @@ namespace HerosInsight::Filtering
                 }
             );
             strId = string_templates.CommitWritten(&string_templates_deduper);
-            if (strId == searchable_text.arena.SpanCount())
+
+            bool is_known_template = strId < searchable_text.arena.SpanCount();
+            if (!is_known_template)
             {
+                // If the tempalte is new: Build the searchable string it represents.
                 auto t = GetStringTemplate(strId);
                 if (t.root.header.type != Text::StringTemplateAtom::Type::Null)
                 {
@@ -180,6 +185,59 @@ namespace HerosInsight::Filtering
         }
     }
 
+#define SkillDull "<c=@skilldull>"
+#define ArgColor "<c=@skilldyn>"
+#define ControlColor "<c=#64ffff>"
+#define ModifierColor "<c=#f0f080>"
+#define CloseColor "</c>"
+
+    MetaSetup::MetaSetup(std::span<MetaProp> metas)
+        : metas(metas)
+    {
+        size_t n_meta = metas.size();
+        assert(n_meta > 0);
+        size_t n_props = metas[0].propset.size();
+        assert(n_props > 0);
+#ifdef _DEBUG
+        for (auto &meta : metas)
+        {
+            assert(meta.propset.size() == n_props);
+        }
+#endif
+
+        // Sort metas from most to least "specific".
+        std::sort(
+            metas.begin(), metas.end(),
+            [](auto &a, auto &b)
+            {
+                auto cmp = a.propset.PopCount() <=> b.propset.PopCount();
+                if (cmp != 0)
+                    return cmp < 0;
+                return a.name.text < b.name.text;
+            }
+        );
+
+        // Build the prop headers
+        for (size_t prop_id = 0; prop_id < n_props; ++prop_id)
+        {
+            size_t count = 0;
+            for (auto meta : metas)
+            {
+                if (!meta.propset[prop_id] || meta.name.empty())
+                    continue;
+
+                if (count > 0)
+                {
+                    constexpr LoweredString join = SkillDull ", " CloseColor;
+                    prop_headers.AppendPartial(join);
+                }
+                prop_headers.AppendPartial(meta.name);
+                ++count;
+            }
+            prop_headers.Commit();
+        }
+    }
+
     // Returns the index of the "best" match
     template <typename TextGetter>
     static std::optional<size_t> BestMatch(std::string_view subject, TextGetter &&getter, size_t count)
@@ -209,36 +267,6 @@ namespace HerosInsight::Filtering
         return index;
     }
 
-    Device::Device(std::span<MetaProp> metas, std::span<IncrementalProp *> props)
-        : metas(metas), props(props)
-    {
-        auto n_meta = metas.size();
-        auto n_props = props.size();
-        auto deduper = relevant_metas_per_prop.CreateDeduper(n_props);
-        relevant_metas_per_prop.Reserve(n_props, n_props * 2);
-        for (size_t prop_id = 0; prop_id <= n_props; ++prop_id)
-        {
-            for (size_t meta_id = 0; meta_id < n_meta; ++meta_id)
-            {
-                auto propset = metas[meta_id].propset;
-                if (propset[prop_id])
-                {
-                    relevant_metas_per_prop.Elements().emplace_back(meta_id, propset.PopCount());
-                }
-            }
-            auto pending = relevant_metas_per_prop.GetPendingSpan();
-            std::stable_sort(
-                pending.begin(),
-                pending.end(),
-                [](auto a, auto b)
-                {
-                    return a.popcount < b.popcount;
-                }
-            );
-            relevant_metas_per_prop.CommitWritten(&deduper);
-        }
-    }
-
     static std::optional<size_t> TryGetMetaIdFromName(std::span<const MetaProp> metas, std::string_view subject)
     {
         return BestMatch(
@@ -260,7 +288,8 @@ namespace HerosInsight::Filtering
 
         auto separator_pos = rem.find_first_of("!:=<>");
 
-        filter.meta_prop_id = 0;
+        const size_t default_meta_id = metas.size() - 1;
+        filter.meta_id = default_meta_id;
         if (separator_pos != std::string_view::npos)
         {
             char separator = rem[separator_pos];
@@ -269,10 +298,10 @@ namespace HerosInsight::Filtering
                 auto target_str = rem.substr(0, separator_pos);
                 if (!target_str.empty())
                 {
-                    auto opt_meta_prop_id = TryGetMetaIdFromName(metas, target_str);
-                    if (opt_meta_prop_id.has_value())
+                    auto opt_meta_id = TryGetMetaIdFromName(metas, target_str);
+                    if (opt_meta_id.has_value())
                     {
-                        filter.meta_prop_id = opt_meta_prop_id.value();
+                        filter.meta_id = opt_meta_id.value();
                         rem = rem.substr(separator_pos);
                     }
                 }
@@ -280,7 +309,7 @@ namespace HerosInsight::Filtering
         }
 
         filter.is_exclusion = Utils::TryRead('!', rem);
-        if (filter.meta_prop_id)
+        if (filter.meta_id)
         {
             Utils::TryRead(':', rem) || Utils::TryRead('=', rem);
         }
@@ -311,15 +340,15 @@ namespace HerosInsight::Filtering
         return filter;
     }
 
-    static LoweredString matched_target{"Matched"};
-    static LoweredStringView GetSortTargetName(std::span<const MetaProp> metas, size_t sort_target_id)
+    constexpr static ConstLoweredStringView matched_target = "Matched"_folded;
+    static ConstLoweredStringView GetSortTargetName(std::span<const MetaProp> metas, size_t sort_target_id)
     {
         auto n_meta = metas.size();
         if (sort_target_id < n_meta)
             return metas[sort_target_id].name;
 
         assert(sort_target_id == n_meta);
-        return (LoweredStringView)matched_target;
+        return matched_target;
     }
 
     static std::optional<size_t> TryGetSortTargetIdFromName(std::span<const MetaProp> metas, std::string_view subject)
@@ -343,8 +372,6 @@ namespace HerosInsight::Filtering
         if (!Utils::TryRead('/', rem))
             return false;
 
-        LoweredString sort_command_name("SORT");
-
         auto command_name_end = std::min(rem.find(' '), rem.size());
         auto command_name = rem.substr(0, command_name_end);
         if (command_name.empty())
@@ -353,7 +380,7 @@ namespace HerosInsight::Filtering
             command_name,
             [&](size_t index)
             {
-                return (LoweredStringView)sort_command_name;
+                return "SORT"_folded;
             },
             1
         );
@@ -536,7 +563,7 @@ namespace HerosInsight::Filtering
         Device::index_t index;
     };
 
-    static bool MatchesAny(std::span<Matcher> matchers, LoweredStringView text)
+    static bool MatchesAny(std::span<Matcher> matchers, ConstLoweredStringView text)
     {
         for (auto &matcher : matchers)
         {
@@ -629,7 +656,6 @@ namespace HerosInsight::Filtering
     {
         const Filtering::Device &device;
         std::span<FilterUnit> units;
-        BitView::word_t *propset_alloc;
 
         void Init(std::span<Filtering::Device::index_t> items)
         {
@@ -649,24 +675,22 @@ namespace HerosInsight::Filtering
 
             size_t n_props = device.props.size();
 
-            auto &meta_prop = device.metas[filter.meta_prop_id];
+            auto &meta_prop = device.metas[filter.meta_id];
 
             Partitioner partitioner{units};
 
             for (auto prop_id : meta_prop.propset.IterSetBits())
             {
                 bool is_meta = prop_id == n_props;
-                if (is_meta) // Special case for meta properties
+                if (is_meta) // Special case to search the prop_headers
                 {
-                    // Iterate the meta properties, check for name matches and OR togheter their propsets
-                    BitView propset{propset_alloc, n_props, false};
-                    for (auto &meta_prop : device.metas)
+                    // Iterate the prop_headers, check which ones match and partition by existence of those props
+                    for (size_t prop_id = 0; prop_id < n_props; ++prop_id)
                     {
-                        if (MatchesAny(filter.matchers, meta_prop.name))
-                            propset |= meta_prop.propset;
-                    }
-                    for (auto prop_id : propset.IterSetBits())
-                    {
+                        auto prop_header = device.prop_headers[prop_id];
+                        if (!MatchesAny(filter.matchers, prop_header))
+                            continue;
+
                         auto &prop = *device.props[prop_id];
                         partitioner.PartitionByPropExistence(prop);
                     }
@@ -714,10 +738,9 @@ namespace HerosInsight::Filtering
         size_t n_props = device.props.size();
 
         MultiBuffer::Spec<FilterUnit> units_spec{n_items};
-        MultiBuffer::Spec<BitView::word_t> propset_spec{BitView::CalcWordCount(n_props)};
-        MultiBuffer::HeapAllocated allocation{units_spec, propset_spec};
+        MultiBuffer::HeapAllocated allocation{units_spec};
 
-        UnitFilterer filterer{device, units_spec.Span(), propset_spec.ptr};
+        UnitFilterer filterer{device, units_spec.Span()};
         filterer.Init(items);
 
         for (auto &filter : filters)
@@ -750,7 +773,7 @@ namespace HerosInsight::Filtering
                 std::vector<uint16_t> matches;
                 candidate.reserve(128);
                 matches.reserve(64);
-                auto propset = device.metas[filter.meta_prop_id].propset;
+                auto propset = device.metas[filter.meta_id].propset;
                 for (auto prop_id : propset.IterSetBits())
                 {
                     if (prop_id == device.props.size())
@@ -896,12 +919,6 @@ namespace HerosInsight::Filtering
             }
         };
 
-#define SkillDull "<c=@skilldull>"
-#define ArgColor "<c=@skilldyn>"
-#define ControlColor "<c=#64ffff>"
-#define ModifierColor "<c=#f0f080>"
-#define CloseColor "</c>"
-
         {
             auto &s = out.filter_feedback;
             s.clear();
@@ -912,7 +929,7 @@ namespace HerosInsight::Filtering
                 auto &filter = query.GetFilterInDeclOrder(f);
 
                 FixedVector<char, 128> meta_name;
-                metas[filter.meta_prop_id].name.GetReadableString(meta_name);
+                metas[filter.meta_id].name.GetReadableString(meta_name);
                 auto meta_name_str = (std::string_view)meta_name;
                 auto cond = filter.is_exclusion ? ControlColor "not " CloseColor : "";
                 auto musty = meta_name_str.empty() ? "Must" : " must";
@@ -1053,32 +1070,33 @@ namespace HerosInsight::Filtering
         }
     }
 
-    static void CalcHL(const Filtering::Device &device, Query &q, size_t prop_id, LoweredStringView lowered, std::vector<uint16_t> &hl)
+    static void CalcHL(std::span<const MetaProp> metas, Query &q, size_t prop_id, ConstLoweredStringView lowered, std::vector<uint16_t> &hl)
     {
-        if (!lowered.text.empty())
+        if (lowered.text.empty())
+            return;
+
+        auto init_hl_size = hl.size();
+        // Iterate filters that target this property.
+        for (auto &filter : q.inclusion_filters)
         {
-            auto hl_size_before = hl.size();
-            for (auto &filter : q.inclusion_filters)
+            auto propset = metas[filter.meta_id].propset;
+            if (!propset[prop_id])
+                continue;
+
+            // Collect highlighting for all matchers in this filter.
+            for (auto &matcher : filter.matchers)
             {
-                auto propset = device.metas[filter.meta_prop_id].propset;
-                if (propset[prop_id])
-                {
-                    for (auto &matcher : filter.matchers)
-                    {
-                        auto hl_size_before = hl.size();
-                        bool is_match = matcher.Matches(lowered, hl);
-                        std::span<uint16_t> hl_span = hl;
-                        hl_span = hl_span.subspan(hl_size_before);
-                        ConnectHighlighting(lowered.text, hl_span);
-                        hl.resize(hl_size_before + hl_span.size());
-                    }
-                }
+                auto hl_size_before = hl.size();
+                bool is_match = matcher.Matches(lowered, hl);
+                std::span<uint16_t> hl_span{hl.data() + hl_size_before, hl.size() - hl_size_before};
+                ConnectSpaceSeparatedHighlighting(lowered.text, hl_span);
+                hl.resize(hl_size_before + hl_span.size());
             }
-            std::span<uint16_t> hl_span = hl;
-            hl_span = hl_span.subspan(hl_size_before);
-            SortHighlighting(hl_span);
-            hl.resize(hl_size_before + hl_span.size());
         }
+        std::span<uint16_t> hl_span = hl;
+        hl_span = hl_span.subspan(init_hl_size);
+        SortHighlighting(hl_span);
+        hl.resize(init_hl_size + hl_span.size());
     }
 
     ResultItem Device::CalcItemResult(Query &q, size_t prop_id, index_t item_id) const
@@ -1087,9 +1105,18 @@ namespace HerosInsight::Filtering
         auto str_id = prop.GetStrId(item_id);
         ResultItem result;
         result.searchable_text = prop.GetSearchableStr(str_id);
-        CalcHL(*this, q, prop_id, result.searchable_text, result._hl_storage);
+        CalcHL(this->metas, q, prop_id, result.searchable_text, result._hl_storage);
         FixedVector<Text::PosDelta, 128> deltas;
-        prop.GetReadableString(str_id, result.presentable_text, deltas);
+        result.presentable_text_storage.resize_and_overwrite(
+            512,
+            [&](char *c, size_t size) -> size_t
+            {
+                SpanWriter<char> dst{c, size};
+                prop.GetReadableString(str_id, dst, deltas);
+                return dst.size();
+            }
+        );
+        result.presentable_text = result.presentable_text_storage;
         if (deltas.empty())
         {
             result.searchable_hl = result.presentable_hl = result._hl_storage;
@@ -1105,41 +1132,23 @@ namespace HerosInsight::Filtering
         return result;
     }
 
-    ResultItem Device::CalcPropResult(Query &q, size_t prop_id) const
+    ResultItem Device::CalcHeaderResult(Query &q, size_t prop_id) const
     {
+        auto prop_header = this->prop_headers[prop_id];
         ResultItem result;
-        auto meta_prop_id = props.size();
-        auto relevant_metas = relevant_metas_per_prop.CGet(prop_id);
-        if (!relevant_metas.empty())
-        {
-            constexpr std::string_view join = SkillDull ", " CloseColor;
-            for (size_t i = 0; i < relevant_metas.size(); ++i)
+        result.searchable_text = prop_header;
+        const auto META_PROPS_ID = props.size();
+        CalcHL(this->metas, q, META_PROPS_ID, prop_header, result._hl_storage);
+        result.presentable_text_storage.resize_and_overwrite(
+            prop_header.size(),
+            [prop_header](char *c, size_t size) -> size_t
             {
-                auto &relevant_meta = relevant_metas[i];
-
-                size_t offset = result.presentable_text.size();
-                LoweredStringView lowered = metas[relevant_meta.meta_id].name;
-                if (lowered.text.empty()) // We allow empty meta names; just skip
-                    continue;
-                auto size = result._hl_storage.size();
-                CalcHL(*this, q, meta_prop_id, lowered, result._hl_storage);
-                result.searchable_hl = result.presentable_hl = result._hl_storage;
-                lowered.GetReadableString(result.presentable_text);
-                if (offset > 0)
-                {
-                    for (size_t i = size; i < result._hl_storage.size(); i++)
-                    {
-                        result._hl_storage[i] += offset;
-                    }
-                }
-
-                result.presentable_text.AppendString(join);
+                prop_header.ToReadableString(c);
+                return prop_header.size();
             }
-            if (result.presentable_text.size() > join.size())
-            {
-                result.presentable_text.resize(result.presentable_text.size() - join.size());
-            }
-        }
+        );
+        result.presentable_text = result.presentable_text_storage;
+        result.searchable_hl = result.presentable_hl = result._hl_storage;
 
         return result;
     }

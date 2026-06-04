@@ -9,8 +9,8 @@
 
 namespace HerosInsight::SkillFiltering
 {
-    using Propset = BitArray<SkillFiltering::PROP_COUNT + 1>; // +1 for meta props
-    constexpr static Propset ALL_PROPS = Propset(true);
+    using namespace HerosInsight::Filtering;
+    static constexpr size_t PropsetSize = SkillFiltering::PROP_COUNT + 1; // +1 for meta props
 
     void SortSkills(std::span<uint16_t> skills)
     {
@@ -109,12 +109,40 @@ namespace HerosInsight::SkillFiltering
         SortSkills(base_skills);
     }
 
+    template <SkillProp... Ts>
+    static ConstBitView CreatePropset()
+    {
+        return BitLit<PropsetSize, false, static_cast<size_t>(Ts)...>();
+    }
+
+    static std::array meta_props = {
+        MetaProp{""_folded, BitLit<PropsetSize, true>()}, // "All props"
+        MetaProp{"Meta"_folded, CreatePropset<SkillProp::COUNT>()},
+        MetaProp{"Name"_folded, CreatePropset<SkillProp::Name>()},
+        MetaProp{"Type"_folded, CreatePropset<SkillProp::Type>()},
+        MetaProp{"Tags"_folded, CreatePropset<SkillProp::Tag>()},
+        MetaProp{"Energy"_folded, CreatePropset<SkillProp::Energy>()},
+        MetaProp{"Recharge"_folded, CreatePropset<SkillProp::Recharge>()},
+        MetaProp{"Activation"_folded, CreatePropset<SkillProp::Activation>()},
+        MetaProp{"Aftercast"_folded, CreatePropset<SkillProp::Aftercast>()},
+        MetaProp{"Sacrifice"_folded, CreatePropset<SkillProp::Sacrifice>()},
+        MetaProp{"Overcast"_folded, CreatePropset<SkillProp::Overcast>()},
+        MetaProp{"Adrenaline"_folded, CreatePropset<SkillProp::Adrenaline>()},
+        MetaProp{"Upkeep"_folded, CreatePropset<SkillProp::Upkeep>()},
+        MetaProp{"Full Description"_folded, CreatePropset<SkillProp::Description>()},
+        MetaProp{"Concise Description"_folded, CreatePropset<SkillProp::Concise>()},
+        MetaProp{"Description"_folded, CreatePropset<SkillProp::Description, SkillProp::Concise>()},
+        MetaProp{"Attribute"_folded, CreatePropset<SkillProp::Attribute>()},
+        MetaProp{"Profession"_folded, CreatePropset<SkillProp::Profession>()},
+        MetaProp{"Campaign"_folded, CreatePropset<SkillProp::Campaign>()},
+        MetaProp{"AoE"_folded, CreatePropset<SkillProp::AoE>()},
+        MetaProp{"Id"_folded, CreatePropset<SkillProp::Id>()}
+    };
+    static MetaSetup meta_setup{meta_props};
+
     struct TextStorage
     {
         std::array<Filtering::IncrementalProp, PROP_COUNT> static_props;
-        std::vector<Propset> meta_propsets;
-        LoweredStringVector meta_prop_names;
-        std::vector<Filtering::MetaProp> meta_props;
 
         template <auto Func, auto Unit, auto Icon>
         static Text::StringTemplateAtom NumberAndIcon(Text::StringTemplateAtom::Builder &b, size_t skill_id, void *)
@@ -239,69 +267,12 @@ namespace HerosInsight::SkillFiltering
             );
         }
 
-        template <typename... Ts>
-        static Propset CreatePropset(Ts... args)
-        {
-            Propset propset;
-            ((propset[static_cast<size_t>(args)] = true), ...);
-            return propset;
-        }
-
-        void SetupMetaProps()
-        {
-            auto SetupMetaProp = [&](std::string_view name, Propset propset)
-            {
-                meta_prop_names.arena.push_back(name);
-                meta_propsets.push_back(propset);
-            };
-
-            std::string_view capacity_hint_key = "meta_prop_names";
-            meta_prop_names.arena.ReserveFromHint(capacity_hint_key);
-            meta_propsets.reserve(meta_prop_names.arena.SpanCount());
-
-            SetupMetaProp("", ALL_PROPS); // Must be first
-            SetupMetaProp("Meta", CreatePropset(SkillProp::COUNT));
-            SetupMetaProp("Name", CreatePropset(SkillProp::Name));
-            SetupMetaProp("Type", CreatePropset(SkillProp::Type));
-            SetupMetaProp("Tags", CreatePropset(SkillProp::Tag));
-            SetupMetaProp("Energy", CreatePropset(SkillProp::Energy));
-            SetupMetaProp("Recharge", CreatePropset(SkillProp::Recharge));
-            SetupMetaProp("Activation", CreatePropset(SkillProp::Activation));
-            SetupMetaProp("Aftercast", CreatePropset(SkillProp::Aftercast));
-            SetupMetaProp("Sacrifice", CreatePropset(SkillProp::Sacrifice));
-            SetupMetaProp("Overcast", CreatePropset(SkillProp::Overcast));
-            SetupMetaProp("Adrenaline", CreatePropset(SkillProp::Adrenaline));
-            SetupMetaProp("Upkeep", CreatePropset(SkillProp::Upkeep));
-            SetupMetaProp("Full Description", CreatePropset(SkillProp::Description));
-            SetupMetaProp("Concise Description", CreatePropset(SkillProp::Concise));
-            SetupMetaProp("Description", CreatePropset(SkillProp::Description, SkillProp::Concise));
-            SetupMetaProp("Attribute", CreatePropset(SkillProp::Attribute));
-            SetupMetaProp("Profession", CreatePropset(SkillProp::Profession));
-            SetupMetaProp("Campaign", CreatePropset(SkillProp::Campaign));
-            SetupMetaProp("AoE", CreatePropset(SkillProp::AoE));
-
-            SetupMetaProp("Id", CreatePropset(SkillProp::Id));
-
-            meta_prop_names.LowercaseFold();
-            meta_prop_names.arena.StoreCapacityHint(capacity_hint_key);
-
-            assert(meta_prop_names.arena.SpanCount() == meta_propsets.size());
-            size_t n_meta = meta_propsets.size();
-
-            meta_props.reserve(n_meta);
-            for (size_t i = 0; i < n_meta; ++i)
-            {
-                meta_props.push_back({meta_prop_names[i], meta_propsets[i]});
-            }
-        }
-
         bool is_initialized = false;
         void TryInitialize()
         {
             if (is_initialized)
                 return;
             InitBaseSkills();
-            SetupMetaProps();
             InitProps();
             is_initialized = true;
         }
@@ -441,20 +412,13 @@ namespace HerosInsight::SkillFiltering
         {
             auto prop_id = (SkillProp)i;
             auto it = dynamic_props.find(prop_id);
-            if (it != dynamic_props.end())
-            {
-                props[i] = &it->second;
-            }
-            else
-            {
-                props[i] = &text_storage.static_props[i];
-            }
+            props[i] = it != dynamic_props.end() ? &it->second : &text_storage.static_props[i];
         }
     }
 
     Filtering::Device Setup::CreateFilteringDevice()
     {
-        return Filtering::Device{text_storage.meta_props, this->props};
+        return Filtering::Device(meta_setup, this->props);
     }
 
     int8_t SkillFiltering::AttributeSource::GetAttrLvl(AttributeOrTitle id) const
