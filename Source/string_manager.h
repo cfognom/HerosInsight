@@ -1,6 +1,6 @@
 #pragma once
 
-#include <bitview.h>
+#include <bitspan.h>
 #include <rich_text.h>
 #include <span_vector.h>
 
@@ -9,7 +9,7 @@ namespace HerosInsight::Text
     namespace AssembleMode
     {
         // clang-format off
-        struct Renderable{};
+        struct Readable{};
         struct Searchable{};
         struct Measure{};
         // clang-format on
@@ -84,7 +84,7 @@ namespace HerosInsight::Text
             None,
             SingularOnly,
             PluralOnly,
-            RenderableOnly,
+            ReadableOnly,
         };
         struct Header
         {
@@ -217,7 +217,7 @@ namespace HerosInsight::Text
             {
                 StringTemplateAtom atom;
                 auto &obj = atom.tag;
-                obj.header = Header{Type::Tag, Constraint::RenderableOnly};
+                obj.header = Header{Type::Tag, Constraint::ReadableOnly};
                 obj.tag_type = tag.type;
                 obj.padding = 0;
                 obj.raw_tag = tag.tag;
@@ -339,6 +339,7 @@ namespace HerosInsight::Text
 
     void PatchPositions(std::span<uint16_t> positions, std::span<uint16_t> out_positions, std::span<PosDelta> deltas);
 
+    // Can assimilate strings into IDs and output them as either "searchable" (effcient representation for search) or "readable" (Human readable)
     struct StringManager
     {
         using StrId = uint16_t;
@@ -374,7 +375,7 @@ namespace HerosInsight::Text
         size_t AssimilateString(std::string_view str);
 
         void AssembleSearchableString(StringTemplate t, OutBuf<char> dst);
-        void AssembleRenderableString(StringTemplate t, OutBuf<char> dst, OutBuf<PosDelta> *searchable_to_renderable = nullptr);
+        void AssembleReadableString(StringTemplate t, OutBuf<char> dst, OutBuf<PosDelta> *searchable_to_readable = nullptr);
     };
 
     struct StringMapper

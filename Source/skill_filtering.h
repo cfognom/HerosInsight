@@ -61,9 +61,9 @@ namespace HerosInsight::SkillFiltering
         int8_t GetAttrLvl(AttributeOrTitle id) const;
     };
 
-    struct Adapter
+    struct Setup
     {
-        struct Settings
+        struct Config
         {
             bool use_exact_adrenaline;
             uint32_t focused_agent_id;
@@ -80,27 +80,18 @@ namespace HerosInsight::SkillFiltering
         std::unordered_map<SkillProp, Filtering::IncrementalProp> dynamic_props;
         std::array<Filtering::IncrementalProp *, PROP_COUNT> props;
 
-        void RefreshDynamicProps()
+        void ResetDynamicProps()
         {
             for (auto &prop : dynamic_props)
             {
-                prop.second.MarkDirty();
+                prop.second.Reset();
             }
         }
 
-        explicit Adapter(Settings &settings);
+        explicit Setup(Config &config);
 
-        using index_type = uint16_t;
-        constexpr static size_t PropCount() { return PROP_COUNT; }
-        size_t MetaCount() const;
-
-        LoweredText GetMetaName(size_t meta);
-        BitView GetMetaPropset(size_t meta) const;
-
-        Filtering::IncrementalProp *GetProperty(size_t prop) { return props[prop]; }
+        Filtering::Device CreateFilteringDevice();
     };
-
-    using Device = Filtering::Device<Adapter>;
 
     std::span<uint16_t> GetBaseSkills();
 }

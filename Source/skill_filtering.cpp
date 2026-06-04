@@ -9,8 +9,8 @@
 
 namespace HerosInsight::SkillFiltering
 {
-    using Propset = BitArray<SkillFiltering::PROP_COUNT + 1>; // +1 for meta props
-    constexpr static Propset ALL_PROPS = Propset(true);
+    using namespace HerosInsight::Filtering;
+    static constexpr size_t PropsetSize = SkillFiltering::PROP_COUNT + 1; // +1 for meta props
 
     void SortSkills(std::span<uint16_t> skills)
     {
@@ -109,11 +109,40 @@ namespace HerosInsight::SkillFiltering
         SortSkills(base_skills);
     }
 
+    template <SkillProp... Ts>
+    static ConstBitSpan CreatePropset()
+    {
+        return BitLit<PropsetSize, false, static_cast<size_t>(Ts)...>();
+    }
+
+    static std::array meta_props = {
+        MetaProp{""_folded, BitLit<PropsetSize, true>()}, // "All props"
+        MetaProp{"Meta"_folded, CreatePropset<SkillProp::COUNT>()},
+        MetaProp{"Name"_folded, CreatePropset<SkillProp::Name>()},
+        MetaProp{"Type"_folded, CreatePropset<SkillProp::Type>()},
+        MetaProp{"Tags"_folded, CreatePropset<SkillProp::Tag>()},
+        MetaProp{"Energy"_folded, CreatePropset<SkillProp::Energy>()},
+        MetaProp{"Recharge"_folded, CreatePropset<SkillProp::Recharge>()},
+        MetaProp{"Activation"_folded, CreatePropset<SkillProp::Activation>()},
+        MetaProp{"Aftercast"_folded, CreatePropset<SkillProp::Aftercast>()},
+        MetaProp{"Sacrifice"_folded, CreatePropset<SkillProp::Sacrifice>()},
+        MetaProp{"Overcast"_folded, CreatePropset<SkillProp::Overcast>()},
+        MetaProp{"Adrenaline"_folded, CreatePropset<SkillProp::Adrenaline>()},
+        MetaProp{"Upkeep"_folded, CreatePropset<SkillProp::Upkeep>()},
+        MetaProp{"Full Description"_folded, CreatePropset<SkillProp::Description>()},
+        MetaProp{"Concise Description"_folded, CreatePropset<SkillProp::Concise>()},
+        MetaProp{"Description"_folded, CreatePropset<SkillProp::Description, SkillProp::Concise>()},
+        MetaProp{"Attribute"_folded, CreatePropset<SkillProp::Attribute>()},
+        MetaProp{"Profession"_folded, CreatePropset<SkillProp::Profession>()},
+        MetaProp{"Campaign"_folded, CreatePropset<SkillProp::Campaign>()},
+        MetaProp{"AoE"_folded, CreatePropset<SkillProp::AoE>()},
+        MetaProp{"Id"_folded, CreatePropset<SkillProp::Id>()}
+    };
+    static MetaSetup meta_setup{meta_props};
+
     struct TextStorage
     {
         std::array<Filtering::IncrementalProp, PROP_COUNT> static_props;
-        std::vector<Propset> meta_propsets;
-        LoweredTextVector meta_prop_names;
 
         template <auto Func, auto Unit, auto Icon>
         static Text::StringTemplateAtom NumberAndIcon(Text::StringTemplateAtom::Builder &b, size_t skill_id, void *)
@@ -238,60 +267,12 @@ namespace HerosInsight::SkillFiltering
             );
         }
 
-        template <typename... Ts>
-        static Propset CreatePropset(Ts... args)
-        {
-            Propset propset;
-            ((propset[static_cast<size_t>(args)] = true), ...);
-            return propset;
-        }
-
-        void SetupMetaProps()
-        {
-            auto SetupMetaProp = [&](std::string_view name, Propset propset)
-            {
-                meta_prop_names.arena.push_back(name);
-                meta_propsets.push_back(propset);
-            };
-
-            std::string_view capacity_hint_key = "meta_prop_names";
-            meta_prop_names.arena.ReserveFromHint(capacity_hint_key);
-            meta_propsets.reserve(meta_prop_names.arena.SpanCount());
-
-            SetupMetaProp("", ALL_PROPS); // Must be first
-            SetupMetaProp("Meta", CreatePropset(SkillProp::COUNT));
-            SetupMetaProp("Name", CreatePropset(SkillProp::Name));
-            SetupMetaProp("Type", CreatePropset(SkillProp::Type));
-            SetupMetaProp("Tags", CreatePropset(SkillProp::Tag));
-            SetupMetaProp("Energy", CreatePropset(SkillProp::Energy));
-            SetupMetaProp("Recharge", CreatePropset(SkillProp::Recharge));
-            SetupMetaProp("Activation", CreatePropset(SkillProp::Activation));
-            SetupMetaProp("Aftercast", CreatePropset(SkillProp::Aftercast));
-            SetupMetaProp("Sacrifice", CreatePropset(SkillProp::Sacrifice));
-            SetupMetaProp("Overcast", CreatePropset(SkillProp::Overcast));
-            SetupMetaProp("Adrenaline", CreatePropset(SkillProp::Adrenaline));
-            SetupMetaProp("Upkeep", CreatePropset(SkillProp::Upkeep));
-            SetupMetaProp("Full Description", CreatePropset(SkillProp::Description));
-            SetupMetaProp("Concise Description", CreatePropset(SkillProp::Concise));
-            SetupMetaProp("Description", CreatePropset(SkillProp::Description, SkillProp::Concise));
-            SetupMetaProp("Attribute", CreatePropset(SkillProp::Attribute));
-            SetupMetaProp("Profession", CreatePropset(SkillProp::Profession));
-            SetupMetaProp("Campaign", CreatePropset(SkillProp::Campaign));
-            SetupMetaProp("AoE", CreatePropset(SkillProp::AoE));
-
-            SetupMetaProp("Id", CreatePropset(SkillProp::Id));
-
-            meta_prop_names.LowercaseFold();
-            meta_prop_names.arena.StoreCapacityHint(capacity_hint_key);
-        }
-
         bool is_initialized = false;
         void TryInitialize()
         {
             if (is_initialized)
                 return;
             InitBaseSkills();
-            SetupMetaProps();
             InitProps();
             is_initialized = true;
         }
@@ -300,25 +281,25 @@ namespace HerosInsight::SkillFiltering
     template <bool IsConcise>
     Text::StringTemplateAtom MakeDescription(Text::StringTemplateAtom::Builder &b, size_t skill_id, void *data)
     {
-        auto &settings = *(Adapter::Settings *)data;
+        auto &config = *(Setup::Config *)data;
         auto &cskill = CustomSkillDataModule::GetSkills()[skill_id];
         auto &text_provider = Text::GetTextProvider(GW::Constants::Language::English);
-        auto attr_rank = settings.attr_src.GetAttrLvl(cskill.attribute);
+        auto attr_rank = config.attr_src.GetAttrLvl(cskill.attribute);
         return text_provider.MakeSkillDescription(b, (GW::Constants::SkillID)skill_id, IsConcise, attr_rank);
     }
 
-    Adapter::Adapter(Adapter::Settings &settings)
+    Setup::Setup(Setup::Config &config)
     {
         text_storage.TryInitialize();
 
         dynamic_props.reserve(8);
-        dynamic_props[SkillProp::Description].SetupIncremental(&settings, MakeDescription<false>);
-        dynamic_props[SkillProp::Concise].SetupIncremental(&settings, MakeDescription<true>);
+        dynamic_props[SkillProp::Description].SetupIncremental(&config, MakeDescription<false>);
+        dynamic_props[SkillProp::Concise].SetupIncremental(&config, MakeDescription<true>);
         dynamic_props[SkillProp::Adrenaline].SetupIncremental(
-            &settings,
+            &config,
             +[](Text::StringTemplateAtom::Builder &b, size_t skill_id, void *data) -> Text::StringTemplateAtom
             {
-                auto &settings = *(Adapter::Settings *)data;
+                auto &config = *(Setup::Config *)data;
                 auto &skill = GW::SkillbarMgr::GetSkills()[skill_id];
                 auto adrenaline = skill.adrenaline;
                 if (adrenaline == 0)
@@ -327,7 +308,7 @@ namespace HerosInsight::SkillFiltering
                 auto adrenaline_strikes = adrenaline / 25;
                 auto adrenaline_units = adrenaline % 25;
 
-                if (!settings.use_exact_adrenaline)
+                if (!config.use_exact_adrenaline)
                 {
                     if (adrenaline_units > 0)
                     {
@@ -343,10 +324,10 @@ namespace HerosInsight::SkillFiltering
             }
         );
         dynamic_props[SkillProp::Tag].SetupIncremental(
-            &settings,
+            &config,
             +[](Text::StringTemplateAtom::Builder &b, size_t skill_id, void *data) -> Text::StringTemplateAtom
             {
-                auto &settings = *(Adapter::Settings *)data;
+                auto &config = *(Setup::Config *)data;
                 auto skills = GW::SkillbarMgr::GetSkills();
                 auto cskills = CustomSkillDataModule::GetSkills();
                 auto &skill = skills[skill_id];
@@ -357,10 +338,10 @@ namespace HerosInsight::SkillFiltering
 
                 auto &tags = cskill.tags;
                 bool is_unlocked = GW::SkillbarMgr::GetIsSkillUnlocked(skill_id_to_check);
-                bool is_learned = Utils::IsSkillLearned(pve_skill, settings.focused_agent_id);
-                bool is_equipable = Utils::IsSkillEquipable(skill, settings.focused_agent_id);
+                bool is_learned = Utils::IsSkillLearned(pve_skill, config.focused_agent_id);
+                bool is_equipable = Utils::IsSkillEquipable(skill, config.focused_agent_id);
                 bool is_locked = tags.Unlockable && !is_unlocked;
-                bool is_learnable = Utils::IsSkillLearnable(pve_cskill, settings.focused_agent_id);
+                bool is_learnable = Utils::IsSkillLearnable(pve_cskill, config.focused_agent_id);
                 bool is_unlearned = is_learnable && !is_learned;
 
                 FixedVector<Text::StringTemplateAtom, 128> args;
@@ -431,30 +412,13 @@ namespace HerosInsight::SkillFiltering
         {
             auto prop_id = (SkillProp)i;
             auto it = dynamic_props.find(prop_id);
-            if (it != dynamic_props.end())
-            {
-                props[i] = &it->second;
-            }
-            else
-            {
-                props[i] = &text_storage.static_props[i];
-            }
+            props[i] = it != dynamic_props.end() ? &it->second : &text_storage.static_props[i];
         }
     }
 
-    size_t Adapter::MetaCount() const
+    Filtering::Device Setup::CreateFilteringDevice()
     {
-        return text_storage.meta_propsets.size();
-    }
-
-    LoweredText Adapter::GetMetaName(size_t meta)
-    {
-        return text_storage.meta_prop_names.Get(meta);
-    }
-
-    BitView Adapter::GetMetaPropset(size_t meta) const
-    {
-        return text_storage.meta_propsets[meta];
+        return Filtering::Device(meta_setup, this->props);
     }
 
     int8_t SkillFiltering::AttributeSource::GetAttrLvl(AttributeOrTitle id) const

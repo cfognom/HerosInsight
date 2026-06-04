@@ -69,6 +69,15 @@ public:
         return std::span<const T>(data(), size());
     }
 
+    // Caller must init the buffer
+    T *AppendDstBuffer(std::size_t buffer_size)
+    {
+        assert(AvailableCapacity() >= buffer_size);
+        T *buffer_start = data() + size();
+        Len() += buffer_size;
+        return buffer_start;
+    }
+
     void AppendRange(std::span<const T> src)
     {
         assert(AvailableCapacity() >= src.size());
@@ -256,6 +265,7 @@ class SpanWriter : public BufferBase<SpanWriter<T>, T>
     std::size_t len = 0;
 
 public:
+    SpanWriter(T *ptr, std::size_t size) : span(ptr, size) {}
     SpanWriter(std::span<T> span) : span(span) {}
 
     T *data() { return span.data(); }

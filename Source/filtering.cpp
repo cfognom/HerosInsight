@@ -6,7 +6,9 @@
 
 namespace HerosInsight::Filtering
 {
-    void SortHighlighting(std::span<uint16_t> &hl)
+    // Takes a span of highlight starts and stops, sorts them and removes any bad openings and closings
+    // Modifies the size of the span to account for the removed values
+    static void SortHighlighting(std::span<uint16_t> &hl)
     {
         assert(hl.size() % 2 == 0);
 
@@ -41,7 +43,7 @@ namespace HerosInsight::Filtering
         }
     }
 
-    void ConnectHighlighting(std::string_view text, std::span<uint16_t> &hl)
+    static void ConnectSpaceSeparatedHighlighting(std::string_view text, std::span<uint16_t> &hl)
     {
         if (hl.size() < 4)
             return;
@@ -81,5 +83,1073 @@ namespace HerosInsight::Filtering
         }
         cmp = asubs.size() <=> bsubs.size();
         return cmp;
+    }
+
+    bool SubstrsContainsSubstrs(std::span<const uint16_t> asubs, std::string_view astr, std::span<const uint16_t> bsubs, std::string_view bstr)
+    {
+    retry:
+        if (asubs.size() < bsubs.size())
+            return false;
+        for (size_t i = 0; i < bsubs.size(); i += 2)
+        {
+            auto asub = astr.substr(asubs[i], asubs[i + 1] - asubs[i]);
+            auto bsub = bstr.substr(bsubs[i], bsubs[i + 1] - bsubs[i]);
+            if (asub != bsub)
+            {
+                asubs = asubs.subspan(2);
+                goto retry;
+            }
+        }
+        return true;
+    }
+
+    void IncrementalProp::Reset()
+    {
+        searchable_text.clear();
+        string_templates.clear();
+        string_templates_deduper.clear();
+        item_to_str.clear();
+    }
+
+    size_t IncrementalProp::GetStrId(size_t itemId)
+    {
+        if (itemId >= item_to_str.size())
+            item_to_str.resize(itemId + 1, std::numeric_limits<uint16_t>::max());
+
+        auto &strId = item_to_str[itemId];
+        if (strId == std::numeric_limits<uint16_t>::max())
+        {
+            // We dont have the string template: Build it!
+            string_templates.AppendWriteBuffer(
+                32,
+                [&](std::span<Text::StringTemplateAtom> &buffer)
+                {
+                    SpanWriter<Text::StringTemplateAtom> writer(buffer);
+                    OutBuf<Text::StringTemplateAtom> out(writer);
+                    Text::StringTemplateAtom::Builder b(out);
+                    out.push_back(Build_template_fn(b, itemId, build_template_data));
+                    buffer = writer.WrittenSpan();
+                }
+            );
+            strId = string_templates.CommitWritten(&string_templates_deduper);
+
+            bool is_known_template = strId < searchable_text.arena.SpanCount();
+            if (!is_known_template)
+            {
+                // If the tempalte is new: Build the searchable string it represents.
+                auto t = GetStringTemplate(strId);
+                if (t.root.header.type != Text::StringTemplateAtom::Type::Null)
+                {
+                    searchable_text.arena.AppendWriteBuffer(
+                        512,
+                        [&](std::span<char> &buffer)
+                        {
+                            SpanWriter<char> writer(buffer);
+                            OutBuf<char> out(writer);
+                            mgr.AssembleSearchableString(t, out);
+                            buffer = writer.WrittenSpan();
+                        }
+                    );
+                }
+                auto strId2 = searchable_text.CommitAndFold();
+                assert(strId == strId2);
+            }
+        }
+        return strId;
+    }
+
+    Text::StringTemplate IncrementalProp::GetStringTemplate(size_t strId)
+    {
+        auto span = string_templates[strId];
+        auto root = span.back();
+        return Text::StringTemplate{
+            .root = root,
+            .rest = span
+        };
+    }
+
+    void IncrementalProp::GetReadableString(size_t strId, OutBuf<char> out, OutBuf<Text::PosDelta> deltas)
+    {
+        if (string_templates.SpanCount() == 0) // Temp hack
+        {
+            auto text = GetSearchableStr(strId);
+            text.GetReadableString(out);
+            return;
+        }
+
+        auto t = GetStringTemplate(strId);
+        if (t.root.header.type != Text::StringTemplateAtom::Type::Null)
+        {
+            mgr.AssembleReadableString(t, out, &deltas);
+            return;
+        }
+    }
+
+#define SkillDull "<c=@skilldull>"
+#define ArgColor "<c=@skilldyn>"
+#define ControlColor "<c=#64ffff>"
+#define ModifierColor "<c=#f0f080>"
+#define CloseColor "</c>"
+
+    MetaSetup::MetaSetup(std::span<MetaProp> metas)
+        : metas(metas)
+    {
+        size_t n_meta = metas.size();
+        assert(n_meta > 0);
+        size_t n_props = metas[0].propset.size();
+        assert(n_props > 0);
+#ifdef _DEBUG
+        for (auto &meta : metas)
+        {
+            assert(meta.propset.size() == n_props);
+        }
+#endif
+
+        // Sort metas from most to least "specific".
+        std::sort(
+            metas.begin(), metas.end(),
+            [](auto &a, auto &b)
+            {
+                auto cmp = a.propset.PopCount() <=> b.propset.PopCount();
+                if (cmp != 0)
+                    return cmp < 0;
+                return a.name.text < b.name.text;
+            }
+        );
+
+        // Build the prop headers
+        for (size_t prop_id = 0; prop_id < n_props; ++prop_id)
+        {
+            size_t count = 0;
+            for (auto meta : metas)
+            {
+                if (!meta.propset[prop_id] || meta.name.empty())
+                    continue;
+
+                if (count > 0)
+                {
+                    constexpr FoldedString join = SkillDull ", " CloseColor;
+                    prop_headers.AppendPartial(join);
+                }
+                prop_headers.AppendPartial(meta.name);
+                ++count;
+            }
+            prop_headers.Commit();
+        }
+    }
+
+    // Returns the index of the "best" match
+    template <typename TextGetter>
+    static std::optional<size_t> BestMatch(std::string_view subject, TextGetter &&getter, size_t count)
+    {
+        size_t index;
+
+        auto matcher = Matcher(subject);
+
+        size_t best_match_cost = std::numeric_limits<size_t>::max();
+        for (size_t i = 0; i < count; ++i)
+        {
+            auto target = getter(i);
+            if (matcher.Match(target, 0))
+            {
+                float match_cost = target.text.size();
+                if (match_cost < best_match_cost)
+                {
+                    best_match_cost = match_cost;
+                    index = i;
+                }
+            }
+        }
+
+        if (best_match_cost == std::numeric_limits<size_t>::max())
+            return std::nullopt;
+
+        return index;
+    }
+
+    static std::optional<size_t> TryGetMetaIdFromName(std::span<const MetaProp> metas, std::string_view subject)
+    {
+        return BestMatch(
+            subject,
+            [metas](size_t metaId)
+            {
+                return metas[metaId].name;
+            },
+            metas.size()
+        );
+    }
+
+    static std::optional<Filter> ParseFilter(std::span<const MetaProp> metas, std::string_view source)
+    {
+        Filter filter;
+        filter.source_text = source;
+        auto rem = source;
+        Utils::ReadSpaces(rem);
+
+        auto separator_pos = rem.find_first_of("!:=<>");
+
+        const size_t default_meta_id = metas.size() - 1;
+        filter.meta_id = default_meta_id;
+        if (separator_pos != std::string_view::npos)
+        {
+            char separator = rem[separator_pos];
+            if (separator_pos != 0)
+            {
+                auto target_str = rem.substr(0, separator_pos);
+                if (!target_str.empty())
+                {
+                    auto opt_meta_id = TryGetMetaIdFromName(metas, target_str);
+                    if (opt_meta_id.has_value())
+                    {
+                        filter.meta_id = opt_meta_id.value();
+                        rem = rem.substr(separator_pos);
+                    }
+                }
+            }
+        }
+
+        filter.is_exclusion = Utils::TryRead('!', rem);
+        if (filter.meta_id)
+        {
+            Utils::TryRead(':', rem) || Utils::TryRead('=', rem);
+        }
+
+        Utils::ReadSpaces(rem);
+        filter.filter_text = rem;
+
+        do
+        {
+            auto or_pos = rem.find('|');
+            std::string_view content;
+            if (or_pos == std::string_view::npos)
+            {
+                content = rem;
+                rem = "";
+            }
+            else
+            {
+                content = rem.substr(0, or_pos);
+                rem = rem.substr(or_pos + 1);
+            }
+            Utils::ReadSpaces(content);
+            Utils::TrimTrailingSpaces(content);
+
+            filter.matchers.emplace_back(Matcher(content));
+        } while (!rem.empty());
+
+        return filter;
+    }
+
+    constexpr static ConstFoldedStringView matched_target = "Matched"_folded;
+    static ConstFoldedStringView GetSortTargetName(std::span<const MetaProp> metas, size_t sort_target_id)
+    {
+        auto n_meta = metas.size();
+        if (sort_target_id < n_meta)
+            return metas[sort_target_id].name;
+
+        assert(sort_target_id == n_meta);
+        return matched_target;
+    }
+
+    static std::optional<size_t> TryGetSortTargetIdFromName(std::span<const MetaProp> metas, std::string_view subject)
+    {
+        return BestMatch(
+            subject,
+            [metas](size_t id)
+            {
+                return GetSortTargetName(metas, id);
+            },
+            metas.size() + 1
+        );
+    }
+
+    static bool ParseCommand(std::span<const MetaProp> metas, std::string_view source, Command &command)
+    {
+        auto rem = source;
+
+        Utils::ReadSpaces(rem);
+
+        if (!Utils::TryRead('/', rem))
+            return false;
+
+        auto command_name_end = std::min(rem.find(' '), rem.size());
+        auto command_name = rem.substr(0, command_name_end);
+        if (command_name.empty())
+            return true;
+        auto command_id_opt = BestMatch(
+            command_name,
+            [&](size_t index)
+            {
+                return "SORT"_folded;
+            },
+            1
+        );
+        if (!command_id_opt.has_value())
+            return false;
+        rem = rem.substr(command_name_end);
+
+        auto &sort_com = command.emplace<SortCommand>();
+        while (true)
+        {
+            auto arg_end = rem.find(',');
+            auto target_text = rem.substr(0, arg_end);
+            Utils::ReadSpaces(target_text);
+            Utils::TrimTrailingSpaces(target_text);
+            size_t pos;
+            SortCommand::Arg arg;
+            while (pos = target_text.find_last_of("!"), pos != std::string_view::npos)
+            {
+                arg.is_negated |= target_text[pos] == '!';
+                target_text = target_text.substr(0, pos);
+            }
+            Utils::TrimTrailingSpaces(target_text);
+            auto sort_target_id = target_text.empty() ? 0 : TryGetSortTargetIdFromName(metas, target_text);
+            if (sort_target_id.has_value())
+            {
+                arg.sort_target_id = sort_target_id.value();
+                sort_com.args.push_back(std::move(arg));
+            }
+
+            if (arg_end == std::string_view::npos)
+                break;
+            rem = rem.substr(arg_end + 1);
+        }
+
+        return true;
+    }
+
+    void Device::ParseQuery(std::string_view source, Query &query) const
+    {
+        query.clear();
+
+        BitVector sorting_props{props.size(), false};
+
+        auto ParseTrailingCommands = [&](std::string_view &stmt)
+        {
+            FixedVector<Command, 32> commands;
+            while (true) // Loop that eats commands from end
+            {
+                auto com_start = stmt.find_last_of('/');
+                if (com_start == std::string_view::npos)
+                    break;
+                auto com_src = stmt.substr(com_start);
+
+                auto &command = commands.emplace_back();
+                if (ParseCommand(this->metas, com_src, command))
+                {
+                    stmt = stmt.substr(0, com_start);
+                    Utils::TrimTrailingSpaces(stmt);
+                }
+                else
+                {
+                    commands.pop_back();
+                    break;
+                }
+            }
+            for (auto &command : std::views::reverse(commands))
+            {
+                std::visit(
+                    VisitHelper{
+                        [&](SortCommand &sort_command)
+                        {
+                            for (auto &arg : sort_command.args)
+                            {
+                                query.sort_args.emplace_back(std::move(arg));
+                                if (arg.sort_target_id == 0) // Special case: Default sort
+                                {
+                                    if (arg.is_negated)
+                                        query.reverse_output = !query.reverse_output;
+                                    continue;
+                                }
+                                if (GetSortTargetName(this->metas, arg.sort_target_id).text == (std::string_view)matched_target.text) // Special case: Matched sort
+                                {
+                                    query.sort_atoms.emplace_back(0, arg.is_negated, true);
+                                    continue;
+                                }
+                                auto propset = metas[arg.sort_target_id].propset;
+                                for (auto prop_id : propset.IterSetBits())
+                                {
+                                    if (prop_id == props.size())
+                                        continue;
+                                    if (sorting_props[prop_id])
+                                        continue;
+                                    sorting_props[prop_id] = true;
+                                    query.sort_atoms.emplace_back((uint16_t)prop_id, arg.is_negated);
+                                }
+                            }
+                        },
+                        [](auto &&)
+                        {
+                            assert(false);
+                        },
+                    },
+                    command
+                );
+            }
+        };
+
+        auto rem = source;
+        while (!rem.empty())
+        {
+            auto stmt_end = rem.find('&');
+            std::string_view stmt;
+            if (stmt_end == std::string_view::npos)
+            {
+                stmt = rem;
+                rem = "";
+            }
+            else
+            {
+                stmt = rem.substr(0, stmt_end);
+                rem = rem.substr(stmt_end + 1);
+            }
+            Utils::ReadSpaces(stmt);
+            Utils::TrimTrailingSpaces(stmt);
+
+            ParseTrailingCommands(stmt);
+
+            if (stmt.empty())
+                continue;
+
+            auto filter_opt = ParseFilter(this->metas, stmt);
+            if (filter_opt.has_value())
+            {
+                auto &filter = filter_opt.value();
+                query.filters.emplace_back(std::move(filter));
+            }
+        }
+
+        // We now need to put exclusion filters before inclusion filters while also keeping track of their original order
+        std::span<Filter> filters = query.filters;
+        auto n_filters = filters.size();
+
+        // Create mapping from original index to new index
+        query.filters_in_decl_order.resize(n_filters);
+        size_t dst_index = 0;
+        for (size_t i = 0; i < n_filters; ++i)
+        {
+            if (filters[i].is_exclusion)
+                query.filters_in_decl_order[i] = dst_index++;
+        }
+        size_t inclusion_start = dst_index;
+        for (size_t i = 0; i < n_filters; ++i)
+        {
+            if (!filters[i].is_exclusion)
+                query.filters_in_decl_order[i] = dst_index++;
+        }
+
+        // Partition the filters so that exclusion filters come first
+        std::stable_partition(
+            filters.begin(), filters.end(),
+            [](const Filter &f)
+            {
+                return f.is_exclusion;
+            }
+        );
+
+        // Make the spans
+        query.exclusion_filters = filters.subspan(0, inclusion_start);
+        query.inclusion_filters = filters.subspan(inclusion_start);
+    }
+
+    struct FilterUnit
+    {
+        union
+        {
+            Device::index_t str_id;
+            bool is_match;
+        };
+        Device::index_t item;
+        Device::index_t index;
+    };
+
+    static bool MatchesAny(std::span<Matcher> matchers, ConstFoldedStringView text)
+    {
+        for (auto &matcher : matchers)
+        {
+            if (matcher.Match(text, 0))
+                return true;
+        }
+        return false;
+    }
+
+    struct Partitioner
+    {
+        FilterUnit *units;
+        std::span<FilterUnit> unmatched;
+        std::span<FilterUnit> Matched() { return std::span{units, unmatched.data()}; }
+
+        Partitioner(std::span<FilterUnit> units) : units(units.data()), unmatched(units) {}
+
+        static bool Predicate(FilterUnit &unit) { return unit.is_match; }
+        void PartitionMatched()
+        {
+            auto unmatched_group_it = std::partition(unmatched.begin(), unmatched.end(), Predicate);
+            unmatched = std::span{unmatched_group_it, unmatched.end()};
+        }
+
+        void AssignStrIds(IncrementalProp &prop)
+        {
+            ProfilingScope profiler;
+
+            for (auto &unit : unmatched)
+            {
+                unit.str_id = prop.GetStrId(unit.item);
+            }
+        }
+
+        void SortByStrId()
+        {
+            ProfilingScope profiler;
+
+            std::sort(
+                unmatched.begin(), unmatched.end(),
+                [](auto &a, auto &b)
+                {
+                    return a.str_id < b.str_id;
+                }
+            );
+        }
+
+        void PartitionByPropMatch(IncrementalProp &prop, std::span<Matcher> matchers)
+        {
+            AssignStrIds(prop); // Tag the items with their string ids
+            SortByStrId();      // Sort by string id so we can avoid processing duplicates (This might not be needed since the input is mostly sorted)
+
+            { // Iterate the units and mark which ones match
+                ProfilingScope profiler{"matching"};
+
+                auto prev_str_id = std::numeric_limits<Device::index_t>::max();
+                bool is_match;
+                for (auto &unit : unmatched)
+                {
+                    auto str_id = unit.str_id;
+                    if (str_id != prev_str_id)
+                    {
+                        prev_str_id = str_id;
+                        auto str = prop.GetSearchableStr(str_id);
+                        is_match = MatchesAny(matchers, str);
+                    }
+                    unit.is_match = is_match;
+                }
+            }
+
+            PartitionMatched();
+        }
+
+        void PartitionByPropExistence(IncrementalProp &prop)
+        {
+            // Iterate the units and check which ones "has" this property
+            for (auto &unit : unmatched)
+            {
+                auto str_id = prop.GetStrId(unit.item);
+                auto str = prop.GetSearchableStr(str_id);
+                bool has_prop = !str.text.empty();
+                unit.is_match = has_prop;
+            }
+
+            PartitionMatched();
+        }
+    };
+
+    struct UnitFilterer
+    {
+        const Filtering::Device &device;
+        std::span<FilterUnit> units;
+
+        void Init(std::span<Filtering::Device::index_t> items)
+        {
+            ProfilingScope profiler;
+
+            for (size_t i = 0; i < items.size(); ++i)
+            {
+                auto &unit = units[i];
+                unit.item = items[i];
+                unit.index = i;
+            }
+        }
+
+        void ApplyFilter(Filter &filter)
+        {
+            ProfilingScope profiler;
+
+            size_t n_props = device.props.size();
+
+            auto &meta_prop = device.metas[filter.meta_id];
+
+            Partitioner partitioner{units};
+
+            for (auto prop_id : meta_prop.propset.IterSetBits())
+            {
+                bool is_meta = prop_id == n_props;
+                if (is_meta) // Special case to search the prop_headers
+                {
+                    // Iterate the prop_headers, check which ones match and partition by existence of those props
+                    for (size_t prop_id = 0; prop_id < n_props; ++prop_id)
+                    {
+                        auto prop_header = device.prop_headers[prop_id];
+                        if (!MatchesAny(filter.matchers, prop_header))
+                            continue;
+
+                        auto &prop = *device.props[prop_id];
+                        partitioner.PartitionByPropExistence(prop);
+                    }
+                }
+                else // Non-meta
+                {
+                    auto &prop = *device.props[prop_id];
+                    partitioner.PartitionByPropMatch(prop, filter.matchers);
+                }
+            }
+            units = filter.is_exclusion ? partitioner.unmatched : partitioner.Matched();
+        }
+
+        void RestoreOrder()
+        {
+            ProfilingScope profiler;
+
+            std::sort(
+                units.begin(), units.end(),
+                [](auto &a, auto &b)
+                {
+                    return a.index < b.index;
+                }
+            );
+        }
+
+        void Export(std::vector<Device::index_t> &dst_items)
+        {
+            ProfilingScope profiler;
+
+            dst_items.resize(units.size());
+            auto dst = dst_items.begin();
+            for (auto &unit : units)
+            {
+                *dst++ = unit.item;
+            }
+        }
+    };
+
+    static void ApplyFilters(const Filtering::Device &device, std::span<Filter> filters, std::vector<Device::index_t> &items)
+    {
+        ProfilingScope profiler;
+
+        size_t n_items = items.size();
+        size_t n_props = device.props.size();
+
+        MultiBuffer::Spec<FilterUnit> units_spec{n_items};
+        MultiBuffer::HeapAllocated allocation{units_spec};
+
+        UnitFilterer filterer{device, units_spec.Span()};
+        filterer.Init(items);
+
+        for (auto &filter : filters)
+        {
+            filterer.ApplyFilter(filter);
+        }
+
+        filterer.RestoreOrder();
+        filterer.Export(items);
+    }
+
+    static void SortItems(const Filtering::Device &device, Query &query, std::span<Device::index_t> items)
+    {
+        ProfilingScope profiler;
+
+        struct MatchedSortObject
+        {
+            const Filtering::Device &device;
+            SlotSpanVector<char> &cache;
+            Filter &filter;
+            bool negated;
+
+            size_t CalcMatched(size_t id)
+            {
+#ifdef _DEBUG
+                assert(cache.GetPendingSpan().empty());
+                assert(!cache.GetSpanId(id).has_value());
+#endif
+                std::vector<char> candidate;
+                std::vector<uint16_t> matches;
+                candidate.reserve(128);
+                matches.reserve(64);
+                auto propset = device.metas[filter.meta_id].propset;
+                for (auto prop_id : propset.IterSetBits())
+                {
+                    if (prop_id == device.props.size())
+                        continue;
+
+                    auto &prop = *device.props[prop_id];
+                    auto str = prop.GetSearchableStr(prop.GetStrId(id));
+                    for (auto &matcher : filter.matchers)
+                    {
+                        size_t offset = 0;
+                        while (matcher.Match(str, offset, (matches.clear(), matches)))
+                        {
+                            if (matches.empty())
+                                continue;
+
+                            auto current = cache.GetPendingSpan();
+                            bool no_current = current.empty();
+                            std::vector<char> &dst_vec = no_current ? cache.Elements() : (candidate.clear(), candidate);
+                            for (size_t i = 0; i < matches.size(); i += 2)
+                            {
+                                dst_vec.append_range(str.text.substr(matches[i], matches[i + 1] - matches[i]));
+                            }
+                            if (no_current)
+                                continue;
+
+                            auto cmp = (std::string_view)candidate <=> (std::string_view)current;
+                            if (cmp == 0)
+                                continue;
+
+                            if ((cmp < 0) != negated)
+                            {
+                                cache.DiscardWritten();
+                                cache.Elements().append_range(candidate);
+                            }
+                        }
+                    }
+                }
+                return cache.CommitWrittenToIndex(id);
+            };
+            size_t GetOrCalcMatched(size_t id)
+            {
+                auto opt_span_id = cache.GetSpanId(id);
+                return opt_span_id.has_value() ? opt_span_id.value() : CalcMatched(id);
+            };
+        };
+
+        std::vector<SlotSpanVector<char>> cache;
+
+        std::stable_sort(
+            items.begin(), items.end(),
+            [&](size_t item_a, size_t item_b)
+            {
+                for (auto &atom : query.sort_atoms)
+                {
+                    std::strong_ordering cmp;
+                    if (atom.sort_by_matched)
+                    {
+                        for (size_t f = 0; f < query.inclusion_filters.size(); ++f)
+                        {
+                            auto &c = f < cache.size() ? cache[f] : cache.emplace_back();
+                            MatchedSortObject obj{
+                                .device = device,
+                                .cache = c,
+                                .filter = query.inclusion_filters[f],
+                                .negated = atom.is_negated,
+                            };
+                            auto a_span_id = obj.GetOrCalcMatched(item_a);
+                            auto b_span_id = obj.GetOrCalcMatched(item_b);
+                            auto a_matched = c.CGet(a_span_id);
+                            auto b_matched = c.CGet(b_span_id);
+                            cmp = a_matched <=> b_matched;
+                            if (cmp != 0)
+                                return (cmp < 0) != atom.is_negated;
+                        }
+                    }
+                    else
+                    {
+                        auto prop_id = atom.prop_id;
+                        auto &prop = *device.props[prop_id];
+                        auto str_a = prop.GetSearchableStr(prop.GetStrId(item_a));
+                        auto str_b = prop.GetSearchableStr(prop.GetStrId(item_b));
+                        cmp = str_a.text <=> str_b.text;
+                        if (cmp != 0)
+                            return (cmp < 0) != atom.is_negated;
+                    }
+                }
+                return false;
+            }
+        );
+    }
+
+    void Device::RunQuery(Query &query, std::vector<index_t> &items) const
+    {
+        if (!query.filters.empty())
+        {
+            ApplyFilters(*this, query.filters, items);
+        }
+
+        if (query.reverse_output)
+        {
+            std::reverse(items.begin(), items.end());
+        }
+
+        if (!query.sort_atoms.empty())
+        {
+            SortItems(*this, query, items);
+        }
+    }
+
+    void Device::GetFeedback(Query &query, Feedback &out, bool verbose) const
+    {
+        static auto GetDispStr = [](const Matcher::Atom &atom) -> std::string_view
+        {
+            if (atom.type == Matcher::Atom::Type::AnyNumber)
+            {
+                if (!Utils::HasAnyFlag(atom.post_check, Matcher::Atom::PostCheck::NumChecks))
+                {
+                    return "any number";
+                }
+            }
+            else if (atom.type == Matcher::Atom::Type::ExactNumber)
+            {
+                if (!atom.src_str.empty() && atom.src_str[0] == '=')
+                    return atom.src_str.substr(1);
+            }
+            return atom.src_str;
+        };
+
+        static auto AppendJoin = [](std::string &s, size_t i, size_t count) -> void
+        {
+            if (i > 0)
+            {
+                std::string_view str;
+                if (i + 1 < count)
+                {
+                    str = ", then ";
+                }
+                else
+                {
+                    str = " and then ";
+                }
+                s.append_range(str);
+            }
+        };
+
+        {
+            auto &s = out.filter_feedback;
+            s.clear();
+            auto inserter = std::back_inserter(s);
+            const auto n_filters = query.filters_in_decl_order.size();
+            for (size_t f = 0; f < n_filters; ++f)
+            {
+                auto &filter = query.GetFilterInDeclOrder(f);
+
+                FixedVector<char, 128> meta_name;
+                metas[filter.meta_id].name.GetReadableString(meta_name);
+                auto meta_name_str = (std::string_view)meta_name;
+                auto cond = filter.is_exclusion ? ControlColor "not " CloseColor : "";
+                auto musty = meta_name_str.empty() ? "Must" : " must";
+                std::format_to(inserter, ControlColor "{}</c>{} {}contain: ", meta_name_str, musty, cond);
+                for (size_t m = 0; m < filter.matchers.size(); ++m)
+                {
+                    auto &matcher = filter.matchers[m];
+
+                    if (!verbose)
+                    {
+                        std::format_to(inserter, ArgColor "'{}'</c>", matcher.src_str);
+                    }
+                    else
+                    {
+                        if (matcher.atoms.empty())
+                        {
+                            std::format_to(inserter, ArgColor "[Nothing]</c>");
+                        }
+                        else
+                        {
+                            for (size_t a = 0; a < matcher.atoms.size(); ++a)
+                            {
+                                auto &atom = matcher.atoms[a];
+                                AppendJoin(s, a, matcher.atoms.size());
+
+                                bool is_leading = Utils::HasAnyFlag(atom.post_check, Matcher::Atom::PostCheck::Distinct);
+                                if (is_leading)
+                                {
+                                    s.append_range((std::string_view)ModifierColor "leading</c> ");
+                                }
+                                auto src_str = GetDispStr(atom);
+                                switch (atom.type)
+                                {
+                                    case Matcher::Atom::Type::String:
+                                    {
+                                        std::format_to(inserter, ArgColor "'{}'</c>", atom.src_str);
+                                        break;
+                                    }
+                                    case Matcher::Atom::Type::AnyNumber:
+                                    case Matcher::Atom::Type::ExactNumber:
+                                    {
+                                        std::string_view number_str = atom.src_str;
+                                        if (atom.type == Matcher::Atom::Type::AnyNumber)
+                                        {
+                                            if (!Utils::HasAnyFlag(atom.post_check, Matcher::Atom::PostCheck::NumChecks))
+                                                number_str = "[AnyNumber]";
+                                        }
+                                        else if (atom.type == Matcher::Atom::Type::ExactNumber)
+                                        {
+                                            if (!atom.src_str.empty() && atom.src_str[0] == '=')
+                                                number_str = atom.src_str.substr(1);
+                                        }
+
+                                        std::format_to(inserter, ArgColor "{}</c>", number_str);
+                                        break;
+                                    }
+                                }
+                                switch (atom.search_bound)
+                                {
+                                    case Matcher::Atom::SearchBound::Anywhere:
+                                        // std::format_to(inserter, " <c=#ffff80>anywhere</c>");
+                                        break;
+                                    case Matcher::Atom::SearchBound::WithinXWords:
+                                        switch (atom.within_count)
+                                        {
+                                            case 0:
+                                                std::format_to(inserter, ModifierColor " within same word</c>");
+                                                break;
+                                            case 1:
+                                                std::format_to(inserter, ModifierColor " within 1 word</c>");
+                                                break;
+                                            default:
+                                                std::format_to(inserter, ModifierColor " within {} words</c>", atom.within_count);
+                                                break;
+                                        }
+                                        break;
+                                }
+                            }
+                        }
+                    }
+
+                    if (m + 1 < filter.matchers.size()) // all but last
+                    {
+                        std::format_to(inserter, ", " ControlColor "or</c> ");
+                    }
+                    else // last
+                    {
+                        *inserter++ = '.';
+                    }
+                }
+
+                if (f + 1 < n_filters) // all but last
+                {
+                    *inserter++ = '\n';
+                }
+            }
+        }
+
+        auto &s = out.command_feedback;
+        s.clear();
+        if (!query.sort_args.empty())
+        {
+            auto inserter = std::back_inserter(s);
+
+            const auto n_args = query.sort_args.size();
+
+            std::format_to(inserter, "Sort ");
+            for (uint32_t a = 0; a < n_args; a++)
+            {
+                const auto &arg = query.sort_args[a];
+
+                AppendJoin(s, a, n_args);
+                s.append_range((std::string_view) "by ");
+
+                std::string_view sort_target_name;
+                if (arg.sort_target_id == 0)
+                {
+                    sort_target_name = "Default";
+                }
+                else
+                {
+                    FixedVector<char, 128> name;
+                    GetSortTargetName(this->metas, arg.sort_target_id).GetReadableString(name);
+                    sort_target_name = name;
+                }
+
+                std::format_to(inserter, ArgColor "{}</c>", sort_target_name);
+
+                if (arg.is_negated)
+                {
+                    std::format_to(inserter, ":" ModifierColor "descending</c>");
+                }
+                else
+                {
+                    std::format_to(inserter, ":" ModifierColor "ascending</c>");
+                }
+            }
+        }
+    }
+
+    static void CalcHL(std::span<const MetaProp> metas, Query &q, size_t prop_id, ConstFoldedStringView str, std::vector<uint16_t> &hl)
+    {
+        if (str.text.empty())
+            return;
+
+        auto init_hl_size = hl.size();
+        // Iterate filters that target this property.
+        for (auto &filter : q.inclusion_filters)
+        {
+            auto propset = metas[filter.meta_id].propset;
+            if (!propset[prop_id])
+                continue;
+
+            // Collect highlighting for all matchers in this filter.
+            for (auto &matcher : filter.matchers)
+            {
+                auto hl_size_before = hl.size();
+                bool is_match = matcher.Matches(str, hl);
+                std::span<uint16_t> hl_span{hl.data() + hl_size_before, hl.size() - hl_size_before};
+                ConnectSpaceSeparatedHighlighting(str.text, hl_span);
+                hl.resize(hl_size_before + hl_span.size());
+            }
+        }
+        std::span<uint16_t> hl_span = hl;
+        hl_span = hl_span.subspan(init_hl_size);
+        SortHighlighting(hl_span);
+        hl.resize(init_hl_size + hl_span.size());
+    }
+
+    ResultItem Device::CalcItemResult(Query &q, size_t prop_id, index_t item_id) const
+    {
+        auto &prop = *props[prop_id];
+        auto str_id = prop.GetStrId(item_id);
+        ResultItem result;
+        result.searchable_text = prop.GetSearchableStr(str_id);
+        CalcHL(this->metas, q, prop_id, result.searchable_text, result._hl_storage);
+        FixedVector<Text::PosDelta, 128> deltas;
+        result.presentable_text_storage.resize_and_overwrite(
+            512,
+            [&](char *c, size_t size) -> size_t
+            {
+                SpanWriter<char> dst{c, size};
+                prop.GetReadableString(str_id, dst, deltas);
+                return dst.size();
+            }
+        );
+        result.presentable_text = result.presentable_text_storage;
+        if (deltas.empty())
+        {
+            result.searchable_hl = result.presentable_hl = result._hl_storage;
+        }
+        else
+        {
+            auto hl_count = result._hl_storage.size();
+            result._hl_storage.resize(hl_count * 2);
+            result.searchable_hl = {result._hl_storage.data(), hl_count};
+            result.presentable_hl = {result._hl_storage.data() + hl_count, hl_count};
+            Text::PatchPositions(result.searchable_hl, result.presentable_hl, deltas);
+        }
+        return result;
+    }
+
+    ResultItem Device::CalcHeaderResult(Query &q, size_t prop_id) const
+    {
+        auto prop_header = this->prop_headers[prop_id];
+        ResultItem result;
+        result.searchable_text = prop_header;
+        const auto META_PROPS_ID = props.size();
+        CalcHL(this->metas, q, META_PROPS_ID, prop_header, result._hl_storage);
+        result.presentable_text_storage.resize_and_overwrite(
+            prop_header.size(),
+            [prop_header](char *c, size_t size) -> size_t
+            {
+                prop_header.ToReadableString(c);
+                return prop_header.size();
+            }
+        );
+        result.presentable_text = result.presentable_text_storage;
+        result.searchable_hl = result.presentable_hl = result._hl_storage;
+
+        return result;
     }
 }
