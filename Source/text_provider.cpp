@@ -11,7 +11,7 @@
 #include <ranges>
 #include <variant>
 
-#include <bitview.h>
+#include <bitspan.h>
 #include <custom_skill_data.h>
 #include <parsing.h>
 #include <span_vector.h>

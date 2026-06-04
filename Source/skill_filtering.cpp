@@ -110,7 +110,7 @@ namespace HerosInsight::SkillFiltering
     }
 
     template <SkillProp... Ts>
-    static ConstBitView CreatePropset()
+    static ConstBitSpan CreatePropset()
     {
         return BitLit<PropsetSize, false, static_cast<size_t>(Ts)...>();
     }

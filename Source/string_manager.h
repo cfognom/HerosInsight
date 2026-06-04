@@ -1,6 +1,6 @@
 #pragma once
 
-#include <bitview.h>
+#include <bitspan.h>
 #include <rich_text.h>
 #include <span_vector.h>
 

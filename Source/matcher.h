@@ -5,7 +5,7 @@
 #include <variant>
 #include <vector>
 
-#include <bitview.h>
+#include <bitspan.h>
 #include <multibuffer.h>
 #include <span_vector.h>
 #include <string_manager.h>
@@ -33,8 +33,8 @@ namespace HerosInsight
     {
         // clang-format off
         constexpr std::string_view Text() const { return static_cast<const Derived *>(this)->TextView(); }
-        constexpr ConstBitView Uppercase() const { return static_cast<const Derived *>(this)->UppercaseView(); }
-        constexpr BitView Uppercase() requires(!IsConst) { return static_cast<const Derived *>(this)->UppercaseView(); }
+        constexpr ConstBitSpan Uppercase() const { return static_cast<const Derived *>(this)->UppercaseView(); }
+        constexpr BitSpan Uppercase() requires(!IsConst) { return static_cast<const Derived *>(this)->UppercaseView(); }
         // clang-format on
 
         constexpr size_t size() const { return Text().size(); }
@@ -60,7 +60,7 @@ namespace HerosInsight
         constexpr LoweredStringViewBase<false> SubStr(size_t offset, size_t count)
             requires(!IsConst);
 
-        constexpr static void FoldText(std::span<char> text, BitView uppercase)
+        constexpr static void FoldText(std::span<char> text, BitSpan uppercase)
         {
             auto n_chars = text.size();
             for (size_t i = 0; i < n_chars; ++i)
@@ -80,10 +80,10 @@ namespace HerosInsight
     struct LoweredStringViewBase : LoweredStringBase<LoweredStringViewBase<IsConst>, IsConst>
     {
         std::string_view text;
-        BitViewBase<IsConst> uppercase;
+        BitSpanBase<IsConst> uppercase;
 
         LoweredStringViewBase() = default;
-        constexpr LoweredStringViewBase(std::string_view text, BitViewBase<IsConst> uppercase) : text(text), uppercase(uppercase)
+        constexpr LoweredStringViewBase(std::string_view text, BitSpanBase<IsConst> uppercase) : text(text), uppercase(uppercase)
         {
 #ifdef _DEBUG
             assert(text.size() == uppercase.size());
@@ -92,8 +92,8 @@ namespace HerosInsight
 
         // clang-format off
         constexpr std::string_view TextView() const { return text; }
-        constexpr ConstBitView UppercaseView() const { return uppercase; }
-        constexpr BitView UppercaseView() requires(!IsConst) { return uppercase; }
+        constexpr ConstBitSpan UppercaseView() const { return uppercase; }
+        constexpr BitSpan UppercaseView() requires(!IsConst) { return uppercase; }
         // clang-format on
     };
     using LoweredStringView = LoweredStringViewBase<false>;
@@ -125,8 +125,8 @@ namespace HerosInsight
 
         constexpr std::string_view TextView() const { return {text.data(), N - 1}; }
 
-        constexpr BitView UppercaseView() { return uppercase; }
-        constexpr ConstBitView UppercaseView() const { return uppercase; }
+        constexpr BitSpan UppercaseView() { return uppercase; }
+        constexpr ConstBitSpan UppercaseView() const { return uppercase; }
 
         constexpr operator LoweredStringView() { return LoweredStringView(TextView(), UppercaseView()); }
         constexpr operator ConstLoweredStringView() const { return ConstLoweredStringView(TextView(), UppercaseView()); }
@@ -134,7 +134,7 @@ namespace HerosInsight
         constexpr LoweredString(const char (&str)[N])
         {
             std::copy(str, str + N, text.begin());
-            this->FoldText(std::span<char>(text.data(), N - 1), (BitView)uppercase);
+            this->FoldText(std::span<char>(text.data(), N - 1), (BitSpan)uppercase);
         }
     };
 
@@ -217,7 +217,7 @@ namespace HerosInsight
             auto offset = str.data() - self.arena.Elements().data();
             return LoweredStringViewBase<IsConst>{
                 str,
-                (BitViewBase<IsConst>)self.uppercase.Subview(offset, str.size())
+                (BitSpanBase<IsConst>)self.uppercase.Subview(offset, str.size())
             };
         }
 

@@ -4,7 +4,7 @@
 #include <GWCA/Managers/AssetMgr.h>
 #include <GWCA/Managers/TextMgr.h>
 
-#include <bitview.h>
+#include <bitspan.h>
 #include <buffer.h>
 #include <color_conv.h>
 #include <constants.h>
@@ -810,7 +810,7 @@ struct Colors
 
     void SetColors(ImGuiColorDescriptor color_desc, ImVec4 color)
     {
-        BitView affected = color_desc.included;
+        BitSpan affected = color_desc.included;
         for (auto color_id : affected.IterSetBits())
         {
             colors[color_id] = color;
@@ -819,7 +819,7 @@ struct Colors
 
     void ShiftColors(ImGuiColorDescriptor color_desc, float hue_shift, float saturation_shift, float lightness_shift)
     {
-        BitView affected = color_desc.included;
+        BitSpan affected = color_desc.included;
 
         for (auto color_idx : affected.IterSetBits())
         {
@@ -887,7 +887,7 @@ struct ColorTransformer
 
     void ApplySrcColors(ImGuiColorDescriptor colors)
     {
-        BitView affected = colors.included;
+        BitSpan affected = colors.included;
         for (auto color_idx : affected.IterSetBits())
         {
             dst_colors[color_idx] = src_colors[color_idx];
@@ -896,7 +896,7 @@ struct ColorTransformer
 
     void ApplySrcColors(ImGuiColorDescriptor colors, ImVec4 tint)
     {
-        BitView affected = colors.included;
+        BitSpan affected = colors.included;
 
         auto tint_hsla = ColorConv::RGBAToHSLA(tint);
 

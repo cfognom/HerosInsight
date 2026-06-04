@@ -1,6 +1,6 @@
 #include <ranges>
 
-#include <bitview.h>
+#include <bitspan.h>
 #include <multibuffer.h>
 #include <rich_text.h>
 #include <utils.h>

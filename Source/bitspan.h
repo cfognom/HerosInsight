@@ -6,14 +6,14 @@
 #include <type_traits>
 
 template <bool IsConst>
-class BitViewBase;
+class BitSpanBase;
 
 template <typename Derived, bool IsConst>
-class BitOperations // Base class for Curiously Recurring Template Pattern
+class BitOperations // Base class for CRTP (Curiously Recurring Template Pattern)
 {
 public:
     using word_t = uint64_t;
-    using NaturalBitView = BitViewBase<IsConst>;
+    using NaturalBitSpan = BitSpanBase<IsConst>;
     using Self = BitOperations<Derived, IsConst>;
 
     static constexpr size_t BITS_PER_WORD = sizeof(word_t) * CHAR_BIT;
@@ -39,7 +39,7 @@ public:
     constexpr void SetAll(bool value)
         requires(!IsConst)
     {
-        if constexpr (std::is_same_v<Derived, NaturalBitView>)
+        if constexpr (std::is_same_v<Derived, NaturalBitSpan>)
         {
             auto data = get_segments();
 
@@ -159,8 +159,8 @@ public:
     constexpr       word_t* data() requires(!IsConst) { return as_derived().data(); }
     constexpr const word_t* data() const              { return as_derived().data(); }
     constexpr       size_t  size() const              { return as_derived().size(); }
-    constexpr BitViewBase<false> Subview(size_t offset, size_t count) requires(!IsConst);
-    constexpr BitViewBase<true>  Subview(size_t offset, size_t count) const;
+    constexpr BitSpanBase<false> Subview(size_t offset, size_t count) requires(!IsConst);
+    constexpr BitSpanBase<true>  Subview(size_t offset, size_t count) const;
     // clang-format on
 
     constexpr size_t PopCount() const
@@ -393,20 +393,20 @@ public: // These should be protected but c++ is being a bitch
     constexpr size_t bit_offset() const { return as_derived().bit_offset(); }
 };
 
-// Template BitView implementation. IsConst toggles constness of the underlying data pointer
+// Template BitSpan implementation. IsConst toggles constness of the underlying data pointer
 template <bool IsConst>
-class BitViewBase : public BitOperations<BitViewBase<IsConst>, IsConst>
+class BitSpanBase : public BitOperations<BitSpanBase<IsConst>, IsConst>
 {
 public:
-    using base = BitOperations<BitViewBase<IsConst>, IsConst>;
+    using base = BitOperations<BitSpanBase<IsConst>, IsConst>;
     using word_t = typename base::word_t;
     using consty_word_t = std::conditional_t<IsConst, const word_t, word_t>;
 
-    BitViewBase() : words(nullptr), _bit_offset(0), n_bits(0) {}
+    BitSpanBase() : words(nullptr), _bit_offset(0), n_bits(0) {}
 
-    constexpr BitViewBase(consty_word_t *words, size_t n_bits, bool init_val)
+    constexpr BitSpanBase(consty_word_t *words, size_t n_bits, bool init_val)
         requires(!IsConst)
-        : BitViewBase(words, size_t(0), n_bits)
+        : BitSpanBase(words, size_t(0), n_bits)
     {
         this->init_bits(init_val);
 #ifdef _DEBUG
@@ -414,17 +414,17 @@ public:
 #endif
     }
 
-    constexpr BitViewBase(consty_word_t *words, size_t bit_offset, size_t n_bits)
+    constexpr BitSpanBase(consty_word_t *words, size_t bit_offset, size_t n_bits)
         : words(words), _bit_offset(bit_offset), n_bits(n_bits)
     {
         assert(bit_offset <= base::MAX_BIT_OFFSET);
         assert(n_bits <= base::MAX_LENGTH);
     }
 
-    constexpr BitViewBase(const BitViewBase &) = default;
+    constexpr BitSpanBase(const BitSpanBase &) = default;
 
     // Allow implicit conversion from mutable view to const view
-    constexpr BitViewBase(const BitViewBase<false> &other)
+    constexpr BitSpanBase(const BitSpanBase<false> &other)
         requires(IsConst)
         : words(other.data()), _bit_offset(other.bit_offset()), n_bits(other.size())
     {
@@ -443,9 +443,9 @@ private:
     size_t n_bits : base::LENGTH_WIDTH;
 };
 
-using BitView = BitViewBase<false>;
-using ConstBitView = BitViewBase<true>;
-static_assert(sizeof(BitView) == sizeof(size_t) * 2);
+using BitSpan = BitSpanBase<false>;
+using ConstBitSpan = BitSpanBase<true>;
+static_assert(sizeof(BitSpan) == sizeof(size_t) * 2);
 
 template <size_t N>
 class BitArray : public BitOperations<BitArray<N>, false>
@@ -456,8 +456,8 @@ public:
     using base = typename BitOperations<BitArray<N>, false>;
     using word_t = typename base::word_t;
 
-    constexpr operator BitView() { return BitView(words.data(), 0, N); }
-    constexpr operator ConstBitView() const { return ConstBitView(words.data(), 0, N); }
+    constexpr operator BitSpan() { return BitSpan(words.data(), 0, N); }
+    constexpr operator ConstBitSpan() const { return ConstBitSpan(words.data(), 0, N); }
 
     constexpr word_t *data() { return words.data(); }
     constexpr const word_t *data() const { return words.data(); }
@@ -476,7 +476,7 @@ private:
 };
 
 template <size_t N, bool BaseValue, size_t... FlipIndices>
-static inline constexpr ConstBitView BitLit()
+static inline constexpr ConstBitSpan BitLit()
 {
     static constexpr BitArray<N> bits = []
     {
@@ -492,13 +492,13 @@ class BitVector : public BitOperations<BitVector, false>
     friend class BitOperations<BitVector, false>;
 
 public:
-    // using base = typename BitViewBase<BitVector>;
+    // using base = typename BitSpanBase<BitVector>;
     // using word_t = typename base::word_t;
 
     BitVector() = default;
     BitVector(size_t n_bits, bool value) : words(CalcWordCount(n_bits), value ? std::numeric_limits<word_t>::max() : 0), n_bits(n_bits) {};
 
-    operator BitView() { return BitView(words.data(), 0, n_bits); }
+    operator BitSpan() { return BitSpan(words.data(), 0, n_bits); }
 
     void clear() { words.clear(); }
     void resize(size_t n_bits, bool value = false)
@@ -510,7 +510,7 @@ public:
             if (data.tail.has_value())
             {
                 // All bits that are beyond the new size are set in this mask
-                auto off_limits_mask = ~data.tail->mask << std::min(n_bits - this->n_bits, BitView::MAX_BIT_OFFSET);
+                auto off_limits_mask = ~data.tail->mask << std::min(n_bits - this->n_bits, BitSpan::MAX_BIT_OFFSET);
                 auto mask = ~(data.tail->mask | off_limits_mask); // The newly added bits that we need to set
                 auto ref = Reference{data.tail->word, mask};
                 ref.Set(value);
@@ -519,7 +519,7 @@ public:
         this->words.resize(CalcWordCount(n_bits), value ? std::numeric_limits<word_t>::max() : word_t(0));
         this->n_bits = n_bits;
     }
-    void append_range(const ConstBitView &range)
+    void append_range(const ConstBitSpan &range)
     {
         // TODO: Maybe do this with bit shifting instead?
         size_t original_size = this->n_bits;
@@ -539,20 +539,20 @@ private:
     size_t n_bits = 0;
 };
 
-#define BitView_alloca(n_bits, init_val) HerosInsight::BitView((word_t *)alloca(HerosInsight::BitView::CalcReqMemSize(n_bits)), n_bits, init_val)
+#define BitSpan_alloca(n_bits, init_val) HerosInsight::BitSpan((word_t *)alloca(HerosInsight::BitSpan::CalcReqMemSize(n_bits)), n_bits, init_val)
 
 template <typename Derived, bool IsConst>
-constexpr BitView BitOperations<Derived, IsConst>::Subview(size_t offset, size_t count)
+constexpr BitSpan BitOperations<Derived, IsConst>::Subview(size_t offset, size_t count)
     requires(!IsConst)
 {
     assert(offset + count <= size());
     auto pos = this->get_bit_pos(offset);
-    return BitView{this->data() + pos.word_offset, pos.bit_offset, count};
+    return BitSpan{this->data() + pos.word_offset, pos.bit_offset, count};
 }
 template <typename Derived, bool IsConst>
-constexpr ConstBitView BitOperations<Derived, IsConst>::Subview(size_t offset, size_t count) const
+constexpr ConstBitSpan BitOperations<Derived, IsConst>::Subview(size_t offset, size_t count) const
 {
     assert(offset + count <= size());
     auto pos = this->get_bit_pos(offset);
-    return ConstBitView{this->data() + pos.word_offset, pos.bit_offset, count};
+    return ConstBitSpan{this->data() + pos.word_offset, pos.bit_offset, count};
 }

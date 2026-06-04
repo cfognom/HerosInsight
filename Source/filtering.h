@@ -4,7 +4,7 @@
 #include <set>
 #include <span>
 
-#include <bitview.h>
+#include <bitspan.h>
 #include <front_back_pair.h>
 #include <matcher.h>
 #include <multibuffer.h>
@@ -176,7 +176,7 @@ namespace HerosInsight::Filtering
     struct MetaProp
     {
         ConstLoweredStringView name;
-        ConstBitView propset; // Which props this meta-prop targets
+        ConstBitSpan propset; // Which props this meta-prop targets
     };
 
     struct MetaSetup
