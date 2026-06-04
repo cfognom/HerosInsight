@@ -81,7 +81,7 @@ namespace HerosInsight::Filtering
 
     struct ResultItem
     {
-        ConstLoweredStringView searchable_text;
+        ConstFoldedStringView searchable_text;
         std::string_view presentable_text;
         std::span<uint16_t> searchable_hl;
         std::span<uint16_t> presentable_hl;
@@ -109,7 +109,7 @@ namespace HerosInsight::Filtering
             );
 
         Text::StringManager &mgr = Text::s_Manager;
-        LoweredStringVector searchable_text;
+        FoldedStringVector searchable_text;
         SpanVector<Text::StringTemplateAtom> string_templates;
         SpanVector<Text::StringTemplateAtom>::Deduper string_templates_deduper;
         std::vector<uint16_t> item_to_str;
@@ -163,7 +163,7 @@ namespace HerosInsight::Filtering
 
         size_t GetStrId(size_t itemId);
         Text::StringTemplate GetStringTemplate(size_t strId);
-        ConstLoweredStringView GetSearchableStr(size_t strId) { return std::as_const(searchable_text)[strId]; }
+        ConstFoldedStringView GetSearchableStr(size_t strId) { return std::as_const(searchable_text)[strId]; }
         void GetReadableString(size_t strId, OutBuf<char> out, OutBuf<Text::PosDelta> deltas);
     };
 
@@ -175,14 +175,14 @@ namespace HerosInsight::Filtering
 
     struct MetaProp
     {
-        ConstLoweredStringView name;
+        ConstFoldedStringView name;
         ConstBitSpan propset; // Which props this meta-prop targets
     };
 
     struct MetaSetup
     {
-        std::span<MetaProp> metas;        // Sorted from most specific to least.
-        LoweredStringVector prop_headers; // Headers for each prop. I.e. comma separated string of meta-props targeting this prop, sorted from most specific to least.
+        std::span<MetaProp> metas;       // Sorted from most specific to least.
+        FoldedStringVector prop_headers; // Headers for each prop. I.e. comma separated string of meta-props targeting this prop, sorted from most specific to least.
 
         MetaSetup(std::span<MetaProp> metas);
     };
@@ -192,7 +192,7 @@ namespace HerosInsight::Filtering
         using index_t = uint16_t;
 
         std::span<const MetaProp> metas;
-        const LoweredStringVector &prop_headers;
+        const FoldedStringVector &prop_headers;
         std::span<IncrementalProp *> props;
 
         Device(const MetaSetup &setup, std::span<IncrementalProp *> props)

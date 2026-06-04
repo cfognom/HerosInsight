@@ -228,7 +228,7 @@ namespace HerosInsight::Filtering
 
                 if (count > 0)
                 {
-                    constexpr LoweredString join = SkillDull ", " CloseColor;
+                    constexpr FoldedString join = SkillDull ", " CloseColor;
                     prop_headers.AppendPartial(join);
                 }
                 prop_headers.AppendPartial(meta.name);
@@ -340,8 +340,8 @@ namespace HerosInsight::Filtering
         return filter;
     }
 
-    constexpr static ConstLoweredStringView matched_target = "Matched"_folded;
-    static ConstLoweredStringView GetSortTargetName(std::span<const MetaProp> metas, size_t sort_target_id)
+    constexpr static ConstFoldedStringView matched_target = "Matched"_folded;
+    static ConstFoldedStringView GetSortTargetName(std::span<const MetaProp> metas, size_t sort_target_id)
     {
         auto n_meta = metas.size();
         if (sort_target_id < n_meta)
@@ -563,7 +563,7 @@ namespace HerosInsight::Filtering
         Device::index_t index;
     };
 
-    static bool MatchesAny(std::span<Matcher> matchers, ConstLoweredStringView text)
+    static bool MatchesAny(std::span<Matcher> matchers, ConstFoldedStringView text)
     {
         for (auto &matcher : matchers)
         {
@@ -1070,9 +1070,9 @@ namespace HerosInsight::Filtering
         }
     }
 
-    static void CalcHL(std::span<const MetaProp> metas, Query &q, size_t prop_id, ConstLoweredStringView lowered, std::vector<uint16_t> &hl)
+    static void CalcHL(std::span<const MetaProp> metas, Query &q, size_t prop_id, ConstFoldedStringView str, std::vector<uint16_t> &hl)
     {
-        if (lowered.text.empty())
+        if (str.text.empty())
             return;
 
         auto init_hl_size = hl.size();
@@ -1087,9 +1087,9 @@ namespace HerosInsight::Filtering
             for (auto &matcher : filter.matchers)
             {
                 auto hl_size_before = hl.size();
-                bool is_match = matcher.Matches(lowered, hl);
+                bool is_match = matcher.Matches(str, hl);
                 std::span<uint16_t> hl_span{hl.data() + hl_size_before, hl.size() - hl_size_before};
-                ConnectSpaceSeparatedHighlighting(lowered.text, hl_span);
+                ConnectSpaceSeparatedHighlighting(str.text, hl_span);
                 hl.resize(hl_size_before + hl_span.size());
             }
         }

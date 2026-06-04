@@ -166,7 +166,7 @@ namespace HerosInsight
         }
 
         auto values = atoms | std::views::transform(&Atom::src_str);
-        this->strings = LoweredStringVector(values);
+        this->strings = FoldedStringVector(values);
         for (size_t i = 0; i < atoms.size(); ++i)
         {
             auto &atom = atoms[i];
@@ -246,7 +246,7 @@ namespace HerosInsight
         return offset;
     }
 
-    bool IsSubstring(LoweredStringView text, LoweredStringView sub, size_t offset)
+    bool IsSubstring(FoldedStringView text, FoldedStringView sub, size_t offset)
     {
         if (offset + sub.text.size() > text.text.size())
             return false;
@@ -259,7 +259,7 @@ namespace HerosInsight
         return std::string::npos;
     }
 
-    size_t FindPrefixedWord(LoweredStringView haystack, LoweredStringView prefix, size_t offset)
+    size_t FindPrefixedWord(FoldedStringView haystack, FoldedStringView prefix, size_t offset)
     {
         while (true)
         {
@@ -335,7 +335,7 @@ namespace HerosInsight
         return offset;
     }
 
-    bool PostChecks(Matcher::Atom &atom, ConstLoweredStringView haystack, size_t offset)
+    bool PostChecks(Matcher::Atom &atom, ConstFoldedStringView haystack, size_t offset)
     {
         if (Utils::HasAnyFlag(atom.post_check, Matcher::Atom::PostCheck::Distinct))
         {
@@ -366,7 +366,7 @@ namespace HerosInsight
         return true;
     }
 
-    bool Matcher::Match(ConstLoweredStringView text, size_t offset)
+    bool Matcher::Match(ConstFoldedStringView text, size_t offset)
     {
         auto n_atoms = atoms.size();
 
@@ -421,7 +421,7 @@ namespace HerosInsight
         return true;
     }
 
-    bool Matcher::Match(ConstLoweredStringView text, size_t &offset, std::vector<uint16_t> &matches)
+    bool Matcher::Match(ConstFoldedStringView text, size_t &offset, std::vector<uint16_t> &matches)
     {
         if (!Match(text, offset))
             return false;
@@ -435,7 +435,7 @@ namespace HerosInsight
         return true;
     }
 
-    bool Matcher::Matches(ConstLoweredStringView text, std::vector<uint16_t> &matches)
+    bool Matcher::Matches(ConstFoldedStringView text, std::vector<uint16_t> &matches)
     {
         if (atoms.empty())
             return true;
