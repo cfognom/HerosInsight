@@ -280,7 +280,7 @@ namespace HerosInsight
         }
     }
 
-    size_t CalcLimit(Matcher::Atom atom, LoweredStringView text, size_t offset)
+    size_t CalcLimit(Matcher::Atom atom, std::string_view text, size_t offset)
     {
         using SearchBound = Matcher::Atom::SearchBound;
 
@@ -290,18 +290,18 @@ namespace HerosInsight
             case SearchBound::WithinXWords:
                 for (size_t i = 0; i < atom.within_count; ++i)
                 {
-                    offset = FindNextWord(text.text, offset);
+                    offset = FindNextWord(text, offset);
                     if (offset == std::string::npos)
-                        return text.text.size();
+                        return text.size();
                 }
-                search_space_max = text.text.find(' ', offset);
+                search_space_max = text.find(' ', offset);
                 break;
 
             case SearchBound::Anywhere:
             default:
-                return text.text.size();
+                return text.size();
         }
-        return std::min(search_space_max, text.text.size());
+        return std::min(search_space_max, text.size());
     }
 
     struct FindResult
@@ -317,7 +317,7 @@ namespace HerosInsight
         size_t Len() const { return end - begin; }
     };
 
-    size_t Find(Matcher::Atom &atom, LoweredStringView haystack, size_t offset)
+    size_t Find(Matcher::Atom &atom, std::string_view haystack, size_t offset)
     {
         using Type = Matcher::Atom::Type;
 
@@ -325,17 +325,17 @@ namespace HerosInsight
         {
             case Type::String:
             case Type::ExactNumber:
-                offset = haystack.text.find(atom.GetNeedleStr(), offset);
+                offset = haystack.find(atom.GetNeedleStr(), offset);
                 break;
             case Type::AnyNumber:
-                offset = haystack.text.find('\x1', offset);
+                offset = haystack.find('\x1', offset);
                 break;
         }
 
         return offset;
     }
 
-    bool PostChecks(Matcher::Atom &atom, LoweredStringView haystack, size_t offset)
+    bool PostChecks(Matcher::Atom &atom, ConstLoweredStringView haystack, size_t offset)
     {
         if (Utils::HasAnyFlag(atom.post_check, Matcher::Atom::PostCheck::Distinct))
         {
@@ -366,7 +366,7 @@ namespace HerosInsight
         return true;
     }
 
-    bool Matcher::Match(LoweredStringView text, size_t offset)
+    bool Matcher::Match(ConstLoweredStringView text, size_t offset)
     {
         auto n_atoms = atoms.size();
 
@@ -377,7 +377,7 @@ namespace HerosInsight
             auto atom = &atoms[i];
             auto mrec = &work_mem[i];
 
-            mrec->limit = CalcLimit(*atom, text, offset);
+            mrec->limit = CalcLimit(*atom, text.text, offset);
 
             if (i < horizon && offset <= mrec->begin) // We already have a cached 'Find'
             {
@@ -388,7 +388,7 @@ namespace HerosInsight
             horizon += (i == horizon);
             while (true)
             {
-                offset = Find(*atom, text, offset + 1);
+                offset = Find(*atom, text.text, offset + 1);
                 if (offset == std::string::npos)
                     return false;
                 mrec->begin = offset;
@@ -421,7 +421,7 @@ namespace HerosInsight
         return true;
     }
 
-    bool Matcher::Match(LoweredStringView text, size_t &offset, std::vector<uint16_t> &matches)
+    bool Matcher::Match(ConstLoweredStringView text, size_t &offset, std::vector<uint16_t> &matches)
     {
         if (!Match(text, offset))
             return false;
@@ -435,7 +435,7 @@ namespace HerosInsight
         return true;
     }
 
-    bool Matcher::Matches(LoweredStringView text, std::vector<uint16_t> &matches)
+    bool Matcher::Matches(ConstLoweredStringView text, std::vector<uint16_t> &matches)
     {
         if (atoms.empty())
             return true;

@@ -95,7 +95,7 @@ namespace HerosInsight
         // The count of strings in the arena
         size_t SpanCount() const { return ends.size(); }
         std::vector<T> &Elements() { return elements; }
-        T_const_view Elements() const { return elements; }
+        T_const_view Elements() const { return (T_const_view)elements; }
 
         void Reserve(size_t n_spans, size_t n_elements)
         {
@@ -243,6 +243,11 @@ namespace HerosInsight
         {
             elements.append_range(span);
             return CommitWritten(deduper);
+        }
+
+        void AppendPartial(std::span<const T> span)
+        {
+            elements.append_range(span);
         }
 
         // Writer should modify the span size to the number of elements written

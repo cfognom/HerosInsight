@@ -1,15 +1,20 @@
 #pragma once
 
 #include <bit>
+#include <cstring>
 #include <limits.h>
+#include <type_traits>
 
-struct BitView;
+template <bool IsConst>
+class BitViewBase;
 
-template <typename Derived>
-class BitViewBase
+template <typename Derived, bool IsConst>
+class BitOperations // Base class for Curiously Recurring Template Pattern
 {
 public:
     using word_t = uint64_t;
+    using NaturalBitView = BitViewBase<IsConst>;
+    using Self = BitOperations<Derived, IsConst>;
 
     static constexpr size_t BITS_PER_WORD = sizeof(word_t) * CHAR_BIT;
     static constexpr size_t MAX_BIT_OFFSET = BITS_PER_WORD - 1;
@@ -32,20 +37,21 @@ public:
     }
 
     constexpr void SetAll(bool value)
+        requires(!IsConst)
     {
-        if constexpr (std::is_same<Derived, BitView>::value)
+        if constexpr (std::is_same_v<Derived, NaturalBitView>)
         {
-            auto data = uncompress();
+            auto data = get_segments();
 
             word_t val = value ? std::numeric_limits<word_t>::max() : 0;
 
-            if (data.has_partial_head)
-                data.head.Set(value);
+            if (data.head.has_value())
+                data.head->Set(value);
 
             std::memset(data.whole_words.data(), val, data.whole_words.size() * sizeof(word_t));
 
-            if (data.has_partial_tail)
-                data.tail.Set(value);
+            if (data.tail.has_value())
+                data.tail->Set(value);
         }
         else // For BitArray and BitVector we dont mind if we spill over, since we own all memory
         {
@@ -54,19 +60,24 @@ public:
     }
 
     constexpr void Flip()
+        requires(!IsConst)
     {
-        auto data = uncompress();
-        if (data.has_partial_head)
-            data.head.SetMaskedWord(~*data.head.word);
-        for (auto &word : data.whole_words)
+        auto data = get_segments();
+        if (data.head.has_value())
+            data.head->SetMaskedWord(~*data.head->word);
+        for (auto &word : data.middle)
             word = ~word;
-        if (data.has_partial_tail)
-            data.tail.SetMaskedWord(~*data.tail.word);
+        if (data.tail.has_value())
+            data.tail.SetMaskedWord(~*data.tail->word);
     }
 
-    struct reference
+    template <bool IsConst>
+    struct ReferenceBase
     {
+        using consty_word_t = std::conditional_t<IsConst, const word_t, word_t>;
+
         constexpr void Set(bool value)
+            requires(!IsConst)
         {
             if (value)
             {
@@ -83,44 +94,35 @@ public:
             return GetMaskedWord() != 0;
         }
 
-        constexpr reference &operator=(bool value)
-        {
-            this->Set(value);
-            return *this;
-        }
-
-        constexpr reference &operator=(const reference &other)
-        {
-            this->Set(other.Get());
-            return *this;
-        }
-
-        constexpr bool operator~() const
-        {
-            return !this->Get();
-        }
-
-        constexpr operator bool() const
-        {
-            return this->Get();
-        }
+        // clang-format off
+        constexpr ReferenceBase& operator=(bool value)                 requires(!IsConst) { this->Set(value);       return *this; }
+        constexpr ReferenceBase& operator=(const ReferenceBase &other) requires(!IsConst) { this->Set(other.Get()); return *this; }
+        constexpr bool operator~() const { return !this->Get(); }
+        constexpr operator  bool() const { return  this->Get(); }
+        // clang-format on
 
     private:
-        constexpr reference(word_t *word, word_t bit)
-            : word(word), mask(bit) {}
+        constexpr ReferenceBase(consty_word_t *word, word_t bit) : word(word), mask(bit) {}
 
         constexpr word_t GetMaskedWord() const { return *word & mask; }
-        constexpr void SetMaskedWord(word_t value) { *word = (*word & ~mask) | (value & mask); }
+        constexpr void SetMaskedWord(word_t value)
+            requires(!IsConst)
+        {
+            *word = (*word & ~mask) | (value & mask);
+        }
 
-        word_t *word;
+        consty_word_t *word;
         word_t mask;
 
         friend struct iterator;
-        friend struct BitViewBase;
+        friend struct BitOperations;
         friend struct BitVector;
     };
+    using Reference = ReferenceBase<false>;
+    using ConstReference = ReferenceBase<true>;
 
-    constexpr reference operator[](size_t index)
+    constexpr Reference operator[](size_t index)
+        requires(!IsConst)
     {
         assert(index < size());
         return ref_unchecked(index);
@@ -132,75 +134,71 @@ public:
         return (data()[pos.word_offset] & (word_t(1) << pos.bit_offset)) != word_t(0);
     }
 
-    template <typename T>
-    constexpr Derived &operator|=(const BitViewBase<T> &other)
+    template <typename T, bool OtherIsConst>
+    constexpr Derived &operator|=(const BitOperations<T, OtherIsConst> &other)
+        requires(!IsConst)
     {
         if (this->bit_offset() == other.bit_offset())
         {
-            auto data = uncompress();
-            auto other_data = other.uncompress();
-            auto min_size = std::min(data.whole_words.size(), other_data.whole_words.size());
-            if (data.has_partial_head)
-                data.head.SetMaskedWord(*data.head.word | other_data.head.GetMaskedWord());
+            auto data = get_segments();
+            auto other_data = other.get_segments();
+            auto min_size = std::min(data.middle.size(), other_data.middle.size());
+            if (data.head.has_value())
+                data.head->SetMaskedWord(*data.head->word | other_data.head->GetMaskedWord());
             for (size_t i = 0; i < min_size; ++i)
-                data.whole_words[i] |= other_data.whole_words[i];
-            if (data.has_partial_tail)
-                data.tail.SetMaskedWord(*data.tail.word | other_data.tail.GetMaskedWord());
+                data.middle[i] |= other_data.middle[i];
+            if (data.tail.has_value())
+                data.tail->SetMaskedWord(*data.tail->word | other_data.tail->GetMaskedWord());
             return as_derived();
         }
 
         throw std::runtime_error("Not implemented");
     }
 
-    constexpr word_t *data() { return as_derived().data(); }
-    constexpr const word_t *data() const { return as_derived().data(); }
-    constexpr size_t WordCount() const { return CalcWordCount(size()); }
-    constexpr std::span<word_t> Words() const { return std::span<word_t>(data(), CalcWordCount(size())); }
-    constexpr size_t size() const { return as_derived().size(); }
+    // clang-format off
+    constexpr       word_t* data() requires(!IsConst) { return as_derived().data(); }
+    constexpr const word_t* data() const              { return as_derived().data(); }
+    constexpr       size_t  size() const              { return as_derived().size(); }
+    constexpr BitViewBase<false> Subview(size_t offset, size_t count) requires(!IsConst);
+    constexpr BitViewBase<true>  Subview(size_t offset, size_t count) const;
+    // clang-format on
 
-    // We will impl this after the BitView class is defined
-    BitView Subview(size_t offset, size_t count);
-
-    constexpr size_t PopCount()
+    constexpr size_t PopCount() const
     {
-        auto data = uncompress();
+        auto data = get_segments();
         size_t count = 0;
-        if (data.has_partial_head)
-            count += std::popcount(data.head.GetMaskedWord());
-        for (auto word : data.whole_words)
+        if (data.head.has_value())
+            count += std::popcount(data.head->GetMaskedWord());
+        for (auto word : data.middle)
             count += std::popcount(word);
-        if (data.has_partial_tail)
-            count += std::popcount(data.tail.GetMaskedWord());
+        if (data.tail.has_value())
+            count += std::popcount(data.tail->GetMaskedWord());
         return count;
     }
 
-    constexpr bool Any()
+    constexpr bool Any() const
     {
-        auto data = uncompress();
-        if (data.has_partial_head)
-            if (data.head.GetMaskedWord() != 0)
-                return true;
-        for (auto word : data.whole_words)
+        auto data = get_segments();
+        if (data.head.has_value() && data.head->GetMaskedWord() != 0)
+            return true;
+        for (auto word : data.middle)
             if (word != 0)
                 return true;
-        if (data.has_partial_tail)
-            if (data.tail.GetMaskedWord() != 0)
-                return true;
+        if (data.tail.has_value() && data.tail->GetMaskedWord() != 0)
+            return true;
         return false;
     }
 
-    constexpr bool All()
+    constexpr bool All() const
     {
-        auto data = uncompress();
-        if (data.has_partial_head)
-            if (data.head.GetMaskedWord() != data.head.mask)
-                return false;
-        for (auto word : data.whole_words)
+        auto data = get_segments();
+        if (data.head.has_value() && data.head->GetMaskedWord() != data.head->mask)
+            return false;
+        for (auto word : data.middle)
             if (word != std::numeric_limits<word_t>::max())
                 return false;
-        if (data.has_partial_tail)
-            if (data.tail.GetMaskedWord() != data.tail.mask)
-                return false;
+        if (data.tail.has_value() && data.tail->GetMaskedWord() != data.tail->mask)
+            return false;
         return true;
     }
 
@@ -211,8 +209,8 @@ public:
         const auto physical_end = this->bit_offset() + this->size();
         const auto word_count = CalcWordCount(physical_end);
         auto physical_index = this->bit_offset() + index;
-        auto word_index = physical_index / BitView::BITS_PER_WORD;
-        auto bit_index = physical_index % BitView::BITS_PER_WORD;
+        auto word_index = physical_index / BITS_PER_WORD;
+        auto bit_index = physical_index % BITS_PER_WORD;
         auto mask = std::numeric_limits<word_t>::max() << bit_index;
         auto word = this->data()[word_index] & mask;
         while (word == 0 && ++word_index < word_count)
@@ -220,16 +218,17 @@ public:
             word = this->data()[word_index];
         }
         auto trailing_zeros = std::countr_zero(word);
-        physical_index = word_index * BitView::BITS_PER_WORD + trailing_zeros;
+        physical_index = word_index * BITS_PER_WORD + trailing_zeros;
         index = std::min(physical_index, physical_end) - bit_offset();
         return index;
     }
 
-    bool IsSubsetOf(const BitView &other) const
+    template <typename T, bool OtherIsConst>
+    bool IsSubsetOf(const BitOperations<T, OtherIsConst> &other) const
     {
         for (auto index : this->IterSetBits())
         {
-            if (other[index] == false)
+            if (!other[index])
                 return false;
         }
         return true;
@@ -237,7 +236,7 @@ public:
 
     struct iterator
     {
-        reference ref;
+        Reference ref;
         iterator &operator++()
         {
             if (ref.mask == 0)
@@ -249,10 +248,10 @@ public:
             {
                 ref.mask <<= 1;
             }
-            *this;
+            return *this;
         }
 
-        reference operator*() const
+        Reference operator*() const
         {
             return ref;
         }
@@ -264,10 +263,12 @@ public:
         }
     };
 
-    iterator begin() { return iterator{ref_unchecked(0)}; }
-    iterator end() { return iterator{ref_unchecked(size())}; }
+    // clang-format off
+    iterator begin() requires(!IsConst) { return iterator{ref_unchecked(0)}; }
+    iterator end()   requires(!IsConst) { return iterator{ref_unchecked(size())}; }
+    // clang-format on
 
-    struct IteratorAdapter
+    struct SetBitsIterable
     {
         struct iterator
         {
@@ -275,43 +276,43 @@ public:
 
             iterator &operator++()
             {
-                index = bitview.FindNextSetBit(index + 1);
+                index = bit_obj.FindNextSetBit(index + 1);
                 return *this;
             }
 
             bool operator==(const iterator &other) const
             {
-                return bitview.data() == other.bitview.data() &&
+                return bit_obj.data() == other.bit_obj.data() &&
                        index == other.index;
             }
 
         private:
-            iterator(const BitViewBase<Derived> &bitview, size_t index)
-                : bitview(bitview), index(index) {}
+            iterator(const Self &bit_obj, size_t index)
+                : bit_obj(bit_obj), index(index) {}
 
-            const BitViewBase<Derived> &bitview;
+            const Self &bit_obj;
             size_t index;
 
-            friend struct IteratorAdapter;
+            friend struct SetBitsIterable;
         };
 
         iterator begin()
         {
-            if (this->bitview.size() == 0)
+            if (this->bit_obj.size() == 0)
                 return end();
-            auto it = iterator(this->bitview, -1);
+            auto it = iterator(this->bit_obj, size_t(-1));
             ++it;
             return it;
         }
         iterator end()
         {
-            return iterator(this->bitview, this->bitview.size());
+            return iterator(this->bit_obj, this->bit_obj.size());
         }
 
-        const BitViewBase<Derived> &bitview;
+        const Self &bit_obj;
     };
 
-    IteratorAdapter IterSetBits() const { return IteratorAdapter{*this}; }
+    SetBitsIterable IterSetBits() const { return SetBitsIterable{*this}; }
 
 protected:
     constexpr Derived &as_derived() { return *static_cast<Derived *>(this); }
@@ -320,6 +321,7 @@ protected:
     // Initializes all bits to value
     // WARNING: This will overwrite any head/tail bits not belonging to this bitview
     constexpr void init_bits(bool value)
+        requires(!IsConst)
     {
         std::memset(data(), value ? 0xFF : 0, CalcReqMemSize(size()));
     }
@@ -338,31 +340,39 @@ protected:
         return BitPos{word_offset, bit_offset};
     }
 
-    constexpr reference ref_unchecked(size_t index)
+    constexpr Reference ref_unchecked(size_t index)
+        requires(!IsConst)
     {
         auto pos = get_bit_pos(index);
-        return reference(data() + pos.word_offset, word_t(1) << pos.bit_offset);
+        return Reference(this->data() + pos.word_offset, word_t(1) << pos.bit_offset);
     }
 
-    struct Properties
+public: // These should be protected but c++ is being a bitch
+    template <bool IsConst>
+    struct SegmentsBase
     {
-        bool has_partial_head;
-        bool has_partial_tail;
-        reference head;
-        reference tail;
-        std::span<word_t> whole_words;
-    };
+        using consty_word_t = std::conditional_t<IsConst, const word_t, word_t>;
 
-    constexpr inline Properties uncompress()
+        std::optional<ReferenceBase<IsConst>> head;
+        std::optional<ReferenceBase<IsConst>> tail;
+        std::span<consty_word_t> middle;
+    };
+    using Segments = SegmentsBase<false>;
+    using ConstSegments = SegmentsBase<true>;
+
+    constexpr inline auto get_segments(this auto &self)
     {
-        const auto end = get_bit_pos(size());
-        const auto start_bit_offset = bit_offset();
+        constexpr bool IsConst = std::is_const_v<std::remove_reference_t<decltype(self)>>;
+
+        const auto end = self.get_bit_pos(self.size());
+        const auto start_bit_offset = self.bit_offset();
         word_t head_mask = std::numeric_limits<word_t>::max() << start_bit_offset;  // 1 = included in view.
         word_t tail_mask = ~(std::numeric_limits<word_t>::max() << end.bit_offset); // 1 = included in view. Not valid if end_offset == 0.
 
+        auto data = self.data();
         bool has_partial_head = start_bit_offset > 0;
         bool has_partial_tail = end.bit_offset > 0;
-        auto span_ptr = this->data() + has_partial_head;
+        auto span_ptr = data + has_partial_head;
         auto span_len = end.word_offset - has_partial_head;
 
         bool head_is_tail = end.word_offset == 0; // Head and tail are the same word.
@@ -373,64 +383,81 @@ protected:
             has_partial_tail = false;
             span_len = 0;
         }
-        return Properties{
-            .has_partial_head = has_partial_head,
-            .has_partial_tail = has_partial_tail,
-            .head = reference(this->data(), head_mask),
-            .tail = reference(this->data() + end.word_offset, tail_mask),
-            .whole_words = std::span<word_t>(span_ptr, span_len),
+        return SegmentsBase<IsConst>{
+            .head = has_partial_head ? std::optional{ReferenceBase<IsConst>(data, head_mask)} : std::nullopt,
+            .tail = has_partial_tail ? std::optional{ReferenceBase<IsConst>(data + end.word_offset, tail_mask)} : std::nullopt,
+            .middle = std::span{span_ptr, span_len},
         };
     }
 
     constexpr size_t bit_offset() const { return as_derived().bit_offset(); }
 };
 
-class BitView : public BitViewBase<BitView>
+// Template BitView implementation. IsConst toggles constness of the underlying data pointer
+template <bool IsConst>
+class BitViewBase : public BitOperations<BitViewBase<IsConst>, IsConst>
 {
 public:
-    // using base = typename BitViewBase<BitView>;
-    // using word_t = typename base::word_t;
+    using base = BitOperations<BitViewBase<IsConst>, IsConst>;
+    using word_t = typename base::word_t;
+    using consty_word_t = std::conditional_t<IsConst, const word_t, word_t>;
 
-    BitView() : words(nullptr), _bit_offset(0), n_bits(0) {}
+    BitViewBase() : words(nullptr), _bit_offset(0), n_bits(0) {}
 
-    constexpr BitView(word_t *words, size_t n_bits, bool init_val)
-        : BitView(words, size_t(0), n_bits)
+    constexpr BitViewBase(consty_word_t *words, size_t n_bits, bool init_val)
+        requires(!IsConst)
+        : BitViewBase(words, size_t(0), n_bits)
     {
-        init_bits(init_val);
+        this->init_bits(init_val);
 #ifdef _DEBUG
-        assert(PopCount() == (init_val ? n_bits : 0));
+        assert(this->PopCount() == (init_val ? n_bits : 0));
 #endif
     }
 
-    constexpr BitView(word_t *words, size_t bit_offset, size_t n_bits)
+    constexpr BitViewBase(consty_word_t *words, size_t bit_offset, size_t n_bits)
         : words(words), _bit_offset(bit_offset), n_bits(n_bits)
     {
-        assert(bit_offset <= MAX_BIT_OFFSET);
-        assert(n_bits <= MAX_LENGTH);
+        assert(bit_offset <= base::MAX_BIT_OFFSET);
+        assert(n_bits <= base::MAX_LENGTH);
     }
 
-    constexpr word_t *data() { return words; }
-    constexpr const word_t *data() const { return words; }
-    constexpr size_t size() const { return n_bits; }
+    constexpr BitViewBase(const BitViewBase &) = default;
+
+    // Allow implicit conversion from mutable view to const view
+    constexpr BitViewBase(const BitViewBase<false> &other)
+        requires(IsConst)
+        : words(other.data()), _bit_offset(other.bit_offset()), n_bits(other.size())
+    {
+    }
+
+    // clang-format off
+    constexpr       word_t *data() requires(!IsConst) { return words; }
+    constexpr const word_t *data() const              { return words; }
+    constexpr size_t size()       const { return n_bits; }
     constexpr size_t bit_offset() const { return _bit_offset; }
+    // clang-format on
 
 private:
-    word_t *words;
-    size_t _bit_offset : BIT_OFFSET_WIDTH; // The bit-offset into the first word where the view starts
-    size_t n_bits : LENGTH_WIDTH;
+    consty_word_t *words;
+    size_t _bit_offset : base::BIT_OFFSET_WIDTH; // The bit-offset into the first word where the view starts
+    size_t n_bits : base::LENGTH_WIDTH;
 };
+
+using BitView = BitViewBase<false>;
+using ConstBitView = BitViewBase<true>;
 static_assert(sizeof(BitView) == sizeof(size_t) * 2);
 
 template <size_t N>
-class BitArray : public BitViewBase<BitArray<N>>
+class BitArray : public BitOperations<BitArray<N>, false>
 {
-    friend class BitViewBase<BitArray<N>>;
+    friend class BitOperations<BitArray<N>, false>;
 
 public:
-    using base = typename BitViewBase<BitArray<N>>;
+    using base = typename BitOperations<BitArray<N>, false>;
     using word_t = typename base::word_t;
 
     constexpr operator BitView() { return BitView(words.data(), 0, N); }
+    constexpr operator ConstBitView() const { return ConstBitView(words.data(), 0, N); }
 
     constexpr word_t *data() { return words.data(); }
     constexpr const word_t *data() const { return words.data(); }
@@ -442,15 +469,27 @@ public:
         words.fill(inital_value ? std::numeric_limits<word_t>::max() : 0);
     }
 
+    std::array<word_t, base::CalcWordCount(N)> words; // Cannot be private because this type must be "structural".
+
 private:
     constexpr size_t bit_offset() const { return 0; }
-
-    std::array<word_t, base::CalcWordCount(N)> words;
 };
 
-class BitVector : public BitViewBase<BitVector>
+template <size_t N, bool BaseValue, size_t... FlipIndices>
+static inline constexpr ConstBitView BitLit()
 {
-    friend class BitViewBase<BitVector>;
+    static constexpr BitArray<N> bits = []
+    {
+        BitArray<N> result(BaseValue);
+        ((result[FlipIndices] = !BaseValue), ...);
+        return result;
+    }();
+    return bits;
+}
+
+class BitVector : public BitOperations<BitVector, false>
+{
+    friend class BitOperations<BitVector, false>;
 
 public:
     // using base = typename BitViewBase<BitVector>;
@@ -467,20 +506,20 @@ public:
         if (n_bits > this->n_bits) // Grow
         {
             // When growing, we may need to grow the tail
-            auto data = this->uncompress();
-            if (data.has_partial_tail)
+            auto data = this->get_segments();
+            if (data.tail.has_value())
             {
                 // All bits that are beyond the new size are set in this mask
-                auto off_limits_mask = ~data.tail.mask << std::min(n_bits - this->n_bits, BitView::MAX_BIT_OFFSET);
-                auto mask = ~(data.tail.mask | off_limits_mask); // The newly added bits that we need to set
-                auto ref = reference(data.tail.word, mask);
+                auto off_limits_mask = ~data.tail->mask << std::min(n_bits - this->n_bits, BitView::MAX_BIT_OFFSET);
+                auto mask = ~(data.tail->mask | off_limits_mask); // The newly added bits that we need to set
+                auto ref = Reference{data.tail->word, mask};
                 ref.Set(value);
             }
         }
         this->words.resize(CalcWordCount(n_bits), value ? std::numeric_limits<word_t>::max() : word_t(0));
         this->n_bits = n_bits;
     }
-    void append_range(const BitView &range)
+    void append_range(const ConstBitView &range)
     {
         // TODO: Maybe do this with bit shifting instead?
         size_t original_size = this->n_bits;
@@ -502,10 +541,18 @@ private:
 
 #define BitView_alloca(n_bits, init_val) HerosInsight::BitView((word_t *)alloca(HerosInsight::BitView::CalcReqMemSize(n_bits)), n_bits, init_val)
 
-template <typename Derived>
-BitView BitViewBase<Derived>::Subview(size_t offset, size_t count)
+template <typename Derived, bool IsConst>
+constexpr BitView BitOperations<Derived, IsConst>::Subview(size_t offset, size_t count)
+    requires(!IsConst)
 {
     assert(offset + count <= size());
     auto pos = this->get_bit_pos(offset);
-    return BitView(this->data() + pos.word_offset, pos.bit_offset, count);
+    return BitView{this->data() + pos.word_offset, pos.bit_offset, count};
+}
+template <typename Derived, bool IsConst>
+constexpr ConstBitView BitOperations<Derived, IsConst>::Subview(size_t offset, size_t count) const
+{
+    assert(offset + count <= size());
+    auto pos = this->get_bit_pos(offset);
+    return ConstBitView{this->data() + pos.word_offset, pos.bit_offset, count};
 }
