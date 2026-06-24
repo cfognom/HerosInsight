@@ -133,11 +133,13 @@ namespace
             }
             else if constexpr (std::is_base_of_v<CaptureUntilTag, Element>)
             {
+                constexpr std::string_view str_cap = Element::str();
                 auto start = pos;
-                pos = input.find(Element::str(), pos);
+                pos = input.find(str_cap, pos);
                 if (pos == std::string_view::npos)
                     return false;
                 val = input.substr(start, pos - start);
+                pos += str_cap.size();
                 return true;
             }
         }

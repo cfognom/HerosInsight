@@ -1,6 +1,7 @@
 # CHANGELOG
 ## WIP
 - Fixed secondary description not showing if matches were only in its header.
+- Fixed weird characters ("]) appearing in skill descriptions.
 
 ## 0.8.5
 - Fixed compatibility with latest GW update.
