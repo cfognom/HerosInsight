@@ -31,7 +31,7 @@ namespace HerosInsight::Filtering
     {
         struct Arg
         {
-            size_t sort_target_id = 0;
+            size_t sort_target_id = std::numeric_limits<size_t>::max();
             bool is_negated = false;
         };
 

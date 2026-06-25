@@ -279,6 +279,8 @@ namespace HerosInsight::Filtering
         );
     }
 
+    static size_t GetDefaultMetaId(std::span<const MetaProp> metas) { return metas.size() - 1; }
+
     static std::optional<Filter> ParseFilter(std::span<const MetaProp> metas, std::string_view source)
     {
         Filter filter;
@@ -288,8 +290,7 @@ namespace HerosInsight::Filtering
 
         auto separator_pos = rem.find_first_of("!:=<>");
 
-        const size_t default_meta_id = metas.size() - 1;
-        filter.meta_id = default_meta_id;
+        filter.meta_id = GetDefaultMetaId(metas);
         if (separator_pos != std::string_view::npos)
         {
             char separator = rem[separator_pos];
@@ -363,6 +364,27 @@ namespace HerosInsight::Filtering
         );
     }
 
+    static void ParseSortArg(std::string_view source, std::string_view &target, bool &is_negated)
+    {
+        size_t pos = 0;
+        bool found;
+        target = {};
+        is_negated = false;
+        do
+        {
+            size_t new_pos = source.find('!', pos);
+            found = new_pos != std::string_view::npos;
+            is_negated ^= found;
+            if (target.empty())
+            {
+                target = source.substr(pos, new_pos - pos);
+                Utils::ReadSpaces(target);
+                Utils::TrimTrailingSpaces(target);
+            }
+            pos = new_pos + 1; // skip '!'
+        } while (found);
+    }
+
     static bool ParseCommand(std::span<const MetaProp> metas, std::string_view source, Command &command)
     {
         auto rem = source;
@@ -392,18 +414,12 @@ namespace HerosInsight::Filtering
         while (true)
         {
             auto arg_end = rem.find(',');
-            auto target_text = rem.substr(0, arg_end);
-            Utils::ReadSpaces(target_text);
-            Utils::TrimTrailingSpaces(target_text);
-            size_t pos;
+            auto arg_text = rem.substr(0, arg_end);
             SortCommand::Arg arg;
-            while (pos = target_text.find_last_of("!"), pos != std::string_view::npos)
-            {
-                arg.is_negated |= target_text[pos] == '!';
-                target_text = target_text.substr(0, pos);
-            }
-            Utils::TrimTrailingSpaces(target_text);
-            auto sort_target_id = target_text.empty() ? 0 : TryGetSortTargetIdFromName(metas, target_text);
+
+            std::string_view target_text;
+            ParseSortArg(arg_text, target_text, arg.is_negated);
+            auto sort_target_id = TryGetSortTargetIdFromName(metas, target_text);
             if (sort_target_id.has_value())
             {
                 arg.sort_target_id = sort_target_id.value();
@@ -422,7 +438,7 @@ namespace HerosInsight::Filtering
     {
         query.clear();
 
-        BitVector sorting_props{props.size(), false};
+        BitVector sorting_props_had{props.size(), false};
 
         auto ParseTrailingCommands = [&](std::string_view &stmt)
         {
@@ -452,10 +468,11 @@ namespace HerosInsight::Filtering
                     VisitHelper{
                         [&](SortCommand &sort_command)
                         {
+                            const auto default_meta_id = GetDefaultMetaId(this->metas);
                             for (auto &arg : sort_command.args)
                             {
                                 query.sort_args.emplace_back(std::move(arg));
-                                if (arg.sort_target_id == 0) // Special case: Default sort
+                                if (arg.sort_target_id == default_meta_id) // Special case: Default sort
                                 {
                                     if (arg.is_negated)
                                         query.reverse_output = !query.reverse_output;
@@ -471,9 +488,9 @@ namespace HerosInsight::Filtering
                                 {
                                     if (prop_id == props.size())
                                         continue;
-                                    if (sorting_props[prop_id])
+                                    if (sorting_props_had[prop_id])
                                         continue;
-                                    sorting_props[prop_id] = true;
+                                    sorting_props_had[prop_id] = true;
                                     query.sort_atoms.emplace_back((uint16_t)prop_id, arg.is_negated);
                                 }
                             }
@@ -1045,7 +1062,7 @@ namespace HerosInsight::Filtering
                 s.append_range((std::string_view) "by ");
 
                 std::string_view sort_target_name;
-                if (arg.sort_target_id == 0)
+                if (arg.sort_target_id == GetDefaultMetaId(this->metas))
                 {
                     sort_target_name = "Default";
                 }
