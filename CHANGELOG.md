@@ -1,4 +1,7 @@
 # CHANGELOG
+## 0.8.8
+- Fixed compatibility with latest GW update.
+
 ## 0.8.7
 - Fixed sorting by "Activation" not working.
 - Relaxed sort-argument syntax so that '!' may also be used as a prefix and there may be multiple '!' per argument.
