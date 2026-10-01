@@ -131,7 +131,7 @@ def get_release_staging_dir(version: str) -> Path:
 def get_zip(version: str) -> Path:
     path = get_release_staging_dir(version) / f"HerosInsight-{version}.zip"
     if not path.exists():
-        raise RuntimeError(f"❌ Error: zip file not found at {path}")
+        raise RuntimeError(f"❌ Error: Zip file not found at {path}")
     return path
 
 def stage_release(args):
@@ -156,6 +156,10 @@ def stage_release(args):
     has_tag = head_is_tag(new_version_tag)
     if has_tag:
         # Shortcut in case we need to rebuild
+        if release_staging_dir.exists():
+            if input(f"\nWarning: Local release already exists at {release_staging_dir}. Do you want to overwrite it? [y/N]: ").strip().lower() != "y":
+                print("Aborted.")
+                sys.exit(0)
         build_local_release()
         print(f"\n✅ Successfully staged local release with tag: {new_version_tag}.")
         sys.exit(0)
@@ -168,17 +172,17 @@ def stage_release(args):
         sys.exit(1)
 
     if (behind("dev", "main")):
-        print(f"❌ Error: main branch is ahead of dev branch.")
+        print(f"❌ Error: Main branch is ahead of dev branch.")
         sys.exit(1)
 
     old_version = read_version_txt()
     
     if release_staging_dir.exists():
-        print(f"❌ Error: local release already exists at {release_staging_dir}.")
+        print(f"❌ Error: Local release already exists at {release_staging_dir}.")
         sys.exit(1)
 
     if has_local_tag(new_version_tag):
-        print(f"❌ Error: local tag is on a different commit than HEAD.")
+        print(f"❌ Error: Local tag is on a different commit than HEAD.")
         sys.exit(1)
 
     print()
@@ -190,7 +194,7 @@ def stage_release(args):
     print()
 
     if not is_newer_version(old_version, new_version):
-        print("❌ Error: new version is not greater than old version.")
+        print("❌ Error: New version is not greater than old version.")
         sys.exit(1)
 
     # Single confirmation
@@ -241,11 +245,11 @@ def unstage_release(args):
     tag_str = format_tag(version)
 
     if not has_local_tag(tag_str):
-        print(f"\n❌ Error: there is no release to unstage.")
+        print(f"\n❌ Error: There is no release to unstage.")
         sys.exit(1)
     
     if has_remote_tag(tag_str):
-        print(f"\n❌ Error: cannot unstage a release that has been published.")
+        print(f"\n❌ Error: Cannot unstage a release that has been published.")
         sys.exit(1)
     
     if not head_is_tag(tag_str):
@@ -267,7 +271,7 @@ def public_release(args):
     tag_str = format_tag(version)
 
     if not has_local_tag(tag_str):
-        print(f"\n❌ Error: there is no release to publish.")
+        print(f"\n❌ Error: There is no release to publish.")
         sys.exit(1)
 
     # Check if user is authenticated
@@ -278,7 +282,7 @@ def public_release(args):
         subprocess.run(["gh", "auth", "status"], check=True)
 
     if has_remote_release(tag_str):
-        print(f"\n❌ Error: release {tag_str} already exists on GitHub.")
+        print(f"\n❌ Error: Release {tag_str} already exists on GitHub.")
         sys.exit(1)
     
     title = f"Hero's Insight {version}"
