@@ -1,4 +1,7 @@
 # CHANGELOG
+## 0.8.9
+- Fixed compatibility with latest GW update.
+
 ## 0.8.8
 - Fixed compatibility with latest GW update.
 
